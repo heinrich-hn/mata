@@ -24,6 +24,7 @@ export interface Driver {
   created_at: string | null;
   updated_at: string | null;
   created_by: string | null;
+  auth_user_id: string | null;
 }
 
 export type DriverInsert = Omit<Driver, 'id' | 'created_at' | 'updated_at'>;

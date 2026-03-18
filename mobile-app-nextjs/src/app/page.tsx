@@ -6,27 +6,26 @@ import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/auth-context";
 import { useDriverDocuments } from "@/hooks/use-driver-documents";
-import
-  {
-    useDieselRealtimeSync,
-    useFreightRealtimeSync,
-    useVehicleAssignmentSubscription,
-  } from "@/hooks/use-realtime";
+import {
+  useDieselRealtimeSync,
+  useFreightRealtimeSync,
+  useVehicleAssignmentSubscription,
+} from "@/hooks/use-realtime";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import
-  {
-    Activity,
-    AlertCircle,
-    ChevronRight,
-    Droplet,
-    Gauge,
-    MapPin,
-    TrendingUp,
-    Truck
-  } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  ChevronRight,
+  Droplet,
+  Gauge,
+  MapPin,
+  TrendingUp,
+  Truck
+} from "lucide-react";
 import Link from "next/link";
+import { useCallback, useMemo } from "react";
 
 interface Vehicle {
   id: string;
@@ -79,31 +78,22 @@ interface DriverVehicleAssignment {
 
 export default function HomePage() {
   const { user, profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
 
-  // Get driver name with multiple fallbacks
-  const getDriverName = () => {
-    // Try profile name first
+  // Get driver name with multiple fallbacks — memoized
+  const driverName = useMemo(() => {
     if (profile?.full_name && profile.full_name !== "Driver") return profile.full_name;
     if (profile?.name && profile.name !== "Driver") return profile.name;
-
-    // Try user metadata
     const metadata = user?.user_metadata;
     if (metadata?.full_name) return metadata.full_name;
     if (metadata?.name) return metadata.name;
-
-    // Try email prefix as last resort
     if (user?.email) {
       const emailName = user.email.split('@')[0];
-      // Capitalize first letter
       return emailName.charAt(0).toUpperCase() + emailName.slice(1);
     }
-
     return "Driver";
-  };
-
-  const driverName = getDriverName();
+  }, [profile?.full_name, profile?.name, user?.user_metadata, user?.email]);
 
   // Find driver by email for document expiry notifications
   const { data: driverRecord } = useQuery<{ id: string } | null>({
@@ -133,8 +123,8 @@ export default function HomePage() {
   useFreightRealtimeSync(user?.id);
   useVehicleAssignmentSubscription(user?.id);
 
-  // Pull-to-refresh handler
-  const handleRefresh = async () => {
+  // Pull-to-refresh handler — memoized
+  const handleRefresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["assigned-vehicle"] }),
       queryClient.invalidateQueries({ queryKey: ["monthly-diesel-records"] }),
@@ -143,12 +133,17 @@ export default function HomePage() {
       queryClient.invalidateQueries({ queryKey: ["recent-trips"] }),
       queryClient.invalidateQueries({ queryKey: ["driver-documents"] }),
     ]);
-  };
+  }, [queryClient]);
 
-  // Get current month date range
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+  // Get current month date range — memoized
+  const { firstDayOfMonth, lastDayOfMonth, monthName } = useMemo(() => {
+    const now = new Date();
+    return {
+      firstDayOfMonth: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0],
+      lastDayOfMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0],
+      monthName: now.toLocaleString("default", { month: "long" }),
+    };
+  }, []);
 
   // Fetch assigned vehicle from driver_vehicle_assignments
   const { data: vehicle, isLoading: vehicleLoading } = useQuery({
@@ -209,6 +204,7 @@ export default function HomePage() {
       return (data || []) as DieselRecord[];
     },
     enabled: !!vehicle?.fleet_number,
+    staleTime: 5 * 60 * 1000, // 5 min
   });
 
   // Fetch ALL trips for this month - linked directly to vehicles via fleet_vehicle_id
@@ -232,6 +228,7 @@ export default function HomePage() {
       return (data || []) as Trip[];
     },
     enabled: !!vehicle?.id,
+    staleTime: 5 * 60 * 1000, // 5 min
   });
 
   // Fetch recent diesel records (last 5 for activity feed) - from diesel_records table
@@ -250,6 +247,7 @@ export default function HomePage() {
       return (data || []) as DieselRecord[];
     },
     enabled: !!vehicle?.fleet_number,
+    staleTime: 5 * 60 * 1000, // 5 min
   });
 
   // Fetch recent trips (last 5 for activity feed) - linked directly via fleet_vehicle_id
@@ -272,29 +270,40 @@ export default function HomePage() {
       return (data || []) as Trip[];
     },
     enabled: !!vehicle?.id,
+    staleTime: 5 * 60 * 1000, // 5 min
   });
 
-  // Calculate monthly stats
-  const totalDieselLitres = monthlyDiesel.reduce((sum, entry) => sum + (entry.litres_filled || 0), 0);
-  const totalDieselCost = monthlyDiesel.reduce((sum, entry) => sum + (entry.total_cost || 0), 0);
-  const totalTrips = monthlyTrips.length;
-  const completedTrips = monthlyTrips.filter(t => t.status === "completed").length;
-  const totalDistanceKm = monthlyTrips.reduce((sum, trip) => sum + (trip.distance_km || 0), 0);
+  // Memoized monthly stats
+  const { totalDieselLitres, totalDieselCost, totalTrips, completedTrips, totalDistanceKm, kmTraveled, consumption } = useMemo(() => {
+    const dieselLitres = monthlyDiesel.reduce((sum, entry) => sum + (entry.litres_filled || 0), 0);
+    const dieselCost = monthlyDiesel.reduce((sum, entry) => sum + (entry.total_cost || 0), 0);
+    const trips = monthlyTrips.length;
+    const completed = monthlyTrips.filter(t => t.status === "completed").length;
+    const distanceKm = monthlyTrips.reduce((sum, trip) => sum + (trip.distance_km || 0), 0);
 
-  // Calculate KM traveled this month (from odometer readings in diesel records)
-  const odometerReadings = monthlyDiesel
-    .filter(d => d.km_reading != null)
-    .map(d => d.km_reading as number)
-    .sort((a, b) => a - b);
+    const odometerReadings = monthlyDiesel
+      .filter(d => d.km_reading != null)
+      .map(d => d.km_reading as number)
+      .sort((a, b) => a - b);
 
-  const kmTraveled = odometerReadings.length >= 2
-    ? odometerReadings[odometerReadings.length - 1] - odometerReadings[0]
-    : totalDistanceKm; // Fallback to trip distance if no odometer readings
+    const km = odometerReadings.length >= 2
+      ? odometerReadings[odometerReadings.length - 1] - odometerReadings[0]
+      : distanceKm;
 
-  // Calculate consumption (L/100km)
-  const consumption = kmTraveled > 0 ? (totalDieselLitres / kmTraveled) * 100 : 0;
+    const cons = km > 0 ? (dieselLitres / km) * 100 : 0;
 
-  const getInitials = (name: string | null | undefined) => {
+    return {
+      totalDieselLitres: dieselLitres,
+      totalDieselCost: dieselCost,
+      totalTrips: trips,
+      completedTrips: completed,
+      totalDistanceKm: distanceKm,
+      kmTraveled: km,
+      consumption: cons,
+    };
+  }, [monthlyDiesel, monthlyTrips]);
+
+  const getInitials = useCallback((name: string | null | undefined) => {
     if (!name) return "U";
     return name
       .split(" ")
@@ -302,261 +311,257 @@ export default function HomePage() {
       .join("")
       .toUpperCase()
       .slice(0, 2);
-  };
+  }, []);
 
-  const getGreeting = () => {
+  const getGreeting = useCallback(() => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
     if (hour < 18) return "Good afternoon";
     return "Good evening";
-  };
-
-  const monthName = now.toLocaleString("default", { month: "long" });
+  }, []);
 
   return (
     <MobileShell>
       <PullToRefresh onRefresh={handleRefresh}>
-      <div className="p-6 space-y-6">
-        {/* Modern Header */}
-        <div className="flex items-center justify-between animate-fade-up">
-          <div>
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-widest">
-              {getGreeting()}
-            </p>
-            <h1 className="text-2xl font-bold text-foreground">
-              {driverName}
-            </h1>
+        <div className="p-6 space-y-6">
+          {/* Modern Header */}
+          <div className="flex items-center justify-between animate-fade-up">
+            <div>
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-widest">
+                {getGreeting()}
+              </p>
+              <h1 className="text-2xl font-bold text-foreground">
+                {driverName}
+              </h1>
+            </div>
+            <Avatar className="h-12 w-12 ring-2 ring-border">
+              <AvatarImage src={profile?.avatar_url || undefined} />
+              <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
+                {getInitials(driverName)}
+              </AvatarFallback>
+            </Avatar>
           </div>
-          <Avatar className="h-12 w-12 ring-2 ring-border">
-            <AvatarImage src={profile?.avatar_url || undefined} />
-            <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
-              {getInitials(driverName)}
-            </AvatarFallback>
-          </Avatar>
-        </div>
 
-        {/* Assigned Vehicle Card */}
-        {vehicleLoading ? (
-          <div className="rounded-2xl border border-border bg-card shadow-sm p-5 animate-fade-up stagger-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                Loading Vehicle...
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="icon-container icon-container-lg bg-muted/30 animate-pulse">
-                <Truck className="w-6 h-6 text-muted-foreground/50" strokeWidth={2} />
-              </div>
-              <div className="flex-1 min-w-0 space-y-2">
-                <div className="h-6 w-24 bg-muted/20 rounded animate-pulse" />
-                <div className="h-4 w-32 bg-muted/10 rounded animate-pulse" />
-              </div>
-            </div>
-          </div>
-        ) : vehicle ? (
-          <div className="rounded-2xl border border-border bg-card shadow-sm p-5 animate-fade-up stagger-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                Active Vehicle
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="icon-container icon-container-lg bg-primary/10">
-                <Truck className="w-6 h-6 text-primary" strokeWidth={2} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-xl">{vehicle.fleet_number}</p>
-                <p className="text-sm text-muted-foreground truncate">
-                  {vehicle.registration_number}
+          {/* Assigned Vehicle Card */}
+          {vehicleLoading ? (
+            <div className="rounded-2xl border border-border bg-card shadow-sm p-5 animate-fade-up stagger-1">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Loading Vehicle...
                 </p>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              <div className="flex items-center gap-4">
+                <div className="icon-container icon-container-lg bg-muted/30 animate-pulse">
+                  <Truck className="w-6 h-6 text-muted-foreground/50" strokeWidth={2} />
+                </div>
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="h-6 w-24 bg-muted/20 rounded animate-pulse" />
+                  <div className="h-4 w-32 bg-muted/10 rounded animate-pulse" />
+                </div>
+              </div>
             </div>
-            {vehicle.make && vehicle.model && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground">
-                  {vehicle.make} {vehicle.model}
+          ) : vehicle ? (
+            <div className="rounded-2xl border border-border bg-card shadow-sm p-5 animate-fade-up stagger-1">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                  Active Vehicle
                 </p>
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-border bg-card shadow-sm p-8 animate-fade-up stagger-1">
-            <div className="flex flex-col items-center justify-center text-center">
-              <div className="icon-container icon-container-lg bg-muted/50 mb-4">
-                <AlertCircle className="w-6 h-6 text-muted-foreground" strokeWidth={1.5} />
-              </div>
-              <p className="font-semibold">No Vehicle Assigned</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Contact your supervisor
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Document Expiry Notifications */}
-        {hasAlerts && (
-          <DocumentExpiryBanner
-            alerts={alerts}
-            expiredCount={expiredCount}
-            expiringCount={expiringCount}
-          />
-        )}
-
-        {/* Monthly Stats Header */}
-        <div className="animate-fade-up stagger-2">
-          <p className="section-title mb-3">{monthName} Overview</p>
-        </div>
-
-        {/* Stats Grid - 4 key metrics */}
-        <div className="grid grid-cols-2 gap-3 animate-fade-up stagger-2">
-          {/* KM Traveled */}
-          <div className="rounded-2xl border border-border bg-card shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="icon-container icon-container-sm bg-orange-500/10">
-                <Gauge className="w-4 h-4 text-orange-500" strokeWidth={2} />
-              </div>
-              <p className="stat-label">KM Traveled</p>
-            </div>
-            <p className="text-2xl font-bold">{formatNumber(kmTraveled)}</p>
-            <p className="text-xs text-muted-foreground">this month</p>
-          </div>
-
-          {/* Diesel Consumption */}
-          <Link href="/diesel" className="block">
-            <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="icon-container icon-container-sm bg-blue-500/10">
-                  <Droplet className="w-4 h-4 text-blue-500" strokeWidth={2} />
+              <div className="flex items-center gap-4">
+                <div className="icon-container icon-container-lg bg-primary/10">
+                  <Truck className="w-6 h-6 text-primary" strokeWidth={2} />
                 </div>
-                <p className="stat-label">Diesel</p>
-              </div>
-              <p className="text-2xl font-bold">{formatNumber(totalDieselLitres)}L</p>
-              <p className="text-xs text-muted-foreground">
-                {consumption > 0 ? `${consumption.toFixed(1)} L/100km` : "this month"}
-              </p>
-            </div>
-          </Link>
-
-          {/* Total Trips */}
-          <Link href="/trip" className="block">
-            <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="icon-container icon-container-sm bg-emerald-500/10">
-                  <Activity className="w-4 h-4 text-emerald-500" strokeWidth={2} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-xl">{vehicle.fleet_number}</p>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {vehicle.registration_number}
+                  </p>
                 </div>
-                <p className="stat-label">Trips</p>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </div>
-              <p className="text-2xl font-bold">{totalTrips}</p>
-              <p className="text-xs text-muted-foreground">
-                {completedTrips} completed
-              </p>
-            </div>
-          </Link>
-
-          {/* Diesel Cost */}
-          <Link href="/diesel" className="block">
-            <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="icon-container icon-container-sm bg-amber-500/10">
-                  <TrendingUp className="w-4 h-4 text-amber-500" strokeWidth={2} />
+              {vehicle.make && vehicle.model && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs text-muted-foreground">
+                    {vehicle.make} {vehicle.model}
+                  </p>
                 </div>
-                <p className="stat-label">Fuel Cost</p>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border bg-card shadow-sm p-8 animate-fade-up stagger-1">
+              <div className="flex flex-col items-center justify-center text-center">
+                <div className="icon-container icon-container-lg bg-muted/50 mb-4">
+                  <AlertCircle className="w-6 h-6 text-muted-foreground" strokeWidth={1.5} />
+                </div>
+                <p className="font-semibold">No Vehicle Assigned</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Contact your supervisor
+                </p>
               </div>
-              <p className="text-2xl font-bold">{formatCurrency(totalDieselCost, "USD")}</p>
+            </div>
+          )}
+
+          {/* Document Expiry Notifications */}
+          {hasAlerts && (
+            <DocumentExpiryBanner
+              alerts={alerts}
+              expiredCount={expiredCount}
+              expiringCount={expiringCount}
+            />
+          )}
+
+          {/* Monthly Stats Header */}
+          <div className="animate-fade-up stagger-2">
+            <p className="section-title mb-3">{monthName} Overview</p>
+          </div>
+
+          {/* Stats Grid - 4 key metrics */}
+          <div className="grid grid-cols-2 gap-3 animate-fade-up stagger-2">
+            {/* KM Traveled */}
+            <div className="rounded-2xl border border-border bg-card shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="icon-container icon-container-sm bg-orange-500/10">
+                  <Gauge className="w-4 h-4 text-orange-500" strokeWidth={2} />
+                </div>
+                <p className="stat-label">KM Traveled</p>
+              </div>
+              <p className="text-2xl font-bold">{formatNumber(kmTraveled)}</p>
               <p className="text-xs text-muted-foreground">this month</p>
             </div>
-          </Link>
-        </div>
 
-        {/* Recent Activity */}
-        <div className="animate-fade-up stagger-3">
-          <p className="section-title mb-3">Recent Activity</p>
-          <div className="space-y-2">
-            {/* Show recent trips */}
-            {recentTrips.slice(0, 3).map((trip) => (
-              <Link href="/trip" key={trip.id} className="block">
-                <div className="rounded-2xl border border-border bg-card shadow-sm p-3 flex items-center gap-3 active:scale-[0.98] transition-transform">
-                  <div className={`icon-container icon-container-sm ${
-                    trip.status === "completed" ? "bg-emerald-500/10" : "bg-amber-500/10"
-                  }`}>
-                    <MapPin className={`w-4 h-4 ${
-                      trip.status === "completed" ? "text-emerald-500" : "text-amber-500"
-                    }`} strokeWidth={2} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {trip.origin || "N/A"} → {trip.destination || "N/A"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {trip.departure_date ? new Date(trip.departure_date).toLocaleDateString() : "N/A"} • {trip.status || "pending"}
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-
-            {/* Show recent diesel */}
-            {recentDiesel.slice(0, 2).map((entry) => (
-              <Link href="/diesel" key={entry.id} className="block">
-                <div className="rounded-2xl border border-border bg-card shadow-sm p-3 flex items-center gap-3 active:scale-[0.98] transition-transform">
+            {/* Diesel Consumption */}
+            <Link href="/diesel" className="block">
+              <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
+                <div className="flex items-center gap-2 mb-2">
                   <div className="icon-container icon-container-sm bg-blue-500/10">
                     <Droplet className="w-4 h-4 text-blue-500" strokeWidth={2} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">
-                      {formatNumber(entry.litres_filled)}L Diesel
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(entry.date).toLocaleDateString()} • {entry.fuel_station || "Unknown station"}
-                    </p>
-                  </div>
-                  {entry.total_cost && (
-                    <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                      {formatCurrency(entry.total_cost, entry.currency || "USD")}
-                    </p>
-                  )}
+                  <p className="stat-label">Diesel</p>
                 </div>
-              </Link>
-            ))}
-
-            {recentTrips.length === 0 && recentDiesel.length === 0 && (
-              <div className="rounded-2xl border border-border bg-card shadow-sm p-6 text-center">
-                <p className="text-sm text-muted-foreground">No recent activity</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Record a trip or diesel fill-up to get started
+                <p className="text-2xl font-bold">{formatNumber(totalDieselLitres)}L</p>
+                <p className="text-xs text-muted-foreground">
+                  {consumption > 0 ? `${consumption.toFixed(1)} L/100km` : "this month"}
                 </p>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="animate-fade-up stagger-4">
-          <p className="section-title mb-3">Quick Actions</p>
-          <div className="grid grid-cols-2 gap-3">
-            <Link href="/diesel" className="block">
-              <div className="rounded-2xl border border-border bg-card shadow-sm flex flex-col items-center justify-center gap-2 p-4 active:scale-[0.98] transition-transform">
-                <div className="icon-container icon-container-md bg-blue-500/10">
-                  <Droplet className="w-5 h-5 text-blue-500" strokeWidth={2} />
-                </div>
-                <p className="text-sm font-semibold">Record Diesel</p>
-              </div>
             </Link>
 
+            {/* Total Trips */}
             <Link href="/trip" className="block">
-              <div className="rounded-2xl border border-border bg-card shadow-sm flex flex-col items-center justify-center gap-2 p-4 active:scale-[0.98] transition-transform">
-                <div className="icon-container icon-container-md bg-emerald-500/10">
-                  <TrendingUp className="w-5 h-5 text-emerald-500" strokeWidth={2} />
+              <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="icon-container icon-container-sm bg-emerald-500/10">
+                    <Activity className="w-4 h-4 text-emerald-500" strokeWidth={2} />
+                  </div>
+                  <p className="stat-label">Trips</p>
                 </div>
-                <p className="text-sm font-semibold">View Trips</p>
+                <p className="text-2xl font-bold">{totalTrips}</p>
+                <p className="text-xs text-muted-foreground">
+                  {completedTrips} completed
+                </p>
+              </div>
+            </Link>
+
+            {/* Diesel Cost */}
+            <Link href="/diesel" className="block">
+              <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="icon-container icon-container-sm bg-amber-500/10">
+                    <TrendingUp className="w-4 h-4 text-amber-500" strokeWidth={2} />
+                  </div>
+                  <p className="stat-label">Fuel Cost</p>
+                </div>
+                <p className="text-2xl font-bold">{formatCurrency(totalDieselCost, "USD")}</p>
+                <p className="text-xs text-muted-foreground">this month</p>
               </div>
             </Link>
           </div>
+
+          {/* Recent Activity */}
+          <div className="animate-fade-up stagger-3">
+            <p className="section-title mb-3">Recent Activity</p>
+            <div className="space-y-2">
+              {/* Show recent trips */}
+              {recentTrips.slice(0, 3).map((trip) => (
+                <Link href="/trip" key={trip.id} className="block">
+                  <div className="rounded-2xl border border-border bg-card shadow-sm p-3 flex items-center gap-3 active:scale-[0.98] transition-transform">
+                    <div className={`icon-container icon-container-sm ${trip.status === "completed" ? "bg-emerald-500/10" : "bg-amber-500/10"
+                      }`}>
+                      <MapPin className={`w-4 h-4 ${trip.status === "completed" ? "text-emerald-500" : "text-amber-500"
+                        }`} strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {trip.origin || "N/A"} → {trip.destination || "N/A"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {trip.departure_date ? new Date(trip.departure_date).toLocaleDateString() : "N/A"} • {trip.status || "pending"}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+
+              {/* Show recent diesel */}
+              {recentDiesel.slice(0, 2).map((entry) => (
+                <Link href="/diesel" key={entry.id} className="block">
+                  <div className="rounded-2xl border border-border bg-card shadow-sm p-3 flex items-center gap-3 active:scale-[0.98] transition-transform">
+                    <div className="icon-container icon-container-sm bg-blue-500/10">
+                      <Droplet className="w-4 h-4 text-blue-500" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">
+                        {formatNumber(entry.litres_filled)}L Diesel
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(entry.date).toLocaleDateString()} • {entry.fuel_station || "Unknown station"}
+                      </p>
+                    </div>
+                    {entry.total_cost && (
+                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                        {formatCurrency(entry.total_cost, entry.currency || "USD")}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+
+              {recentTrips.length === 0 && recentDiesel.length === 0 && (
+                <div className="rounded-2xl border border-border bg-card shadow-sm p-6 text-center">
+                  <p className="text-sm text-muted-foreground">No recent activity</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Record a trip or diesel fill-up to get started
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="animate-fade-up stagger-4">
+            <p className="section-title mb-3">Quick Actions</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Link href="/diesel" className="block">
+                <div className="rounded-2xl border border-border bg-card shadow-sm flex flex-col items-center justify-center gap-2 p-4 active:scale-[0.98] transition-transform">
+                  <div className="icon-container icon-container-md bg-blue-500/10">
+                    <Droplet className="w-5 h-5 text-blue-500" strokeWidth={2} />
+                  </div>
+                  <p className="text-sm font-semibold">Record Diesel</p>
+                </div>
+              </Link>
+
+              <Link href="/trip" className="block">
+                <div className="rounded-2xl border border-border bg-card shadow-sm flex flex-col items-center justify-center gap-2 p-4 active:scale-[0.98] transition-transform">
+                  <div className="icon-container icon-container-md bg-emerald-500/10">
+                    <TrendingUp className="w-5 h-5 text-emerald-500" strokeWidth={2} />
+                  </div>
+                  <p className="text-sm font-semibold">View Trips</p>
+                </div>
+              </Link>
+            </div>
+          </div>
         </div>
-      </div>
       </PullToRefresh>
     </MobileShell>
   );

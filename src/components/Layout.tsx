@@ -7,17 +7,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useGeofenceNotifications } from "@/hooks/useGeofenceNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import
-  {
-    Calendar, ChevronDown,
-    ClipboardCheck, ClipboardList,
-    Fuel,
-    Gauge, LayoutDashboard, LogOut, MapPin, Menu,
-    Search,
-    ShieldAlert, ShoppingCart,
-    Store,
-    Truck, Users
-  } from "lucide-react";
+import {
+Calendar, ChevronDown,
+ClipboardCheck, ClipboardList,
+Fuel,
+Gauge, LayoutDashboard, LogOut, MapPin, Menu,
+Search,
+ShieldAlert, ShoppingCart,
+Store,
+Truck, Users
+} from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
@@ -40,7 +39,7 @@ const Layout = ({ children }: LayoutProps) => {
   ];
   const operationsPaths = [
     "/admin", "/cost-management", "/performance",
-    "/trip-management", "/load-management", "/driver-management",
+    "/trip-management", "/driver-management",
     "/diesel-management", "/fuel-bunkers", "/invoicing", "/action-log",
     "/unified-map", "/analytics"
   ];

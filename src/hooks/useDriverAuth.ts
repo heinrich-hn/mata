@@ -189,6 +189,46 @@ export const useDriverAuth = () => {
     return false;
   };
 
+  // Unlink mobile profile from driver (clears auth_user_id + deactivates vehicle assignments)
+  const unlinkAuthProfileMutation = useMutation({
+    mutationFn: async ({ driverId, authUserId }: { driverId: string; authUserId: string }) => {
+      // Step 1: Deactivate all active vehicle assignments for this auth user
+      const { error: assignmentError } = await supabase
+        .from('driver_vehicle_assignments')
+        .update({ is_active: false, unassigned_at: new Date().toISOString() } as never)
+        .eq('driver_id', authUserId)
+        .eq('is_active', true);
+      if (assignmentError) {
+        console.error('Failed to deactivate assignments:', assignmentError);
+        // Non-blocking — continue even if this fails
+      }
+
+      // Step 2: Clear auth_user_id from the driver record
+      const { error: unlinkError } = await supabase
+        .from('drivers')
+        .update({ auth_user_id: null } as never)
+        .eq('id', driverId);
+      if (unlinkError) throw new Error(`Failed to unlink profile: ${unlinkError.message}`);
+
+      return { driverId };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['drivers'] });
+      queryClient.invalidateQueries({ queryKey: ['driver-vehicle-assignments'] });
+      toast({
+        title: 'Mobile Profile Unlinked',
+        description: 'The driver\'s mobile profile has been unlinked. You can now create a new one.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Unlink Failed',
+        description: error.message || 'Failed to unlink mobile profile',
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Generate a random password
   const generatePassword = useCallback((): string => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
@@ -205,8 +245,10 @@ export const useDriverAuth = () => {
     roles,
     refetch,
     createAuthProfile: createAuthProfileMutation.mutateAsync,
+    unlinkAuthProfile: unlinkAuthProfileMutation.mutateAsync,
     resetPassword: resetPasswordMutation.mutateAsync,
     isCreatingProfile: createAuthProfileMutation.isPending,
+    isUnlinkingProfile: unlinkAuthProfileMutation.isPending,
     isResettingPassword: resetPasswordMutation.isPending,
     checkEmailExists,
     generatePassword,

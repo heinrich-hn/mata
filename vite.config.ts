@@ -240,11 +240,25 @@ export default defineConfig(({ mode }) => ({
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'supabase-vendor': ['@supabase/supabase-js'],
-          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-popover'],
-          'query-vendor': ['@tanstack/react-query'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-dom')) return 'react-dom';
+            if (id.includes('/react/') || id.includes('/scheduler/')) return 'react-core';
+            if (id.includes('@supabase')) return 'supabase-vendor';
+            if (id.includes('@radix-ui')) return 'ui-vendor';
+            if (id.includes('@tanstack')) return 'query-vendor';
+            if (id.includes('recharts') || id.includes('d3-')) return 'charts-vendor';
+            if (id.includes('leaflet') || id.includes('react-leaflet') || id.includes('@react-leaflet')) return 'map-vendor';
+            if (id.includes('jspdf') || id.includes('jspdf-autotable')) return 'pdf-vendor';
+            if (id.includes('exceljs') || id.includes('xlsx') || id.includes('file-saver') || id.includes('html2canvas')) return 'export-vendor';
+            if (id.includes('lucide-react')) return 'icons-vendor';
+            if (id.includes('date-fns')) return 'date-vendor';
+            if (id.includes('zod') || id.includes('react-hook-form') || id.includes('@hookform')) return 'form-vendor';
+            if (id.includes('cmdk') || id.includes('embla-carousel') || id.includes('vaul') || id.includes('sonner') || id.includes('input-otp') || id.includes('class-variance-authority') || id.includes('clsx') || id.includes('tailwind-merge')) return 'ui-utils-vendor';
+            if (id.includes('qrcode') || id.includes('qr-code') || id.includes('html5-qrcode')) return 'qr-vendor';
+            // Catch-all for remaining node_modules
+            return 'vendor';
+          }
         },
       },
     },

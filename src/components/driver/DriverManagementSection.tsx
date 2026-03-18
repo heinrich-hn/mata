@@ -9,10 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import AssignVehicleDialog from '@/components/driver/AssignVehicleDialog';
 import { CreateDriverAuthDialog } from '@/components/driver/CreateDriverAuthDialog';
 import DriverDocumentsSection from '@/components/driver/DriverDocumentsSection';
+import { useDriverAuth } from '@/hooks/useDriverAuth';
 import { useDrivers, type Driver, type DriverInsert } from '@/hooks/useDrivers';
-import { Calendar, Edit, Eye, FileText, Loader2, Mail, MoreVertical, Phone, Plus, Search, Smartphone, SmartphoneCharging, Trash2, User } from 'lucide-react';
+import { Calendar, Edit, Eye, FileText, Loader2, Mail, MoreVertical, Phone, Plus, Search, Smartphone, SmartphoneCharging, Trash2, Truck, Unlink, User } from 'lucide-react';
 import { useState } from 'react';
 
 const INITIAL_FORM_STATE: Partial<DriverInsert> = {
@@ -56,7 +58,7 @@ const DriverManagementSection = () => {
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [deletingDriver, setDeletingDriver] = useState<Driver | null>(null);
   const [formData, setFormData] = useState<Partial<DriverInsert>>(INITIAL_FORM_STATE);
-  
+
   // Auth profile state
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [selectedDriverForAuth, setSelectedDriverForAuth] = useState<Driver | null>(null);
@@ -64,6 +66,15 @@ const DriverManagementSection = () => {
   // Driver detail/documents state
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedDriverForDetail, setSelectedDriverForDetail] = useState<Driver | null>(null);
+
+  // Vehicle assignment state
+  const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
+  const [selectedDriverForVehicle, setSelectedDriverForVehicle] = useState<Driver | null>(null);
+
+  // Unlink mobile profile state
+  const [isUnlinkDialogOpen, setIsUnlinkDialogOpen] = useState(false);
+  const [driverToUnlink, setDriverToUnlink] = useState<Driver | null>(null);
+  const { unlinkAuthProfile, isUnlinkingProfile } = useDriverAuth();
 
   // Generate next driver number
   const generateDriverNumber = (): string => {
@@ -570,6 +581,7 @@ const DriverManagementSection = () => {
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">Docs</TableHead>
                   <TableHead className="text-center">Mobile App</TableHead>
+                  <TableHead className="text-center">Vehicle</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -647,8 +659,7 @@ const DriverManagementSection = () => {
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            {/* @ts-expect-error - auth_user_id added via migration */}
-                            {(driver as Record<string, unknown>).auth_user_id ? (
+                            {driver.auth_user_id ? (
                               <div className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30">
                                 <SmartphoneCharging className="h-4 w-4 text-green-600 dark:text-green-400" />
                               </div>
@@ -659,10 +670,34 @@ const DriverManagementSection = () => {
                             )}
                           </TooltipTrigger>
                           <TooltipContent>
-                            {/* @ts-expect-error - auth_user_id added via migration */}
-                            {(driver as Record<string, unknown>).auth_user_id
+                            {driver.auth_user_id
                               ? 'Has mobile app access'
                               : 'No mobile app profile'}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setSelectedDriverForVehicle(driver);
+                                setIsVehicleDialogOpen(true);
+                              }}
+                              disabled={!driver.auth_user_id}
+                            >
+                              <Truck className={`h-4 w-4 ${driver.auth_user_id ? 'text-primary' : 'text-muted-foreground'}`} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {driver.auth_user_id
+                              ? 'Assign vehicle'
+                              : 'Create mobile profile first'}
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -688,8 +723,7 @@ const DriverManagementSection = () => {
                             <Eye className="h-4 w-4 mr-2" />
                             View Documents
                           </DropdownMenuItem>
-                          {/* @ts-expect-error - auth_user_id added via migration */}
-                          {!(driver as Record<string, unknown>).auth_user_id && (
+                          {!driver.auth_user_id && (
                             <DropdownMenuItem
                               onClick={() => {
                                 setSelectedDriverForAuth(driver);
@@ -698,6 +732,29 @@ const DriverManagementSection = () => {
                             >
                               <Smartphone className="h-4 w-4 mr-2" />
                               Create Mobile Profile
+                            </DropdownMenuItem>
+                          )}
+                          {driver.auth_user_id && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedDriverForVehicle(driver);
+                                setIsVehicleDialogOpen(true);
+                              }}
+                            >
+                              <Truck className="h-4 w-4 mr-2" />
+                              Assign Vehicle
+                            </DropdownMenuItem>
+                          )}
+                          {driver.auth_user_id && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setDriverToUnlink(driver);
+                                setIsUnlinkDialogOpen(true);
+                              }}
+                              className="text-orange-600"
+                            >
+                              <Unlink className="h-4 w-4 mr-2" />
+                              Unlink Mobile Profile
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
@@ -793,6 +850,52 @@ const DriverManagementSection = () => {
                 />
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Assign Vehicle Dialog */}
+        <AssignVehicleDialog
+          open={isVehicleDialogOpen}
+          onOpenChange={setIsVehicleDialogOpen}
+          driver={selectedDriverForVehicle}
+        />
+
+        {/* Unlink Mobile Profile Confirmation Dialog */}
+        <Dialog open={isUnlinkDialogOpen} onOpenChange={setIsUnlinkDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Unlink className="h-5 w-5 text-orange-600" />
+                Unlink Mobile Profile
+              </DialogTitle>
+              <DialogDescription>
+                This will unlink the mobile app profile for{' '}
+                <strong>{driverToUnlink ? getDriverFullName(driverToUnlink) : ''}</strong>.
+                Their vehicle assignments will be deactivated and they won&apos;t be able to log in to the mobile app until you create a new profile.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsUnlinkDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  if (!driverToUnlink?.auth_user_id) return;
+                  await unlinkAuthProfile({
+                    driverId: driverToUnlink.id,
+                    authUserId: driverToUnlink.auth_user_id,
+                  });
+                  setIsUnlinkDialogOpen(false);
+                  setDriverToUnlink(null);
+                  refetch();
+                }}
+                disabled={isUnlinkingProfile}
+              >
+                {isUnlinkingProfile && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Unlink Profile
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </CardContent>

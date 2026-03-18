@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { RouteSelect } from '@/components/ui/route-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { LOAD_TYPES } from '@/constants/loadTypes';
+import { CARGO_TYPES } from '@/constants/cargoTypes';
 import { TOLL_COST_CATEGORY, TOLL_COST_SUBCATEGORY } from '@/constants/routeTollCosts';
 import { useOperations } from '@/contexts/OperationsContext';
 import { useToast } from '@/hooks/use-toast';
@@ -409,7 +409,7 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {LOAD_TYPES.map((type) => (
+                        {CARGO_TYPES.map((type) => (
                           <SelectItem key={type} value={type}>
                             {type}
                           </SelectItem>

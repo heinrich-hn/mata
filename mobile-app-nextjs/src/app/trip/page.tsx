@@ -10,8 +10,8 @@ import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Calendar, CalendarRange, Clock, MapPin } from "lucide-react";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { memo, useCallback, useMemo, useState } from "react";
+
 
 interface Vehicle {
   id: string;
@@ -98,8 +98,8 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
-// Helper to get month options (current + past 11 months)
-function getMonthOptions() {
+// Helper to get month options (current + past 11 months) — computed once at module level
+const MONTH_OPTIONS = (() => {
   const options = [];
   const now = new Date();
   for (let i = 0; i < 12; i++) {
@@ -112,47 +112,46 @@ function getMonthOptions() {
     });
   }
   return options;
-}
+})();
 
 export default function TripsPage() {
   const { user } = useAuth();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   // Date filter state
-  const monthOptions = getMonthOptions();
-  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0].value);
+  const [selectedMonth, setSelectedMonth] = useState(MONTH_OPTIONS[0].value);
   const [filterMode, setFilterMode] = useState<"month" | "custom">("month");
-  const today = new Date().toISOString().split("T")[0];
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const thirtyDaysAgo = useMemo(() => new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0], []);
   const [customFrom, setCustomFrom] = useState(thirtyDaysAgo);
   const [customTo, setCustomTo] = useState(today);
 
   // State for trip detail sheet
   const [selectedTrip, setSelectedTrip] = useState<TripEntry | null>(null);
 
-  // Compute effective date range based on filter mode
-  const selectedMonthData = monthOptions.find(m => m.value === selectedMonth) || monthOptions[0];
-  const dateFrom = filterMode === "month"
-    ? new Date(selectedMonthData.year, selectedMonthData.month, 1).toISOString().split("T")[0]
-    : customFrom;
-  const dateTo = filterMode === "month"
-    ? new Date(selectedMonthData.year, selectedMonthData.month + 1, 0).toISOString().split("T")[0]
-    : customTo;
-  const dateRangeLabel = filterMode === "month"
-    ? new Date(selectedMonthData.year, selectedMonthData.month).toLocaleString("default", { month: "long" })
-    : `${customFrom} → ${customTo}`;
+  // Compute effective date range based on filter mode — memoized
+  const { dateFrom, dateTo, dateRangeLabel } = useMemo(() => {
+    const selectedMonthData = MONTH_OPTIONS.find(m => m.value === selectedMonth) || MONTH_OPTIONS[0];
+    if (filterMode === "month") {
+      return {
+        dateFrom: new Date(selectedMonthData.year, selectedMonthData.month, 1).toISOString().split("T")[0],
+        dateTo: new Date(selectedMonthData.year, selectedMonthData.month + 1, 0).toISOString().split("T")[0],
+        dateRangeLabel: new Date(selectedMonthData.year, selectedMonthData.month).toLocaleString("default", { month: "long" }),
+      };
+    }
+    return { dateFrom: customFrom, dateTo: customTo, dateRangeLabel: `${customFrom} → ${customTo}` };
+  }, [selectedMonth, filterMode, customFrom, customTo]);
 
   // Refresh Handler
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["assigned-vehicle"] }),
       queryClient.invalidateQueries({ queryKey: ["monthly-trips"] }),
       queryClient.invalidateQueries({ queryKey: ["freight-details"] }),
       queryClient.invalidateQueries({ queryKey: ["cycle-tracker-exists"] }),
     ]);
-  };
+  }, [queryClient]);
 
   // Fetch assigned vehicle from driver_vehicle_assignments
   const { data: assignedVehicle, isLoading: isLoadingVehicle } = useQuery({
@@ -192,14 +191,7 @@ export default function TripsPage() {
     staleTime: 10 * 60 * 1000, // 10 min
   });
 
-  // Handle vehicle query error with useEffect
-  if (assignedVehicle === undefined && !isLoadingVehicle) {
-    toast({
-      title: "Error",
-      description: "Failed to fetch assigned vehicle. Please try again.",
-      variant: "destructive",
-    });
-  }
+
 
   // Fetch trips for current month
   const { data: monthlyTrips = [], isLoading: isLoadingTrips } = useQuery<TripEntry[]>({
@@ -243,14 +235,7 @@ export default function TripsPage() {
     staleTime: 2 * 60 * 1000, // 2 min — prevents refetch on every tab switch
   });
 
-  // Handle trips query error
-  if (monthlyTrips === undefined && !isLoadingTrips) {
-    toast({
-      title: "Error",
-      description: "Failed to fetch trips. Please pull to refresh.",
-      variant: "destructive",
-    });
-  }
+
 
   // Fetch existing freight details for all trips
   const { data: freightDetails = [], isLoading: isLoadingFreight } = useQuery<FreightDetail[]>({
@@ -268,16 +253,10 @@ export default function TripsPage() {
       return (data || []) as FreightDetail[];
     },
     enabled: !!assignedVehicle?.id && !!user?.id,
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Handle freight query error
-  if (freightDetails === undefined && !isLoadingFreight) {
-    toast({
-      title: "Error",
-      description: "Failed to fetch freight details.",
-      variant: "destructive",
-    });
-  }
+
 
   // Fetch cycle tracker existence for all trips
   const tripIds = monthlyTrips.map(t => t.id);
@@ -294,39 +273,40 @@ export default function TripsPage() {
       return (data || []) as TrackerRecord[];
     },
     enabled: tripIds.length > 0,
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Handle tracker query error
-  if (trackerRecords === undefined && tripIds.length > 0) {
-    toast({
-      title: "Error",
-      description: "Failed to fetch trip trackers.",
-      variant: "destructive",
-    });
-  }
 
-  // Create tracker map for quick lookup
-  const trackerMap = trackerRecords.reduce((acc: Record<string, TrackerRecord>, t) => {
-    acc[t.trip_id] = t;
-    return acc;
-  }, {});
 
-  // Create a map for quick lookup of freight by trip_id
-  const freightMap = freightDetails.reduce((acc: Record<string, FreightDetail>, freight) => {
-    acc[freight.trip_id] = freight;
-    return acc;
-  }, {});
+  // Create tracker map for quick lookup — memoized
+  const trackerMap = useMemo(() =>
+    trackerRecords.reduce((acc: Record<string, TrackerRecord>, t) => {
+      acc[t.trip_id] = t;
+      return acc;
+    }, {}),
+    [trackerRecords]
+  );
 
-  // Show ALL trips
-  const allTrips = monthlyTrips || [];
-  const totalTrips = allTrips.length;
-  const totalDistanceKm = allTrips.reduce((sum, e) => sum + (e.distance_km || 0), 0);
-  const completedTrips = allTrips.filter(t => t.status === 'completed').length;
+  // Create a map for quick lookup of freight by trip_id — memoized
+  const freightMap = useMemo(() =>
+    freightDetails.reduce((acc: Record<string, FreightDetail>, freight) => {
+      acc[freight.trip_id] = freight;
+      return acc;
+    }, {}),
+    [freightDetails]
+  );
 
-  // Handler to open trip detail
-  const handleOpenTripDetail = (trip: TripEntry) => {
+  // Memoized stats
+  const { totalTrips, totalDistanceKm, completedTrips } = useMemo(() => ({
+    totalTrips: monthlyTrips.length,
+    totalDistanceKm: monthlyTrips.reduce((sum, e) => sum + (e.distance_km || 0), 0),
+    completedTrips: monthlyTrips.filter(t => t.status === 'completed').length,
+  }), [monthlyTrips]);
+
+  // Handler to open trip detail — memoized
+  const handleOpenTripDetail = useCallback((trip: TripEntry) => {
     setSelectedTrip(trip);
-  };
+  }, []);
 
   const isLoading = isLoadingVehicle || isLoadingTrips || isLoadingFreight;
 
@@ -335,7 +315,7 @@ export default function TripsPage() {
     return (
       <MobileShell>
         <div className="p-5 space-y-6 min-h-screen flex flex-col items-center justify-center text-center">
-          <EmptyState 
+          <EmptyState
             title="No Vehicle Assigned"
             description="Please contact your administrator to get a vehicle assigned."
           />
@@ -364,7 +344,7 @@ export default function TripsPage() {
               <BottomSheetSelect
                 value={selectedMonth}
                 onValueChange={setSelectedMonth}
-                options={monthOptions.map(opt => ({ value: opt.value, label: opt.label }))}
+                options={MONTH_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
                 placeholder="Select month"
                 label="Select Month"
                 className="h-8 text-xs text-muted-foreground"
@@ -410,16 +390,16 @@ export default function TripsPage() {
             </div>
             {isLoading ? (
               <LoadingSpinner />
-            ) : allTrips.length === 0 ? (
-              <EmptyState 
+            ) : monthlyTrips.length === 0 ? (
+              <EmptyState
                 title="No Trips Found"
                 description={filterMode === "month" ? `No trips available for ${dateRangeLabel}. Try selecting another month.` : `No trips found for ${customFrom} to ${customTo}. Try adjusting the date range.`}
               />
             ) : (
-              allTrips.map((entry) => (
-                <TripCard 
-                  key={entry.id} 
-                  entry={entry} 
+              monthlyTrips.map((entry) => (
+                <TripCard
+                  key={entry.id}
+                  entry={entry}
                   tracker={trackerMap[entry.id]}
                   hasFreight={!!freightMap[entry.id]}
                   onOpenDetail={() => handleOpenTripDetail(entry)}
@@ -442,14 +422,14 @@ export default function TripsPage() {
   );
 }
 
-// Trip Card component
-function TripCard({ 
-  entry, 
+// Trip Card component — memoized to avoid re-render on parent state change
+const TripCard = memo(function TripCard({
+  entry,
   tracker,
   hasFreight,
-  onOpenDetail 
-}: { 
-  entry: TripEntry; 
+  onOpenDetail
+}: {
+  entry: TripEntry;
   tracker?: TrackerRecord;
   hasFreight: boolean;
   onOpenDetail: () => void;
@@ -457,11 +437,11 @@ function TripCard({
   const statusColor = entry.status === "completed"
     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
     : entry.status === "in_progress" || entry.status === "active"
-    ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-    : "bg-muted text-muted-foreground";
+      ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+      : "bg-muted text-muted-foreground";
 
   return (
-    <Card 
+    <Card
       className="hover:bg-muted/30 transition-colors cursor-pointer active:scale-[0.99]"
       onClick={onOpenDetail}
     >
@@ -470,11 +450,10 @@ function TripCard({
           <div className="flex items-center gap-2 min-w-0">
             <p className="font-medium text-sm truncate">{entry.client_name || entry.trip_number || "Trip"}</p>
             {tracker && (
-              <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                tracker.is_completed
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-              }`}>
+              <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tracker.is_completed
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                }`}>
                 <Clock className="w-2.5 h-2.5" />
                 {tracker.is_completed ? "360°" : `P${tracker.current_phase}`}
               </span>
@@ -509,4 +488,4 @@ function TripCard({
       </CardContent>
     </Card>
   );
-}
+});

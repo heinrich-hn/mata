@@ -21,45 +21,43 @@ import type { ReportResult } from '@/hooks/useWialonReports';
 import { supabase } from '@/integrations/supabase/client';
 import { useWialonContext, type VehicleLocation } from '@/integrations/wialon';
 import L from 'leaflet';
-import
-  {
-    ArrowDown,
-    ArrowUp,
-    ChevronLeft,
-    ChevronRight,
-    Eye,
-    EyeOff,
-    FileBarChart,
-    History,
-    Layers,
-    List,
-    Loader2,
-    MapPin,
-    Maximize2,
-    Play,
-    RefreshCw,
-    Route as RouteIcon,
-    Save,
-    Search,
-    Shield,
-    Square,
-    Truck,
-    X,
-    Zap
-  } from 'lucide-react';
+import {
+ArrowDown,
+ArrowUp,
+ChevronLeft,
+ChevronRight,
+Eye,
+EyeOff,
+FileBarChart,
+History,
+Layers,
+List,
+Loader2,
+MapPin,
+Maximize2,
+Play,
+RefreshCw,
+Route as RouteIcon,
+Save,
+Search,
+Shield,
+Square,
+Truck,
+X,
+Zap
+} from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import
-  {
-    Circle,
-    MapContainer,
-    Marker,
-    Polygon,
-    Polyline,
-    Popup,
-    TileLayer,
-    useMap
-  } from 'react-leaflet';
-import { SaveRouteDialog } from './loads/SaveRouteDialog';
+import {
+Circle,
+MapContainer,
+Marker,
+Polygon,
+Polyline,
+Popup,
+TileLayer,
+useMap
+} from 'react-leaflet';
+import { SaveRouteDialog } from './map/SaveRouteDialog';
 import { MapReportPanel } from './map/MapReportPanel';
 import { ReportResultsPanel } from './map/ReportResultsPanel';
 import WialonSensorWidget from './sensors/WialonSensorWidget';
@@ -1047,9 +1045,8 @@ const UnifiedMapView: React.FC = () => {
       <div className="flex h-[calc(100vh-4rem)] bg-background">
         {/* Collapsible Sidebar - Wider when expanded */}
         <div
-          className={`border-r bg-card flex flex-col transition-all duration-300 ${
-            sidebarCollapsed ? 'w-12' : 'w-96 xl:w-[400px]'
-          }`}
+          className={`border-r bg-card flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-12' : 'w-96 xl:w-[400px]'
+            }`}
         >
           {/* Sidebar Header */}
           <div className="p-3 border-b flex items-center justify-between">
@@ -1258,932 +1255,929 @@ const UnifiedMapView: React.FC = () => {
                   </Tooltip>
                 </TabsList>
 
-            {/* Vehicles Tab */}
-            <TabsContent value="vehicles" className="flex-1 overflow-hidden px-3 mt-3">
-              <div className="space-y-3 h-full flex flex-col">
-                {/* Connection Status */}
-                <Card className="shrink-0">
-                  <CardHeader className="pb-2 pt-3 px-3">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <Zap className={`h-4 w-4 ${wialonConnected ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        Wialon
-                      </span>
-                      <Badge
-                        variant={wialonConnected ? "default" : "secondary"}
-                        className={wialonConnected ? "bg-green-500" : ""}
-                      >
-                        {wialonConnected ? "Live" : "Offline"}
-                      </Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-3 pb-3">
-                    <div className="flex gap-2">
-                      {!wialonConnected ? (
-                        <Button
-                          size="sm"
-                          onClick={connectWialon}
-                          disabled={wialonLoading}
-                          className="w-full"
-                        >
-                          {wialonLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Connecting...
-                            </>
-                          ) : (
-                            "Connect"
-                          )}
-                        </Button>
-                      ) : (
-                        <>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={refreshUnits}
-                                className="flex-1"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Refresh Vehicles</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={fitMapToVehicles}
-                                className="flex-1"
-                              >
-                                <Maximize2 className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Fit All Vehicles</TooltipContent>
-                          </Tooltip>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={disconnectWialon}
-                            className="flex-1"
+                {/* Vehicles Tab */}
+                <TabsContent value="vehicles" className="flex-1 overflow-hidden px-3 mt-3">
+                  <div className="space-y-3 h-full flex flex-col">
+                    {/* Connection Status */}
+                    <Card className="shrink-0">
+                      <CardHeader className="pb-2 pt-3 px-3">
+                        <CardTitle className="text-sm flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <Zap className={`h-4 w-4 ${wialonConnected ? 'text-green-500' : 'text-muted-foreground'}`} />
+                            Wialon
+                          </span>
+                          <Badge
+                            variant={wialonConnected ? "default" : "secondary"}
+                            className={wialonConnected ? "bg-green-500" : ""}
                           >
-                            Disconnect
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Vehicle Search & Filter */}
-                {wialonConnected && (
-                  <div className="shrink-0 space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search vehicles..."
-                        value={vehicleSearchQuery}
-                        onChange={(e) => setVehicleSearchQuery(e.target.value)}
-                        className="pl-9 h-9"
-                      />
-                      {vehicleSearchQuery && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-1 top-1 h-7 w-7 p-0"
-                          onClick={() => setVehicleSearchQuery('')}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant={vehicleStatusFilter === 'all' ? 'default' : 'outline'}
-                        onClick={() => setVehicleStatusFilter('all')}
-                        className="flex-1 h-7 text-xs"
-                      >
-                        All
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={vehicleStatusFilter === 'moving' ? 'default' : 'outline'}
-                        onClick={() => setVehicleStatusFilter('moving')}
-                        className="flex-1 h-7 text-xs"
-                      >
-                        <div className="w-2 h-2 rounded-full bg-green-500 mr-1" />
-                        Moving
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={vehicleStatusFilter === 'stopped' ? 'default' : 'outline'}
-                        onClick={() => setVehicleStatusFilter('stopped')}
-                        className="flex-1 h-7 text-xs"
-                      >
-                        <div className="w-2 h-2 rounded-full bg-yellow-500 mr-1" />
-                        Stopped
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Vehicle List */}
-                {wialonConnected && (
-                  <Card className="flex-1 flex flex-col overflow-hidden">
-                    <CardHeader className="pb-2 pt-3 px-3">
-                      <CardTitle className="text-sm flex items-center justify-between">
-                        <span>
-                          Vehicles
-                          {vehicleSearchQuery && (
-                            <span className="text-muted-foreground ml-1">
-                              ({filteredVehicles.length} of {vehicleLocations.length})
-                            </span>
-                          )}
-                        </span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto px-3 pb-3">
-                      <div className="space-y-2">
-                        {filteredVehicles.length === 0 ? (
-                          <div className="text-center py-8 text-sm text-muted-foreground">
-                            {vehicleSearchQuery ? 'No vehicles match your search' : 'No vehicles available'}
-                          </div>
-                        ) : (
-                          filteredVehicles.map((vehicle) => (
-                            <div
-                              key={vehicle.vehicleId}
-                              className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                                selectedVehicle === vehicle.vehicleId
-                                  ? 'bg-primary/10 border-primary ring-1 ring-primary'
-                                  : 'bg-background hover:bg-muted'
-                              }`}
-                              onClick={() => focusOnVehicle(vehicle)}
-                            >
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium text-sm truncate">
-                                    {vehicle.vehicleName}
-                                  </span>
-                                  <div className="flex items-center gap-1">
-                                    {selectedVehicle === vehicle.vehicleId && (
-                                      <Badge variant="default" className="text-xs h-5">
-                                        <Zap className="h-3 w-3 mr-1" />
-                                        Live
-                                      </Badge>
-                                    )}
-                                    {trackVisualization.isEnabled && (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              generateVehicleTrack(vehicle.vehicleId, vehicle.vehicleName);
-                                            }}
-                                            className="h-6 w-6 p-0"
-                                            disabled={activeTracks.has(vehicle.vehicleId)}
-                                          >
-                                            <Play className="h-3 w-3" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Load Track History</TooltipContent>
-                                      </Tooltip>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${
-                                      vehicle.speed > 0 ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'
-                                    }`} />
-                                    <span className={vehicle.speed > 0 ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
-                                      {vehicle.speed > 0 ? 'Moving' : 'Stopped'}
-                                    </span>
-                                  </div>
-                                  <span className="font-mono font-medium">{Math.round(vehicle.speed)} km/h</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Tracks Tab */}
-            <TabsContent value="tracks" className="flex-1 overflow-hidden px-3 mt-3">
-              <div className="space-y-4 h-full flex flex-col">
-                {/* Track Controls */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      Track Visualization
-                      <Button
-                        size="sm"
-                        variant={trackVisualization.isEnabled ? "default" : "outline"}
-                        onClick={() => setTrackVisualization(prev => ({
-                          ...prev,
-                          isEnabled: !prev.isEnabled
-                        }))}
-                      >
-                        {trackVisualization.isEnabled ? "Enabled" : "Disabled"}
-                      </Button>
-                    </CardTitle>
-                  </CardHeader>
-                  {trackVisualization.isEnabled && (
-                    <CardContent className="space-y-3">
-                      <div>
-                        <Label className="text-xs mb-1 block">Date</Label>
-                        <DatePicker
-                          value={new Date(trackVisualization.selectedDate)}
-                          onChange={(date) => setTrackVisualization(prev => ({
-                            ...prev,
-                            selectedDate: date ? date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
-                          }))}
-                          placeholder="Select date"
-                          className="w-full text-xs"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs mb-1 block">Time Range</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-muted-foreground">From</Label>
-                            <Input
-                              type="time"
-                              value={trackVisualization.timeRange.start}
-                              onChange={(e) => setTrackVisualization(prev => ({
-                                ...prev,
-                                timeRange: { ...prev.timeRange, start: e.target.value }
-                              }))}
-                              className="text-xs h-8"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-[10px] text-muted-foreground">To</Label>
-                            <Input
-                              type="time"
-                              value={trackVisualization.timeRange.end}
-                              onChange={(e) => setTrackVisualization(prev => ({
-                                ...prev,
-                                timeRange: { ...prev.timeRange, end: e.target.value }
-                              }))}
-                              className="text-xs h-8"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
-
-                {/* Load Vehicle Track */}
-                {trackVisualization.isEnabled && wialonConnected && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm">Load Historical Route</CardTitle>
-                      <CardDescription className="text-xs">
-                        Select a vehicle to view its historical GPS track
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {/* Vehicle Quick Select */}
-                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                          {vehicleLocations.map((vehicle) => (
+                            {wialonConnected ? "Live" : "Offline"}
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-3 pb-3">
+                        <div className="flex gap-2">
+                          {!wialonConnected ? (
                             <Button
-                              key={vehicle.vehicleId}
-                              variant={activeTracks.has(vehicle.vehicleId) ? "default" : "outline"}
                               size="sm"
-                              onClick={() => generateVehicleTrack(vehicle.vehicleId, vehicle.vehicleName)}
-                              disabled={activeTracks.has(vehicle.vehicleId)}
-                              className="h-auto py-2 px-2 flex-col items-start text-left"
+                              onClick={connectWialon}
+                              disabled={wialonLoading}
+                              className="w-full"
                             >
-                              <div className="flex items-center gap-1.5 w-full">
-                                {activeTracks.has(vehicle.vehicleId) ? (
-                                  <History className="h-3 w-3 shrink-0" />
-                                ) : (
-                                  <Play className="h-3 w-3 shrink-0" />
-                                )}
-                                <span className="text-xs font-medium truncate flex-1">
-                                  {vehicle.vehicleName}
-                                </span>
-                              </div>
-                              {activeTracks.has(vehicle.vehicleId) && (
-                                <span className="text-[10px] text-muted-foreground mt-0.5">
-                                  ✓ Loaded
-                                </span>
+                              {wialonLoading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Connecting...
+                                </>
+                              ) : (
+                                "Connect"
                               )}
                             </Button>
-                          ))}
-                        </div>
-                        {vehicleLocations.length === 0 && (
-                          <div className="text-center py-4 text-xs text-muted-foreground">
-                            No vehicles available. Check Wialon connection.
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Active Tracks */}
-                {activeTracks.size > 0 ? (
-                  <Card className="flex-1 flex flex-col overflow-hidden">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center justify-between">
-                        Active Tracks ({activeTracks.size})
-                        <Button size="sm" variant="ghost" onClick={clearAllTracks}>
-                          <X className="h-3 w-3 mr-1" />
-                          Clear All
-                        </Button>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto">
-                      <div className="space-y-2">
-                        {Array.from(activeTracks.values()).map(track => (
-                          <div key={track.unitId} className="flex items-center gap-2 p-2 bg-background rounded border">
-                            <div
-                              className="w-3 h-3 rounded-full border shrink-0"
-                              style={{ backgroundColor: track.color }}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{track.unitName}</p>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>{track.mileage} km</span>
-                                <span>•</span>
-                                <span>{track.points.length} points</span>
-                                {track.isDemo && (
-                                  <>
-                                    <span>•</span>
-                                    <Badge variant="secondary" className="text-[10px] h-4 px-1">Demo</Badge>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex gap-1 shrink-0">
+                          ) : (
+                            <>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
                                     size="sm"
-                                    variant="ghost"
-                                    onClick={() => toggleTrackVisibility(track.unitId)}
-                                    className="h-7 w-7 p-0"
+                                    variant="outline"
+                                    onClick={refreshUnits}
+                                    className="flex-1"
                                   >
-                                    {track.isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                                    <RefreshCw className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>{track.isVisible ? 'Hide' : 'Show'} Track</TooltipContent>
+                                <TooltipContent>Refresh Vehicles</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
                                     size="sm"
-                                    variant="ghost"
-                                    onClick={() => removeTrack(track.unitId)}
-                                    className="h-7 w-7 p-0"
+                                    variant="outline"
+                                    onClick={fitMapToVehicles}
+                                    className="flex-1"
                                   >
-                                    <X className="h-3 w-3" />
+                                    <Maximize2 className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Remove Track</TooltipContent>
+                                <TooltipContent>Fit All Vehicles</TooltipContent>
                               </Tooltip>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : trackVisualization.isEnabled ? (
-                  <Card className="flex-1 flex flex-col">
-                    <CardContent className="flex-1 flex items-center justify-center p-8">
-                      <div className="text-center space-y-3">
-                        <History className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                        <h3 className="font-medium text-sm">No Tracks Loaded</h3>
-                        <p className="text-xs text-muted-foreground max-w-xs">
-                          Click on any vehicle button above to load its historical GPS route for the selected date and time range
-                        </p>
-                        <div className="pt-2 flex justify-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            <Play className="h-3 w-3 mr-1" />
-                            Click to load
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px]">
-                            <History className="h-3 w-3 mr-1" />
-                            Shows loaded
-                          </Badge>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={disconnectWialon}
+                                className="flex-1"
+                              >
+                                Disconnect
+                              </Button>
+                            </>
+                          )}
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card className="flex-1 flex flex-col">
-                    <CardContent className="flex-1 flex items-center justify-center p-8">
-                      <div className="text-center space-y-3">
-                        <History className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                        <h3 className="font-medium text-sm">Track Visualization Disabled</h3>
-                        <p className="text-xs text-muted-foreground max-w-xs">
-                          Click <strong>"Disabled"</strong> button above to enable historical route tracking
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
+                      </CardContent>
+                    </Card>
 
-            {/* Geofences Tab */}
-            <TabsContent value="geofences" className="flex-1 overflow-hidden px-4">
-              <Card className="h-full flex flex-col">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center justify-between">
-                    Geofences ({geofences.length})
-                    <Button
-                      size="sm"
-                      variant={isCreatingRoute ? "default" : "outline"}
-                      onClick={() => setIsCreatingRoute(!isCreatingRoute)}
-                    >
-                      {isCreatingRoute ? "Creating Route" : "Create Route"}
-                    </Button>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto">
-                  <div className="space-y-2">
-                    {geofences.length === 0 ? (
-                      <div className="text-center text-sm text-muted-foreground py-8">
-                        No geofences available
-                      </div>
-                    ) : (
-                      geofences.map(geofence => {
-                        const isSelected = selectedGeofences.has(geofence.id);
-                        return (
-                          <div
-                            key={geofence.id}
-                            className={`p-3 border rounded cursor-pointer transition-colors ${
-                              isSelected ? 'bg-primary/10 border-primary' : 'bg-background hover:bg-muted'
-                            }`}
-                            onClick={() => {
-                              if (isCreatingRoute) {
-                                toggleGeofenceSelection(geofence.id);
-                              }
-                            }}
+                    {/* Vehicle Search & Filter */}
+                    {wialonConnected && (
+                      <div className="shrink-0 space-y-2">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Search vehicles..."
+                            value={vehicleSearchQuery}
+                            onChange={(e) => setVehicleSearchQuery(e.target.value)}
+                            className="pl-9 h-9"
+                          />
+                          {vehicleSearchQuery && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-1 top-1 h-7 w-7 p-0"
+                              onClick={() => setVehicleSearchQuery('')}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant={vehicleStatusFilter === 'all' ? 'default' : 'outline'}
+                            onClick={() => setVehicleStatusFilter('all')}
+                            className="flex-1 h-7 text-xs"
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <p className="font-medium text-sm truncate hover:text-clip hover:whitespace-normal hover:break-words">
-                                      {geofence.name}
-                                    </p>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="right" className="max-w-xs">
-                                    <p className="font-semibold">{geofence.name}</p>
-                                    {geofence.description && <p className="text-xs mt-1">{geofence.description}</p>}
-                                  </TooltipContent>
-                                </Tooltip>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Badge variant="outline" className="text-xs">
-                                    {geofence.type}
-                                  </Badge>
-                                  {geofence.color && (
-                                    <div
-                                      className="w-3 h-3 rounded-full border"
-                                      style={{ backgroundColor: geofence.color }}
-                                    />
-                                  )}
-                                </div>
-                                {geofence.description && (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <p className="text-xs text-muted-foreground mt-1 truncate">
-                                        {geofence.description}
-                                      </p>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-xs">
-                                      {geofence.description}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
+                            All
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={vehicleStatusFilter === 'moving' ? 'default' : 'outline'}
+                            onClick={() => setVehicleStatusFilter('moving')}
+                            className="flex-1 h-7 text-xs"
+                          >
+                            <div className="w-2 h-2 rounded-full bg-green-500 mr-1" />
+                            Moving
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={vehicleStatusFilter === 'stopped' ? 'default' : 'outline'}
+                            onClick={() => setVehicleStatusFilter('stopped')}
+                            className="flex-1 h-7 text-xs"
+                          >
+                            <div className="w-2 h-2 rounded-full bg-yellow-500 mr-1" />
+                            Stopped
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Vehicle List */}
+                    {wialonConnected && (
+                      <Card className="flex-1 flex flex-col overflow-hidden">
+                        <CardHeader className="pb-2 pt-3 px-3">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            <span>
+                              Vehicles
+                              {vehicleSearchQuery && (
+                                <span className="text-muted-foreground ml-1">
+                                  ({filteredVehicles.length} of {vehicleLocations.length})
+                                </span>
+                              )}
+                            </span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-y-auto px-3 pb-3">
+                          <div className="space-y-2">
+                            {filteredVehicles.length === 0 ? (
+                              <div className="text-center py-8 text-sm text-muted-foreground">
+                                {vehicleSearchQuery ? 'No vehicles match your search' : 'No vehicles available'}
                               </div>
-                              {isCreatingRoute && geofence.center_lat && geofence.center_lng && (
+                            ) : (
+                              filteredVehicles.map((vehicle) => (
+                                <div
+                                  key={vehicle.vehicleId}
+                                  className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${selectedVehicle === vehicle.vehicleId
+                                      ? 'bg-primary/10 border-primary ring-1 ring-primary'
+                                      : 'bg-background hover:bg-muted'
+                                    }`}
+                                  onClick={() => focusOnVehicle(vehicle)}
+                                >
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium text-sm truncate">
+                                        {vehicle.vehicleName}
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        {selectedVehicle === vehicle.vehicleId && (
+                                          <Badge variant="default" className="text-xs h-5">
+                                            <Zap className="h-3 w-3 mr-1" />
+                                            Live
+                                          </Badge>
+                                        )}
+                                        {trackVisualization.isEnabled && (
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  generateVehicleTrack(vehicle.vehicleId, vehicle.vehicleName);
+                                                }}
+                                                className="h-6 w-6 p-0"
+                                                disabled={activeTracks.has(vehicle.vehicleId)}
+                                              >
+                                                <Play className="h-3 w-3" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Load Track History</TooltipContent>
+                                          </Tooltip>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${vehicle.speed > 0 ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'
+                                          }`} />
+                                        <span className={vehicle.speed > 0 ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
+                                          {vehicle.speed > 0 ? 'Moving' : 'Stopped'}
+                                        </span>
+                                      </div>
+                                      <span className="font-mono font-medium">{Math.round(vehicle.speed)} km/h</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </TabsContent>
+
+                {/* Tracks Tab */}
+                <TabsContent value="tracks" className="flex-1 overflow-hidden px-3 mt-3">
+                  <div className="space-y-4 h-full flex flex-col">
+                    {/* Track Controls */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center justify-between">
+                          Track Visualization
+                          <Button
+                            size="sm"
+                            variant={trackVisualization.isEnabled ? "default" : "outline"}
+                            onClick={() => setTrackVisualization(prev => ({
+                              ...prev,
+                              isEnabled: !prev.isEnabled
+                            }))}
+                          >
+                            {trackVisualization.isEnabled ? "Enabled" : "Disabled"}
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      {trackVisualization.isEnabled && (
+                        <CardContent className="space-y-3">
+                          <div>
+                            <Label className="text-xs mb-1 block">Date</Label>
+                            <DatePicker
+                              value={new Date(trackVisualization.selectedDate)}
+                              onChange={(date) => setTrackVisualization(prev => ({
+                                ...prev,
+                                selectedDate: date ? date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+                              }))}
+                              placeholder="Select date"
+                              className="w-full text-xs"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs mb-1 block">Time Range</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-muted-foreground">From</Label>
+                                <Input
+                                  type="time"
+                                  value={trackVisualization.timeRange.start}
+                                  onChange={(e) => setTrackVisualization(prev => ({
+                                    ...prev,
+                                    timeRange: { ...prev.timeRange, start: e.target.value }
+                                  }))}
+                                  className="text-xs h-8"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-muted-foreground">To</Label>
+                                <Input
+                                  type="time"
+                                  value={trackVisualization.timeRange.end}
+                                  onChange={(e) => setTrackVisualization(prev => ({
+                                    ...prev,
+                                    timeRange: { ...prev.timeRange, end: e.target.value }
+                                  }))}
+                                  className="text-xs h-8"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+
+                    {/* Load Vehicle Track */}
+                    {trackVisualization.isEnabled && wialonConnected && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Load Historical Route</CardTitle>
+                          <CardDescription className="text-xs">
+                            Select a vehicle to view its historical GPS track
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {/* Vehicle Quick Select */}
+                            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                              {vehicleLocations.map((vehicle) => (
+                                <Button
+                                  key={vehicle.vehicleId}
+                                  variant={activeTracks.has(vehicle.vehicleId) ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => generateVehicleTrack(vehicle.vehicleId, vehicle.vehicleName)}
+                                  disabled={activeTracks.has(vehicle.vehicleId)}
+                                  className="h-auto py-2 px-2 flex-col items-start text-left"
+                                >
+                                  <div className="flex items-center gap-1.5 w-full">
+                                    {activeTracks.has(vehicle.vehicleId) ? (
+                                      <History className="h-3 w-3 shrink-0" />
+                                    ) : (
+                                      <Play className="h-3 w-3 shrink-0" />
+                                    )}
+                                    <span className="text-xs font-medium truncate flex-1">
+                                      {vehicle.vehicleName}
+                                    </span>
+                                  </div>
+                                  {activeTracks.has(vehicle.vehicleId) && (
+                                    <span className="text-[10px] text-muted-foreground mt-0.5">
+                                      ✓ Loaded
+                                    </span>
+                                  )}
+                                </Button>
+                              ))}
+                            </div>
+                            {vehicleLocations.length === 0 && (
+                              <div className="text-center py-4 text-xs text-muted-foreground">
+                                No vehicles available. Check Wialon connection.
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Active Tracks */}
+                    {activeTracks.size > 0 ? (
+                      <Card className="flex-1 flex flex-col overflow-hidden">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm flex items-center justify-between">
+                            Active Tracks ({activeTracks.size})
+                            <Button size="sm" variant="ghost" onClick={clearAllTracks}>
+                              <X className="h-3 w-3 mr-1" />
+                              Clear All
+                            </Button>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-y-auto">
+                          <div className="space-y-2">
+                            {Array.from(activeTracks.values()).map(track => (
+                              <div key={track.unitId} className="flex items-center gap-2 p-2 bg-background rounded border">
+                                <div
+                                  className="w-3 h-3 rounded-full border shrink-0"
+                                  style={{ backgroundColor: track.color }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{track.unitName}</p>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span>{track.mileage} km</span>
+                                    <span>•</span>
+                                    <span>{track.points.length} points</span>
+                                    {track.isDemo && (
+                                      <>
+                                        <span>•</span>
+                                        <Badge variant="secondary" className="text-[10px] h-4 px-1">Demo</Badge>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
                                 <div className="flex gap-1 shrink-0">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Button
                                         size="sm"
                                         variant="ghost"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          addGeofenceToRoute(geofence, 'pickup');
-                                        }}
-                                        className="text-xs h-7 w-7 p-0"
+                                        onClick={() => toggleTrackVisibility(track.unitId)}
+                                        className="h-7 w-7 p-0"
                                       >
-                                        📦
+                                        {track.isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                                       </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent>Add as Pickup</TooltipContent>
+                                    <TooltipContent>{track.isVisible ? 'Hide' : 'Show'} Track</TooltipContent>
                                   </Tooltip>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Button
                                         size="sm"
                                         variant="ghost"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          addGeofenceToRoute(geofence, 'delivery');
-                                        }}
-                                        className="text-xs h-7 w-7 p-0"
+                                        onClick={() => removeTrack(track.unitId)}
+                                        className="h-7 w-7 p-0"
                                       >
-                                        🚚
+                                        <X className="h-3 w-3" />
                                       </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent>Add as Delivery</TooltipContent>
+                                    <TooltipContent>Remove Track</TooltipContent>
                                   </Tooltip>
                                 </div>
-                              )}
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : trackVisualization.isEnabled ? (
+                      <Card className="flex-1 flex flex-col">
+                        <CardContent className="flex-1 flex items-center justify-center p-8">
+                          <div className="text-center space-y-3">
+                            <History className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                            <h3 className="font-medium text-sm">No Tracks Loaded</h3>
+                            <p className="text-xs text-muted-foreground max-w-xs">
+                              Click on any vehicle button above to load its historical GPS route for the selected date and time range
+                            </p>
+                            <div className="pt-2 flex justify-center gap-2">
+                              <Badge variant="outline" className="text-[10px]">
+                                <Play className="h-3 w-3 mr-1" />
+                                Click to load
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                <History className="h-3 w-3 mr-1" />
+                                Shows loaded
+                              </Badge>
                             </div>
                           </div>
-                        );
-                      })
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card className="flex-1 flex flex-col">
+                        <CardContent className="flex-1 flex items-center justify-center p-8">
+                          <div className="text-center space-y-3">
+                            <History className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                            <h3 className="font-medium text-sm">Track Visualization Disabled</h3>
+                            <p className="text-xs text-muted-foreground max-w-xs">
+                              Click <strong>"Disabled"</strong> button above to enable historical route tracking
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </TabsContent>
 
-            {/* Routes Tab */}
-            <TabsContent value="routes" className="flex-1 overflow-hidden px-4">
-              <div className="space-y-4 h-full flex flex-col">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      Route Planning
-                      {routeWaypoints.length > 0 && (
-                        <Badge>{routeWaypoints.length} stops</Badge>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {routeWaypoints.length > 0 && (
-                      <>
-                        <div className="text-xs space-y-1">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Total Distance:</span>
-                            <span className="font-medium">{calculateRouteDistance()} km</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Est. Duration:</span>
-                            <span className="font-medium">
-                              {Math.floor(calculateEstimatedDuration() / 60)}h {calculateEstimatedDuration() % 60}m
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Waypoints:</span>
-                            <span className="font-medium">{routeWaypoints.length}</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={optimizeRoute} className="flex-1">
-                            Optimize
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => setIsSaveRouteDialogOpen(true)}
-                            className="flex-1 bg-green-600 hover:bg-green-700"
-                          >
-                            <Save className="h-3 w-3 mr-1" />
-                            Save
-                          </Button>
-                          <Button size="sm" variant="destructive" onClick={clearRoute}>
-                            Clear
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                    {routeWaypoints.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-4">
-                        Go to Geofences tab and click "Create Route" to start adding waypoints
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Saved Routes Templates */}
-                {savedRoutes.length > 0 && (
-                  <Card>
+                {/* Geofences Tab */}
+                <TabsContent value="geofences" className="flex-1 overflow-hidden px-4">
+                  <Card className="h-full flex flex-col">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-sm">Saved Route Templates</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 max-h-48 overflow-y-auto">
-                      {loadingSavedRoutes ? (
-                        <p className="text-xs text-muted-foreground text-center py-2">Loading...</p>
-                      ) : (
-                        savedRoutes.map((route) => (
-                          <div key={route.id} className="flex items-center justify-between p-2 bg-background rounded border">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{route.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {route.waypoints.length} stops · {route.total_distance_km} km
-                                {route.usage_count > 0 && ` · Used ${route.usage_count}×`}
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleLoadRouteTemplate(route.id)}
-                              className="ml-2"
-                            >
-                              Load
-                            </Button>
-                          </div>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {routeWaypoints.length > 0 && (
-                  <Card className="flex-1 flex flex-col overflow-hidden">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm">Waypoints</CardTitle>
+                      <CardTitle className="text-sm flex items-center justify-between">
+                        Geofences ({geofences.length})
+                        <Button
+                          size="sm"
+                          variant={isCreatingRoute ? "default" : "outline"}
+                          onClick={() => setIsCreatingRoute(!isCreatingRoute)}
+                        >
+                          {isCreatingRoute ? "Creating Route" : "Create Route"}
+                        </Button>
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="flex-1 overflow-y-auto">
                       <div className="space-y-2">
-                        {routeWaypoints.map((waypoint, index) => (
-                          <div key={waypoint.id} className="flex items-center gap-2 p-2 bg-background rounded border">
-                            <div className="flex flex-col gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => moveWaypointUp(index)}
-                                disabled={index === 0}
-                                className="h-4 w-4 p-0"
-                                title="Move up"
-                              >
-                                <ArrowUp className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => moveWaypointDown(index)}
-                                disabled={index === routeWaypoints.length - 1}
-                                className="h-4 w-4 p-0"
-                                title="Move down"
-                              >
-                                <ArrowDown className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
-                              {index + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{waypoint.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {waypoint.type === 'pickup' ? '📦 Pickup' : waypoint.type === 'delivery' ? '🚚 Delivery' : '🛑 Stop'}
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => removeWaypoint(waypoint.id)}
-                              className="h-6 w-6 p-0"
-                              title="Remove waypoint"
-                            >
-                              <Square className="h-3 w-3" />
-                            </Button>
+                        {geofences.length === 0 ? (
+                          <div className="text-center text-sm text-muted-foreground py-8">
+                            No geofences available
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Layers Tab */}
-            <TabsContent value="layers" className="flex-1 overflow-hidden px-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Layer Visibility</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(Object.keys(layerVisibility) as Array<keyof LayerState>).map(layer => (
-                    <div key={layer} className="flex items-center justify-between">
-                      <span className="text-sm capitalize">{layer}</span>
-                      <Button
-                        size="sm"
-                        variant={layerVisibility[layer] ? "default" : "outline"}
-                        onClick={() => toggleLayer(layer)}
-                        className="h-6"
-                      >
-                        {layerVisibility[layer] ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                      </Button>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Table View Tab */}
-            <TabsContent value="table" className="flex-1 overflow-hidden px-3 mt-3">
-              <div className="space-y-4 h-full flex flex-col">
-                <Card>
-                  <CardHeader className="pb-2 pt-3 px-3">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      <span>Live Vehicle Data</span>
-                      <Badge variant="outline" className="text-xs">
-                        {vehicleLocations.length} vehicles
-                      </Badge>
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      Real-time GPS positions from Wialon
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-3 pb-3">
-                    {!wialonConnected ? (
-                      <div className="text-center py-8 text-sm text-muted-foreground">
-                        <MapPin className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>Connect to Wialon to view vehicle data</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {/* Quick Stats */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="bg-muted/30 rounded-lg p-3 text-center">
-                            <p className="text-2xl font-bold">{vehicleStats.total}</p>
-                            <p className="text-xs text-muted-foreground">Total Vehicles</p>
-                          </div>
-                          <div className="bg-green-500/10 rounded-lg p-3 text-center">
-                            <p className="text-2xl font-bold text-green-600">{vehicleStats.moving}</p>
-                            <p className="text-xs text-muted-foreground">Moving</p>
-                          </div>
-                          <div className="bg-yellow-500/10 rounded-lg p-3 text-center">
-                            <p className="text-2xl font-bold text-yellow-600">{vehicleStats.stopped}</p>
-                            <p className="text-xs text-muted-foreground">Stopped</p>
-                          </div>
-                          <div className="bg-blue-500/10 rounded-lg p-3 text-center">
-                            <p className="text-2xl font-bold text-blue-600">
-                              {vehicleLocations.length > 0
-                                ? Math.round(vehicleLocations.reduce((sum, v) => sum + v.speed, 0) / vehicleLocations.length)
-                                : 0}
-                            </p>
-                            <p className="text-xs text-muted-foreground">Avg km/h</p>
-                          </div>
-                        </div>
-
-                        {/* Open Full Table Button */}
-                        <Button
-                          className="w-full"
-                          size="lg"
-                          onClick={() => {
-                            setIsVehicleDataPanelOpen(true);
-                            // Close report panel if open to avoid overlap
-                            if (isReportPanelOpen) {
-                              setIsReportPanelOpen(false);
-                              setIsReportPanelExpanded(false);
-                            }
-                          }}
-                          disabled={vehicleLocations.length === 0}
-                        >
-                          <Maximize2 className="h-4 w-4 mr-2" />
-                          Open Full Table View
-                        </Button>
-
-                        <p className="text-xs text-muted-foreground text-center">
-                          Click to view detailed vehicle data in a full-width table
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Recent Vehicles List (condensed preview) */}
-                {wialonConnected && vehicleLocations.length > 0 && (
-                  <Card className="flex-1 flex flex-col overflow-hidden">
-                    <CardHeader className="pb-2 pt-2 px-3">
-                      <CardTitle className="text-xs text-muted-foreground">Quick Preview</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-auto px-3 pb-3">
-                      <div className="space-y-1">
-                        {vehicleLocations.slice(0, 5).map((vehicle) => (
-                          <div
-                            key={vehicle.vehicleId}
-                            className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 cursor-pointer text-sm"
-                            onClick={() => focusOnVehicle(vehicle)}
-                          >
-                            <div className="flex items-center gap-2">
+                        ) : (
+                          geofences.map(geofence => {
+                            const isSelected = selectedGeofences.has(geofence.id);
+                            return (
                               <div
-                                className={`w-2 h-2 rounded-full ${vehicle.speed > 0 ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}
-                              />
-                              <span className="font-medium truncate max-w-[120px]">{vehicle.vehicleName}</span>
-                            </div>
-                            <span className="text-xs font-mono text-muted-foreground">
-                              {Math.round(vehicle.speed)} km/h
-                            </span>
-                          </div>
-                        ))}
-                        {vehicleLocations.length > 5 && (
-                          <p className="text-xs text-center text-muted-foreground pt-2">
-                            +{vehicleLocations.length - 5} more vehicles
-                          </p>
+                                key={geofence.id}
+                                className={`p-3 border rounded cursor-pointer transition-colors ${isSelected ? 'bg-primary/10 border-primary' : 'bg-background hover:bg-muted'
+                                  }`}
+                                onClick={() => {
+                                  if (isCreatingRoute) {
+                                    toggleGeofenceSelection(geofence.id);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <p className="font-medium text-sm truncate hover:text-clip hover:whitespace-normal hover:break-words">
+                                          {geofence.name}
+                                        </p>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-xs">
+                                        <p className="font-semibold">{geofence.name}</p>
+                                        {geofence.description && <p className="text-xs mt-1">{geofence.description}</p>}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge variant="outline" className="text-xs">
+                                        {geofence.type}
+                                      </Badge>
+                                      {geofence.color && (
+                                        <div
+                                          className="w-3 h-3 rounded-full border"
+                                          style={{ backgroundColor: geofence.color }}
+                                        />
+                                      )}
+                                    </div>
+                                    {geofence.description && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <p className="text-xs text-muted-foreground mt-1 truncate">
+                                            {geofence.description}
+                                          </p>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right" className="max-w-xs">
+                                          {geofence.description}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                  </div>
+                                  {isCreatingRoute && geofence.center_lat && geofence.center_lng && (
+                                    <div className="flex gap-1 shrink-0">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              addGeofenceToRoute(geofence, 'pickup');
+                                            }}
+                                            className="text-xs h-7 w-7 p-0"
+                                          >
+                                            📦
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Add as Pickup</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              addGeofenceToRoute(geofence, 'delivery');
+                                            }}
+                                            className="text-xs h-7 w-7 p-0"
+                                          >
+                                            🚚
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Add as Delivery</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
                         )}
                       </div>
                     </CardContent>
                   </Card>
-                )}
-              </div>
-            </TabsContent>
+                </TabsContent>
 
-            {/* Reports Tab */}
-            <TabsContent value="reports" className="flex-1 overflow-hidden px-3 mt-3">
-              <MapReportPanel
-                onReportGenerated={(result) => {
-                  setReportResult(result);
-                  setIsReportPanelOpen(true);
-                }}
-              />
-            </TabsContent>
-          </Tabs>
+                {/* Routes Tab */}
+                <TabsContent value="routes" className="flex-1 overflow-hidden px-4">
+                  <div className="space-y-4 h-full flex flex-col">
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center justify-between">
+                          Route Planning
+                          {routeWaypoints.length > 0 && (
+                            <Badge>{routeWaypoints.length} stops</Badge>
+                          )}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {routeWaypoints.length > 0 && (
+                          <>
+                            <div className="text-xs space-y-1">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Total Distance:</span>
+                                <span className="font-medium">{calculateRouteDistance()} km</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Est. Duration:</span>
+                                <span className="font-medium">
+                                  {Math.floor(calculateEstimatedDuration() / 60)}h {calculateEstimatedDuration() % 60}m
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Waypoints:</span>
+                                <span className="font-medium">{routeWaypoints.length}</span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={optimizeRoute} className="flex-1">
+                                Optimize
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => setIsSaveRouteDialogOpen(true)}
+                                className="flex-1 bg-green-600 hover:bg-green-700"
+                              >
+                                <Save className="h-3 w-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={clearRoute}>
+                                Clear
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                        {routeWaypoints.length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-4">
+                            Go to Geofences tab and click "Create Route" to start adding waypoints
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Saved Routes Templates */}
+                    {savedRoutes.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Saved Route Templates</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 max-h-48 overflow-y-auto">
+                          {loadingSavedRoutes ? (
+                            <p className="text-xs text-muted-foreground text-center py-2">Loading...</p>
+                          ) : (
+                            savedRoutes.map((route) => (
+                              <div key={route.id} className="flex items-center justify-between p-2 bg-background rounded border">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{route.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {route.waypoints.length} stops · {route.total_distance_km} km
+                                    {route.usage_count > 0 && ` · Used ${route.usage_count}×`}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleLoadRouteTemplate(route.id)}
+                                  className="ml-2"
+                                >
+                                  Load
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {routeWaypoints.length > 0 && (
+                      <Card className="flex-1 flex flex-col overflow-hidden">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Waypoints</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-y-auto">
+                          <div className="space-y-2">
+                            {routeWaypoints.map((waypoint, index) => (
+                              <div key={waypoint.id} className="flex items-center gap-2 p-2 bg-background rounded border">
+                                <div className="flex flex-col gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => moveWaypointUp(index)}
+                                    disabled={index === 0}
+                                    className="h-4 w-4 p-0"
+                                    title="Move up"
+                                  >
+                                    <ArrowUp className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => moveWaypointDown(index)}
+                                    disabled={index === routeWaypoints.length - 1}
+                                    className="h-4 w-4 p-0"
+                                    title="Move down"
+                                  >
+                                    <ArrowDown className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                                  {index + 1}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{waypoint.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {waypoint.type === 'pickup' ? '📦 Pickup' : waypoint.type === 'delivery' ? '🚚 Delivery' : '🛑 Stop'}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => removeWaypoint(waypoint.id)}
+                                  className="h-6 w-6 p-0"
+                                  title="Remove waypoint"
+                                >
+                                  <Square className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </TabsContent>
+
+                {/* Layers Tab */}
+                <TabsContent value="layers" className="flex-1 overflow-hidden px-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm">Layer Visibility</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {(Object.keys(layerVisibility) as Array<keyof LayerState>).map(layer => (
+                        <div key={layer} className="flex items-center justify-between">
+                          <span className="text-sm capitalize">{layer}</span>
+                          <Button
+                            size="sm"
+                            variant={layerVisibility[layer] ? "default" : "outline"}
+                            onClick={() => toggleLayer(layer)}
+                            className="h-6"
+                          >
+                            {layerVisibility[layer] ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                          </Button>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Table View Tab */}
+                <TabsContent value="table" className="flex-1 overflow-hidden px-3 mt-3">
+                  <div className="space-y-4 h-full flex flex-col">
+                    <Card>
+                      <CardHeader className="pb-2 pt-3 px-3">
+                        <CardTitle className="text-sm flex items-center justify-between">
+                          <span>Live Vehicle Data</span>
+                          <Badge variant="outline" className="text-xs">
+                            {vehicleLocations.length} vehicles
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Real-time GPS positions from Wialon
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="px-3 pb-3">
+                        {!wialonConnected ? (
+                          <div className="text-center py-8 text-sm text-muted-foreground">
+                            <MapPin className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>Connect to Wialon to view vehicle data</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* Quick Stats */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="bg-muted/30 rounded-lg p-3 text-center">
+                                <p className="text-2xl font-bold">{vehicleStats.total}</p>
+                                <p className="text-xs text-muted-foreground">Total Vehicles</p>
+                              </div>
+                              <div className="bg-green-500/10 rounded-lg p-3 text-center">
+                                <p className="text-2xl font-bold text-green-600">{vehicleStats.moving}</p>
+                                <p className="text-xs text-muted-foreground">Moving</p>
+                              </div>
+                              <div className="bg-yellow-500/10 rounded-lg p-3 text-center">
+                                <p className="text-2xl font-bold text-yellow-600">{vehicleStats.stopped}</p>
+                                <p className="text-xs text-muted-foreground">Stopped</p>
+                              </div>
+                              <div className="bg-blue-500/10 rounded-lg p-3 text-center">
+                                <p className="text-2xl font-bold text-blue-600">
+                                  {vehicleLocations.length > 0
+                                    ? Math.round(vehicleLocations.reduce((sum, v) => sum + v.speed, 0) / vehicleLocations.length)
+                                    : 0}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Avg km/h</p>
+                              </div>
+                            </div>
+
+                            {/* Open Full Table Button */}
+                            <Button
+                              className="w-full"
+                              size="lg"
+                              onClick={() => {
+                                setIsVehicleDataPanelOpen(true);
+                                // Close report panel if open to avoid overlap
+                                if (isReportPanelOpen) {
+                                  setIsReportPanelOpen(false);
+                                  setIsReportPanelExpanded(false);
+                                }
+                              }}
+                              disabled={vehicleLocations.length === 0}
+                            >
+                              <Maximize2 className="h-4 w-4 mr-2" />
+                              Open Full Table View
+                            </Button>
+
+                            <p className="text-xs text-muted-foreground text-center">
+                              Click to view detailed vehicle data in a full-width table
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Recent Vehicles List (condensed preview) */}
+                    {wialonConnected && vehicleLocations.length > 0 && (
+                      <Card className="flex-1 flex flex-col overflow-hidden">
+                        <CardHeader className="pb-2 pt-2 px-3">
+                          <CardTitle className="text-xs text-muted-foreground">Quick Preview</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-auto px-3 pb-3">
+                          <div className="space-y-1">
+                            {vehicleLocations.slice(0, 5).map((vehicle) => (
+                              <div
+                                key={vehicle.vehicleId}
+                                className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 cursor-pointer text-sm"
+                                onClick={() => focusOnVehicle(vehicle)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className={`w-2 h-2 rounded-full ${vehicle.speed > 0 ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}
+                                  />
+                                  <span className="font-medium truncate max-w-[120px]">{vehicle.vehicleName}</span>
+                                </div>
+                                <span className="text-xs font-mono text-muted-foreground">
+                                  {Math.round(vehicle.speed)} km/h
+                                </span>
+                              </div>
+                            ))}
+                            {vehicleLocations.length > 5 && (
+                              <p className="text-xs text-center text-muted-foreground pt-2">
+                                +{vehicleLocations.length - 5} more vehicles
+                              </p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </TabsContent>
+
+                {/* Reports Tab */}
+                <TabsContent value="reports" className="flex-1 overflow-hidden px-3 mt-3">
+                  <MapReportPanel
+                    onReportGenerated={(result) => {
+                      setReportResult(result);
+                      setIsReportPanelOpen(true);
+                    }}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </div>
 
-      {/* Main Map Area */}
-      <div className="flex-1 relative">
-        {/* Sensor Widget - Shows when vehicle is selected */}
-        {selectedVehicle && wialonConnected && (
-          <div className="absolute top-4 right-4 z-[1000] w-96">
-            {(() => {
-              const vehicle = vehicleLocations.find(v => v.vehicleId === selectedVehicle);
-              if (!vehicle) return null;
+        {/* Main Map Area */}
+        <div className="flex-1 relative">
+          {/* Sensor Widget - Shows when vehicle is selected */}
+          {selectedVehicle && wialonConnected && (
+            <div className="absolute top-4 right-4 z-[1000] w-96">
+              {(() => {
+                const vehicle = vehicleLocations.find(v => v.vehicleId === selectedVehicle);
+                if (!vehicle) return null;
 
-              // Use the wialonUnitId from the vehicle object (large integer ID from Wialon API)
-              const unitId = vehicle.wialonUnitId;
+                // Use the wialonUnitId from the vehicle object (large integer ID from Wialon API)
+                const unitId = vehicle.wialonUnitId;
 
-              // Don't render if no valid Wialon unit ID
-              if (!unitId) return null;
+                // Don't render if no valid Wialon unit ID
+                if (!unitId) return null;
 
-              return (
-                <div className="relative">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute -top-2 -right-2 z-10 h-6 w-6 rounded-full bg-background border shadow-sm"
-                    onClick={() => setSelectedVehicle(null)}
-                  >
-                    ×
-                  </Button>
-                  <WialonSensorWidget
-                    unitId={unitId}
-                    title={`${vehicle.vehicleName} - Live Sensors`}
-                    sensorTypes={['fuel', 'temperature', 'speed', 'engine', 'ignition']}
-                    maxSensors={6}
-                    autoRefresh={true}
-                    refreshInterval={10000}
-                    compact={false}
-                    showRefreshButton={true}
-                  />
-                </div>
-              );
-            })()}
-          </div>
-        )}
+                return (
+                  <div className="relative">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="absolute -top-2 -right-2 z-10 h-6 w-6 rounded-full bg-background border shadow-sm"
+                      onClick={() => setSelectedVehicle(null)}
+                    >
+                      ×
+                    </Button>
+                    <WialonSensorWidget
+                      unitId={unitId}
+                      title={`${vehicle.vehicleName} - Live Sensors`}
+                      sensorTypes={['fuel', 'temperature', 'speed', 'engine', 'ignition']}
+                      maxSensors={6}
+                      autoRefresh={true}
+                      refreshInterval={10000}
+                      compact={false}
+                      showRefreshButton={true}
+                    />
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
-        <MapContainer
-          center={defaultCenter}
-          zoom={defaultZoom}
-          style={{ height: '100%', width: '100%' }}
-          ref={mapRef}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
+          <MapContainer
+            center={defaultCenter}
+            zoom={defaultZoom}
+            style={{ height: '100%', width: '100%' }}
+            ref={mapRef}
+          >
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            />
 
-          {/* Map Zoom Controls */}
-          <MapController
-            onFitVehicles={fitMapToVehicles}
-            vehicleCount={vehicleLocations.length}
-          />
+            {/* Map Zoom Controls */}
+            <MapController
+              onFitVehicles={fitMapToVehicles}
+              vehicleCount={vehicleLocations.length}
+            />
 
-          {/* Vehicle Markers */}
-          {layerVisibility.vehicles && wialonConnected && vehicleLocations.map((vehicle) => {
-            const isSelected = selectedVehicle === vehicle.vehicleId;
-            const isMoving = vehicle.speed > 0 || vehicle.isMoving;
-            const heading = vehicle.heading || 0;
-            
-            // Create icon HTML based on movement status
-            const iconHtml = isMoving
-              ? `<div style="
+            {/* Vehicle Markers */}
+            {layerVisibility.vehicles && wialonConnected && vehicleLocations.map((vehicle) => {
+              const isSelected = selectedVehicle === vehicle.vehicleId;
+              const isMoving = vehicle.speed > 0 || vehicle.isMoving;
+              const heading = vehicle.heading || 0;
+
+              // Create icon HTML based on movement status
+              const iconHtml = isMoving
+                ? `<div style="
                   display: flex;
                   flex-direction: column;
                   align-items: center;
@@ -2211,7 +2205,7 @@ const UnifiedMapView: React.FC = () => {
                     </svg>
                   </div>
                 </div>`
-              : `<div style="
+                : `<div style="
                   display: flex;
                   flex-direction: column;
                   align-items: center;
@@ -2237,89 +2231,89 @@ const UnifiedMapView: React.FC = () => {
                     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
                   "></div>
                 </div>`;
-            
-            return (
-              <Marker
-                key={vehicle.vehicleId}
-                position={[vehicle.latitude, vehicle.longitude]}
-                icon={L.divIcon({
-                  html: iconHtml,
-                  className: '',
-                  iconSize: [60, 50],
-                  iconAnchor: [30, 50],
-                })}
-                eventHandlers={{
-                  click: () => setSelectedVehicle(vehicle.vehicleId),
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <p className="font-bold">{vehicle.vehicleName}</p>
-                    <p>Speed: {Math.round(vehicle.speed)} km/h</p>
-                    <p>Heading: {Math.round(heading)}°</p>
-                    <p>Status: {isMoving ? 'Moving' : 'Stopped'}</p>
-                    <p className="text-xs text-gray-500">
-                      {vehicle.latitude.toFixed(6)}, {vehicle.longitude.toFixed(6)}
-                    </p>
-                  </div>
-                </Popup>
-              </Marker>
-            );
-          })}
 
-          {/* Vehicle Tracks */}
-          {layerVisibility.tracks && Array.from(activeTracks.values())
-            .filter(track => track.isVisible && track.points.length > 1)
-            .map(track => (
-              <Polyline
-                key={`track-${track.unitId}`}
-                positions={track.points.map(point => [point.lat, point.lng])}
-                color={track.color}
-                weight={4}
-                opacity={0.8}
-                dashArray={track.isDemo ? [10, 10] : undefined}
-              />
-            ))
-          }
-
-          {/* Route Visualization */}
-          {layerVisibility.routes && routeWaypoints.length > 0 && (
-            <>
-              {/* Route Polyline - Show exact path between waypoints */}
-              {routeWaypoints.length > 1 && (
-                <>
-                  {/* Background line for better visibility */}
-                  <Polyline
-                    positions={routeWaypoints.map(wp => [wp.latitude, wp.longitude])}
-                    color="#ffffff"
-                    weight={7}
-                    opacity={0.8}
-                  />
-                  {/* Main route line */}
-                  <Polyline
-                    positions={routeWaypoints.map(wp => [wp.latitude, wp.longitude])}
-                    color="#8B5CF6"
-                    weight={4}
-                    opacity={1}
-                  />
-                  {/* Direction arrows */}
-                  <Polyline
-                    positions={routeWaypoints.map(wp => [wp.latitude, wp.longitude])}
-                    color="#8B5CF6"
-                    weight={4}
-                    opacity={1}
-                    dashArray="10, 10"
-                  />
-                </>
-              )}
-
-              {/* Waypoint Markers */}
-              {routeWaypoints.map((waypoint, index) => (
+              return (
                 <Marker
-                  key={waypoint.id}
-                  position={[waypoint.latitude, waypoint.longitude]}
+                  key={vehicle.vehicleId}
+                  position={[vehicle.latitude, vehicle.longitude]}
                   icon={L.divIcon({
-                    html: `<div style="
+                    html: iconHtml,
+                    className: '',
+                    iconSize: [60, 50],
+                    iconAnchor: [30, 50],
+                  })}
+                  eventHandlers={{
+                    click: () => setSelectedVehicle(vehicle.vehicleId),
+                  }}
+                >
+                  <Popup>
+                    <div className="text-sm">
+                      <p className="font-bold">{vehicle.vehicleName}</p>
+                      <p>Speed: {Math.round(vehicle.speed)} km/h</p>
+                      <p>Heading: {Math.round(heading)}°</p>
+                      <p>Status: {isMoving ? 'Moving' : 'Stopped'}</p>
+                      <p className="text-xs text-gray-500">
+                        {vehicle.latitude.toFixed(6)}, {vehicle.longitude.toFixed(6)}
+                      </p>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
+
+            {/* Vehicle Tracks */}
+            {layerVisibility.tracks && Array.from(activeTracks.values())
+              .filter(track => track.isVisible && track.points.length > 1)
+              .map(track => (
+                <Polyline
+                  key={`track-${track.unitId}`}
+                  positions={track.points.map(point => [point.lat, point.lng])}
+                  color={track.color}
+                  weight={4}
+                  opacity={0.8}
+                  dashArray={track.isDemo ? [10, 10] : undefined}
+                />
+              ))
+            }
+
+            {/* Route Visualization */}
+            {layerVisibility.routes && routeWaypoints.length > 0 && (
+              <>
+                {/* Route Polyline - Show exact path between waypoints */}
+                {routeWaypoints.length > 1 && (
+                  <>
+                    {/* Background line for better visibility */}
+                    <Polyline
+                      positions={routeWaypoints.map(wp => [wp.latitude, wp.longitude])}
+                      color="#ffffff"
+                      weight={7}
+                      opacity={0.8}
+                    />
+                    {/* Main route line */}
+                    <Polyline
+                      positions={routeWaypoints.map(wp => [wp.latitude, wp.longitude])}
+                      color="#8B5CF6"
+                      weight={4}
+                      opacity={1}
+                    />
+                    {/* Direction arrows */}
+                    <Polyline
+                      positions={routeWaypoints.map(wp => [wp.latitude, wp.longitude])}
+                      color="#8B5CF6"
+                      weight={4}
+                      opacity={1}
+                      dashArray="10, 10"
+                    />
+                  </>
+                )}
+
+                {/* Waypoint Markers */}
+                {routeWaypoints.map((waypoint, index) => (
+                  <Marker
+                    key={waypoint.id}
+                    position={[waypoint.latitude, waypoint.longitude]}
+                    icon={L.divIcon({
+                      html: `<div style="
                       background-color: ${waypoint.type === 'pickup' ? '#10b981' : waypoint.type === 'delivery' ? '#3b82f6' : '#f59e0b'};
                       color: white;
                       width: 32px;
@@ -2333,122 +2327,122 @@ const UnifiedMapView: React.FC = () => {
                       font-size: 14px;
                       font-weight: bold;
                     ">${index + 1}</div>`,
-                    className: '',
-                    iconSize: [32, 32],
-                    iconAnchor: [16, 16],
-                  })}
-                >
-                  <Popup>
-                    <div className="text-sm">
-                      <p className="font-bold">Stop {index + 1}: {waypoint.name}</p>
-                      <p className="text-xs">
-                        Type: {waypoint.type === 'pickup' ? '📦 Pickup' : waypoint.type === 'delivery' ? '🚚 Delivery' : '🛑 Stop'}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {waypoint.latitude.toFixed(6)}, {waypoint.longitude.toFixed(6)}
-                      </p>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </>
-          )}
+                      className: '',
+                      iconSize: [32, 32],
+                      iconAnchor: [16, 16],
+                    })}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <p className="font-bold">Stop {index + 1}: {waypoint.name}</p>
+                        <p className="text-xs">
+                          Type: {waypoint.type === 'pickup' ? '📦 Pickup' : waypoint.type === 'delivery' ? '🚚 Delivery' : '🛑 Stop'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {waypoint.latitude.toFixed(6)}, {waypoint.longitude.toFixed(6)}
+                        </p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
+              </>
+            )}
 
-          {/* Geofences */}
-          {layerVisibility.geofences && geofences.map(geofence => {
-            const color = geofence.color || '#3B82F6';
+            {/* Geofences */}
+            {layerVisibility.geofences && geofences.map(geofence => {
+              const color = geofence.color || '#3B82F6';
 
-            if (geofence.type === 'circle' && geofence.center_lat && geofence.center_lng) {
-              return (
-                <Circle
-                  key={geofence.id}
-                  center={[geofence.center_lat, geofence.center_lng]}
-                  radius={geofence.radius || 500}
-                  color={color}
-                  fillColor={color}
-                  fillOpacity={0.2}
-                  weight={2}
-                >
-                  <Popup>
-                    <div className="text-sm">
-                      <p className="font-bold">{geofence.name}</p>
-                      {geofence.description && <p>{geofence.description}</p>}
-                      <p className="text-xs">Type: {geofence.type}</p>
-                      <p className="text-xs">Radius: {geofence.radius}m</p>
-                    </div>
-                  </Popup>
-                </Circle>
-              );
-            }
-
-            if (geofence.type === 'polygon' && geofence.coordinates) {
-            const positions: [number, number][] = Array.isArray(geofence.coordinates)
-              ? geofence.coordinates.map((coord: { lat?: number; lng?: number; 0?: number; 1?: number }): [number, number] => [coord.lat || coord[1] || 0, coord.lng || coord[0] || 0])
-              : [];              if (positions.length > 0) {
+              if (geofence.type === 'circle' && geofence.center_lat && geofence.center_lng) {
                 return (
-                  <Polygon
+                  <Circle
                     key={geofence.id}
-                    positions={positions}
+                    center={[geofence.center_lat, geofence.center_lng]}
+                    radius={geofence.radius || 500}
                     color={color}
                     fillColor={color}
                     fillOpacity={0.2}
-                    weight={3}
+                    weight={2}
                   >
                     <Popup>
                       <div className="text-sm">
                         <p className="font-bold">{geofence.name}</p>
                         {geofence.description && <p>{geofence.description}</p>}
                         <p className="text-xs">Type: {geofence.type}</p>
-                        <p className="text-xs">Points: {positions.length}</p>
+                        <p className="text-xs">Radius: {geofence.radius}m</p>
                       </div>
                     </Popup>
-                  </Polygon>
+                  </Circle>
                 );
               }
-            }
 
-            return null;
-          })}
-        </MapContainer>
+              if (geofence.type === 'polygon' && geofence.coordinates) {
+                const positions: [number, number][] = Array.isArray(geofence.coordinates)
+                  ? geofence.coordinates.map((coord: { lat?: number; lng?: number; 0?: number; 1?: number }): [number, number] => [coord.lat || coord[1] || 0, coord.lng || coord[0] || 0])
+                  : []; if (positions.length > 0) {
+                    return (
+                      <Polygon
+                        key={geofence.id}
+                        positions={positions}
+                        color={color}
+                        fillColor={color}
+                        fillOpacity={0.2}
+                        weight={3}
+                      >
+                        <Popup>
+                          <div className="text-sm">
+                            <p className="font-bold">{geofence.name}</p>
+                            {geofence.description && <p>{geofence.description}</p>}
+                            <p className="text-xs">Type: {geofence.type}</p>
+                            <p className="text-xs">Points: {positions.length}</p>
+                          </div>
+                        </Popup>
+                      </Polygon>
+                    );
+                  }
+              }
 
-        {/* Report Results Panel - Full width at bottom */}
-        <ReportResultsPanel
-          reportResult={reportResult}
-          isOpen={isReportPanelOpen}
-          onClose={() => {
-            setIsReportPanelOpen(false);
-            setIsReportPanelExpanded(false);
-          }}
-          onToggleExpand={() => setIsReportPanelExpanded(!isReportPanelExpanded)}
-          isExpanded={isReportPanelExpanded}
-        />
+              return null;
+            })}
+          </MapContainer>
 
-        {/* Live Vehicle Data Panel - Full width at bottom */}
-        <LiveVehicleDataPanel
-          vehicleLocations={vehicleLocations}
-          isConnected={wialonConnected}
-          isOpen={isVehicleDataPanelOpen}
-          onClose={() => {
-            setIsVehicleDataPanelOpen(false);
-            setIsVehicleDataPanelExpanded(false);
-          }}
-          onToggleExpand={() => setIsVehicleDataPanelExpanded(!isVehicleDataPanelExpanded)}
-          isExpanded={isVehicleDataPanelExpanded}
-          onVehicleClick={(vehicle) => {
-            focusOnVehicle(vehicle);
-          }}
+          {/* Report Results Panel - Full width at bottom */}
+          <ReportResultsPanel
+            reportResult={reportResult}
+            isOpen={isReportPanelOpen}
+            onClose={() => {
+              setIsReportPanelOpen(false);
+              setIsReportPanelExpanded(false);
+            }}
+            onToggleExpand={() => setIsReportPanelExpanded(!isReportPanelExpanded)}
+            isExpanded={isReportPanelExpanded}
+          />
+
+          {/* Live Vehicle Data Panel - Full width at bottom */}
+          <LiveVehicleDataPanel
+            vehicleLocations={vehicleLocations}
+            isConnected={wialonConnected}
+            isOpen={isVehicleDataPanelOpen}
+            onClose={() => {
+              setIsVehicleDataPanelOpen(false);
+              setIsVehicleDataPanelExpanded(false);
+            }}
+            onToggleExpand={() => setIsVehicleDataPanelExpanded(!isVehicleDataPanelExpanded)}
+            isExpanded={isVehicleDataPanelExpanded}
+            onVehicleClick={(vehicle) => {
+              focusOnVehicle(vehicle);
+            }}
+          />
+        </div>
+
+        {/* Save Route Dialog */}
+        <SaveRouteDialog
+          open={isSaveRouteDialogOpen}
+          onOpenChange={setIsSaveRouteDialogOpen}
+          waypoints={routeWaypoints}
+          totalDistance={calculateRouteDistance()}
+          estimatedDuration={calculateEstimatedDuration()}
         />
       </div>
-
-      {/* Save Route Dialog */}
-      <SaveRouteDialog
-        open={isSaveRouteDialogOpen}
-        onOpenChange={setIsSaveRouteDialogOpen}
-        waypoints={routeWaypoints}
-        totalDistance={calculateRouteDistance()}
-        estimatedDuration={calculateEstimatedDuration()}
-      />
-    </div>
     </TooltipProvider>
   );
 };

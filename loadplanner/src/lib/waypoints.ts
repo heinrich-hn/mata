@@ -10,7 +10,7 @@ export interface Waypoint {
 }
 
 // Import waypoints data
-import waypointsData from "../../Waypoints,Zones, Geofences.json";
+import waypointsData from "../waypoints-zones-geofences.json";
 
 export const waypoints: Waypoint[] = waypointsData;
 

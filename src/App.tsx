@@ -6,45 +6,44 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { LoadRealtimeProvider } from "@/contexts/LoadRealtimeContext";
 import { OperationsProvider } from "@/contexts/OperationsContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React, { Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
-// Import your page components
-import ActionLog from "./pages/ActionLog";
-import Admin from "./pages/Admin";
-import Analytics from "./pages/Analytics";
+// Light pages loaded eagerly
 import Auth from "./pages/Auth";
-import CostManagement from "./pages/CostManagement";
-import DieselManagement from "./pages/DieselManagement";
-import DriverManagement from "./pages/DriverManagement";
-// Faults page merged into Inspections page
-import FuelBunkers from "./pages/FuelBunkers";
-import Incidents from "./pages/Incidents";
 import Index from "./pages/Index";
-import InspectionDetails from "./pages/InspectionDetails";
-import Inspections from "./pages/Inspections";
-import InspectorProfiles from "./pages/InspectorProfiles";
-// Inventory page merged into Procurement page
-import Invoicing from "./pages/Invoicing";
-import JobCardDetails from "./pages/JobCardDetails";
-import JobCards from "./pages/JobCards";
-import LoadManagement from "./pages/LoadManagement";
-import MaintenanceScheduling from "./pages/MaintenanceScheduling";
-import MobileInspections from "./pages/MobileInspections";
 import NotFound from "./pages/NotFound";
-import PerformanceAnalytics from "./pages/PerformanceAnalytics";
-import Procurement from "./pages/Procurement";
-import TripManagement from "./pages/TripManagement";
-import TyreInspections from "./pages/TyreInspections";
-import TyreManagement from "./pages/TyreManagement";
-import UnifiedMapPage from "./pages/UnifiedMapPage";
-import Vehicles from "./pages/Vehicles";
-import Vendors from "./pages/Vendors";
 
-// Import inspection components for sub-routes
-import InspectionTypeSelector from "./components/inspections/InspectionTypeSelector";
+// Heavy pages lazy-loaded for code splitting
+const ActionLog = React.lazy(() => import("./pages/ActionLog"));
+const Admin = React.lazy(() => import("./pages/Admin"));
+const Analytics = React.lazy(() => import("./pages/Analytics"));
+const CostManagement = React.lazy(() => import("./pages/CostManagement"));
+const DieselManagement = React.lazy(() => import("./pages/DieselManagement"));
+const DriverManagement = React.lazy(() => import("./pages/DriverManagement"));
+const FuelBunkers = React.lazy(() => import("./pages/FuelBunkers"));
+const Incidents = React.lazy(() => import("./pages/Incidents"));
+const InspectionDetails = React.lazy(() => import("./pages/InspectionDetails"));
+const Inspections = React.lazy(() => import("./pages/Inspections"));
+const InspectorProfiles = React.lazy(() => import("./pages/InspectorProfiles"));
+const Invoicing = React.lazy(() => import("./pages/Invoicing"));
+const JobCardDetails = React.lazy(() => import("./pages/JobCardDetails"));
+const JobCards = React.lazy(() => import("./pages/JobCards"));
+const MaintenanceScheduling = React.lazy(() => import("./pages/MaintenanceScheduling"));
+const MobileInspections = React.lazy(() => import("./pages/MobileInspections"));
+const PerformanceAnalytics = React.lazy(() => import("./pages/PerformanceAnalytics"));
+const Procurement = React.lazy(() => import("./pages/Procurement"));
+const TripManagement = React.lazy(() => import("./pages/TripManagement"));
+const TyreInspections = React.lazy(() => import("./pages/TyreInspections"));
+const TyreManagement = React.lazy(() => import("./pages/TyreManagement"));
+const UnifiedMapPage = React.lazy(() => import("./pages/UnifiedMapPage"));
+const Vehicles = React.lazy(() => import("./pages/Vehicles"));
+const Vendors = React.lazy(() => import("./pages/Vendors"));
+
+// Lazy-loaded sub-route component
+const InspectionTypeSelector = React.lazy(() => import("./components/inspections/InspectionTypeSelector"));
 
 const queryClient = new QueryClient();
 
@@ -52,18 +51,18 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <OperationsProvider>
-        <LoadRealtimeProvider>
-          <TooltipProvider>
-            <ErrorBoundary>
-              <Toaster />
-              <Sonner />
-              <PWAInstallPrompt autoShowDelay={60000} />
-              <BrowserRouter
-                future={{
-                  v7_startTransition: true,
-                  v7_relativeSplatPath: true,
-                }}
-              >
+        <TooltipProvider>
+          <ErrorBoundary>
+            <Toaster />
+            <Sonner />
+            <PWAInstallPrompt autoShowDelay={60000} />
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+              }}
+            >
+              <Suspense fallback={<div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
                 <Routes>
                   <Route path="/auth" element={<Auth />} />
 
@@ -100,15 +99,15 @@ const App = () => (
                   <Route path="/action-log" element={<ProtectedRoute><ActionLog /></ProtectedRoute>} />
                   <Route path="/gps-tracking" element={<Navigate to="/unified-map" replace />} /> {/* Redirect to Unified Map */}
                   <Route path="/unified-map" element={<ProtectedRoute><UnifiedMapPage /></ProtectedRoute>} />
-                  <Route path="/load-management" element={<ProtectedRoute><LoadManagement /></ProtectedRoute>} />
+                  <Route path="/load-management" element={<Navigate to="/trip-management" replace />} />
                   {/* WialonReports functionality moved to Unified Map page - redirect old route */}
                   <Route path="/wialon-reports" element={<Navigate to="/unified-map" replace />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-              </BrowserRouter>
-            </ErrorBoundary>
-          </TooltipProvider>
-        </LoadRealtimeProvider>
+              </Suspense>
+            </BrowserRouter>
+          </ErrorBoundary>
+        </TooltipProvider>
       </OperationsProvider>
     </AuthProvider>
   </QueryClientProvider>

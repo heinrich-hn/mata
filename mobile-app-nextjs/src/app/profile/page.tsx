@@ -5,30 +5,28 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { VehicleSelect } from "@/components/ui/vehicle-select";
 import { useAuth } from "@/contexts/auth-context";
 import { useDriverDocuments } from "@/hooks/use-driver-documents";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import
-  {
-    Bell,
-    Car,
-    ChevronRight,
-    FileText,
-    Fuel,
-    HelpCircle,
-    Loader2,
-    LogOut,
-    Mail,
-    Phone,
-    Settings,
-    Shield,
-    Smartphone,
-    Truck,
-    User
-  } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Bell,
+  Car,
+  ChevronRight,
+  FileText,
+  Fuel,
+  HelpCircle,
+  Loader2,
+  LogOut,
+  Mail,
+  Phone,
+  Settings,
+  Shield,
+  Smartphone,
+  Truck,
+  User
+} from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -37,14 +35,11 @@ interface Vehicle {
   id: string;
   fleet_number: string;
   registration?: string;
-  registration_number?: string; // Database column name
+  registration_number?: string;
   vehicle_type?: string | null;
   make?: string | null;
   model?: string | null;
   active?: boolean | null;
-  tonnage?: number | null;
-  current_driver_id?: string | null;
-  [key: string]: unknown; // Allow additional columns from select("*")
 }
 
 interface DriverAssignment {
@@ -71,20 +66,6 @@ interface Driver {
   license_number?: string | null;
 }
 
-interface VehicleOption {
-  value: string;
-  label: string;
-  sublabel: string;
-  details: {
-    fleetNumber: string | null;
-    registration: string | null;
-    type: string | null;
-    make?: string | null;
-    model?: string | null;
-    reefer?: string | null;
-  };
-}
-
 export default function ProfilePage() {
   const { user, profile, signOut: _signOut } = useAuth();
   const { toast } = useToast();
@@ -93,21 +74,12 @@ export default function ProfilePage() {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  // Find driver by matching email - handles multiple rows gracefully
+  // Find driver by matching email
   const { data: driver, isLoading: _driverLoading } = useQuery<Driver | null>({
     queryKey: ["driver-by-email", user?.email],
     queryFn: async () => {
       if (!user?.email) return null;
-
       try {
-        // First check if ANY driver exists with this email (regardless of status)
-        const { data: _allDrivers, error: checkError } = await supabase
-          .from("drivers")
-          .select("id, email, status, first_name, last_name")
-          .eq("email", user.email);
-        
-        if (checkError) return null;
-
         const { data, error } = await supabase
           .from("drivers")
           .select("*")
@@ -115,17 +87,9 @@ export default function ProfilePage() {
           .eq("status", "active")
           .order("created_at", { ascending: false });
 
-        if (error) {
-          return null;
-        }
-
+        if (error) return null;
         const drivers = data ?? [];
-
-        if (drivers.length === 0) {
-          return null;
-        }
-
-        return drivers[0];
+        return drivers.length > 0 ? drivers[0] : null;
       } catch {
         return null;
       }
@@ -133,39 +97,12 @@ export default function ProfilePage() {
     enabled: !!user?.email,
   });
 
-  // Fetch all active vehicles
-  const { data: vehicles = [], isLoading: vehiclesLoading, error: _vehiclesError } = useQuery<Vehicle[]>({
-    queryKey: ["vehicles-list"],
-    queryFn: async () => {
-      // Check if we have a valid session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (!session || sessionError) return [];
-
-      const { data, error } = await supabase
-        .from("vehicles")
-        .select("id, fleet_number, registration_number, vehicle_type, make, model, active")
-        .eq("active", true)
-        .order("fleet_number");
-
-      if (error) {
-        throw error;
-      }
-
-      return data || [];
-    },
-  });
-
-  // Fetch current driver assignment
-  // Note: driver_vehicle_assignments.driver_id references auth.users(id), not drivers(id)
+  // Fetch current driver assignment (assigned by admin from dashboard)
   const { data: currentAssignment, isLoading: assignmentLoading } = useQuery<DriverAssignment | null>({
     queryKey: ["driver-assignment", user?.id],
     queryFn: async () => {
-      if (!user?.id) {
-        return null;
-      }
-
+      if (!user?.id) return null;
       try {
-
         const { data, error } = await supabase
           .from("driver_vehicle_assignments")
           .select(`
@@ -193,10 +130,7 @@ export default function ProfilePage() {
           .order("assigned_at", { ascending: false })
           .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') {
-          throw error;
-        }
-
+        if (error && error.code !== "PGRST116") throw error;
         return data as DriverAssignment | null;
       } catch {
         return null;
@@ -205,160 +139,36 @@ export default function ProfilePage() {
     enabled: !!user?.id,
   });
 
-  // Assign vehicle mutation
-  // Note: driver_vehicle_assignments.driver_id references auth.users(id), not drivers(id)
-  const assignVehicleMutation = useMutation({
-    mutationFn: async (vehicleId: string) => {
-      if (!user?.id) throw new Error("User not authenticated");
-
-      if (!vehicleId) {
-
-        const { error } = await supabase
-          .from("driver_vehicle_assignments")
-          .update({
-            is_active: false,
-            unassigned_at: new Date().toISOString()
-          } as never)
-          .eq("driver_id", user.id)
-          .eq("is_active", true);
-
-        if (error) {
-          throw error;
-        }
-
-        // Clear the cache immediately for unassignment
-        queryClient.setQueryData(["driver-assignment", user.id], null);
-        return null;
-      }
-
-      // Unassign existing
-      await supabase
-        .from("driver_vehicle_assignments")
-        .update({
-          is_active: false,
-          unassigned_at: new Date().toISOString()
-        } as never)
-        .eq("driver_id", user.id)
-        .eq("is_active", true);
-
-      // Create new assignment
-      const { data, error } = await supabase
-        .from("driver_vehicle_assignments")
-        .insert([{
-          driver_id: user.id,
-          vehicle_id: vehicleId,
-          assigned_at: new Date().toISOString(),
-          is_active: true,
-          notes: `Assigned via mobile app by ${user?.email || "driver"}`
-        }] as never)
-        .select(`
-          id,
-          driver_id,
-          vehicle_id,
-          assigned_at,
-          is_active,
-          created_at,
-          updated_at,
-          vehicles!inner (
-            id,
-            fleet_number,
-            registration_number,
-            vehicle_type,
-            make,
-            model,
-            active
-          )
-        `)
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      // Transform the data
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const assignmentData = data as any;
-      const { vehicles: vehiclesArr, ...rest } = assignmentData;
-      const transformed: DriverAssignment = {
-        ...rest,
-        vehicles: Array.isArray(vehiclesArr) ? vehiclesArr[0] ?? null : vehiclesArr
-      } as DriverAssignment;
-      return transformed;
-    },
-    onSuccess: (data) => {
-      // Immediately update the assignment cache for instant UI update
-      queryClient.setQueryData(["driver-assignment", user?.id], data);
-      
-      // Invalidate queries in the background (don't await) - this triggers refetch
-      // Using invalidateQueries instead of resetQueries for better performance
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["driver-assignment"] }),
-        queryClient.invalidateQueries({ queryKey: ["assigned-vehicle"] }),
-        queryClient.invalidateQueries({ queryKey: ["driver-assigned-vehicle"] }),
-        queryClient.invalidateQueries({ queryKey: ["wialon-vehicle"] }),
-        // Data that depends on assigned vehicle
-        queryClient.invalidateQueries({ queryKey: ["monthly-diesel-records"] }),
-        queryClient.invalidateQueries({ queryKey: ["monthly-trips"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-diesel-records"] }),
-        queryClient.invalidateQueries({ queryKey: ["recent-trips"] }),
-      ]).catch(console.error);
-
-      toast({
-        title: data ? "Vehicle assigned" : "Vehicle unassigned",
-        description: data
-          ? `You are now assigned to ${data.vehicles?.fleet_number || "Unknown"} - ${data.vehicles?.registration_number || data.vehicles?.registration || "Unknown"}`
-          : "You are no longer assigned to a vehicle",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update assignment",
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleSignOut = async () => {
     setIsSigningOut(true);
     try {
-      // Clear query cache first
       queryClient.clear();
-
-      // Clear all storage
       localStorage.clear();
       sessionStorage.clear();
 
-      // Clear all cookies related to Supabase
       document.cookie.split(";").forEach((cookie) => {
         const eqPos = cookie.indexOf("=");
         const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
-        // Delete cookie for all possible paths
         document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
         document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
       });
 
-      // Sign out from Supabase
       try {
-        await supabase.auth.signOut({ scope: 'local' });
+        await supabase.auth.signOut({ scope: "local" });
       } catch {
         // signOut error - continue with cleanup
       }
 
-      // Clear service worker caches for PWA
-      if ('caches' in window) {
+      if ("caches" in window) {
         try {
           const cacheNames = await caches.keys();
-          await Promise.all(
-            cacheNames.map(cacheName => caches.delete(cacheName))
-          );
+          await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
         } catch {
           // cache clear error - non-critical
         }
       }
 
-      // Unregister service workers
-      if ('serviceWorker' in navigator) {
+      if ("serviceWorker" in navigator) {
         try {
           const registrations = await navigator.serviceWorker.getRegistrations();
           for (const registration of registrations) {
@@ -374,11 +184,8 @@ export default function ProfilePage() {
         description: "You have been signed out successfully",
       });
 
-      // Force hard redirect to login (bypasses any client-side routing cache)
       window.location.replace("/login");
-
     } catch {
-      // Even on error, force redirect to login
       window.location.replace("/login");
     }
   };
@@ -395,12 +202,12 @@ export default function ProfilePage() {
 
   const getVehicleTypeIcon = (vehicleType?: string | null) => {
     switch (vehicleType?.toLowerCase()) {
-      case 'truck':
-      case 'horse':
+      case "truck":
+      case "horse":
         return <Truck className="w-3.5 h-3.5" />;
-      case 'trailer':
+      case "trailer":
         return <Settings className="w-3.5 h-3.5" />;
-      case 'reefer':
+      case "reefer":
         return <Fuel className="w-3.5 h-3.5" />;
       default:
         return <Car className="w-3.5 h-3.5" />;
@@ -435,10 +242,11 @@ export default function ProfilePage() {
       description: "Get help",
       badge: undefined as string | undefined,
       badgeCount: 0,
-      onClick: () => toast({
-        title: "Support",
-        description: "Contact administrator for assistance",
-      }),
+      onClick: () =>
+        toast({
+          title: "Support",
+          description: "Contact administrator for assistance",
+        }),
     },
     {
       icon: Smartphone,
@@ -446,35 +254,20 @@ export default function ProfilePage() {
       description: "v2.1.0",
       badge: undefined as string | undefined,
       badgeCount: 0,
-      onClick: () => toast({
-        title: "Matanuska Fleet",
-        description: "Version 2.1.0",
-      }),
+      onClick: () =>
+        toast({
+          title: "Matanuska Fleet",
+          description: "Version 2.1.0",
+        }),
     },
   ];
-
-  const vehicleOptions: VehicleOption[] = vehicles.map((v) => {
-    const reg = v.registration_number || v.registration || "";
-    return {
-      value: v.id,
-      label: v.fleet_number || reg || `Vehicle ${v.id.slice(0, 4)}`,
-      sublabel: `${reg || "No Reg"} • ${v.vehicle_type || "Unknown"}`,
-      details: {
-        fleetNumber: v.fleet_number || null,
-        registration: reg || null,
-        type: v.vehicle_type || null,
-        make: v.make || null,
-        model: v.model || null,
-        reefer: null,
-      }
-    };
-  });
 
   const assignedVehicle = currentAssignment?.vehicles;
 
   return (
     <MobileShell>
       <div className="p-5 space-y-6">
+        {/* Avatar & Name */}
         <div className="flex flex-col items-center py-6">
           <Avatar className="h-20 w-20 ring-4 ring-background shadow-xl mb-4">
             <AvatarImage src={profile?.avatar_url || undefined} />
@@ -489,20 +282,25 @@ export default function ProfilePage() {
           </Badge>
         </div>
 
+        {/* Debug Info (dev only) */}
         {process.env.NODE_ENV === "development" && (
           <Card className="bg-muted/50">
             <CardContent className="p-4">
               <p className="text-xs font-mono mb-2">Debug Info:</p>
               <p className="text-xs">User Email: {user?.email || "None"}</p>
-              <p className="text-xs">Driver: {driver ? `${driver.first_name} ${driver.last_name}` : "Not found"}</p>
+              <p className="text-xs">
+                Driver: {driver ? `${driver.first_name} ${driver.last_name}` : "Not found"}
+              </p>
               <p className="text-xs">Driver ID: {driver?.id || "None"}</p>
-              <p className="text-xs">Vehicles: {vehicles.length} active</p>
               <p className="text-xs">Assignment: {currentAssignment ? "Active" : "None"}</p>
-              <p className="text-xs">Assigned Vehicle: {assignedVehicle?.fleet_number || "None"}</p>
+              <p className="text-xs">
+                Assigned Vehicle: {assignedVehicle?.fleet_number || "None"}
+              </p>
             </CardContent>
           </Card>
         )}
 
+        {/* Driver Profile */}
         {driver && (
           <Card>
             <CardContent className="p-0">
@@ -513,7 +311,9 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <p className="font-medium text-sm text-muted-foreground">Driver Profile</p>
-                    <p className="text-sm font-semibold">{driver.first_name} {driver.last_name}</p>
+                    <p className="text-sm font-semibold">
+                      {driver.first_name} {driver.last_name}
+                    </p>
                     <Badge variant="outline" className="mt-1 text-xs">
                       {driver.driver_number}
                     </Badge>
@@ -548,6 +348,7 @@ export default function ProfilePage() {
           </Card>
         )}
 
+        {/* Account Contact */}
         <Card>
           <CardContent className="p-0">
             <div className="p-4 border-b border-border/50">
@@ -580,74 +381,51 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
+        {/* Assigned Vehicle (read-only — assigned by admin from dashboard) */}
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Truck className="w-4 h-4 text-primary" strokeWidth={1.5} />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-medium">Assigned Vehicle</p>
-                <p className="text-xs text-muted-foreground">
-                  {assignmentLoading || vehiclesLoading ? (
-                    <span className="flex items-center gap-1">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Loading...
-                    </span>
-                                      ) : assignedVehicle ? (
-                    <span className="flex items-center gap-2">
+                {assignmentLoading ? (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Loading...
+                  </span>
+                ) : assignedVehicle ? (
+                  <div className="mt-1">
+                    <div className="flex items-center gap-2 text-sm">
                       {getVehicleTypeIcon(assignedVehicle.vehicle_type)}
-                      <span>
-                        {assignedVehicle.fleet_number || "Unknown"} - {assignedVehicle.registration_number || assignedVehicle.registration || "Unknown"}
+                      <span className="font-semibold">
+                        {assignedVehicle.fleet_number || "Unknown"}
                       </span>
-                    </span>
-                  ) : (
-                    "No vehicle assigned"
-                  )}
-                </p>
+                      <span className="text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">
+                        {assignedVehicle.registration_number || assignedVehicle.registration || "Unknown"}
+                      </span>
+                    </div>
+                    {(assignedVehicle.make || assignedVehicle.vehicle_type) && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {[assignedVehicle.vehicle_type, assignedVehicle.make, assignedVehicle.model]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    No vehicle assigned — contact your administrator
+                  </p>
+                )}
               </div>
             </div>
-
-            {assignmentLoading || vehiclesLoading ? (
-              <div className="flex items-center justify-center p-4">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                <span className="ml-2 text-sm text-muted-foreground">Loading vehicles...</span>
-              </div>
-            ) : vehicles.length === 0 ? (
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm text-muted-foreground">No active vehicles available</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">
-                  All vehicles are currently assigned or inactive
-                </p>
-              </div>
-            ) : (
-              <>
-                <VehicleSelect
-                  options={vehicleOptions}
-                  value={assignedVehicle?.id || ""}
-                  onChange={(value) => assignVehicleMutation.mutate(value)}
-                  placeholder="Select your vehicle"
-                  disabled={assignVehicleMutation.isPending || assignmentLoading}
-                />
-                {assignedVehicle && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full mt-3"
-                    onClick={() => assignVehicleMutation.mutate("")}
-                    disabled={assignVehicleMutation.isPending}
-                  >
-                    {assignVehicleMutation.isPending ? (
-                      <Loader2 className="w-3 h-3 mr-2 animate-spin" />
-                    ) : null}
-                    Unassign Vehicle
-                  </Button>
-                )}
-              </>
-            )}
           </CardContent>
         </Card>
 
+        {/* Menu Items */}
         <Card>
           <CardContent className="p-0">
             {menuItems.map((item, index) => {
@@ -686,6 +464,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
+        {/* Sign Out */}
         <Button
           variant="outline"
           className="w-full h-12 border-destructive/30 hover:border-destructive hover:bg-destructive/10"
@@ -701,7 +480,10 @@ export default function ProfilePage() {
         </Button>
 
         <p className="text-center text-xs text-muted-foreground pt-2">
-          Matanuska Fleet Management • {assignedVehicle ? `Assigned: ${assignedVehicle.fleet_number || "Unknown"}` : "No assignment"}
+          Matanuska Fleet Management •{" "}
+          {assignedVehicle
+            ? `Assigned: ${assignedVehicle.fleet_number || "Unknown"}`
+            : "No assignment"}
         </p>
       </div>
     </MobileShell>
