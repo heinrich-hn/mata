@@ -1,0 +1,81 @@
+/* Quick Action Buttons */
+.quick-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.quick-action-primary {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.quick-action-primary:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+.quick-action-accent {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.quick-action-accent:hover {
+  background-color: hsl(var(--accent) / 0.9);
+}
+
+.quick-action-secondary {
+  background-color: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+}
+
+.quick-action-secondary:hover {
+  background-color: hsl(var(--secondary) / 0.8);
+}
+
+/* Color Dot for Legend */
+.stat-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* Text Colors */
+.text-info {
+  color: #3b82f6;
+}
+
+.text-success {
+  color: #22c55e;
+}
+
+.text-warning {
+  color: #f59e0b;
+}
+
+.text-destructive {
+  color: #ef4444;
+}
+
+/* Background Colors */
+.bg-info {
+  background-color: #3b82f6;
+}
+
+.bg-success {
+  background-color: #22c55e;
+}
+
+.bg-warning {
+  background-color: #f59e0b;
+}
+
+.bg-destructive {
+  background-color: #ef4444;
+}

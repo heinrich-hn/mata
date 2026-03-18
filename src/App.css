@@ -1,0 +1,103 @@
+/* Base styles - fixed */
+html {
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scroll-padding-top: var(--header-height, 4rem);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* User select utilities - fixed */
+.select-none {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.select-text {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+.select-all {
+  -webkit-user-select: all;
+  -moz-user-select: all;
+  -ms-user-select: all;
+  user-select: all;
+}
+
+/* Backdrop utilities - fixed */
+.backdrop-blur-sm {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.backdrop-blur {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.backdrop-blur-md {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.backdrop-blur-lg {
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* Logo container - fixed */
+.logo-container {
+  display: inline-flex;
+  padding: 1.5rem;
+  border-radius: var(--radius-2xl);
+  background: var(--gradient-surface);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid hsl(var(--border) / 0.4);
+  box-shadow: var(--shadow-elevated);
+  margin-bottom: 2rem;
+  transition: all var(--duration-normal) var(--ease-bounce);
+  will-change: transform;
+}
+
+/* Card glass - fixed */
+.card-glass {
+  background: var(--gradient-glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid hsl(var(--border) / 0.3);
+}
+
+/* Text gradient - fixed */
+.text-gradient {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Touch device scrolling - fixed */
+@media (hover: none) and (pointer: coarse) {
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+}
+
+/* Print styles - fixed */
+@media print {
+  p, h2, h3 {
+    orphans: 3;
+    widows: 3;
+  }
+}

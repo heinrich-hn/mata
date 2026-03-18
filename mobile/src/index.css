@@ -1,0 +1,235 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Mobile-First Foundation
+   ============================================================================ */
+@layer base {
+  /* Prevent iOS zoom on input focus (inputs < 16px trigger zoom) */
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent pull-to-refresh on the main wrapper */
+  #root {
+    overscroll-behavior: none;
+    min-height: 100dvh;
+  }
+
+  /* Smooth scrolling for user interactions */
+  * {
+    scroll-behavior: smooth;
+  }
+
+  /* Ensure inputs don't zoom on iOS (minimum 16px) */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  :root {
+    /* ==========================================================================
+       Primitive Colors – raw palette (do not use directly in components)
+    ========================================================================== */
+    --color-neutral-0:   0 0% 100%;
+    --color-neutral-50:  210 40% 99%;
+    --color-neutral-100: 210 35% 97%;
+    --color-neutral-200: 210 30% 94%;
+    --color-neutral-300: 210 25% 89%;
+    --color-neutral-400: 210 20% 78%;
+    --color-neutral-500: 210 18% 55%;
+    --color-neutral-600: 210 20% 38%;
+    --color-neutral-700: 215 24% 26%;
+    --color-neutral-800: 215 28% 17%;
+    --color-neutral-900: 215 30% 11%;
+    --color-neutral-950: 215 35% 6%;
+
+    /* Soft primary – teal-cyan family, lowered chroma for calmness */
+    --color-primary-400: 170 35% 65%;
+    --color-primary-500: 170 38% 55%;
+    --color-primary-600: 170 42% 45%;
+    --color-primary-700: 170 45% 38%;
+
+    /* Status palette – softer, less eye-searing */
+    --color-red-500:    353 65% 58%;
+    --color-green-500:  155 45% 52%;
+    --color-amber-500:   38 78% 58%;
+    --color-blue-500:   205 60% 55%;
+
+    /* Semantic tokens – what components should actually use */
+    --background:        var(--color-neutral-0);
+    --foreground:        var(--color-neutral-900);
+
+    --surface:           var(--color-neutral-0);
+    --surface-hover:     var(--color-neutral-50);
+    --surface-active:    var(--color-neutral-100);
+    --surface-subtle:    var(--color-neutral-50);
+
+    --card:              var(--color-neutral-0);
+    --card-foreground:   var(--color-neutral-900);
+    --card-border:       var(--color-neutral-200);
+
+    --popover:           var(--color-neutral-0);
+    --popover-foreground: var(--color-neutral-900);
+
+    --primary:           var(--color-primary-500);
+    --primary-hover:     var(--color-primary-600);
+    --primary-active:    var(--color-primary-700);
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:         var(--color-neutral-100);
+    --secondary-foreground: var(--color-neutral-800);
+
+    --muted:             var(--color-neutral-100);
+    --muted-foreground:  var(--color-neutral-500);
+
+    --accent:            var(--color-neutral-100);
+    --accent-foreground: var(--color-neutral-800);
+
+    --border:            var(--color-neutral-200);
+    --input:             var(--color-neutral-200);
+    --ring:              var(--primary);
+
+    --destructive:       var(--color-red-500);
+    --destructive-foreground: 0 0% 100%;
+
+    --success:           var(--color-green-500);
+    --success-foreground: 0 0% 100%;
+
+    --warning:           var(--color-amber-500);
+    --warning-foreground: 0 0% 100%;
+
+    --info:              var(--color-blue-500);
+    --info-foreground:   0 0% 100%;
+
+    /* UI sizing & shape */
+    --radius:     0.5rem;
+    --radius-lg:  0.75rem;
+    --radius-xl:  1rem;
+
+    /* Shadows – very soft, almost flat design friendly */
+    --shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.04);
+    --shadow-sm: 0 1px 3px hsl(0 0% 0% / 0.06), 0 1px 2px hsl(0 0% 0% / 0.04);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.08), 0 2px 4px -1px hsl(0 0% 0% / 0.04);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.09), 0 4px 6px -2px hsl(0 0% 0% / 0.05);
+
+    /* Animations */
+    --duration-fast:    150ms;
+    --duration-normal:  250ms;
+    --duration-slow:    400ms;
+    --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out:      cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Sidebar (kept but harmonized) */
+    --sidebar-background: var(--color-neutral-50);
+    --sidebar-foreground: var(--color-neutral-900);
+    --sidebar-border:     var(--color-neutral-200);
+  }
+
+  .dark {
+    --background:        var(--color-neutral-950);
+    --foreground:        var(--color-neutral-100);
+
+    --surface:           var(--color-neutral-900);
+    --surface-hover:     var(--color-neutral-800);
+    --surface-active:    var(--color-neutral-700);
+    --surface-subtle:    var(--color-neutral-950);
+
+    --card:              var(--color-neutral-900);
+    --card-foreground:   var(--color-neutral-100);
+    --card-border:       var(--color-neutral-800);
+
+    --popover:           var(--color-neutral-900);
+    --popover-foreground: var(--color-neutral-100);
+
+    --primary:           var(--color-primary-400);          /* lighter in dark mode */
+    --primary-hover:     var(--color-primary-300);          /* you can add 300 if needed */
+    --primary-active:    var(--color-primary-500);
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:         var(--color-neutral-800);
+    --secondary-foreground: var(--color-neutral-200);
+
+    --muted:             var(--color-neutral-800);
+    --muted-foreground:  var(--color-neutral-400);
+
+    --accent:            var(--color-neutral-800);
+    --accent-foreground: var(--color-neutral-200);
+
+    --border:            var(--color-neutral-800);
+    --input:             var(--color-neutral-800);
+    --ring:              var(--primary);
+
+    --sidebar-background: var(--color-neutral-950);
+    --sidebar-foreground: var(--color-neutral-100);
+    --sidebar-border:     var(--color-neutral-800);
+  }
+}
+
+/* ============================================================================
+   Safe Area Utilities (iOS notch / home indicator / Android nav bar)
+   ============================================================================ */
+@layer utilities {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+}
+
+/* ============================================================================
+   Mobile Component Overrides
+   ============================================================================ */
+@layer components {
+  /* Ensure all interactive elements meet 44px minimum touch target */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Active press feedback for mobile cards */
+  .press-scale {
+    transition: transform 100ms ease-out;
+  }
+  .press-scale:active {
+    transform: scale(0.97);
+  }
+
+  /* Scrollable horizontal row (for filter chips) */
+  .scroll-row {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scroll-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* FAB positioning helper */
+  .fab {
+    position: fixed;
+    bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    right: 1rem;
+    z-index: 40;
+  }
+}

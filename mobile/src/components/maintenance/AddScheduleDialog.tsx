@@ -1,0 +1,350 @@
+
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+
+interface AddScheduleDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}
+
+export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddScheduleDialogProps) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  // Fetch active vehicles for selection
+  const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
+    queryKey: ["vehicles", "active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("id, registration_number, fleet_number, vehicle_type")
+        .eq("active", true)
+        .order("fleet_number");
+
+      if (error) throw error;
+      // Filter out any vehicles with empty or null IDs
+      return (data || []).filter(vehicle => vehicle.id && vehicle.id.trim() !== "");
+    },
+  });
+
+  const { register, handleSubmit, watch, setValue, reset } = useForm({
+    defaultValues: {
+      vehicle_id: "none",
+      title: "",
+      description: "",
+      schedule_type: "one_time",
+      frequency: "monthly",
+      frequency_value: 1,
+      start_date: new Date().toISOString().split('T')[0],
+      category: "service",
+      maintenance_type: "",
+      priority: "medium",
+      assigned_to: "",
+      estimated_duration_hours: 0,
+      auto_create_job_card: false,
+      odometer_based: false,
+      odometer_interval_km: 0,
+      notes: "",
+    },
+  });
+
+  const scheduleType = watch("schedule_type");
+  const odometerBased = watch("odometer_based");
+
+  const onSubmit = async (data: Record<string, unknown>) => {
+    setLoading(true);
+    try {
+      // Calculate next_due_date based on start_date and frequency
+      const startDate = new Date(data.start_date as string);
+      const nextDueDate = new Date(startDate);
+
+      if (data.schedule_type === "recurring") {
+        // Add frequency interval to start date
+        switch (data.frequency) {
+          case "daily":
+            nextDueDate.setDate(nextDueDate.getDate() + (data.frequency_value as number || 1));
+            break;
+          case "weekly":
+            nextDueDate.setDate(nextDueDate.getDate() + (7 * (data.frequency_value as number || 1)));
+            break;
+          case "monthly":
+            nextDueDate.setMonth(nextDueDate.getMonth() + (data.frequency_value as number || 1));
+            break;
+          case "quarterly":
+            nextDueDate.setMonth(nextDueDate.getMonth() + (3 * (data.frequency_value as number || 1)));
+            break;
+          case "yearly":
+            nextDueDate.setFullYear(nextDueDate.getFullYear() + (data.frequency_value as number || 1));
+            break;
+        }
+      }
+
+      const submitData = {
+        title: data.title,
+        description: data.description,
+        schedule_type: data.schedule_type,
+        frequency: data.frequency,
+        frequency_value: data.frequency_value,
+        start_date: data.start_date,
+        category: data.category,
+        maintenance_type: data.maintenance_type,
+        priority: data.priority,
+        assigned_to: data.assigned_to || null,
+        estimated_duration_hours: data.estimated_duration_hours,
+        auto_create_job_card: data.auto_create_job_card,
+        odometer_based: data.odometer_based,
+        odometer_interval_km: data.odometer_interval_km,
+        notes: data.notes || null,
+        // Required fields
+        next_due_date: nextDueDate.toISOString().split('T')[0],
+        // Vehicle ID - null for fleet-wide, specific UUID for vehicle-specific
+        vehicle_id: data.vehicle_id === "none" ? null : data.vehicle_id,
+        // Optional fields
+        created_by: "System User",
+        notification_channels: {
+          email: true,
+          sms: false,
+          in_app: true,
+        },
+        notification_recipients: [],
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await supabase.from("maintenance_schedules").insert([submitData as any]);      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Maintenance schedule created successfully",
+      });
+
+      reset();
+      onSuccess();
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Create Maintenance Schedule</DialogTitle>
+          <DialogDescription>
+            Fill in the details below to create a new maintenance schedule for your fleet or a specific vehicle.
+          </DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="max-h-[600px] pr-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title *</Label>
+                <Input id="title" {...register("title")} required />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="maintenance_type">Maintenance Type *</Label>
+                <Input id="maintenance_type" {...register("maintenance_type")} required />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="vehicle_id">Vehicle</Label>
+              <Select
+                onValueChange={(value) => setValue("vehicle_id", value)}
+                disabled={vehiclesLoading}
+                defaultValue="none"
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={vehiclesLoading ? "Loading vehicles..." : "Select vehicle (optional)"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (Fleet-wide schedule)</SelectItem>
+                  {vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.fleet_number || vehicle.registration_number} - {vehicle.registration_number}
+                      {vehicle.vehicle_type && ` (${vehicle.vehicle_type})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select a specific vehicle or leave empty for fleet-wide maintenance
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea id="description" {...register("description")} />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="category">Category *</Label>
+                <Select
+                  onValueChange={(value) => setValue("category", value as "inspection" | "service" | "repair" | "replacement" | "calibration")}
+                  defaultValue="service"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inspection">Inspection</SelectItem>
+                    <SelectItem value="service">Service</SelectItem>
+                    <SelectItem value="repair">Repair</SelectItem>
+                    <SelectItem value="replacement">Replacement</SelectItem>
+                    <SelectItem value="calibration">Calibration</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority *</Label>
+                <Select
+                  onValueChange={(value) => setValue("priority", value as "low" | "medium" | "high" | "critical")}
+                  defaultValue="medium"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="schedule_type">Schedule Type *</Label>
+                <Select
+                  onValueChange={(value) => setValue("schedule_type", value as "one_time" | "recurring")}
+                  defaultValue="one_time"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="one_time">One Time</SelectItem>
+                    <SelectItem value="recurring">Recurring</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {scheduleType === "recurring" && (
+                <div className="space-y-2">
+                  <Label htmlFor="frequency">Frequency *</Label>
+                  <Select
+                    onValueChange={(value) => setValue("frequency", value as "daily" | "weekly" | "monthly" | "quarterly" | "yearly")}
+                    defaultValue="monthly"
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="yearly">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Start Date *</Label>
+                <DatePicker
+                  id="start_date"
+                  value={watch("start_date")}
+                  onChange={(date) => setValue("start_date", date ? date.toISOString().split('T')[0] : '')}
+                  placeholder="Select start date"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="estimated_duration_hours">Estimated Duration (hours)</Label>
+                <Input
+                  id="estimated_duration_hours"
+                  type="number"
+                  step="0.5"
+                  {...register("estimated_duration_hours", { valueAsNumber: true })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="assigned_to">Assigned To</Label>
+              <Input id="assigned_to" {...register("assigned_to")} />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="auto_create_job_card"
+                onCheckedChange={(checked) => setValue("auto_create_job_card", checked)}
+              />
+              <Label htmlFor="auto_create_job_card">Auto-create job card when due</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="odometer_based"
+                onCheckedChange={(checked) => setValue("odometer_based", checked)}
+              />
+              <Label htmlFor="odometer_based">Odometer-based scheduling</Label>
+            </div>
+
+            {odometerBased && (
+              <div className="space-y-2">
+                <Label htmlFor="odometer_interval_km">Odometer Interval (km)</Label>
+                <Input
+                  id="odometer_interval_km"
+                  type="number"
+                  {...register("odometer_interval_km", { valueAsNumber: true })}
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea id="notes" {...register("notes")} />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? "Creating..." : "Create Schedule"}
+              </Button>
+            </div>
+          </form>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}

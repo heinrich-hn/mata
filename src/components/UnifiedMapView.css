@@ -1,0 +1,190 @@
+/* src/components/UnifiedMapView.css */
+
+/* Map Controls Positioning */
+.leaflet-top.leaflet-left .leaflet-control {
+  margin-top: 80px;
+  margin-left: 10px;
+  z-index: 1000;
+}
+
+/* Vehicle Marker Styles */
+.vehicle-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.vehicle-marker:hover {
+  transform: scale(1.05);
+}
+
+.vehicle-label {
+  background-color: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  white-space: nowrap;
+  margin-bottom: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  backdrop-filter: blur(2px);
+  border: 1px solid rgba(255,255,255,0.1);
+  z-index: 1001;
+}
+
+.vehicle-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.vehicle-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: all 0.2s ease;
+}
+
+.vehicle-dot.selected {
+  background-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+}
+
+.vehicle-dot:hover {
+  transform: scale(1.1);
+}
+
+/* Animation for moving vehicles */
+@keyframes pulse {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.2);
+  }
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+}
+
+.vehicle-moving .vehicle-dot {
+  animation: pulse 2s infinite;
+  background-color: #10b981;
+}
+
+/* Route Waypoint Marker */
+.route-waypoint {
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.route-waypoint:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* Geofence Color Dot */
+.geofence-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.3);
+  transition: transform 0.2s ease;
+}
+
+.geofence-color-dot:hover {
+  transform: scale(1.2);
+}
+
+/* Track Color Dot */
+.track-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.5);
+}
+
+/* Popup Styles */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.leaflet-popup-content {
+  margin: 0;
+  min-width: 200px;
+  padding: 12px;
+}
+
+.leaflet-popup-tip {
+  background-color: white;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .vehicle-label {
+    background-color: rgba(0, 0, 0, 0.9);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  
+  .leaflet-popup-content-wrapper {
+    background-color: #1f2937;
+    color: white;
+  }
+  
+  .leaflet-popup-tip {
+    background-color: #1f2937;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .vehicle-label {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+  
+  .vehicle-dot {
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
+  }
+  
+  .route-waypoint {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    border-width: 2px;
+  }
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+.vehicle-marker:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
