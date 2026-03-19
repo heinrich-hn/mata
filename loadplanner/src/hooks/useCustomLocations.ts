@@ -5,26 +5,31 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 export interface CustomLocation {
   id: string;
   name: string;
-  latitude: number;
-  longitude: number;
-  type: 'depot' | 'warehouse' | 'market' | 'border' | 'farm' | 'customer';
-  country: 'Zimbabwe' | 'South Africa' | 'Mozambique' | 'Zambia' | 'Botswana';
-  radius: number;
-  notes?: string;
+  address: string | null;  // Added
+  city: string | null;     // Added
+  province: string | null; // Added
+  country: 'Zimbabwe' | 'South Africa' | 'Mozambique' | 'Zambia' | 'Botswana' | null; // Made nullable to match DB
+  latitude: number | null;  // Made nullable to match DB
+  longitude: number | null; // Made nullable to match DB
+  type: 'depot' | 'warehouse' | 'market' | 'border' | 'farm' | 'customer' | null; // Made nullable
   is_active: boolean;
+  notes: string | null;
   created_at: string;
   updated_at: string;
-  created_by?: string;
+  // Removed radius and created_by as they don't exist in DB
 }
 
 export interface CustomLocationInsert {
   name: string;
-  latitude: number;
-  longitude: number;
-  type?: CustomLocation['type'];
+  latitude?: number | null;  // Made optional
+  longitude?: number | null; // Made optional
+  address?: string | null;   // Added
+  city?: string | null;      // Added
+  province?: string | null;  // Added
   country?: CustomLocation['country'];
-  radius?: number;
-  notes?: string;
+  type?: CustomLocation['type'];
+  notes?: string | null;
+  // Removed radius
 }
 
 // Fetch all custom locations
@@ -32,13 +37,20 @@ export function useCustomLocations() {
   return useQuery({
     queryKey: ['custom-locations'],
     queryFn: async () => {
+      console.log('Fetching custom locations...');
+      
       const { data, error } = await supabase
         .from('custom_locations')
         .select('*')
         .eq('is_active', true)
         .order('name', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      // No need to parse latitude/longitude since they're already numbers from numeric type
       return data as CustomLocation[];
     },
   });
@@ -50,16 +62,22 @@ export function useCreateCustomLocation() {
   
   return useMutation({
     mutationFn: async (location: CustomLocationInsert) => {
+      // Remove any fields that don't exist in the database
+      const { ...dbFields } = location;
+      
       const { data, error } = await supabase
         .from('custom_locations')
         .insert({
-          name: location.name,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          type: location.type || 'depot',
-          country: location.country || 'Zimbabwe',
-          radius: location.radius || 500,
-          notes: location.notes,
+          name: dbFields.name,
+          latitude: dbFields.latitude,
+          longitude: dbFields.longitude,
+          address: dbFields.address,
+          city: dbFields.city,
+          province: dbFields.province,
+          type: dbFields.type || 'depot',
+          country: dbFields.country || 'Zimbabwe',
+          notes: dbFields.notes,
+          is_active: true, // Set default
         })
         .select()
         .single();
@@ -87,9 +105,12 @@ export function useUpdateCustomLocation() {
   
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CustomLocation> & { id: string }) => {
+      // Remove any fields that don't exist or shouldn't be updated
+      const { created_at, updated_at, ...updateFields } = updates;
+      
       const { data, error } = await supabase
         .from('custom_locations')
-        .update(updates)
+        .update(updateFields)
         .eq('id', id)
         .select()
         .single();

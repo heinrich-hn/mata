@@ -7,6 +7,7 @@ export interface Trip {
   trip_number: string;
   driver_name?: string;
   vehicle_id?: string;
+  fleet_vehicle_id?: string;
   client_name?: string;
   client_type?: 'internal' | 'external';
   load_type?: string;

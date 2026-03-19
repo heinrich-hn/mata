@@ -1,4 +1,4 @@
- import DieselDebriefModal from '@/components/diesel/DieselDebriefModal';
+import DieselDebriefModal from '@/components/diesel/DieselDebriefModal';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import DieselImportModal from '@/components/diesel/DieselImportModal';
 import DieselNormsModal from '@/components/diesel/DieselNormsModal';
@@ -8,6 +8,7 @@ import ProbeVerificationModal from '@/components/diesel/ProbeVerificationModal';
 import ReeferDieselEntryModal from '@/components/diesel/ReeferDieselEntryModal';
 import type { ReeferDieselRecord } from '@/components/diesel/ReeferDieselEntryModal';
 import ReeferLinkageModal from '@/components/diesel/ReeferLinkageModal';
+import ReeferVehicleLinkModal from '@/components/diesel/ReeferVehicleLinkModal';
 import TripLinkageModal from '@/components/diesel/TripLinkageModal';
 import Layout from '@/components/Layout';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOperations } from '@/contexts/OperationsContext';
+import { useVehicles } from '@/hooks/useVehicles';
 import { useReeferConsumptionSummary, useReeferDieselRecords, type ReeferDieselRecordRow } from '@/hooks/useReeferDiesel';
 import { generateFleetDebriefSummaryPDF, generateSelectedTransactionsPDF } from '@/lib/dieselDebriefExport';
 import {
@@ -187,6 +189,8 @@ const DieselManagement = () => {
     addDieselNorm,
     updateDieselNorm,
     deleteDieselNorm,
+    addCostEntry,
+    deleteCostEntry,
   } = useOperations();
 
   // Batch debrief state
@@ -194,7 +198,7 @@ const DieselManagement = () => {
   const [selectedFleetForBatch, setSelectedFleetForBatch] = useState<string>('');
 
   // Consolidated reefer diesel records hook (CRUD + records from reefer_diesel_records table)
-  const { records: allReeferRecords, createRecordAsync, updateRecordAsync } = useReeferDieselRecords({});
+  const { records: allReeferRecords, createRecordAsync, updateRecordAsync, linkToVehicleAsync, unlinkFromVehicleAsync } = useReeferDieselRecords({});
 
   const truckRecords = useMemo(
     () => dieselRecords.filter(record => !isReeferFleet(record.fleet_number)),
@@ -220,6 +224,7 @@ const DieselManagement = () => {
       notes: r.notes || undefined,
       created_at: r.created_at,
       updated_at: r.updated_at,
+      trip_id: r.trip_id ?? undefined,
       // Reefer-specific fields carried through for display
       operating_hours: r.operating_hours,
       previous_operating_hours: r.previous_operating_hours,
@@ -299,9 +304,14 @@ const DieselManagement = () => {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isReeferLinkageOpen, setIsReeferLinkageOpen] = useState(false);
   const [isReeferEntryOpen, setIsReeferEntryOpen] = useState(false);
+  const [isReeferVehicleLinkOpen, setIsReeferVehicleLinkOpen] = useState(false);
+  const [selectedReeferForVehicle, setSelectedReeferForVehicle] = useState<ReeferDieselRecordRow | null>(null);
 
   // Selected records
   const [selectedRecord, setSelectedRecord] = useState<DieselConsumptionRecord | null>(null);
+
+  // Vehicles for fleet_number → vehicle_id mapping
+  const { data: vehicles = [] } = useVehicles();
   const [selectedReeferEditRecord, setSelectedReeferEditRecord] = useState<ReeferDieselRecord | null>(null);
   const [selectedNorm, setSelectedNorm] = useState<DieselNorms | null>(null);
 
@@ -1604,6 +1614,30 @@ const DieselManagement = () => {
     await unlinkDieselFromTrip(recordId);
   };
 
+  // Reefer vehicle linkage handlers
+  const openReeferVehicleLink = (record: DieselConsumptionRecord) => {
+    const reeferRecord = allReeferRecords.find(r => r.id === record.id);
+    if (reeferRecord) {
+      setSelectedReeferForVehicle(reeferRecord);
+      setIsReeferVehicleLinkOpen(true);
+    }
+  };
+
+  const handleLinkReeferToVehicle = async (reeferRecordId: string, dieselRecordId: string, fleetNumber: string) => {
+    await linkToVehicleAsync({ recordId: reeferRecordId, dieselRecordId, fleetNumber });
+  };
+
+  const handleUnlinkReeferFromVehicle = async (reeferRecordId: string) => {
+    // If reefer has cost entries on a trip, clean them up
+    const reeferRecord = allReeferRecords.find(r => r.id === reeferRecordId);
+    if (reeferRecord?.cost_entry_ids && reeferRecord.cost_entry_ids.length > 0) {
+      for (const costId of reeferRecord.cost_entry_ids) {
+        await deleteCostEntry(costId);
+      }
+    }
+    await unlinkFromVehicleAsync({ recordId: reeferRecordId });
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleProbeVerification = async (verificationData: any) => {
     await updateDieselRecord(verificationData as unknown as DieselConsumptionRecord);
@@ -2471,12 +2505,10 @@ const DieselManagement = () => {
                                                                 <Edit className="h-4 w-4 mr-2" />
                                                                 Edit Record
                                                               </DropdownMenuItem>
-                                                              {!record.probe_verified && (
-                                                                <DropdownMenuItem onClick={() => openProbeVerification(record)}>
-                                                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                                                  Verify Probe
-                                                                </DropdownMenuItem>
-                                                              )}
+                                                              <DropdownMenuItem onClick={() => openReeferVehicleLink(record)}>
+                                                                <Truck className="h-4 w-4 mr-2" />
+                                                                {allReeferRecords.find(r => r.id === record.id)?.linked_diesel_record_id ? 'Change Vehicle' : 'Link to Vehicle'}
+                                                              </DropdownMenuItem>
                                                               <DropdownMenuItem
                                                                 onClick={() => handleDeleteRecord(record.id)}
                                                                 className="text-destructive"
@@ -4448,6 +4480,30 @@ const DieselManagement = () => {
         trips={trips}
         onLinkToTrip={handleLinkToTrip}
         onUnlinkFromTrip={handleUnlinkFromTrip}
+        previousRefillDate={
+          selectedRecord
+            ? dieselRecords
+              .filter(r => r.fleet_number === selectedRecord.fleet_number && r.date < selectedRecord.date && r.id !== selectedRecord.id)
+              .sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? null
+            : null
+        }
+        vehicleId={
+          selectedRecord
+            ? vehicles.find(v => v.fleet_number === selectedRecord.fleet_number)?.id ?? null
+            : null
+        }
+      />
+
+      <ReeferVehicleLinkModal
+        isOpen={isReeferVehicleLinkOpen}
+        onClose={() => {
+          setIsReeferVehicleLinkOpen(false);
+          setSelectedReeferForVehicle(null);
+        }}
+        reeferRecord={selectedReeferForVehicle}
+        dieselRecords={dieselRecords}
+        onLink={handleLinkReeferToVehicle}
+        onUnlink={handleUnlinkReeferFromVehicle}
       />
 
       <ProbeVerificationModal

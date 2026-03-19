@@ -1,18 +1,17 @@
 
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import type { Trip } from '@/types/operations';
-import
-  {
-    AlertCircle,
-    AlertTriangle,
-    CheckCircle,
-    Info,
-    Link,
-    Save,
-    Truck,
-    Unlink,
-    X,
-  } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  Link,
+  Save,
+  Truck,
+  Unlink,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Button from '../ui/button-variants';
 import { Select } from '../ui/form-elements';
@@ -40,6 +39,8 @@ interface TripLinkageModalProps {
   trips: Trip[];
   onLinkToTrip: (dieselRecord: DieselRecord, tripId: string) => Promise<void>;
   onUnlinkFromTrip: (dieselRecordId: string) => Promise<void>;
+  previousRefillDate?: string | null;
+  vehicleId?: string | null;
 }
 
 const TripLinkageModal = ({
@@ -48,7 +49,9 @@ const TripLinkageModal = ({
   dieselRecord,
   trips,
   onLinkToTrip,
-  onUnlinkFromTrip
+  onUnlinkFromTrip,
+  previousRefillDate,
+  vehicleId,
 }: TripLinkageModalProps) => {
   const [selectedTripId, setSelectedTripId] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -77,11 +80,22 @@ const TripLinkageModal = ({
 
   const availableTrips = useMemo(() => {
     if (!dieselRecord) return [];
-    // Allow linking to both active and completed trips for comprehensive cost tracking
+    const currentDate = new Date(dieselRecord.date).getTime();
+    const refillDate = previousRefillDate ? new Date(previousRefillDate).getTime() : null;
+
     return trips
-      .filter(trip => trip.status === 'active' || trip.status === 'completed')
+      .filter(trip => {
+        if (trip.status !== 'active' && trip.status !== 'completed') return false;
+        // Filter by vehicle using fleet_vehicle_id (references vehicles table, not wialon_vehicles)
+        if (vehicleId && trip.fleet_vehicle_id !== vehicleId) return false;
+        // Filter by date range: from previous refill date up to and including current transaction date
+        const tripDate = new Date(trip.departure_date || trip.created_at!).getTime();
+        if (tripDate > currentDate) return false;
+        if (refillDate && tripDate < refillDate) return false;
+        return true;
+      })
       .sort((a, b) => new Date(b.departure_date || b.created_at!).getTime() - new Date(a.departure_date || a.created_at!).getTime());
-  }, [trips, dieselRecord]);
+  }, [trips, dieselRecord, previousRefillDate, vehicleId]);
 
   const currentLinkedTrip = useMemo(() => {
     if (!dieselRecord || !dieselRecord.trip_id) return undefined;
@@ -189,7 +203,8 @@ const TripLinkageModal = ({
               <div className="flex-1">
                 <h4 className="text-sm font-medium">Currently Linked to Trip</h4>
                 <div className="text-sm mt-2 space-y-1">
-                  <p><strong>Trip:</strong> {currentLinkedTrip.trip_number}</p>
+                  <p><strong>Trip/POD Ref:</strong> {currentLinkedTrip.trip_number}</p>
+                  <p><strong>Route:</strong> {currentLinkedTrip.route || 'N/A'}</p>
                   <p><strong>Client:</strong> {currentLinkedTrip.client_name}</p>
                 </div>
                 <div className="mt-3">
@@ -222,7 +237,7 @@ const TripLinkageModal = ({
                   options={[
                     { label: 'Select a trip...', value: '' },
                     ...availableTrips.map(trip => ({
-                      label: `${trip.trip_number} - ${trip.client_name}`,
+                      label: `${trip.trip_number}${trip.route ? ` — ${trip.route}` : ''}`,
                       value: trip.id
                     }))
                   ]}
@@ -238,11 +253,12 @@ const TripLinkageModal = ({
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div className="space-y-2">
-                        <p><strong>Trip:</strong> {selectedTrip.trip_number}</p>
+                        <p><strong>Trip/POD Ref:</strong> {selectedTrip.trip_number}</p>
+                        <p><strong>Route:</strong> {selectedTrip.route || 'N/A'}</p>
                         <p><strong>Client:</strong> {selectedTrip.client_name}</p>
-                        <p><strong>Driver:</strong> {selectedTrip.driver_name}</p>
                       </div>
                       <div className="space-y-2">
+                        <p><strong>Driver:</strong> {selectedTrip.driver_name}</p>
                         <p><strong>Distance:</strong> {selectedTrip.distance_km}km</p>
                         <p><strong>Status:</strong> {selectedTrip.status}</p>
                       </div>
@@ -264,9 +280,9 @@ const TripLinkageModal = ({
                 <div className="flex items-start space-x-3">
                   <AlertTriangle className="w-5 h-5 text-warning mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-medium">No Active Trips Available</h4>
+                    <h4 className="text-sm font-medium">No Matching Trips Available</h4>
                     <p className="text-sm mt-1">
-                      There are no active trips to link this diesel record to.
+                      There are no active or completed trips for this vehicle in the applicable date range.
                     </p>
                   </div>
                 </div>

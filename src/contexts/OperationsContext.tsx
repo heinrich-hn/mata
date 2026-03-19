@@ -1,17 +1,16 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database, Json } from '@/integrations/supabase/types';
-import
-  {
-    mapDbToActionItem,
-    mapDbToCARReport,
-    mapDbToCostEntry,
-    mapDbToDieselNorms,
-    mapDbToDieselRecord,
-    mapDbToDriverEvent,
-    mapDbToMissedLoad,
-    mapDbToTrip,
-    mapTripToDb
-  } from '@/lib/typeMappers';
+import {
+  mapDbToActionItem,
+  mapDbToCARReport,
+  mapDbToCostEntry,
+  mapDbToDieselNorms,
+  mapDbToDieselRecord,
+  mapDbToDriverEvent,
+  mapDbToMissedLoad,
+  mapDbToTrip,
+  mapTripToDb
+} from '@/lib/typeMappers';
 import type {
   ActionItem,
   CARReport,
@@ -555,7 +554,37 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // 3. Update diesel record with trip_id and cost_entry_ids
+      // 3. Check for linked reefer records and create cost entries for them
+      const { data: linkedReefers } = await (supabase as any).from('reefer_diesel_records')
+        .select('*')
+        .eq('linked_diesel_record_id', dieselRecord.id);
+
+      if (linkedReefers && linkedReefers.length > 0) {
+        for (const reefer of linkedReefers) {
+          const reeferCostEntry: Omit<CostEntry, 'id' | 'created_at' | 'updated_at'> = {
+            trip_id: tripId,
+            category: 'Fuel',
+            sub_category: 'Diesel - Reefer',
+            amount: reefer.total_cost,
+            currency: reefer.currency || 'ZAR',
+            date: reefer.date,
+            reference_number: `RFR-${reefer.id.substring(0, 8)}`,
+            notes: `Reefer diesel for ${reefer.reefer_unit} at ${reefer.fuel_station}`,
+            diesel_record_id: reefer.id,
+            vehicle_identifier: reefer.reefer_unit,
+            is_flagged: false,
+            is_system_generated: true,
+          };
+          const reeferCostId = await addCostEntry(reeferCostEntry);
+          costEntryIds.push(reeferCostId);
+          // Update reefer record with trip linkage
+          await (supabase as any).from('reefer_diesel_records')
+            .update({ trip_id: tripId, cost_entry_ids: [reeferCostId] })
+            .eq('id', reefer.id);
+        }
+      }
+
+      // 4. Update diesel record with trip_id and cost_entry_ids
       await updateDieselRecord({
         ...dieselRecord,
         trip_id: tripId,
@@ -582,7 +611,25 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // 2. Update diesel record to remove trip linkage
+      // 2. Clean up linked reefer records' trip linkage and cost entries
+      const { data: linkedReefers } = await (supabase as any).from('reefer_diesel_records')
+        .select('*')
+        .eq('linked_diesel_record_id', dieselRecordId);
+
+      if (linkedReefers && linkedReefers.length > 0) {
+        for (const reefer of linkedReefers) {
+          if (reefer.cost_entry_ids && reefer.cost_entry_ids.length > 0) {
+            for (const costId of reefer.cost_entry_ids) {
+              await deleteCostEntry(costId);
+            }
+          }
+          await (supabase as any).from('reefer_diesel_records')
+            .update({ trip_id: null, cost_entry_ids: null })
+            .eq('id', reefer.id);
+        }
+      }
+
+      // 3. Update diesel record to remove trip linkage
       await updateDieselRecord({
         ...record,
         trip_id: undefined,

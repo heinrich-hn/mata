@@ -19,6 +19,10 @@ export interface ReeferDieselRecordRow {
   hours_operated: number | null;
   litres_per_hour: number | null;
   linked_diesel_record_id: string | null;
+  linked_horse: string | null;
+  linked_horse_id: string | null;
+  trip_id: string | null;
+  cost_entry_ids: string[] | null;
   driver_name: string | null;
   notes: string | null;
   created_at: string;
@@ -243,6 +247,26 @@ export const useReeferDieselRecords = (options: UseReeferDieselRecordsOptions = 
     isDeleting: deleteMutation.isPending,
     linkToDieselRecord: linkToDieselRecordMutation.mutate,
     isLinkingToDieselRecord: linkToDieselRecordMutation.isPending,
+    linkToVehicleAsync: async ({ recordId, dieselRecordId, fleetNumber }: { recordId: string; dieselRecordId: string; fleetNumber: string }) => {
+      const { data, error } = await getReeferTable()
+        .update({ linked_diesel_record_id: dieselRecordId, linked_horse: fleetNumber })
+        .eq('id', recordId)
+        .select()
+        .single();
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['reefer-diesel-records'] });
+      return data as ReeferDieselRecordRow;
+    },
+    unlinkFromVehicleAsync: async ({ recordId }: { recordId: string }) => {
+      const { data, error } = await getReeferTable()
+        .update({ linked_diesel_record_id: null, linked_horse: null, linked_horse_id: null, trip_id: null, cost_entry_ids: null })
+        .eq('id', recordId)
+        .select()
+        .single();
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['reefer-diesel-records'] });
+      return data as ReeferDieselRecordRow;
+    },
   };
 };
 
@@ -268,12 +292,12 @@ export const useReeferConsumptionSummary = () => {
       ((data || []) as ReeferDieselRecordRow[]).forEach((record) => {
         const existing = summaryMap.get(record.reefer_unit);
         const opHours = record.operating_hours;
-        
+
         if (existing) {
           existing.total_litres_filled += record.litres_filled || 0;
           existing.total_cost += record.total_cost || 0;
           existing.fill_count += 1;
-          
+
           // Track min/max hour meter readings for this reefer
           if (opHours !== null && opHours !== undefined) {
             if (existing.min_operating_hours === null || opHours < existing.min_operating_hours) {
@@ -283,7 +307,7 @@ export const useReeferConsumptionSummary = () => {
               existing.max_operating_hours = opHours;
             }
           }
-          
+
           if (record.date < existing.first_fill_date) {
             existing.first_fill_date = record.date;
           }
@@ -313,12 +337,12 @@ export const useReeferConsumptionSummary = () => {
         if (summary.min_operating_hours !== null && summary.max_operating_hours !== null) {
           summary.total_hours_operated = summary.max_operating_hours - summary.min_operating_hours;
         }
-        
+
         // Calculate L/hr = total litres / hours operated
         if (summary.total_hours_operated > 0) {
           summary.avg_litres_per_hour = summary.total_litres_filled / summary.total_hours_operated;
         }
-        
+
         // Remove internal tracking fields before returning
         const { min_operating_hours: _min_operating_hours, max_operating_hours: _max_operating_hours, ...cleanSummary } = summary;
         results.push(cleanSummary);
