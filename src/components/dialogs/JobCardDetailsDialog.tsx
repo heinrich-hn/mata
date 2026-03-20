@@ -26,6 +26,7 @@ interface JobCardDetailsDialogProps {
     title: string;
     description: string | null;
     vehicle_id: string | null;
+    inspection_id?: string | null;
     assignee: string | null;
     priority: string;
     due_date: string | null;
@@ -119,6 +120,20 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
       return data || [];
     },
     enabled: !!jobCard?.id,
+  });
+
+  const { data: inspection } = useQuery({
+    queryKey: ["vehicle_inspection", jobCard?.inspection_id],
+    queryFn: async () => {
+      if (!jobCard?.inspection_id) return null;
+      const { data } = await supabase
+        .from("vehicle_inspections")
+        .select("inspection_number, inspection_type, inspection_date")
+        .eq("id", jobCard.inspection_id)
+        .single();
+      return data;
+    },
+    enabled: !!jobCard?.inspection_id,
   });
 
   if (!jobCard) return null;
@@ -239,6 +254,13 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
         document_url: p.document_url,
         document_name: p.document_name,
       })),
+      notes: notes.map(n => ({
+        id: n.id,
+        note: n.note,
+        created_by: n.created_by,
+        created_at: n.created_at,
+      })),
+      inspection: inspection || null,
     };
 
     generateJobCardPDF(exportData);

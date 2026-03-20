@@ -50,6 +50,17 @@ export interface JobCardExportData {
     document_url?: string | null;
     document_name?: string | null;
   }>;
+  notes?: Array<{
+    id: string;
+    note: string;
+    created_by: string | null;
+    created_at: string | null;
+  }>;
+  inspection?: {
+    inspection_number: string;
+    inspection_type: string;
+    inspection_date: string;
+  } | null;
 }
 
 export interface CostSummary {
@@ -552,6 +563,84 @@ export function generateJobCardPDF(data: JobCardExportData): void {
     doc.setFont("helvetica", "normal");
     const descriptionLines = doc.splitTextToSize(data.jobCard.description, pageWidth - 2 * margin - 10);
     doc.text(descriptionLines, margin + 5, yPos);
+    yPos += descriptionLines.length * 4.5 + 10;
+  }
+
+  // =====================
+  // NOTES / FEEDBACK SECTION
+  // =====================
+  if (data.notes && data.notes.length > 0) {
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    doc.setFillColor(234, 179, 8); // Yellow/amber
+    doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 10, 2, 2, "F");
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text(`NOTES & FEEDBACK (${data.notes.length})`, margin + 5, yPos + 7);
+    doc.setTextColor(0, 0, 0);
+    yPos += 14;
+
+    const notesTableData = data.notes.map((note) => [
+      note.created_at ? format(new Date(note.created_at), "MMM dd, yyyy HH:mm") : "-",
+      note.created_by || "Unknown",
+      note.note,
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [["Date", "Author", "Note"]],
+      body: notesTableData,
+      theme: "striped",
+      headStyles: {
+        fillColor: [161, 121, 0],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8,
+      },
+      bodyStyles: {
+        fontSize: 7,
+      },
+      columnStyles: {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: pageWidth - 2 * margin - 65 },
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    yPos = (doc as any).lastAutoTable.finalY + 10;
+  }
+
+  // =====================
+  // LINKED INSPECTION SECTION
+  // =====================
+  if (data.inspection) {
+    if (yPos > 230) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    doc.setFillColor(14, 165, 233); // Sky blue
+    doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 10, 2, 2, "F");
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("LINKED INSPECTION", margin + 5, yPos + 7);
+    doc.setTextColor(0, 0, 0);
+    yPos += 14;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Inspection #: ${data.inspection.inspection_number}`, margin + 5, yPos);
+    yPos += 5;
+    doc.text(`Type: ${data.inspection.inspection_type}`, margin + 5, yPos);
+    yPos += 5;
+    doc.text(`Date: ${format(new Date(data.inspection.inspection_date), "MMM dd, yyyy")}`, margin + 5, yPos);
   }
 
   // Footer on each page

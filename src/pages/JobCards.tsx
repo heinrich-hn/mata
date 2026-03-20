@@ -4,17 +4,16 @@ import AddJobCardDialog from "@/components/dialogs/AddJobCardDialog";
 import JobCardDetailsDialog from "@/components/dialogs/JobCardDetailsDialog";
 import JobCardWeeklyCostReport from "@/components/maintenance/JobCardWeeklyCostReport";
 import { useAuth } from "@/contexts/AuthContext";
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,23 +42,22 @@ import { useToast } from "@/hooks/use-toast";
 import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import
-  {
-    Calendar,
-    CheckCircle2,
-    ChevronDown,
-    ClipboardList,
-    Download,
-    FileText,
-    ListPlus,
-    MessageSquarePlus,
-    MoreHorizontal,
-    Plus,
-    Search,
-    Trash2,
-    Truck,
-    User
-  } from "lucide-react";
+import {
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  ClipboardList,
+  Download,
+  FileText,
+  ListPlus,
+  MessageSquarePlus,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Trash2,
+  Truck,
+  User
+} from "lucide-react";
 import { useCallback, useState } from "react";
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -160,6 +158,7 @@ type JobCard = BaseJobCard & {
   } | null;
   inspection?: VehicleInspectionRow | null;
   partsSummary?: JobCardPartsSummary;
+  notesCount?: number;
 };
 
 type FleetCategory = {
@@ -220,7 +219,7 @@ const JobCards = () => {
   // Group and sort cards by category and fleet
   const groupCardsByCategory = (cards: JobCard[]): Map<string, Map<string, JobCard[]>> => {
     const grouped = new Map<string, Map<string, JobCard[]>>();
-    
+
     // Initialize categories
     Object.keys(categories).forEach(category => {
       grouped.set(category, new Map<string, JobCard[]>());
@@ -238,7 +237,7 @@ const JobCards = () => {
       const fleetNumber = card.vehicle?.fleet_number;
       const category = getFleetCategory(fleetNumber || null);
       const fleetKey = fleetNumber || "__no_fleet__";
-      
+
       const categoryMap = grouped.get(category);
       if (categoryMap) {
         if (!categoryMap.has(fleetKey)) {
@@ -255,7 +254,7 @@ const JobCards = () => {
         const bNum = getFleetNumber(bKey === "__no_fleet__" ? null : bKey);
         return aNum - bNum;
       });
-      
+
       const sortedMap = new Map<string, JobCard[]>(sortedEntries);
       grouped.set(category, sortedMap);
     });
@@ -289,6 +288,7 @@ const JobCards = () => {
       let vehiclesData: Pick<Database["public"]["Tables"]["vehicles"]["Row"], "id" | "fleet_number" | "registration_number">[] = [];
       let inspectionsData: VehicleInspectionRow[] = [];
       let partsLinkData: PartRequestLinkRow[] = [];
+      let notesData: { job_card_id: string }[] = [];
 
       if (vehicleIds.length > 0) {
         const { data, error } = await supabase
@@ -327,6 +327,24 @@ const JobCards = () => {
         }
 
         partsLinkData = (data || []) as PartRequestLinkRow[];
+      }
+
+      if (jobCardIds.length > 0) {
+        const { data, error } = await supabase
+          .from("job_card_notes")
+          .select("job_card_id")
+          .in("job_card_id", jobCardIds);
+
+        if (error) {
+          throw error;
+        }
+
+        notesData = (data || []) as { job_card_id: string }[];
+      }
+
+      const notesCountMap = new Map<string, number>();
+      for (const note of notesData) {
+        notesCountMap.set(note.job_card_id, (notesCountMap.get(note.job_card_id) || 0) + 1);
       }
 
       const vehicleMap = new Map(
@@ -393,6 +411,7 @@ const JobCards = () => {
           latestIrNumber: null,
           latestPartName: null,
         },
+        notesCount: notesCountMap.get(item.id) || 0,
       })) as JobCard[];
     },
   });
@@ -407,7 +426,7 @@ const JobCards = () => {
   // Base filter (search, priority, assignee)
   const baseFilteredCards = jobCards.filter((card) => {
     if (searchTerm && !card.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !card.job_number.toLowerCase().includes(searchTerm.toLowerCase())) {
+      !card.job_number.toLowerCase().includes(searchTerm.toLowerCase())) {
       return false;
     }
     if (selectedPriority !== "all" && card.priority !== selectedPriority) {
@@ -888,6 +907,13 @@ const JobCards = () => {
                     <span className="text-muted-foreground text-sm">No inspection</span>
                   )}
 
+                  {card.notesCount && card.notesCount > 0 ? (
+                    <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200">
+                      <MessageSquarePlus className="h-3 w-3 mr-1" />
+                      {card.notesCount} Note{card.notesCount > 1 ? "s" : ""}
+                    </Badge>
+                  ) : null}
+
                   {card.partsSummary && card.partsSummary.count > 0 ? (
                     <div className="space-y-1">
                       <div className="flex flex-wrap gap-1">
@@ -973,22 +999,19 @@ const JobCards = () => {
     <div className="border border-border rounded-xl overflow-hidden transition-shadow duration-200 shadow-sm hover:shadow-md">
       <button
         type="button"
-        className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors duration-150 ${
-          statusVariant === "active"
-            ? "bg-gradient-to-r from-orange-50/80 to-amber-50/60 hover:from-orange-100/80 hover:to-amber-100/60 dark:from-orange-950/20 dark:to-amber-950/20 dark:hover:from-orange-950/30 dark:hover:to-amber-950/30"
-            : "bg-gradient-to-r from-emerald-50/80 to-green-50/60 hover:from-emerald-100/80 hover:to-green-100/60 dark:from-emerald-950/20 dark:to-green-950/20 dark:hover:from-emerald-950/30 dark:hover:to-green-950/30"
-        }`}
+        className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors duration-150 ${statusVariant === "active"
+          ? "bg-gradient-to-r from-orange-50/80 to-amber-50/60 hover:from-orange-100/80 hover:to-amber-100/60 dark:from-orange-950/20 dark:to-amber-950/20 dark:hover:from-orange-950/30 dark:hover:to-amber-950/30"
+          : "bg-gradient-to-r from-emerald-50/80 to-green-50/60 hover:from-emerald-100/80 hover:to-green-100/60 dark:from-emerald-950/20 dark:to-green-950/20 dark:hover:from-emerald-950/30 dark:hover:to-green-950/30"
+          }`}
         onClick={onToggle}
       >
         <div className="flex items-center gap-3">
-          <div className={`flex items-center justify-center w-9 h-9 rounded-lg ${
-            statusVariant === "active"
-              ? "bg-orange-100 dark:bg-orange-900/50"
-              : "bg-emerald-100 dark:bg-emerald-900/50"
-          }`}>
-            <Truck className={`h-4 w-4 ${
-              statusVariant === "active" ? "text-orange-600 dark:text-orange-400" : "text-emerald-600 dark:text-emerald-400"
-            }`} />
+          <div className={`flex items-center justify-center w-9 h-9 rounded-lg ${statusVariant === "active"
+            ? "bg-orange-100 dark:bg-orange-900/50"
+            : "bg-emerald-100 dark:bg-emerald-900/50"
+            }`}>
+            <Truck className={`h-4 w-4 ${statusVariant === "active" ? "text-orange-600 dark:text-orange-400" : "text-emerald-600 dark:text-emerald-400"
+              }`} />
           </div>
           <div>
             <p className="font-semibold text-sm text-foreground leading-none">{fleetLabel}</p>
@@ -997,11 +1020,10 @@ const JobCards = () => {
             </p>
           </div>
           <Badge
-            className={`ml-1 text-xs font-semibold border ${
-              statusVariant === "active"
-                ? "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800"
-                : "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800"
-            }`}
+            className={`ml-1 text-xs font-semibold border ${statusVariant === "active"
+              ? "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800"
+              : "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800"
+              }`}
           >
             {cards.length}
           </Badge>
@@ -1229,12 +1251,12 @@ const JobCards = () => {
                   <div className="space-y-6">
                     {Object.keys(categories)
                       .sort((a, b) => categories[a].order - categories[b].order)
-                      .map(category => 
+                      .map(category =>
                         renderCategorySection(
-                          category, 
-                          groupCardsByCategory(allActiveCards).get(category) || new Map(), 
-                          true, 
-                          closedActiveFleets, 
+                          category,
+                          groupCardsByCategory(allActiveCards).get(category) || new Map(),
+                          true,
+                          closedActiveFleets,
                           toggleActiveFleet
                         )
                       )}
@@ -1299,12 +1321,12 @@ const JobCards = () => {
                   <div className="space-y-6">
                     {Object.keys(categories)
                       .sort((a, b) => categories[a].order - categories[b].order)
-                      .map(category => 
+                      .map(category =>
                         renderCategorySection(
-                          category, 
-                          groupCardsByCategory(allCompletedCards).get(category) || new Map(), 
-                          false, 
-                          closedCompletedFleets, 
+                          category,
+                          groupCardsByCategory(allCompletedCards).get(category) || new Map(),
+                          false,
+                          closedCompletedFleets,
                           toggleCompletedFleet
                         )
                       )}
