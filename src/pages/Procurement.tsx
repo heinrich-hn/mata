@@ -1,14 +1,14 @@
-import InventoryPanel from "@/components/InventoryPanel";
+import InventoryPanel from "@/components/inventory/InventoryPanel";
 import Layout from "@/components/Layout";
 import {
-AlertDialog,
-AlertDialogAction,
-AlertDialogCancel,
-AlertDialogContent,
-AlertDialogDescription,
-AlertDialogFooter,
-AlertDialogHeader,
-AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,93 +16,93 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
-Dialog,
-DialogContent,
-DialogDescription,
-DialogFooter,
-DialogHeader,
-DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-DropdownMenu,
-DropdownMenuContent,
-DropdownMenuItem,
-DropdownMenuSeparator,
-DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 /* ScrollArea used in Cash Manager tab */
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-Select,
-SelectContent,
-SelectItem,
-SelectTrigger,
-SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-Table,
-TableBody,
-TableCell,
-TableHead,
-TableHeader,
-TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-type LowStockItem,
-type PartsRequest,
-useAllocateToJobCard,
-useAssignVendor,
-useCashManagerRequests,
-useCreateProcurementRequest,
-useCreateReplenishmentRequest,
-useDeleteProcurementRequest,
-useLowStockItems,
-useMarkAsOrdered,
-useMarkAsReceived,
-useOpenRequests,
-useProcurementRequests,
-useProcurementStats,
-useReceiveOrder,
-useUpdateCashManagerApproval,
-useUpdateProcurementRequest,
-useUpdateRequestStatus,
-useUpdateSageRequisition,
-useVendors
+  type LowStockItem,
+  type PartsRequest,
+  useAllocateToJobCard,
+  useAssignVendor,
+  useCashManagerRequests,
+  useCreateProcurementRequest,
+  useCreateReplenishmentRequest,
+  useDeleteProcurementRequest,
+  useLowStockItems,
+  useMarkAsOrdered,
+  useMarkAsReceived,
+  useOpenRequests,
+  useProcurementRequests,
+  useProcurementStats,
+  useReceiveOrder,
+  useUpdateCashManagerApproval,
+  useUpdateProcurementRequest,
+  useUpdateRequestStatus,
+  useUpdateSageRequisition,
+  useVendors
 } from "@/hooks/useProcurement";
 import StartProcurementDialog from "@/components/dialogs/StartProcurementDialog";
 import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
-AlertTriangle,
-BookOpen,
-Check,
-CheckCircle,
-ChevronDown,
-ChevronRight,
-Clock,
-CreditCard,
-DollarSign,
-Download,
-Edit,
-FileDown,
-FileText,
-Loader2,
-MoreHorizontal,
-Package,
-PackagePlus,
-Plus,
-ShoppingBag,
-ShoppingCart,
-Store,
-Trash2,
-Truck,
-Wrench,
-X
+  AlertTriangle,
+  BookOpen,
+  Check,
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  DollarSign,
+  Download,
+  Edit,
+  FileDown,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  Package,
+  PackagePlus,
+  Plus,
+  ShoppingBag,
+  ShoppingCart,
+  Store,
+  Trash2,
+  Truck,
+  Wrench,
+  X
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
@@ -2129,7 +2129,7 @@ const Procurement = () => {
                                       {request.allocated_to_job_card && (
                                         <Badge className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />Fulfilled</Badge>
                                       )}
-                                        <DropdownMenu>
+                                      <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                                         </DropdownMenuTrigger>

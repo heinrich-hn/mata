@@ -14,6 +14,94 @@ export type Database = {
   }
   public: {
     Tables: {
+      breakdowns: {
+        Row: {
+          breakdown_date: string
+          breakdown_number: string
+          category: string
+          created_at: string
+          description: string
+          driver_id: string | null
+          fleet_vehicle_id: string | null
+          id: string
+          load_id: string | null
+          location: string | null
+          main_app_breakdown_id: string | null
+          reported_by: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          sent_at: string | null
+          sent_to_main_app: boolean
+          severity: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          breakdown_date?: string
+          breakdown_number: string
+          category?: string
+          created_at?: string
+          description: string
+          driver_id?: string | null
+          fleet_vehicle_id?: string | null
+          id?: string
+          load_id?: string | null
+          location?: string | null
+          main_app_breakdown_id?: string | null
+          reported_by?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          sent_at?: string | null
+          sent_to_main_app?: boolean
+          severity?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          breakdown_date?: string
+          breakdown_number?: string
+          category?: string
+          created_at?: string
+          description?: string
+          driver_id?: string | null
+          fleet_vehicle_id?: string | null
+          id?: string
+          load_id?: string | null
+          location?: string | null
+          main_app_breakdown_id?: string | null
+          reported_by?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          sent_at?: string | null
+          sent_to_main_app?: boolean
+          severity?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "breakdowns_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "breakdowns_fleet_vehicle_id_fkey"
+            columns: ["fleet_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "fleet_vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "breakdowns_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_feedback: {
         Row: {
           client_id: string

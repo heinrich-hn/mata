@@ -44,8 +44,8 @@ export function AppHeader({ title = 'Dashboard' }: AppHeaderProps) {
           <Menu className="h-5 w-5" />
         </SidebarTrigger>
         <div>
-          <h1 className="text-lg font-semibold text-foreground">{title}</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
+          <p className="text-xs text-muted-foreground font-normal">
             Week of {format(weekStart, 'd')}-{format(weekEnd, 'd MMMM yyyy')}
           </p>
         </div>

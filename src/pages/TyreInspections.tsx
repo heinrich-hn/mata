@@ -1,4 +1,4 @@
-import TyreInspection from "@/components/TyreInspection";
+import TyreInspection from "@/components/tyres/TyreInspection";
 import MobileTyreInspectionForm from "@/components/inspections/MobileTyreInspectionForm";
 import Layout from "@/components/Layout";
 import { useIsMobile } from "@/hooks/use-mobile";

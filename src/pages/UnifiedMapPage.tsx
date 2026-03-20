@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import UnifiedMapView from "@/components/UnifiedMapView";
+import UnifiedMapView from "@/components/map/UnifiedMapView";
 
 const UnifiedMapPage = () => {
   return (

@@ -3587,6 +3587,95 @@ export type Database = {
         }
         Relationships: []
       }
+      fleet_breakdowns: {
+        Row: {
+          breakdown_date: string
+          category: string
+          created_at: string
+          description: string
+          driver_name: string | null
+          id: string
+          linked_inspection_id: string | null
+          linked_job_card_id: string | null
+          load_number: string | null
+          location: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          severity: string
+          source_app: string
+          source_breakdown_id: string | null
+          source_breakdown_number: string | null
+          status: string
+          updated_at: string
+          vehicle_fleet_number: string | null
+          vehicle_id: string | null
+          vehicle_make: string | null
+          vehicle_model: string | null
+          vehicle_registration: string | null
+          workshop_notes: string | null
+        }
+        Insert: {
+          breakdown_date: string
+          category?: string
+          created_at?: string
+          description: string
+          driver_name?: string | null
+          id?: string
+          linked_inspection_id?: string | null
+          linked_job_card_id?: string | null
+          load_number?: string | null
+          location?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          source_app?: string
+          source_breakdown_id?: string | null
+          source_breakdown_number?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_fleet_number?: string | null
+          vehicle_id?: string | null
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          vehicle_registration?: string | null
+          workshop_notes?: string | null
+        }
+        Update: {
+          breakdown_date?: string
+          category?: string
+          created_at?: string
+          description?: string
+          driver_name?: string | null
+          id?: string
+          linked_inspection_id?: string | null
+          linked_job_card_id?: string | null
+          load_number?: string | null
+          location?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          source_app?: string
+          source_breakdown_id?: string | null
+          source_breakdown_number?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_fleet_number?: string | null
+          vehicle_id?: string | null
+          vehicle_make?: string | null
+          vehicle_model?: string | null
+          vehicle_registration?: string | null
+          workshop_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fleet_breakdowns_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fleet_tyre_positions: {
         Row: {
           created_at: string | null
@@ -8485,6 +8574,7 @@ export type Database = {
           verified_no_costs: boolean | null
           verified_no_costs_at: string | null
           verified_no_costs_by: string | null
+          zero_revenue_comment: string | null
         }
         Insert: {
           actual_arrival_date?: string | null
@@ -8556,6 +8646,7 @@ export type Database = {
           verified_no_costs?: boolean | null
           verified_no_costs_at?: string | null
           verified_no_costs_by?: string | null
+          zero_revenue_comment?: string | null
         }
         Update: {
           actual_arrival_date?: string | null
@@ -8627,6 +8718,7 @@ export type Database = {
           verified_no_costs?: boolean | null
           verified_no_costs_at?: string | null
           verified_no_costs_by?: string | null
+          zero_revenue_comment?: string | null
         }
         Relationships: [
           {
@@ -12370,6 +12462,12 @@ export type Database = {
         | "quality_check"
         | "completion_certificate"
         | "other"
+        | "license_disk"
+        | "roadworthy"
+        | "insurance"
+        | "mot"
+        | "cof"
+        | "permit"
       driver_document_type:
         | "license"
         | "pdp"
@@ -12691,6 +12789,12 @@ export const Constants = {
         "quality_check",
         "completion_certificate",
         "other",
+        "license_disk",
+        "roadworthy",
+        "insurance",
+        "mot",
+        "cof",
+        "permit",
       ],
       driver_document_type: [
         "license",

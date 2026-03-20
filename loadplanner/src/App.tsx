@@ -18,6 +18,9 @@ import LoginPage from "./pages/LoginPage";
 import NotFound from "./pages/NotFound";
 import SuppliersPage from "./pages/Suppliers"; // Add this import
 import ThirdPartyLoadsPage from "./pages/ThirdPartyTripsPage";
+import SubcontractorTripsPage from "./pages/SubcontractorTripsPage";
+import LoadConsignmentsPage from "./pages/load-consignments";
+import BreakdownsPage from "./pages/BreakdownsPage";
 import ClientDashboardPage from "./pages/client-dashboard/ClientDashboardPage";
 import { MainLayout } from "./components/layout/MainLayout"; // Add this import if you have it
 
@@ -185,6 +188,36 @@ const App = () => (
                       <ProtectedRoute>
                         <MainLayout>
                           <DeliveriesDashboardPage />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/breakdowns"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <BreakdownsPage />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/subcontractor-trips"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <SubcontractorTripsPage />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/consignments"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <LoadConsignmentsPage />
                         </MainLayout>
                       </ProtectedRoute>
                     }

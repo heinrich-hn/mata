@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import TyreManagementSystem from "@/components/TyreManagementSystem";
+import TyreManagementSystem from "@/components/tyres/TyreManagementSystem";
 
 const TyreManagement = () => {
   return (

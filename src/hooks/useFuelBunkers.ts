@@ -96,8 +96,10 @@ export interface DailyDipRecord {
   closing_dip_cm: number | null;
   closing_volume_liters: number | null;
   closing_pump_reading: number | null;
+  // Diesel additions during this dip period (refills while record is open)
+  diesel_additions_liters: number;   // Total diesel added to bunker during this period
   // Calculated values
-  tank_usage_liters: number | null;  // C = A - B (opening - closing volume)
+  tank_usage_liters: number | null;  // C = A - B + diesel_additions (opening - closing + additions)
   pump_issued_liters: number | null; // F = E - D (closing - opening pump)
   variance_liters: number | null;    // G = C - F (tank usage - pump issued)
   // Metadata
@@ -353,11 +355,34 @@ export const useRefillBunker = () => {
         throw new Error(response.error || "Failed to refill bunker");
       }
 
+      // Background calculation: Add refill amount to any open dip record for this bunker
+      const addedLiters = response.added_liters ?? data.quantity_liters;
+      const { data: openDipRecord } = await fromTable("daily_dip_records")
+        .select("id, diesel_additions_liters")
+        .eq("bunker_id", data.bunker_id)
+        .eq("status", "open")
+        .maybeSingle();
+
+      if (openDipRecord) {
+        const currentAdditions = (openDipRecord as { diesel_additions_liters: number }).diesel_additions_liters || 0;
+        const { error: dipUpdateError } = await fromTable("daily_dip_records")
+          .update({
+            diesel_additions_liters: currentAdditions + addedLiters,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", (openDipRecord as { id: string }).id);
+
+        if (dipUpdateError) {
+          console.error("Failed to update dip record with diesel addition:", dipUpdateError);
+        }
+      }
+
       return response;
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.all });
       queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.transactions });
+      queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.dipRecords });
       toast({
         title: "Bunker Refilled",
         description: `${result.added_liters}L added. New level: ${result.new_bunker_level}L`
@@ -499,6 +524,7 @@ export const useCreateDipRecord = () => {
           opening_dip_cm: data.opening_dip_cm,
           opening_volume_liters: data.opening_volume_liters,
           opening_pump_reading: data.opening_pump_reading,
+          diesel_additions_liters: 0,
           recorded_by: data.recorded_by,
           notes: data.notes,
           status: "open",
@@ -552,8 +578,12 @@ export const useCloseDipRecord = () => {
       const record = existing as DailyDipRecord;
 
       // Calculate values
-      // C = A - B (Tank Usage = Opening Volume - Closing Volume)
-      const tankUsage = record.opening_volume_liters - data.closing_volume_liters;
+      // Diesel additions (refills during this open period) must be accounted for
+      const dieselAdditions = record.diesel_additions_liters || 0;
+
+      // C = A - B + Additions (Tank Usage = Opening - Closing + Diesel Added)
+      // Without additions, refills would make closing > opening, appearing as a "gain"
+      const tankUsage = record.opening_volume_liters - data.closing_volume_liters + dieselAdditions;
 
       // F = E - D (Pump Issued = Closing Pump - Opening Pump)
       let pumpIssued: number | null = null;
@@ -715,13 +745,14 @@ export const useEditDipRecord = () => {
       const closingVolume = (data.closing_volume_liters ?? existingRecord.closing_volume_liters) as number | null;
       const openingPump = (data.opening_pump_reading ?? existingRecord.opening_pump_reading) as number | null;
       const closingPump = (data.closing_pump_reading ?? existingRecord.closing_pump_reading) as number | null;
+      const dieselAdditions = existingRecord.diesel_additions_liters || 0;
 
       if (closingVolume !== null) {
-        updateData.tank_usage_liters = openingVolume - closingVolume;
+        updateData.tank_usage_liters = openingVolume - closingVolume + dieselAdditions;
 
         if (openingPump !== null && closingPump !== null) {
           updateData.pump_issued_liters = closingPump - openingPump;
-          updateData.variance_liters = (openingVolume - closingVolume) - (closingPump - openingPump);
+          updateData.variance_liters = (openingVolume - closingVolume + dieselAdditions) - (closingPump - openingPump);
         }
       }
 

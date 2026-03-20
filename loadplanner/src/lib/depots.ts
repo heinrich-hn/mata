@@ -39,24 +39,25 @@ export interface Depot {
 /**
  * Convert a custom location (from DB) to a Depot shape for use in distance calculations.
  * Accepts any object with the required fields (e.g. from useCustomLocations).
+ * Fields that may be null in the DB get sensible defaults.
  */
 export function customLocationToDepot(loc: {
   id: string;
   name: string;
-  latitude: number;
-  longitude: number;
-  type: string;
-  country: string;
-  radius: number;
+  latitude: number | null;
+  longitude: number | null;
+  type: string | null;
+  country: string | null;
+  radius?: number | null;
 }): Depot {
   return {
     id: loc.id,
     name: loc.name,
-    latitude: loc.latitude,
-    longitude: loc.longitude,
-    type: loc.type as Depot['type'],
-    country: loc.country as Depot['country'],
-    radius: loc.radius,
+    latitude: loc.latitude ?? 0,
+    longitude: loc.longitude ?? 0,
+    type: (loc.type ?? "depot") as Depot['type'],
+    country: (loc.country ?? "Zimbabwe") as Depot['country'],
+    radius: loc.radius ?? 500,
   };
 }
 
@@ -562,10 +563,10 @@ export function calculateDistance(
   const Δλ = (lon2 - lon1) * Math.PI / 180;
 
   const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-          Math.cos(φ1) * Math.cos(φ2) *
-          Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    Math.cos(φ1) * Math.cos(φ2) *
+    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  
+
   return R * c; // Distance in kilometers
 }
 
@@ -611,37 +612,37 @@ export const ALL_LOCATIONS: Depot[] = [...DEPOTS, ...WAYPOINT_DEPOTS];
  */
 export function findDepotByName(name: string, extraLocations?: Depot[]): Depot | undefined {
   if (!name) return undefined;
-  
+
   // Build combined search list: depots first, then custom, then waypoints
   const allLocations = extraLocations
     ? [...DEPOTS, ...extraLocations, ...WAYPOINT_DEPOTS]
     : [...DEPOTS, ...WAYPOINT_DEPOTS];
   const normalizedName = name.toLowerCase().trim();
-  
+
   // Try exact match first
   let depot = allLocations.find(d => d.name.toLowerCase() === normalizedName);
   if (depot) return depot;
-  
+
   // Try includes match
-  depot = allLocations.find(d => 
+  depot = allLocations.find(d =>
     d.name.toLowerCase().includes(normalizedName) ||
     normalizedName.includes(d.name.toLowerCase())
   );
   if (depot) return depot;
-  
+
   // Try matching by id
   depot = allLocations.find(d => d.id.toLowerCase() === normalizedName);
   if (depot) return depot;
-  
+
   // Handle common variations
   if (normalizedName.includes("freshmark") && !depot) {
     return allLocations.find(d => d.name.toLowerCase().includes("freshmark"));
   }
-  
+
   if (normalizedName.includes("beitbridge") || normalizedName.includes("beit bridge")) {
     return allLocations.find(d => d.id === "beitbridge-toll-plaza");
   }
-  
+
   return undefined;
 }
 
@@ -668,7 +669,7 @@ export function isWithinDepot(
     depot.latitude, depot.longitude
   );
   const distanceMeters = distanceKm * 1000;
-  
+
   return distanceMeters <= depot.radius;
 }
 
@@ -722,30 +723,30 @@ export function calculateDepotTripProgress(
     origin.latitude, origin.longitude,
     destination.latitude, destination.longitude
   );
-  
+
   // Calculate distance traveled from origin to current position
   const distanceTraveled = calculateDistance(
     origin.latitude, origin.longitude,
     currentLat, currentLng
   );
-  
+
   // Calculate remaining distance from current position to destination
   const distanceRemaining = calculateDistance(
     currentLat, currentLng,
     destination.latitude, destination.longitude
   );
-  
+
   // Calculate progress percentage (cap at 100%)
   let progress = (distanceTraveled / totalDistance) * 100;
   progress = Math.min(Math.max(progress, 0), 100);
-  
+
   // Check if at origin or destination (within geofence)
   const isAtOrigin = isWithinDepot(currentLat, currentLng, origin);
   const isAtDestination = isWithinDepot(currentLat, currentLng, destination);
-  
+
   // Find the nearest depot for location display
   const nearestDepot = findNearestDepot(currentLat, currentLng);
-  
+
   return {
     progress,
     totalDistance,
@@ -778,30 +779,30 @@ export function calculateDepotETA(
       minutes: 0,
     };
   }
-  
+
   // Calculate travel time
   const hours = distanceKm / speedKmH;
   const totalMinutes = Math.round(hours * 60);
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  
+
   // Format ETA (current time + travel time)
   const eta = new Date();
   eta.setMinutes(eta.getMinutes() + totalMinutes);
-  
-  const etaFormatted = eta.toLocaleTimeString([], { 
-    hour: '2-digit', 
+
+  const etaFormatted = eta.toLocaleTimeString([], {
+    hour: '2-digit',
     minute: '2-digit',
-    hour12: false 
+    hour12: false
   });
-  
+
   // Format duration
   let durationFormatted = '';
   if (h > 0) {
     durationFormatted = `${h}h `;
   }
   durationFormatted += `${m}m`;
-  
+
   return {
     etaFormatted,
     durationFormatted,
@@ -818,25 +819,25 @@ export function findNearestDepot(
   lng: number
 ): Depot | null {
   if (DEPOTS.length === 0) return null;
-  
+
   let nearestDepot = DEPOTS[0];
   let minDistance = calculateDistance(
     lat, lng,
     nearestDepot.latitude, nearestDepot.longitude
   );
-  
+
   for (let i = 1; i < DEPOTS.length; i++) {
     const distance = calculateDistance(
       lat, lng,
       DEPOTS[i].latitude, DEPOTS[i].longitude
     );
-    
+
     if (distance < minDistance) {
       minDistance = distance;
       nearestDepot = DEPOTS[i];
     }
   }
-  
+
   return nearestDepot;
 }
 
@@ -866,9 +867,9 @@ export function getDepotsByType(type: Depot['type']): Depot[] {
  */
 export function searchDepots(query: string): Depot[] {
   if (!query) return [];
-  
+
   const normalizedQuery = query.toLowerCase().trim();
-  
+
   return DEPOTS.filter(depot =>
     depot.name.toLowerCase().includes(normalizedQuery) ||
     depot.id.toLowerCase().includes(normalizedQuery) ||
@@ -893,12 +894,12 @@ export function calculateTravelTime(
     origin.latitude, origin.longitude,
     destination.latitude, destination.longitude
   );
-  
+
   const hours = distance / averageSpeedKmH;
   const totalMinutes = Math.round(hours * 60);
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  
+
   let formatted = '';
   if (h > 0) {
     formatted = `${h} hour${h !== 1 ? 's' : ''}`;
@@ -907,7 +908,7 @@ export function calculateTravelTime(
     if (formatted) formatted += ' ';
     formatted += `${m} minute${m !== 1 ? 's' : ''}`;
   }
-  
+
   return {
     hours: h,
     minutes: m,
@@ -959,8 +960,8 @@ export function calculateBearing(
 
   const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
   const x = Math.cos(φ1) * Math.sin(φ2) -
-          Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
-  
+    Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+
   let θ = Math.atan2(y, x);
   θ = θ * 180 / Math.PI;
   return (θ + 360) % 360;

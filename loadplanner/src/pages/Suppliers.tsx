@@ -47,6 +47,7 @@ import {
   Eye,
   FileText,
   Loader2,
+  Route,
   Mail,
   MapPin,
   MoreHorizontal,
@@ -56,6 +57,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -97,6 +99,7 @@ const getCurrentUserId = (): string | null => {
 };
 
 export default function SuppliersPage() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -1164,13 +1167,13 @@ export default function SuppliersPage() {
                         <Edit className="h-4 w-4 mr-2" />
                         Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/consignments?supplier=${supplier.id}`)}>
                         <Eye className="h-4 w-4 mr-2" />
                         View Consignments
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <FileText className="h-4 w-4 mr-2" />
-                        View Contracts
+                      <DropdownMenuItem onClick={() => navigate(`/subcontractor-trips?supplier=${supplier.id}`)}>
+                        <Route className="h-4 w-4 mr-2" />
+                        Schedule Trip
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem

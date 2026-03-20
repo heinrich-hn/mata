@@ -22,47 +22,47 @@ import { supabase } from '@/integrations/supabase/client';
 import { useWialonContext, type VehicleLocation } from '@/integrations/wialon';
 import L from 'leaflet';
 import {
-ArrowDown,
-ArrowUp,
-ChevronLeft,
-ChevronRight,
-Eye,
-EyeOff,
-FileBarChart,
-History,
-Layers,
-List,
-Loader2,
-MapPin,
-Maximize2,
-Play,
-RefreshCw,
-Route as RouteIcon,
-Save,
-Search,
-Shield,
-Square,
-Truck,
-X,
-Zap
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  FileBarChart,
+  History,
+  Layers,
+  List,
+  Loader2,
+  MapPin,
+  Maximize2,
+  Play,
+  RefreshCw,
+  Route as RouteIcon,
+  Save,
+  Search,
+  Shield,
+  Square,
+  Truck,
+  X,
+  Zap
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-Circle,
-MapContainer,
-Marker,
-Polygon,
-Polyline,
-Popup,
-TileLayer,
-useMap
+  Circle,
+  MapContainer,
+  Marker,
+  Polygon,
+  Polyline,
+  Popup,
+  TileLayer,
+  useMap
 } from 'react-leaflet';
-import { SaveRouteDialog } from './map/SaveRouteDialog';
-import { MapReportPanel } from './map/MapReportPanel';
-import { ReportResultsPanel } from './map/ReportResultsPanel';
-import WialonSensorWidget from './sensors/WialonSensorWidget';
-import { DatePicker } from './ui/date-picker';
-import LiveVehicleDataPanel from './map/LiveVehicleDataPanel';
+import { SaveRouteDialog } from './SaveRouteDialog';
+import { MapReportPanel } from './MapReportPanel';
+import { ReportResultsPanel } from './ReportResultsPanel';
+import WialonSensorWidget from '../sensors/WialonSensorWidget';
+import { DatePicker } from '../ui/date-picker';
+import LiveVehicleDataPanel from './LiveVehicleDataPanel';
 
 // Fix Leaflet default markers
 delete (L.Icon.Default.prototype as L.Icon.Default & { _getIconUrl?: unknown })._getIconUrl;
@@ -1413,8 +1413,8 @@ const UnifiedMapView: React.FC = () => {
                                 <div
                                   key={vehicle.vehicleId}
                                   className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${selectedVehicle === vehicle.vehicleId
-                                      ? 'bg-primary/10 border-primary ring-1 ring-primary'
-                                      : 'bg-background hover:bg-muted'
+                                    ? 'bg-primary/10 border-primary ring-1 ring-primary'
+                                    : 'bg-background hover:bg-muted'
                                     }`}
                                   onClick={() => focusOnVehicle(vehicle)}
                                 >

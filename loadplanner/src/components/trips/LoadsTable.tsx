@@ -1,3 +1,4 @@
+import { LogBreakdownDialog } from "@/components/breakdowns/LogBreakdownDialog";
 import { CreateDieselOrderDialog } from "@/components/diesel/CreateDieselOrderDialog";
 import {
   AlertDialog,
@@ -166,6 +167,8 @@ export function LoadsTable({
   const [verificationOnly, setVerificationOnly] = useState(false);
   const [dieselOrderDialogOpen, setDieselOrderDialogOpen] = useState(false);
   const [loadForDieselOrder, setLoadForDieselOrder] = useState<Load | null>(null);
+  const [breakdownDialogOpen, setBreakdownDialogOpen] = useState(false);
+  const [loadForBreakdown, setLoadForBreakdown] = useState<Load | null>(null);
 
   const deleteLoad = useDeleteLoad();
 
@@ -693,6 +696,18 @@ export function LoadsTable({
                             )}
 
                             <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLoadForBreakdown(load);
+                                setBreakdownDialogOpen(true);
+                              }}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <AlertTriangle className="h-4 w-4 mr-2" />
+                              Log Breakdown
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
                               onClick={(e) =>
                                 handleExportPdf(e as unknown as React.MouseEvent, load)
                               }
@@ -798,6 +813,15 @@ export function LoadsTable({
           if (!open) setLoadForDieselOrder(null);
         }}
         preselectedLoadId={loadForDieselOrder?.id}
+      />
+
+      <LogBreakdownDialog
+        open={breakdownDialogOpen}
+        onOpenChange={(open) => {
+          setBreakdownDialogOpen(open);
+          if (!open) setLoadForBreakdown(null);
+        }}
+        load={loadForBreakdown}
       />
     </div>
   );

@@ -11,13 +11,13 @@ import { useQuery } from "@tanstack/react-query";
 import { differenceInDays, parseISO } from "date-fns";
 import { AlertTriangle, CheckSquare, Edit, FileText, Package, Plus, Search, Shield, ShieldAlert, ShieldCheck, ShoppingCart, Trash2, TrendingUp, Truck, Upload, X } from "lucide-react";
 import { useState } from "react";
-import AddInventoryItemDialog from "./dialogs/AddInventoryItemDialog";
-import AddWarrantyItemDialog from "./dialogs/AddWarrantyItemDialog";
-import InventoryImportModal from "./dialogs/InventoryImportModal";
-import ProcurementFromInventoryDialog from "./dialogs/ProcurementFromInventoryDialog";
-import RequestPartsDialog from "./dialogs/RequestPartsDialog";
-import UpdateStockDialog from "./dialogs/UpdateStockDialog";
-import WarrantyDialog from "./dialogs/WarrantyDialog";
+import AddInventoryItemDialog from "../dialogs/AddInventoryItemDialog";
+import AddWarrantyItemDialog from "../dialogs/AddWarrantyItemDialog";
+import InventoryImportModal from "../dialogs/InventoryImportModal";
+import ProcurementFromInventoryDialog from "../dialogs/ProcurementFromInventoryDialog";
+import RequestPartsDialog from "../dialogs/RequestPartsDialog";
+import UpdateStockDialog from "../dialogs/UpdateStockDialog";
+import WarrantyDialog from "../dialogs/WarrantyDialog";
 
 interface InventoryItem {
   id: string;

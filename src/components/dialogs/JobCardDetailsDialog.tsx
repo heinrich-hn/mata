@@ -9,13 +9,13 @@ import { generateJobCardPDF, type JobCardExportData } from "@/lib/jobCardExport"
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useQuery } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
-import JobCardGeneralInfo from "../JobCardGeneralInfo";
+import JobCardGeneralInfo from "../jobCards/JobCardGeneralInfo";
 import JobCardHeader from "../JobCardHeader";
-import JobCardLaborTable from "../JobCardLaborTable";
+import JobCardLaborTable from "../jobCards/JobCardLaborTable";
 import JobCardNotes from "../JobCardNotes";
-import JobCardPartsTable from "../JobCardPartsTable";
+import JobCardPartsTable from "../jobCards/JobCardPartsTable";
 import JobCardStats from "../JobCardStats";
-import JobCardTasksTable from "../JobCardTasksTable";
+import JobCardTasksTable from "../jobCards/JobCardTasksTable";
 
 interface JobCardDetailsDialogProps {
   open: boolean;

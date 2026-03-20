@@ -134,6 +134,7 @@ export function generateDipRecordsPDF(data: DipRecordExportData): void {
     getBunkerName(record),
     record.opening_volume_liters.toLocaleString(),
     record.closing_volume_liters?.toLocaleString() || "—",
+    (record.diesel_additions_liters || 0) > 0 ? `+${record.diesel_additions_liters.toLocaleString()}` : "—",
     record.tank_usage_liters !== null ? `${record.tank_usage_liters.toLocaleString()}` : "—",
     record.pump_issued_liters?.toLocaleString() || "—",
     record.variance_liters !== null ? `${record.variance_liters > 0 ? "+" : ""}${record.variance_liters.toLocaleString()}` : "—",
@@ -150,6 +151,7 @@ export function generateDipRecordsPDF(data: DipRecordExportData): void {
         "Bunker",
         "Opening (A)",
         "Closing (B)",
+        "Additions",
         "Tank Usage (C)",
         "Pump Issued (F)",
         "Variance (G)",
@@ -171,20 +173,28 @@ export function generateDipRecordsPDF(data: DipRecordExportData): void {
     },
     columnStyles: {
       0: { cellWidth: 22 },
-      1: { cellWidth: 30 },
-      2: { halign: "right", cellWidth: 25 },
-      3: { halign: "right", cellWidth: 25 },
-      4: { halign: "right", cellWidth: 28 },
-      5: { halign: "right", cellWidth: 28 },
+      1: { cellWidth: 28 },
+      2: { halign: "right", cellWidth: 23 },
+      3: { halign: "right", cellWidth: 23 },
+      4: { halign: "right", cellWidth: 22 },
+      5: { halign: "right", cellWidth: 25 },
       6: { halign: "right", cellWidth: 25 },
-      7: { halign: "center", cellWidth: 18 },
-      8: { halign: "center", cellWidth: 20 },
-      9: { cellWidth: 30 },
+      7: { halign: "right", cellWidth: 23 },
+      8: { halign: "center", cellWidth: 18 },
+      9: { halign: "center", cellWidth: 18 },
+      10: { cellWidth: 28 },
     },
     margin: { left: margin, right: margin },
     didParseCell: (data) => {
+      // Color additions cells (green)
+      if (data.column.index === 4 && data.section === "body") {
+        const cellText = data.cell.raw as string;
+        if (cellText !== "—") {
+          data.cell.styles.textColor = [40, 167, 69];
+        }
+      }
       // Color variance cells
-      if (data.column.index === 6 && data.section === "body") {
+      if (data.column.index === 7 && data.section === "body") {
         const cellText = data.cell.raw as string;
         if (cellText.startsWith("+")) {
           data.cell.styles.textColor = [220, 53, 69]; // Red for loss
@@ -198,7 +208,7 @@ export function generateDipRecordsPDF(data: DipRecordExportData): void {
         }
       }
       // Color result cells
-      if (data.column.index === 7 && data.section === "body") {
+      if (data.column.index === 8 && data.section === "body") {
         const result = data.cell.raw as string;
         if (result === "OK") {
           data.cell.styles.textColor = [40, 167, 69];
@@ -310,6 +320,7 @@ export function generateDipRecordsExcel(data: DipRecordExportData): void {
     "Closing Dip (cm)": record.closing_dip_cm ?? "",
     "Closing Volume (L)": record.closing_volume_liters ?? "",
     "Closing Pump": record.closing_pump_reading ?? "",
+    "Diesel Additions (L)": record.diesel_additions_liters || 0,
     "Tank Usage (C)": record.tank_usage_liters ?? "",
     "Pump Issued (F)": record.pump_issued_liters ?? "",
     "Variance (G)": record.variance_liters ?? "",
@@ -335,6 +346,7 @@ export function generateDipRecordsExcel(data: DipRecordExportData): void {
     { wch: 15 }, // Closing Dip
     { wch: 18 }, // Closing Volume
     { wch: 15 }, // Closing Pump
+    { wch: 18 }, // Diesel Additions
     { wch: 15 }, // Tank Usage
     { wch: 15 }, // Pump Issued
     { wch: 12 }, // Variance

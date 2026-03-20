@@ -1,4 +1,4 @@
-import InventoryPanel from "@/components/InventoryPanel";
+import InventoryPanel from "@/components/inventory/InventoryPanel";
 import Layout from "@/components/Layout";
 
 const Inventory = () => {

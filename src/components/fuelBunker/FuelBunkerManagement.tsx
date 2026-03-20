@@ -93,8 +93,8 @@ import {
   MapPin
 } from "lucide-react";
 import { useState } from "react";
-import Layout from "./Layout";
-import { DatePicker } from "./ui/date-picker";
+import Layout from "../Layout";
+import { DatePicker } from "../ui/date-picker";
 
 const FUEL_TYPES = ["Diesel", "Petrol", "LPG", "CNG", "Electric"];
 
@@ -208,7 +208,7 @@ const FuelBunkerManagement = () => {
   });
   const [deleteDipReason, setDeleteDipReason] = useState("");
   const [deleteDipBy, setDeleteDipBy] = useState("");
- 
+
   // Adjust level form state
   const [adjustData, setAdjustData] = useState({
     new_level: "",
@@ -347,11 +347,11 @@ const FuelBunkerManagement = () => {
       (dip) => dip.bunker_id === bunker.id && dip.status === "open"
     );
     if (!recentDip) return null;
-   
+
     // Compare opening volume with bunker's current level
     const discrepancy = bunker.current_level_liters - recentDip.opening_volume_liters;
     const percentDiscrepancy = Math.abs(discrepancy) / bunker.current_level_liters * 100;
-   
+
     // Flag if discrepancy is more than 2% or 50 liters
     if (Math.abs(discrepancy) > 50 || percentDiscrepancy > 2) {
       return {
@@ -645,18 +645,16 @@ const FuelBunkerManagement = () => {
                   const percentage = getLevelPercentage(bunker);
                   const levelColor = getLevelColor(percentage);
                   const discrepancy = getDipDiscrepancy(bunker);
-                 
+
                   return (
                     <Card
                       key={bunker.id}
-                      className={`group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
-                        isLowLevel(bunker) ? "border-red-300 shadow-red-100/50 dark:border-red-900" : ""
-                      }`}
+                      className={`group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${isLowLevel(bunker) ? "border-red-300 shadow-red-100/50 dark:border-red-900" : ""
+                        }`}
                     >
                       {/* Status Bar */}
-                      <div className={`absolute top-0 left-0 right-0 h-1 ${
-                        isLowLevel(bunker) ? "bg-red-500" : "bg-green-500"
-                      }`} />
+                      <div className={`absolute top-0 left-0 right-0 h-1 ${isLowLevel(bunker) ? "bg-red-500" : "bg-green-500"
+                        }`} />
                       <CardHeader className="pb-2">
                         <div className="flex items-start justify-between">
                           <div>
@@ -861,7 +859,7 @@ const FuelBunkerManagement = () => {
                       </div>
                       <div className="space-y-2">
                         <code className="block text-xs bg-white/50 dark:bg-black/20 p-2 rounded font-mono">
-                          C = Opening − Closing
+                          C = Opening − Closing + Additions
                         </code>
                       </div>
                     </div>
@@ -921,6 +919,9 @@ const FuelBunkerManagement = () => {
                             <TableHead className="w-[120px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                               Closing
                             </TableHead>
+                            <TableHead className="w-[100px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Additions
+                            </TableHead>
                             <TableHead className="w-[110px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                               Tank Usage
                             </TableHead>
@@ -941,7 +942,8 @@ const FuelBunkerManagement = () => {
                         <TableBody className="divide-y divide-border">
                           {dipRecords.map((record, idx) => {
                             const varianceStatus = getVarianceStatus(record.variance_liters);
-                            const tankUsage = record.opening_volume_liters - (record.closing_volume_liters || 0);
+                            const dieselAdditions = record.diesel_additions_liters || 0;
+                            const tankUsage = record.opening_volume_liters - (record.closing_volume_liters || 0) + dieselAdditions;
                             const pumpIssued = record.closing_pump_reading && record.opening_pump_reading
                               ? record.closing_pump_reading - record.opening_pump_reading
                               : null;
@@ -1002,6 +1004,19 @@ const FuelBunkerManagement = () => {
                                     <span className="text-muted-foreground text-sm italic">—</span>
                                   )}
                                 </TableCell>
+                                {/* Diesel Additions */}
+                                <TableCell className="px-4 py-3 align-middle text-right">
+                                  {dieselAdditions > 0 ? (
+                                    <div className="inline-flex items-center justify-end gap-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30">
+                                      <Plus className="h-3 w-3 text-green-600 flex-shrink-0" />
+                                      <span className="font-mono text-sm font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">
+                                        {dieselAdditions.toLocaleString()} L
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground text-sm italic">—</span>
+                                  )}
+                                </TableCell>
                                 {/* Tank Usage */}
                                 <TableCell className="px-4 py-3 align-middle text-right">
                                   {record.closing_volume_liters !== null ? (
@@ -1031,13 +1046,12 @@ const FuelBunkerManagement = () => {
                                 {/* Variance */}
                                 <TableCell className="px-4 py-3 align-middle text-right">
                                   {record.variance_liters !== null ? (
-                                    <div className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full font-mono text-sm font-bold whitespace-nowrap ${
-                                      record.variance_liters === 0
-                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                        : record.variance_liters < 0
-                                          ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
-                                          : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                    }`}>
+                                    <div className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full font-mono text-sm font-bold whitespace-nowrap ${record.variance_liters === 0
+                                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                      : record.variance_liters < 0
+                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                      }`}>
                                       {record.variance_liters > 0 ? "+" : ""}
                                       {record.variance_liters.toLocaleString()} L
                                     </div>
@@ -1952,6 +1966,14 @@ const FuelBunkerManagement = () => {
                       </span>
                     </div>
                   )}
+                  {(selectedDipRecord.diesel_additions_liters || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Diesel Added Today:</span>
+                      <span className="font-mono font-medium text-green-600">
+                        +{selectedDipRecord.diesel_additions_liters.toLocaleString()} L
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="grid gap-4 py-4">
@@ -2005,66 +2027,58 @@ const FuelBunkerManagement = () => {
                   />
                 </div>
                 {/* Live Calculation Preview */}
-                {closeDipData.closing_volume_liters && selectedDipRecord && (
-                  <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
-                    <h4 className="font-semibold text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
-                      <Scale className="h-4 w-4" />
-                      Reconciliation Preview
-                    </h4>
-                    <div className="grid grid-cols-3 gap-4 text-xs">
-                      <div>
-                        <div className="text-muted-foreground">Tank Usage</div>
-                        <div className="font-mono font-bold">
-                          {(
-                            selectedDipRecord.opening_volume_liters -
-                            parseFloat(closeDipData.closing_volume_liters)
-                          ).toLocaleString()} L
+                {closeDipData.closing_volume_liters && selectedDipRecord && (() => {
+                  const dieselAdded = selectedDipRecord.diesel_additions_liters || 0;
+                  const closingVol = parseFloat(closeDipData.closing_volume_liters);
+                  const liveUsage = selectedDipRecord.opening_volume_liters - closingVol + dieselAdded;
+                  const hasPump = closeDipData.closing_pump_reading && selectedDipRecord.opening_pump_reading;
+                  const livePumpIssued = hasPump
+                    ? parseFloat(closeDipData.closing_pump_reading) - selectedDipRecord.opening_pump_reading
+                    : null;
+                  const liveVariance = livePumpIssued !== null ? liveUsage - livePumpIssued : null;
+
+                  return (
+                    <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
+                      <h4 className="font-semibold text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                        <Scale className="h-4 w-4" />
+                        Reconciliation Preview
+                      </h4>
+                      <div className={`grid ${liveVariance !== null ? "grid-cols-3" : "grid-cols-1"} gap-4 text-xs`}>
+                        <div>
+                          <div className="text-muted-foreground">
+                            Tank Usage {dieselAdded > 0 ? `(incl. +${dieselAdded.toLocaleString()}L added)` : ""}
+                          </div>
+                          <div className="font-mono font-bold">
+                            {liveUsage.toLocaleString()} L
+                          </div>
                         </div>
+                        {liveVariance !== null && livePumpIssued !== null && (
+                          <>
+                            <div>
+                              <div className="text-muted-foreground">Pump Issued</div>
+                              <div className="font-mono font-bold">
+                                {livePumpIssued.toLocaleString()} L
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Variance</div>
+                              <div
+                                className={`font-mono font-bold ${Math.abs(liveVariance) <= 10
+                                    ? "text-green-600"
+                                    : liveVariance > 0
+                                      ? "text-red-600"
+                                      : "text-orange-500"
+                                  }`}
+                              >
+                                {liveVariance.toLocaleString()} L
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
-                      {closeDipData.closing_pump_reading && selectedDipRecord.opening_pump_reading && (
-                        <>
-                          <div>
-                            <div className="text-muted-foreground">Pump Issued</div>
-                            <div className="font-mono font-bold">
-                              {(
-                                parseFloat(closeDipData.closing_pump_reading) -
-                                selectedDipRecord.opening_pump_reading
-                              ).toLocaleString()} L
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-muted-foreground">Variance</div>
-                            <div
-                              className={`font-mono font-bold ${
-                                Math.abs(
-                                  selectedDipRecord.opening_volume_liters -
-                                    parseFloat(closeDipData.closing_volume_liters) -
-                                    (parseFloat(closeDipData.closing_pump_reading) -
-                                      selectedDipRecord.opening_pump_reading)
-                                ) <= 10
-                                  ? "text-green-600"
-                                  : selectedDipRecord.opening_volume_liters -
-                                      parseFloat(closeDipData.closing_volume_liters) -
-                                      (parseFloat(closeDipData.closing_pump_reading) -
-                                        selectedDipRecord.opening_pump_reading) >
-                                    0
-                                  ? "text-red-600"
-                                  : "text-orange-500"
-                              }`}
-                            >
-                              {(
-                                selectedDipRecord.opening_volume_liters -
-                                parseFloat(closeDipData.closing_volume_liters) -
-                                (parseFloat(closeDipData.closing_pump_reading) -
-                                  selectedDipRecord.opening_pump_reading)
-                              ).toLocaleString()} L
-                            </div>
-                          </div>
-                        </>
-                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setCloseDipDialogOpen(false)}>
@@ -2403,11 +2417,11 @@ const FuelBunkerManagement = () => {
                         ))}
                       {(!selectedDipRecord.edit_history ||
                         (selectedDipRecord.edit_history as DipRecordEditEntry[]).length === 0) && (
-                        <div className="text-center text-muted-foreground py-12">
-                          <History className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                          <p>No edit history for this record</p>
-                        </div>
-                      )}
+                          <div className="text-center text-muted-foreground py-12">
+                            <History className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                            <p>No edit history for this record</p>
+                          </div>
+                        )}
                     </div>
                   </ScrollArea>
                 </>

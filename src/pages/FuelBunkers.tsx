@@ -1,4 +1,4 @@
-import FuelBunkerManagement from "@/components/FuelBunkerManagement";
+import FuelBunkerManagement from "@/components/fuelBunker/FuelBunkerManagement";
 
 const FuelBunkers = () => {
   return <FuelBunkerManagement />;

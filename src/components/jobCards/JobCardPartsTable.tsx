@@ -1,14 +1,13 @@
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+AlertDialog,
+AlertDialogAction,
+AlertDialogCancel,
+AlertDialogContent,
+AlertDialogDescription,
+AlertDialogFooter,
+AlertDialogHeader,
+AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,8 +22,8 @@ import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { supabase } from "@/integrations/supabase/client";
 import { DollarSign, FileText, Loader2, Package, Pencil, Plus, ShoppingBag, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
-import AddPartWithCostDialog from "./dialogs/AddPartWithCostDialog";
-import InventoryDetailDialog from "./dialogs/InventoryDetailDialog";
+import AddPartWithCostDialog from "../dialogs/AddPartWithCostDialog";
+import InventoryDetailDialog from "../dialogs/InventoryDetailDialog";
 
 interface PartsRequest {
   id: string;
@@ -254,9 +253,8 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
                         <Tooltip>
                           <TooltipTrigger>
                             <div
-                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${getSourceColor(part)} ${
-                                part.is_from_inventory ? 'cursor-pointer' : ''
-                              }`}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${getSourceColor(part)} ${part.is_from_inventory ? 'cursor-pointer' : ''
+                                }`}
                               onClick={() =>
                                 part.is_from_inventory && handleInventoryClick(part.inventory_id || null)
                               }
@@ -269,8 +267,8 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
                             {part.is_service
                               ? "Service/Repair work"
                               : part.is_from_inventory
-                              ? "Click to view inventory details"
-                              : "External vendor part"}
+                                ? "Click to view inventory details"
+                                : "External vendor part"}
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>

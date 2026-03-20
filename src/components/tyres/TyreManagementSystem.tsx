@@ -1,7 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TyreInspection from "./TyreInspection";
 import TyreInventory from "./TyreInventory";
-import FleetTyreReports from "./tyres/FleetTyreReports";
+import FleetTyreReports from "./FleetTyreReports";
 
 const TyreManagementSystem = () => {
   return (

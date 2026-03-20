@@ -42,31 +42,30 @@ import { useFleetTyrePositions } from "@/hooks/useFleetTyrePositions";
 import { useRealtimeTyres } from "@/hooks/useRealtimeTyres";
 import { useVehicles } from "@/hooks/useVehicles";
 import type { LucideIcon } from "lucide-react";
-import
-  {
-    AlertTriangle,
-    CheckCircle2,
-    ChevronRight,
-    Circle,
-    ClipboardCheck,
-    Download,
-    FileText,
-    History,
-    MoreHorizontal,
-    Pencil,
-    Plus,
-    Search,
-    Trash2,
-    XCircle
-  } from "lucide-react";
+import {
+AlertTriangle,
+CheckCircle2,
+ChevronRight,
+Circle,
+ClipboardCheck,
+Download,
+FileText,
+History,
+MoreHorizontal,
+Pencil,
+Plus,
+Search,
+Trash2,
+XCircle
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import TyreInspectionDialog from "./tyres/TyreInspectionDialog";
-import TyreLifecycleDialog from "./tyres/TyreLifecycleDialog";
-import TyreManagementDialog from "./tyres/TyreManagementDialog";
+import TyreInspectionDialog from "./TyreInspectionDialog";
+import TyreLifecycleDialog from "./TyreLifecycleDialog";
+import TyreManagementDialog from "./TyreManagementDialog";
 
 type TyreCondition = "excellent" | "good" | "fair" | "poor" | "needs_replacement" | "critical";
 
@@ -124,7 +123,7 @@ const TyreInspection = () => {
   const vehiclesByCategory = (vehicles || []).reduce<Record<string, Record<string, typeof vehicles>>>((acc, vehicle) => {
     const category = getVehicleCategory(vehicle.fleet_number);
     const fleetNumber = vehicle.fleet_number || "Unassigned";
-    
+
     if (!acc[category]) {
       acc[category] = {};
     }
@@ -160,17 +159,17 @@ const TyreInspection = () => {
       const filtered = !term
         ? categoryVehicles
         : categoryVehicles.filter((vehicle) => {
-            const fleet = vehicle.fleet_number?.toLowerCase() || "";
-            const reg = vehicle.registration_number?.toLowerCase() || "";
-            const make = vehicle.make?.toLowerCase() || "";
-            const model = vehicle.model?.toLowerCase() || "";
-            return (
-              fleet.includes(term) ||
-              reg.includes(term) ||
-              make.includes(term) ||
-              model.includes(term)
-            );
-          });
+          const fleet = vehicle.fleet_number?.toLowerCase() || "";
+          const reg = vehicle.registration_number?.toLowerCase() || "";
+          const make = vehicle.make?.toLowerCase() || "";
+          const model = vehicle.model?.toLowerCase() || "";
+          return (
+            fleet.includes(term) ||
+            reg.includes(term) ||
+            make.includes(term) ||
+            model.includes(term)
+          );
+        });
 
       if (filtered.length > 0) {
         acc[category] = filtered;
@@ -350,8 +349,8 @@ const TyreInspection = () => {
   const exportDueTyresToExcel = async () => {
     const rows = getInspectionExportRows();
     if (rows.length === 0) {
-      toast({ 
-        title: "No due tyres", 
+      toast({
+        title: "No due tyres",
         description: "No due or overdue tyre inspections for this vehicle.",
         variant: "default",
       });
@@ -379,8 +378,8 @@ const TyreInspection = () => {
       new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
       `due-tyre-inspections-${vehicleRegistration || "vehicle"}.xlsx`
     );
-    toast({ 
-      title: "Export Successful", 
+    toast({
+      title: "Export Successful",
       description: `${rows.length} due or overdue tyres exported to Excel.`,
     });
   };
@@ -388,8 +387,8 @@ const TyreInspection = () => {
   const exportDueTyresToPDF = () => {
     const rows = getInspectionExportRows();
     if (rows.length === 0) {
-      toast({ 
-        title: "No due tyres", 
+      toast({
+        title: "No due tyres",
         description: "No due or overdue tyre inspections for this vehicle.",
       });
       return;
@@ -416,8 +415,8 @@ const TyreInspection = () => {
       headStyles: { fillColor: [31, 56, 100] },
     });
     doc.save(`due-tyre-inspections-${vehicleRegistration || "vehicle"}.pdf`);
-    toast({ 
-      title: "Export Successful", 
+    toast({
+      title: "Export Successful",
       description: `${rows.length} due or overdue tyres exported to PDF.`,
     });
   };
@@ -443,20 +442,20 @@ const TyreInspection = () => {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex flex-wrap gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={exportDueTyresToExcel} 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportDueTyresToExcel}
               disabled={!vehicleId}
               className="border-2 hover:bg-primary/5 transition-all"
             >
               <Download className="w-4 h-4 mr-2" />
               Export Due (Excel)
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={exportDueTyresToPDF} 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportDueTyresToPDF}
               disabled={!vehicleId}
               className="border-2 hover:bg-primary/5 transition-all"
             >
@@ -568,11 +567,11 @@ const TyreInspection = () => {
                         const fleetVehicles = categoryVehicles.filter(
                           (vehicle) => (vehicle.fleet_number || "Unassigned") === fleetNumber
                         );
-                        
+
                         return fleetVehicles.map((vehicle) => {
                           const isSelected = vehicleId === vehicle.id;
                           const fleetConf = fleetNumber !== "Unassigned" ? getFleetConfig(fleetNumber) : null;
-                          
+
                           return (
                             <div key={vehicle.id}>
                               <Button
@@ -601,7 +600,7 @@ const TyreInspection = () => {
                                   </span>
                                 )}
                               </Button>
-                                    
+
                               {/* Inline Tyre Table - appears directly under selected vehicle */}
                               {isSelected && positions.length > 0 && (
                                 <div className="mt-4 mb-4 border-2 rounded-xl overflow-hidden bg-background overflow-x-auto shadow-inner">
@@ -678,9 +677,9 @@ const TyreInspection = () => {
                                                 <span className={cn(
                                                   "font-bold px-3 py-1.5 rounded-lg inline-block w-fit text-white shadow-sm",
                                                   pos.currentTreadDepth <= 3 ? 'bg-gradient-to-r from-red-600 to-rose-500' :
-                                                  pos.currentTreadDepth <= 5 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
-                                                  pos.currentTreadDepth <= 7 ? 'bg-gradient-to-r from-yellow-500 to-orange-400' :
-                                                  'bg-gradient-to-r from-emerald-500 to-green-400'
+                                                    pos.currentTreadDepth <= 5 ? 'bg-gradient-to-r from-amber-500 to-yellow-400' :
+                                                      pos.currentTreadDepth <= 7 ? 'bg-gradient-to-r from-yellow-500 to-orange-400' :
+                                                        'bg-gradient-to-r from-emerald-500 to-green-400'
                                                 )}>
                                                   {pos.currentTreadDepth} mm
                                                 </span>
@@ -696,9 +695,9 @@ const TyreInspection = () => {
                                           <TableCell className="py-2 text-right">
                                             <DropdownMenu>
                                               <DropdownMenuTrigger asChild>
-                                                <Button 
-                                                  variant="outline" 
-                                                  size="sm" 
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
                                                   className="h-9 w-9 p-0 opacity-70 group-hover:opacity-100 transition-all border-2 hover:border-primary"
                                                 >
                                                   <MoreHorizontal className="w-4 h-4" />
@@ -720,8 +719,8 @@ const TyreInspection = () => {
                                                       View Lifecycle
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem 
-                                                      onClick={() => handleRemove(pos)} 
+                                                    <DropdownMenuItem
+                                                      onClick={() => handleRemove(pos)}
                                                       className="gap-3 py-2.5 text-red-600 focus:text-red-600 focus:bg-red-50"
                                                     >
                                                       <Trash2 className="w-4 h-4" />
@@ -743,7 +742,7 @@ const TyreInspection = () => {
                                   </Table>
                                 </div>
                               )}
-                              
+
                               {/* Show empty positions message */}
                               {isSelected && positions.length === 0 && fleetConfig && (
                                 <div className="mt-4 mb-4 p-6 border-2 rounded-xl text-sm bg-muted/20 flex items-center gap-3">
@@ -753,7 +752,7 @@ const TyreInspection = () => {
                                   <span className="text-muted-foreground">Loading tyre positions...</span>
                                 </div>
                               )}
-                              
+
                               {/* No fleet config warning inline */}
                               {isSelected && !fleetConfig && (
                                 <div className="mt-4 mb-4 p-4 border-2 border-amber-500/30 bg-amber-500/10 rounded-xl text-sm">

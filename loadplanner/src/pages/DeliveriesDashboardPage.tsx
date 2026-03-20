@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
@@ -33,7 +32,6 @@ import { endOfWeek, format, formatDistanceToNow, parseISO, startOfWeek } from "d
 import {
   AlertCircle,
   AlertTriangle,
-  Box,
   Calendar,
   CheckCircle2,
   ChevronRight,
@@ -48,7 +46,6 @@ import {
   SignalLow,
   SignalMedium,
   Timer,
-  Weight
 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -492,50 +489,6 @@ export default function DeliveriesDashboardPage() {
           </div>
         )}
 
-        {/* Legend */}
-        <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
-          <span className="font-semibold text-foreground uppercase tracking-wide">Status:</span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <span>In Transit</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <MapPin className="h-3 w-3 text-violet-500" />
-            <span>Loading</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <MapPin className="h-3 w-3 text-purple-500" />
-            <span>Offloading</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Calendar className="h-3 w-3 text-amber-500" />
-            <span>Scheduled</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-            <span>Delivered</span>
-          </div>
-          <Separator orientation="vertical" className="h-4" />
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1" title="GPS Signal Strong">
-              <SignalHigh className="h-3 w-3 text-green-500" />
-              <span className="text-xs">Strong</span>
-            </div>
-            <div className="flex items-center gap-1" title="GPS Signal Medium">
-              <SignalMedium className="h-3 w-3 text-amber-500" />
-              <span className="text-xs">Medium</span>
-            </div>
-            <div className="flex items-center gap-1" title="GPS Signal Weak">
-              <SignalLow className="h-3 w-3 text-red-500" />
-              <span className="text-xs">Weak</span>
-            </div>
-            <div className="flex items-center gap-1" title="Stale - No update for 30+ min">
-              <AlertCircle className="h-3 w-3 text-red-500" />
-              <span className="text-xs text-red-500 font-medium">Stale</span>
-            </div>
-          </div>
-        </div>
-
         {/* Content */}
         <div className="space-y-6">
           {trucksWithLoads.length === 0 ? (
@@ -737,7 +690,7 @@ function TruckRow({ truck }: { truck: TruckWithLoads }) {
           </div>
 
           <ScrollArea className="w-full">
-            <div className="flex p-5 gap-5">
+            <div className="flex p-4 gap-4">
               {truck.loads.map((load, loadIndex) => (
                 <LoadCard
                   key={load.id}
@@ -864,7 +817,7 @@ function LoadCard({
         <TooltipTrigger asChild>
           <Card
             className={cn(
-              "w-[280px] flex-shrink-0 cursor-pointer transition-all hover:shadow-md",
+              "w-[340px] flex-shrink-0 cursor-pointer transition-all hover:shadow-md",
               isCurrent && isInTransit && "ring-2 ring-blue-500/50",
               isCurrent && !isInTransit && load.isAtLoadOrigin && "ring-2 ring-purple-500/50",
               isDelivered && "ring-2 ring-emerald-500/50",
@@ -883,12 +836,12 @@ function LoadCard({
               )}
             />
 
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <span
                     className={cn(
-                      "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold",
+                      "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0",
                       isDelivered && "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
                       isInTransit && !isDelivered && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
                       isAtLoadingPoint && "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
@@ -897,199 +850,196 @@ function LoadCard({
                       isWaiting && !isDelivered && "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
                     )}
                   >
-                    {isDelivered ? <CheckCircle2 className="h-4 w-4" /> : sequenceNumber}
+                    {isDelivered ? <CheckCircle2 className="h-3.5 w-3.5" /> : sequenceNumber}
                   </span>
-                  <Badge variant="outline" className="text-[10px] font-mono px-2 py-0.5">
+                  <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 flex-shrink-0">
                     {load.load_id}
                   </Badge>
+                  {load.cargo_type && (
+                    <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                      {formatCargoType(load.cargo_type)}
+                    </span>
+                  )}
+                  {load.weight > 0 && (
+                    <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400 flex-shrink-0">
+                      {load.weight}T
+                    </span>
+                  )}
                 </div>
                 <Badge className={cn(
-                  "text-[10px] gap-1.5 px-2.5 py-1 rounded-full",
+                  "text-[9px] gap-1 px-2 py-0.5 rounded-full flex-shrink-0 ml-1.5",
                   detailedStatus.color === "emerald" && "bg-emerald-500 text-white",
                   detailedStatus.color === "blue" && "bg-blue-500 text-white",
                   detailedStatus.color === "purple" && "bg-purple-500 text-white",
                   detailedStatus.color === "violet" && "bg-violet-500 text-white",
                   detailedStatus.color === "amber" && "bg-amber-500 text-white"
                 )}>
-                  <StatusIcon className="h-3 w-3" />
+                  <StatusIcon className="h-2.5 w-2.5" />
                   {detailedStatus.label}
                 </Badge>
               </div>
 
-              <div className="bg-muted/30 rounded-xl p-3 mb-3 border">
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col items-center">
-                    <div className={cn(
-                      "w-3 h-3 rounded-full ring-2 ring-background",
-                      hasArrivedAtLoading ? "bg-emerald-500" : "bg-muted-foreground/30"
-                    )} />
-                    <div className={cn(
-                      "w-0.5 h-10 rounded-full",
-                      isDelivered ? "bg-emerald-500" :
-                        hasDepartedLoading ? "bg-gradient-to-b from-emerald-500 to-blue-500" :
-                          "bg-muted-foreground/30"
-                    )} />
-                    <div className={cn(
-                      "w-3 h-3 rounded-full ring-2 ring-background",
-                      isDelivered ? "bg-emerald-500" :
-                        hasArrivedAtOffloading ? "bg-purple-500" :
-                          "bg-muted-foreground/30"
-                    )} />
-                  </div>
+              <div className="bg-muted/30 rounded-lg px-2.5 py-2 mb-2 border">
+                <div className="flex items-start gap-1.5">
+                  {/* Origin */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Origin</p>
-                    <p className="text-sm font-semibold text-foreground truncate">
+                    <div className="flex items-center gap-1.5">
+                      <div className={cn(
+                        "w-2.5 h-2.5 rounded-full flex-shrink-0",
+                        hasArrivedAtLoading ? "bg-emerald-500" : "bg-muted-foreground/30"
+                      )} />
+                      <p className="text-[10px] text-muted-foreground font-medium leading-none">FROM</p>
+                    </div>
+                    <p className="text-xs font-semibold text-foreground truncate ml-4">
                       {getLocationDisplayName(load.origin)}
                     </p>
                     {hasArrivedAtLoading && (
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
-                        Arrived: {formatTimestamp(load.actual_loading_arrival)}
-                        {hasDepartedLoading && ` • Departed: ${formatTimestamp(load.actual_loading_departure)}`}
+                      <p className="text-[9px] text-emerald-600 dark:text-emerald-400 font-medium ml-4 mt-0.5 truncate">
+                        {formatTimestamp(load.actual_loading_arrival)}
+                        {hasDepartedLoading && ` → ${formatTimestamp(load.actual_loading_departure)}`}
                       </p>
                     )}
                     {(lateLoadingArrival || lateLoadingDeparture) && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
-                        <span className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-                          {lateLoadingArrival && `Arr: ${lateLoadingArrival}`}
-                          {lateLoadingArrival && lateLoadingDeparture && " • "}
-                          {lateLoadingDeparture && `Dep: ${lateLoadingDeparture}`}
-                        </span>
-                      </div>
-                    )}
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium mt-3">Destination</p>
-                    <p className="text-sm font-semibold text-foreground truncate">
-                      {getLocationDisplayName(load.destination)}
-                    </p>
-                    {hasArrivedAtOffloading && (
-                      <p className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mt-0.5">
-                        Arrived: {formatTimestamp(load.actual_offloading_arrival)}
-                        {hasDepartedOffloading && ` • Departed: ${formatTimestamp(load.actual_offloading_departure)}`}
-                      </p>
-                    )}
-                    {(lateOffloadingArrival || lateOffloadingDeparture) && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
-                        <span className="text-[10px] text-red-600 dark:text-red-400 font-medium">
-                          {lateOffloadingArrival && `Arr: ${lateOffloadingArrival}`}
-                          {lateOffloadingArrival && lateOffloadingDeparture && " • "}
-                          {lateOffloadingDeparture && `Dep: ${lateOffloadingDeparture}`}
+                      <div className="flex items-center gap-1 ml-4 mt-0.5">
+                        <AlertTriangle className="h-2.5 w-2.5 text-red-500 flex-shrink-0" />
+                        <span className="text-[9px] text-red-600 dark:text-red-400 font-medium truncate">
+                          {lateLoadingArrival || lateLoadingDeparture}
                         </span>
                       </div>
                     )}
                   </div>
-                  <div className="text-right pl-2">
-                    <p className="text-xl font-bold text-foreground">
+                  {/* Arrow */}
+                  <div className="flex items-center flex-shrink-0 mt-2.5">
+                    <div className={cn(
+                      "w-4 h-px",
+                      isDelivered ? "bg-emerald-400" : hasDepartedLoading ? "bg-blue-400" : "bg-muted-foreground/20"
+                    )} />
+                    <ChevronRight className={cn(
+                      "h-3 w-3 -ml-1",
+                      isDelivered ? "text-emerald-500" : hasDepartedLoading ? "text-blue-500" : "text-muted-foreground/40"
+                    )} />
+                  </div>
+                  {/* Destination */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <div className={cn(
+                        "w-2.5 h-2.5 rounded-full flex-shrink-0",
+                        isDelivered ? "bg-emerald-500" : hasArrivedAtOffloading ? "bg-purple-500" : "bg-muted-foreground/30"
+                      )} />
+                      <p className="text-[10px] text-muted-foreground font-medium leading-none">TO</p>
+                    </div>
+                    <p className="text-xs font-semibold text-foreground truncate ml-4">
+                      {getLocationDisplayName(load.destination)}
+                    </p>
+                    {hasArrivedAtOffloading && (
+                      <p className="text-[9px] text-purple-600 dark:text-purple-400 font-medium ml-4 mt-0.5 truncate">
+                        {formatTimestamp(load.actual_offloading_arrival)}
+                        {hasDepartedOffloading && ` → ${formatTimestamp(load.actual_offloading_departure)}`}
+                      </p>
+                    )}
+                    {(lateOffloadingArrival || lateOffloadingDeparture) && (
+                      <div className="flex items-center gap-1 ml-4 mt-0.5">
+                        <AlertTriangle className="h-2.5 w-2.5 text-red-500 flex-shrink-0" />
+                        <span className="text-[9px] text-red-600 dark:text-red-400 font-medium truncate">
+                          {lateOffloadingArrival || lateOffloadingDeparture}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Distance */}
+                  <div className="text-right flex-shrink-0 pl-1">
+                    <p className="text-base font-bold text-foreground leading-tight">
                       {load.progressData ? Math.round(load.progressData.totalDistance) : "?"}
                     </p>
-                    <p className="text-[10px] text-muted-foreground font-medium">km</p>
+                    <p className="text-[9px] text-muted-foreground font-medium">km</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-2 mb-3 text-xs">
-                {load.cargo_type && (
-                  <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-1.5 rounded-lg border">
-                    <Box className="h-3 w-3 text-indigo-500" />
-                    <span className="font-medium text-indigo-700 dark:text-indigo-300">{formatCargoType(load.cargo_type)}</span>
-                  </div>
-                )}
-                {load.weight > 0 && (
-                  <div className="flex items-center gap-1.5 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1.5 rounded-lg border">
-                    <Weight className="h-3 w-3 text-orange-500" />
-                    <span className="font-medium text-orange-700 dark:text-orange-300">{load.weight}T</span>
-                  </div>
-                )}
-              </div>
-
               {load.progressData && (
-                <div className="mb-4">
+                <div className="mb-2">
                   {isDelivered ? (
                     <>
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-medium">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                          <CheckCircle2 className="h-3 w-3" />
                           Delivered
                         </span>
                         <span className="font-bold text-emerald-600 dark:text-emerald-400">100%</span>
                       </div>
-                      <Progress value={100} className="h-2" />
-                      <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5">
+                      <Progress value={100} className="h-1.5" />
+                      <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
                         <span>{Math.round(load.progressData.totalDistance)} km total</span>
                         <span className="text-emerald-600 dark:text-emerald-400 font-semibold">✓ Complete</span>
                       </div>
                     </>
                   ) : isAtOffloadingPoint ? (
                     <>
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="text-purple-600 dark:text-purple-400 flex items-center gap-1.5 font-medium">
-                          <MapPin className="h-3.5 w-3.5" />
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-purple-600 dark:text-purple-400 flex items-center gap-1 font-medium">
+                          <MapPin className="h-3 w-3" />
                           At Depot - Offloading
                         </span>
                         <span className="font-bold text-purple-600 dark:text-purple-400">100%</span>
                       </div>
-                      <Progress value={100} className="h-2" />
-                      <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5">
-                        <span>Awaiting departure confirmation</span>
+                      <Progress value={100} className="h-1.5" />
+                      <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
+                        <span>Awaiting departure</span>
                         <span className="text-purple-600 dark:text-purple-400 font-semibold">📦 Offloading</span>
                       </div>
                     </>
                   ) : isTracking ? (
                     <>
-                      <div className="flex justify-between text-xs mb-1.5">
+                      <div className="flex justify-between text-[10px] mb-1">
                         <span className="text-muted-foreground font-medium">Progress</span>
                         <span className="font-bold text-blue-600 dark:text-blue-400">
                           {Math.round(load.progressData.progress)}%
                         </span>
                       </div>
-                      <Progress value={load.progressData.progress} className="h-2" />
-                      <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5">
+                      <Progress value={load.progressData.progress} className="h-1.5" />
+                      <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
                         <span>{Math.round(load.progressData.distanceTraveled)} km done</span>
                         <span>{Math.round(load.progressData.distanceRemaining)} km left</span>
                       </div>
                     </>
                   ) : isAtLoadingPoint ? (
                     <>
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="text-violet-600 dark:text-violet-400 flex items-center gap-1.5 font-medium">
-                          <Package className="h-3.5 w-3.5" />
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-violet-600 dark:text-violet-400 flex items-center gap-1 font-medium">
+                          <Package className="h-3 w-3" />
                           At Loading Point
                         </span>
                         <span className="text-muted-foreground">0%</span>
                       </div>
-                      <Progress value={0} className="h-2" />
-                      <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5">
-                        <span>Loading in progress</span>
-                        <span className="text-violet-600 dark:text-violet-400 font-semibold">📦 Loading</span>
-                      </div>
+                      <Progress value={0} className="h-1.5" />
                     </>
                   ) : load.isAtLoadOrigin ? (
                     <>
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="text-purple-600 dark:text-purple-400 flex items-center gap-1.5 font-medium">
-                          <MapPin className="h-3.5 w-3.5" />
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-purple-600 dark:text-purple-400 flex items-center gap-1 font-medium">
+                          <MapPin className="h-3 w-3" />
                           At Depot - Loading
                         </span>
                         <span className="text-muted-foreground">0%</span>
                       </div>
-                      <Progress value={0} className="h-2" />
+                      <Progress value={0} className="h-1.5" />
                     </>
                   ) : (
                     <>
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5 font-medium">
-                          <Calendar className="h-3.5 w-3.5" />
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">
+                          <Calendar className="h-3 w-3" />
                           Scheduled
                         </span>
                         <span className="text-muted-foreground">0%</span>
                       </div>
-                      <Progress value={0} className="h-2" />
+                      <Progress value={0} className="h-1.5" />
                     </>
                   )}
                 </div>
               )}
 
-              <div className="flex items-center justify-between text-xs pt-3 border-t">
+              <div className="flex items-center justify-between text-xs pt-2 border-t">
                 {isDelivered ? (
                   <>
                     <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">

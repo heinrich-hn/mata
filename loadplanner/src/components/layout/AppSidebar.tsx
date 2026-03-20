@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
+  AlertTriangle,
   BarChart3,
   Building2,
   Calendar,
   Fuel,
-  Handshake, // Add this icon for Suppliers
+  Handshake,
   LayoutDashboard,
   MapPin,
   Package,
@@ -32,10 +33,12 @@ const mainNavItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Load Planning", url: "/loads", icon: Package },
   { title: "Third-Party Loads", url: "/third-party", icon: Building2 },
+  { title: "Subcontractor Trips", url: "/subcontractor-trips", icon: Handshake },
   { title: "Diesel Orders", url: "/diesel-orders", icon: Fuel },
   { title: "Calendar", url: "/calendar", icon: Calendar },
   { title: "Live Tracking", url: "/live-tracking", icon: MapPin },
   { title: "Deliveries", url: "/deliveries", icon: Route },
+  { title: "Breakdowns", url: "/breakdowns", icon: AlertTriangle },
 ];
 
 const managementItems = [

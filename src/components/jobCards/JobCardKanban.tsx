@@ -21,8 +21,8 @@ import type { Database } from "@/integrations/supabase/types";
 import { useQuery } from "@tanstack/react-query";
 import { Calendar, Kanban, List, Plus, Trash2, User } from "lucide-react";
 import { useState } from "react";
-import AddJobCardDialog from "./dialogs/AddJobCardDialog";
-import JobCardDetailsDialog from "./dialogs/JobCardDetailsDialog";
+import AddJobCardDialog from "../dialogs/AddJobCardDialog";
+import JobCardDetailsDialog from "../dialogs/JobCardDetailsDialog";
 import JobCardFilters from "./JobCardFilters";
 
 type JobStatus = "pending" | "in_progress" | "on_hold" | "completed";

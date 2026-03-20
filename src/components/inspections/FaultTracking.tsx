@@ -27,9 +27,9 @@ import { generateAllFaultsPDF, generateSingleFaultPDF, type FaultExportData } fr
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle, Clock, Download, Edit, FileText, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import AddFaultDialog from "./dialogs/AddFaultDialog";
-import EditFaultDialog from "./dialogs/EditFaultDialog";
-import FaultDetailsDialog from "./dialogs/FaultDetailsDialog";
+import AddFaultDialog from "../dialogs/AddFaultDialog";
+import EditFaultDialog from "../dialogs/EditFaultDialog";
+import FaultDetailsDialog from "../dialogs/FaultDetailsDialog";
 
 type VehicleFault = Database["public"]["Tables"]["vehicle_faults"]["Row"] & {
   vehicles?: {

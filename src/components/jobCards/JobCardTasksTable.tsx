@@ -1,13 +1,12 @@
-import
-  {
-    AlertDialog,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+AlertDialog,
+AlertDialogCancel,
+AlertDialogContent,
+AlertDialogDescription,
+AlertDialogFooter,
+AlertDialogHeader,
+AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Calendar, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import AddTaskForm from "./AddTaskForm";
-import TaskCompletionDialog from "./dialogs/TaskCompletionDialog";
+import TaskCompletionDialog from "../dialogs/TaskCompletionDialog";
 
 interface Task {
   id: string;

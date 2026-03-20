@@ -20,9 +20,9 @@ import { generateDriverCoachingPDF } from "@/lib/driverBehaviorExport";
 import { formatDate } from "@/lib/formatters";
 import { BarChart3, CheckCircle, Eye, FileText, List, Loader2, MessageSquare, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import DriverBehaviorDetailsDialog from "./driver/DriverBehaviorDetailsDialog";
-import DriverCoachingModal from "./driver/DriverCoachingModal";
-import DriverPerformanceSummary from "./driver/DriverPerformanceSummary";
+import DriverBehaviorDetailsDialog from "./DriverBehaviorDetailsDialog";
+import DriverCoachingModal from "./DriverCoachingModal";
+import DriverPerformanceSummary from "./DriverPerformanceSummary";
 
 type DriverBehaviorEvent = Database["public"]["Tables"]["driver_behavior_events"]["Row"];
 

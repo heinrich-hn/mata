@@ -22,16 +22,16 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Ban, Download, Eye, FileSpreadsheet, FileText, History, Package, Pencil, Plus, Trash2, Truck, Wrench } from "lucide-react";
 import { useState } from "react";
-import AddBayTyreDialog from "./dialogs/AddBayTyreDialog";
-import AddTyreDialog from "./dialogs/AddTyreDialog";
-import BulkTyreInstallImportModal from "./dialogs/BulkTyreInstallImportModal";
-import EditBayTyreDialog from "./dialogs/EditBayTyreDialog";
-import EditInstalledTyreDialog from "./dialogs/EditInstalledTyreDialog";
-import EditTyreDialog from "./dialogs/EditTyreDialog";
-import InstallTyreDialog from "./dialogs/InstallTyreDialog";
-import RemoveTyreDialog from "./dialogs/RemoveTyreDialog";
-import TyreInventoryImportModal from "./dialogs/TyreInventoryImportModal";
-import ViewTyreDialog from "./dialogs/ViewTyreDialog";
+import AddBayTyreDialog from "../dialogs/AddBayTyreDialog";
+import AddTyreDialog from "../dialogs/AddTyreDialog";
+import BulkTyreInstallImportModal from "../dialogs/BulkTyreInstallImportModal";
+import EditBayTyreDialog from "../dialogs/EditBayTyreDialog";
+import EditInstalledTyreDialog from "../dialogs/EditInstalledTyreDialog";
+import EditTyreDialog from "../dialogs/EditTyreDialog";
+import InstallTyreDialog from "../dialogs/InstallTyreDialog";
+import RemoveTyreDialog from "../dialogs/RemoveTyreDialog";
+import TyreInventoryImportModal from "../dialogs/TyreInventoryImportModal";
+import ViewTyreDialog from "../dialogs/ViewTyreDialog";
 
 // Extend Tyre type with optional vehicle-related fields
 type TyreWithPosition = Database["public"]["Tables"]["tyres"]["Row"] & {

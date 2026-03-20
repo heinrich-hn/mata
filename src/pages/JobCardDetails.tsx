@@ -1,11 +1,11 @@
-import JobCardCostSummary from "@/components/JobCardCostSummary";
-import JobCardGeneralInfo from "@/components/JobCardGeneralInfo";
+import JobCardCostSummary from "@/components/jobCards/JobCardCostSummary";
+import JobCardGeneralInfo from "@/components/jobCards/JobCardGeneralInfo";
 import JobCardHeader from "@/components/JobCardHeader";
-import JobCardLaborTable from "@/components/JobCardLaborTable";
+import JobCardLaborTable from "@/components/jobCards/JobCardLaborTable";
 import JobCardNotes from "@/components/JobCardNotes";
-import JobCardPartsTable from "@/components/JobCardPartsTable";
+import JobCardPartsTable from "@/components/jobCards/JobCardPartsTable";
 import JobCardStats from "@/components/JobCardStats";
-import JobCardTasksTable from "@/components/JobCardTasksTable";
+import JobCardTasksTable from "@/components/jobCards/JobCardTasksTable";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

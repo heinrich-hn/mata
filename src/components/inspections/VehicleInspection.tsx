@@ -13,10 +13,10 @@ import { AlertCircle, Camera, CheckCircle2, ClipboardCheck, ImageIcon, Plus, Sma
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import CorrectiveActionDialog from "./dialogs/CorrectiveActionDialog";
-import CreateJobCardFromInspectionDialog from "./dialogs/CreateJobCardFromInspectionDialog";
-import InspectionPhotoDialog from "./dialogs/InspectionPhotoDialog";
-import StartInspectionDialog from "./dialogs/StartInspectionDialog";
+import CorrectiveActionDialog from "../dialogs/CorrectiveActionDialog";
+import CreateJobCardFromInspectionDialog from "../dialogs/CreateJobCardFromInspectionDialog";
+import InspectionPhotoDialog from "../dialogs/InspectionPhotoDialog";
+import StartInspectionDialog from "../dialogs/StartInspectionDialog";
 
 type InspectionItemStatus = "pass" | "fail" | "attention" | "not_applicable";
 type FaultSeverity = Database["public"]["Enums"]["fault_severity"];

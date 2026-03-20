@@ -1,4 +1,4 @@
-import FaultTracking from "@/components/FaultTracking";
+import FaultTracking from "@/components/inspections/FaultTracking";
 import Layout from "@/components/Layout";
 
 const Faults = () => {
