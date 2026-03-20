@@ -3,6 +3,8 @@ import { getFleetSubcategory, FLEET_SUBCATEGORY_META, type FleetSubcategory } fr
 import AddJobCardDialog from "@/components/dialogs/AddJobCardDialog";
 import JobCardDetailsDialog from "@/components/dialogs/JobCardDetailsDialog";
 import JobCardWeeklyCostReport from "@/components/maintenance/JobCardWeeklyCostReport";
+import JobCardNotesPopover from "@/components/jobCards/JobCardNotesPopover";
+import JobCardFollowUpsPopover from "@/components/jobCards/JobCardFollowUpsPopover";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog,
@@ -159,6 +161,7 @@ type JobCard = BaseJobCard & {
   inspection?: VehicleInspectionRow | null;
   partsSummary?: JobCardPartsSummary;
   notesCount?: number;
+  followUpCount?: number;
 };
 
 type FleetCategory = {
@@ -347,6 +350,29 @@ const JobCards = () => {
         notesCountMap.set(note.job_card_id, (notesCountMap.get(note.job_card_id) || 0) + 1);
       }
 
+      let followUpData: { related_entity_id: string | null }[] = [];
+      if (jobCardIds.length > 0) {
+        const { data, error } = await supabase
+          .from("action_items")
+          .select("related_entity_id")
+          .eq("related_entity_type", "job_card")
+          .eq("category", "external_follow_up")
+          .in("related_entity_id", jobCardIds);
+
+        if (error) {
+          throw error;
+        }
+
+        followUpData = (data || []) as { related_entity_id: string | null }[];
+      }
+
+      const followUpCountMap = new Map<string, number>();
+      for (const fu of followUpData) {
+        if (fu.related_entity_id) {
+          followUpCountMap.set(fu.related_entity_id, (followUpCountMap.get(fu.related_entity_id) || 0) + 1);
+        }
+      }
+
       const vehicleMap = new Map(
         (vehiclesData || []).map(v => [v.id, v])
       );
@@ -412,6 +438,7 @@ const JobCards = () => {
           latestPartName: null,
         },
         notesCount: notesCountMap.get(item.id) || 0,
+        followUpCount: followUpCountMap.get(item.id) || 0,
       })) as JobCard[];
     },
   });
@@ -908,10 +935,19 @@ const JobCards = () => {
                   )}
 
                   {card.notesCount && card.notesCount > 0 ? (
-                    <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200">
-                      <MessageSquarePlus className="h-3 w-3 mr-1" />
-                      {card.notesCount} Note{card.notesCount > 1 ? "s" : ""}
-                    </Badge>
+                    <JobCardNotesPopover
+                      jobCardId={card.id}
+                      jobNumber={card.job_number}
+                      notesCount={card.notesCount}
+                    />
+                  ) : null}
+
+                  {card.followUpCount && card.followUpCount > 0 ? (
+                    <JobCardFollowUpsPopover
+                      jobCardId={card.id}
+                      jobNumber={card.job_number}
+                      followUpCount={card.followUpCount}
+                    />
                   ) : null}
 
                   {card.partsSummary && card.partsSummary.count > 0 ? (
