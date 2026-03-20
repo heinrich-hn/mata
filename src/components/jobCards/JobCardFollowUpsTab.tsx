@@ -116,10 +116,24 @@ const JobCardFollowUpsTab = () => {
             if (entityIds.length > 0) {
                 const { data: jobCards } = await supabase
                     .from("job_cards")
-                    .select("id, job_number, title, inspection_id, vehicle:vehicles(registration_number, fleet_number, make, model)")
+                    .select("id, job_number, title, inspection_id, vehicle_id")
                     .in("id", entityIds);
 
                 if (jobCards) {
+                    // Fetch vehicles for job cards that have vehicle_id
+                    const vehicleIds = [...new Set(jobCards.map((jc) => jc.vehicle_id).filter(Boolean) as string[])];
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    let vehiclesMap: Record<string, any> = {};
+                    if (vehicleIds.length > 0) {
+                        const { data: vehicles } = await supabase
+                            .from("vehicles")
+                            .select("id, registration_number, fleet_number, make, model")
+                            .in("id", vehicleIds);
+                        if (vehicles) {
+                            vehiclesMap = Object.fromEntries(vehicles.map((v) => [v.id, v]));
+                        }
+                    }
+
                     // Fetch inspections for job cards that have inspection_id
                     const inspectionIds = jobCards.map((jc) => jc.inspection_id).filter(Boolean) as string[];
                     let inspectionsMap: Record<string, { inspection_number: string; inspection_type: string | null }> = {};
@@ -159,8 +173,7 @@ const JobCardFollowUpsTab = () => {
                                 job_number: jc.job_number,
                                 title: jc.title,
                                 inspection_id: jc.inspection_id,
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                vehicle: (jc.vehicle as any) || null,
+                                vehicle: jc.vehicle_id ? vehiclesMap[jc.vehicle_id] || null : null,
                                 inspection: jc.inspection_id ? inspectionsMap[jc.inspection_id] || null : null,
                                 faults: faultsByJobCard[jc.id] || [],
                             },
@@ -354,6 +367,41 @@ const JobCardFollowUpsTab = () => {
 
                         return (
                             <Card key={fu.id} className="overflow-hidden">
+                                {/* Header: Vehicle + Job Card */}
+                                {(fu.job_card?.vehicle || fu.job_card) && (
+                                    <div className="px-4 pt-3 pb-2 bg-muted/30 border-b">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {fu.job_card?.vehicle && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                                                    <span className="text-sm font-semibold">
+                                                        {fu.job_card.vehicle.fleet_number && (
+                                                            <span className="font-mono text-xs mr-1">[{fu.job_card.vehicle.fleet_number}]</span>
+                                                        )}
+                                                        {fu.job_card.vehicle.registration_number}
+                                                    </span>
+                                                    {(fu.job_card.vehicle.make || fu.job_card.vehicle.model) && (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {fu.job_card.vehicle.make} {fu.job_card.vehicle.model}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {fu.job_card && (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Badge variant="outline" className="text-xs font-mono">
+                                                    Job #{fu.job_card.job_number}
+                                                </Badge>
+                                                {fu.job_card.inspection && (
+                                                    <Badge variant="outline" className="text-xs font-mono bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                        Insp #{fu.job_card.inspection.inspection_number}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                                 <button
                                     type="button"
                                     className="w-full p-4 text-left hover:bg-muted/50 transition-colors"
@@ -361,37 +409,6 @@ const JobCardFollowUpsTab = () => {
                                 >
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
-                                            {/* Main header: Vehicle | Job Card | Inspection */}
-                                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                                {fu.job_card?.vehicle && (
-                                                    <div className="flex items-center gap-1">
-                                                        <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                                                        <span className="text-sm font-semibold">
-                                                            {fu.job_card.vehicle.fleet_number && (
-                                                                <span className="font-mono text-xs mr-1">[{fu.job_card.vehicle.fleet_number}]</span>
-                                                            )}
-                                                            {fu.job_card.vehicle.registration_number}
-                                                        </span>
-                                                        {(fu.job_card.vehicle.make || fu.job_card.vehicle.model) && (
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {fu.job_card.vehicle.make} {fu.job_card.vehicle.model}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                {fu.job_card && (
-                                                    <Badge variant="outline" className="text-xs font-mono">
-                                                        Job #{fu.job_card.job_number}
-                                                    </Badge>
-                                                )}
-                                                {fu.job_card?.inspection && (
-                                                    <Badge variant="outline" className="text-xs font-mono bg-indigo-50 text-indigo-700 border-indigo-200">
-                                                        Insp #{fu.job_card.inspection.inspection_number}
-                                                    </Badge>
-                                                )}
-                                            </div>
                                             <p className={`text-sm font-medium leading-snug ${fu.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
                                                 {fu.title}
                                             </p>
@@ -461,8 +478,8 @@ const JobCardFollowUpsTab = () => {
                                                             <Badge
                                                                 variant="outline"
                                                                 className={`text-[10px] px-1.5 py-0 shrink-0 ${fault.severity === "critical" ? "bg-red-50 text-red-700 border-red-200" :
-                                                                        fault.severity === "major" ? "bg-orange-50 text-orange-700 border-orange-200" :
-                                                                            "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                                                    fault.severity === "major" ? "bg-orange-50 text-orange-700 border-orange-200" :
+                                                                        "bg-yellow-50 text-yellow-700 border-yellow-200"
                                                                     }`}
                                                             >
                                                                 {fault.severity || "unknown"}
