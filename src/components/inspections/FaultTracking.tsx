@@ -8,6 +8,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,8 +31,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { generateAllFaultsPDF, generateSingleFaultPDF, type FaultExportData } from "@/lib/faultExport";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle, Clock, Download, Edit, FileText, MoreVertical, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, CheckCircle, Clock, Download, Edit, FileText, MoreVertical, Plus, Snowflake, Trash2, Truck } from "lucide-react";
+import { useMemo, useState } from "react";
 import AddFaultDialog from "../dialogs/AddFaultDialog";
 import EditFaultDialog from "../dialogs/EditFaultDialog";
 import FaultDetailsDialog from "../dialogs/FaultDetailsDialog";
@@ -37,8 +43,41 @@ type VehicleFault = Database["public"]["Tables"]["vehicle_faults"]["Row"] & {
     registration_number: string;
     make: string | null;
     model: string | null;
+    vehicle_type: string | null;
   } | null;
 };
+
+type VehicleCategory = "Horses" | "Reefers" | "Interlinks" | "LMVs";
+
+const CATEGORY_ORDER: VehicleCategory[] = ["Horses", "Reefers", "Interlinks", "LMVs"];
+
+function getVehicleCategory(vehicleType: string | null | undefined): VehicleCategory {
+  switch (vehicleType) {
+    case "horse_truck":
+    case "truck":
+      return "Horses";
+    case "reefer":
+    case "refrigerated_truck":
+      return "Reefers";
+    case "interlink":
+      return "Interlinks";
+    default:
+      return "LMVs";
+  }
+}
+
+function getCategoryIcon(category: VehicleCategory) {
+  switch (category) {
+    case "Horses":
+      return <Truck className="h-4 w-4" />;
+    case "Reefers":
+      return <Snowflake className="h-4 w-4" />;
+    case "Interlinks":
+      return <Truck className="h-4 w-4" />;
+    case "LMVs":
+      return <Truck className="h-4 w-4" />;
+  }
+}
 
 const FaultTracking = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -177,6 +216,28 @@ const FaultTracking = () => {
     });
   };
 
+  // Group faults by category → vehicle
+  const groupedFaults = useMemo(() => {
+    const byCategory = new Map<VehicleCategory, Map<string, { vehicle: VehicleFault["vehicles"]; faults: VehicleFault[] }>>();
+
+    for (const cat of CATEGORY_ORDER) {
+      byCategory.set(cat, new Map());
+    }
+
+    for (const fault of faults) {
+      const category = getVehicleCategory(fault.vehicles?.vehicle_type);
+      const vehicleKey = fault.vehicle_id;
+      const categoryMap = byCategory.get(category)!;
+
+      if (!categoryMap.has(vehicleKey)) {
+        categoryMap.set(vehicleKey, { vehicle: fault.vehicles, faults: [] });
+      }
+      categoryMap.get(vehicleKey)!.faults.push(fault);
+    }
+
+    return byCategory;
+  }, [faults]);
+
   return (
     <>
       <AddFaultDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
@@ -236,150 +297,142 @@ const FaultTracking = () => {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Faults</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{faults.length}</div>
-            </CardContent>
+        {/* Summary cards */}
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground">Total Faults</p>
+            <p className="text-xl font-semibold">{faults.length}</p>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Identified</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">
-                {faults.filter((f) => f.status === "identified").length}
-              </div>
-            </CardContent>
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground">Identified</p>
+            <p className="text-xl font-semibold">{faults.filter((f) => f.status === "identified").length}</p>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Acknowledged</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">
-                {faults.filter((f) => f.status === "acknowledged").length}
-              </div>
-            </CardContent>
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground">Acknowledged</p>
+            <p className="text-xl font-semibold">{faults.filter((f) => f.status === "acknowledged").length}</p>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Resolved</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">
-                {faults.filter((f) => f.status === "resolved").length}
-              </div>
-            </CardContent>
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground">Resolved</p>
+            <p className="text-xl font-semibold">{faults.filter((f) => f.status === "resolved").length}</p>
           </Card>
         </div>
 
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle>Active Faults</CardTitle>
-            <CardDescription>All reported faults and their current status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <p className="text-center text-muted-foreground py-8">Loading faults...</p>
-            ) : faults.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No faults reported yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {faults.map((fault) => (
-                  <Card key={fault.id} className="shadow-sm hover:shadow-md transition-shadow">
-                    <CardContent className="pt-6">
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="font-mono text-sm font-semibold text-foreground">
-                                {fault.vehicles?.fleet_number || fault.fault_number}
-                              </span>
-                              <Badge variant={getSeverityVariant(fault.severity)}>
-                                {fault.severity}
-                              </Badge>
-                              <div className={`flex items-center gap-1 ${getStatusColor(fault.status)}`}>
-                                {getStatusIcon(fault.status)}
-                                <span className="text-sm font-medium capitalize">{fault.status}</span>
+        {/* Faults grouped by category → vehicle */}
+        {isLoading ? (
+          <p className="text-center text-muted-foreground py-8">Loading faults...</p>
+        ) : faults.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">No faults reported yet.</p>
+        ) : (
+          <div className="space-y-4">
+            {CATEGORY_ORDER.map((category) => {
+              const vehicleMap = groupedFaults.get(category)!;
+              if (vehicleMap.size === 0) return null;
+
+              const totalFaults = Array.from(vehicleMap.values()).reduce((sum, v) => sum + v.faults.length, 0);
+
+              return (
+                <Card key={category}>
+                  <CardHeader className="py-3 px-4">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      {getCategoryIcon(category)}
+                      {category}
+                      <Badge variant="secondary" className="ml-1 text-xs">
+                        {vehicleMap.size} vehicle{vehicleMap.size !== 1 ? "s" : ""} · {totalFaults} fault{totalFaults !== 1 ? "s" : ""}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0 px-4 pb-2">
+                    <Accordion type="multiple">
+                      {Array.from(vehicleMap.entries()).map(([vehicleId, { vehicle, faults: vehicleFaults }]) => {
+                        const label = vehicle?.fleet_number || vehicle?.registration_number || "Unknown";
+                        const openCount = vehicleFaults.filter((f) => f.status !== "resolved").length;
+
+                        return (
+                          <AccordionItem key={vehicleId} value={vehicleId} className="border-b last:border-b-0">
+                            <AccordionTrigger className="py-2 hover:no-underline">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="font-semibold">{label}</span>
+                                {vehicle?.registration_number && vehicle.fleet_number && (
+                                  <span className="text-muted-foreground">{vehicle.registration_number}</span>
+                                )}
+                                {vehicle?.make && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {vehicle.make} {vehicle.model}
+                                  </span>
+                                )}
+                                <Badge variant="secondary" className="text-xs ml-auto mr-2">
+                                  {vehicleFaults.length} fault{vehicleFaults.length !== 1 ? "s" : ""}
+                                </Badge>
+                                {openCount > 0 && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    {openCount} open
+                                  </Badge>
+                                )}
                               </div>
-                            </div>
-                            <h3 className="font-semibold text-foreground mb-1">
-                              {fault.fault_description}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {fault.vehicles?.fleet_number
-                                ? `${fault.vehicles.fleet_number} • `
-                                : ""}
-                              {fault.vehicles?.registration_number || "N/A"} ({fault.vehicles?.make} {fault.vehicles?.model})
-                            </p>
-                          </div>
-                          {/* Actions Dropdown */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-9 w-9 p-0">
-                                <MoreVertical className="h-4 w-4" />
-                                <span className="sr-only">Open menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleViewDetails(fault)}>
-                                <FileText className="h-4 w-4 mr-2" />
-                                View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleEditFault(fault)}>
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit Fault
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleExportSinglePDF(fault)}>
-                                <Download className="h-4 w-4 mr-2" />
-                                Export PDF
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteClick(fault)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete Fault
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        <div className="flex items-center justify-between pt-3 border-t border-border">
-                          <div className="text-sm text-muted-foreground">
-                            <span>Reported by {fault.reported_by}</span>
-                            <span className="mx-2">•</span>
-                            <span>{new Date(fault.reported_date).toLocaleDateString()}</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleViewDetails(fault)}
-                            >
-                              View Details
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleEditFault(fault)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <div className="space-y-1.5">
+                                {vehicleFaults.map((fault) => (
+                                  <div
+                                    key={fault.id}
+                                    className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                                  >
+                                    <div className={`shrink-0 ${getStatusColor(fault.status)}`}>
+                                      {getStatusIcon(fault.status)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium truncate">{fault.fault_description}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {fault.fault_number} · {new Date(fault.reported_date).toLocaleDateString()}
+                                        {fault.reported_by ? ` · ${fault.reported_by}` : ""}
+                                      </p>
+                                    </div>
+                                    <Badge variant={getSeverityVariant(fault.severity)} className="shrink-0 text-xs">
+                                      {fault.severity}
+                                    </Badge>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0">
+                                          <MoreVertical className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => handleViewDetails(fault)}>
+                                          <FileText className="h-4 w-4 mr-2" />
+                                          View Details
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleEditFault(fault)}>
+                                          <Edit className="h-4 w-4 mr-2" />
+                                          Edit Fault
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExportSinglePDF(fault)}>
+                                          <Download className="h-4 w-4 mr-2" />
+                                          Export PDF
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={() => handleDeleteClick(fault)}
+                                          className="text-destructive focus:text-destructive"
+                                        >
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Delete Fault
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        );
+                      })}
+                    </Accordion>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );

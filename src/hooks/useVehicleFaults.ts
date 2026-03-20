@@ -13,7 +13,8 @@ export const useVehicleFaults = () => {
             fleet_number,
             registration_number,
             make,
-            model
+            model,
+            vehicle_type
           )
         `)
         .order("reported_date", { ascending: false });
