@@ -274,7 +274,7 @@ export async function getAssetsForPortal(): Promise<TelematicsAsset[] | null> {
     const response = await fetch(PROXY_URL, {
       method: "POST",
       headers: proxyHeaders(),
-      body: JSON.stringify({ action: "getAssetsForPortal" }),
+      body: JSON.stringify({ action: "getPortalAssets" }),
     });
 
     if (!response.ok) {
@@ -445,9 +445,9 @@ export function calculateDistance(
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -661,7 +661,7 @@ export async function registerGeofenceWebhook(webhookUrl: string): Promise<boole
     const response = await fetch(PROXY_URL, {
       method: "POST",
       headers: proxyHeaders(),
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         action: "registerWebhook",
         token,
         webhookUrl,
@@ -683,7 +683,8 @@ export async function getGeofenceEvents(loadNumber: string): Promise<GeofenceEve
   try {
     const { supabase } = await import('@/integrations/supabase/client');
 
-    const { data, error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
       .from('geofence_events')
       .select('*')
       .eq('load_number', loadNumber)
@@ -694,7 +695,7 @@ export async function getGeofenceEvents(loadNumber: string): Promise<GeofenceEve
       return [];
     }
 
-    return (data || []).map(event => ({
+    return (data || []).map((event: any) => ({
       id: event.id,
       loadNumber: event.load_number,
       assetId: event.telematics_asset_id ? parseInt(event.telematics_asset_id) : null,
@@ -724,7 +725,8 @@ export async function getAssetGeofenceStatus(assetId: number): Promise<{
     const { DEPOTS } = await import('./depots');
 
     // Get last known position from telematics_positions
-    const { data: positions, error: posError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: positions, error: posError } = await (supabase as any)
       .from('telematics_positions')
       .select('*')
       .eq('asset_id', assetId)
@@ -736,7 +738,8 @@ export async function getAssetGeofenceStatus(assetId: number): Promise<{
     }
 
     // Get last event from geofence_events
-    const { data: events, error: eventError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: events, error: eventError } = await (supabase as any)
       .from('geofence_events')
       .select('*')
       .eq('telematics_asset_id', assetId.toString())
@@ -759,12 +762,12 @@ export async function getAssetGeofenceStatus(assetId: number): Promise<{
       source: events[0].source,
       vehicleRegistration: events[0].vehicle_registration
     } : undefined;
-    
+
     const insideGeofences: Array<{ id: number; name: string; distance: number }> = [];
-    
+
     if (positions && positions.length > 0) {
       const pos = positions[0];
-      
+
       // Skip if position has no coordinates
       if (pos.latitude === null || pos.longitude === null) {
         return {
@@ -772,14 +775,14 @@ export async function getAssetGeofenceStatus(assetId: number): Promise<{
           lastEvent
         };
       }
-      
+
       // Check each depot
       for (const depot of DEPOTS) {
         const distance = calculateDistance(
           pos.latitude, pos.longitude,
           depot.latitude, depot.longitude
         ) * 1000; // Convert to meters
-        
+
         if (distance <= (depot.radius || 500)) {
           insideGeofences.push({
             id: parseInt(depot.id.replace(/\D/g, '')) || 0,
@@ -809,7 +812,7 @@ export async function getAssetGeofenceStatus(assetId: number): Promise<{
 export async function isAssetInGeofence(assetId: number, geofenceName: string): Promise<boolean> {
   try {
     const status = await getAssetGeofenceStatus(assetId);
-    return status.insideGeofences.some(g => 
+    return status.insideGeofences.some(g =>
       g.name.toLowerCase().includes(geofenceName.toLowerCase()) ||
       geofenceName.toLowerCase().includes(g.name.toLowerCase())
     );
@@ -842,15 +845,15 @@ export async function getGeofenceTimeline(loadNumber: string): Promise<{
 }> {
   try {
     const events = await getGeofenceEvents(loadNumber);
-    
+
     const entries = events.filter(e => e.eventType === 'entry');
     const exits = events.filter(e => e.eventType === 'exit');
-    
+
     const timeline = events.map(e => ({
       ...e,
       displayText: e.eventType === 'entry' ? '🚚 Arrived at' : '🚚 Departed from'
     }));
-    
+
     return { entries, exits, timeline };
   } catch (error) {
     console.error("Error in getGeofenceTimeline:", error);
@@ -865,7 +868,7 @@ export async function getAssetGeofenceEvents(assetId: number): Promise<GeofenceE
   try {
     const { supabase } = await import('@/integrations/supabase/client');
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('geofence_events')
       .select('*')
       .eq('telematics_asset_id', assetId.toString())
@@ -876,7 +879,7 @@ export async function getAssetGeofenceEvents(assetId: number): Promise<GeofenceE
       return [];
     }
 
-    return (data || []).map(event => ({
+    return (data || []).map((event: any) => ({
       id: event.id,
       loadNumber: event.load_number,
       assetId: event.telematics_asset_id ? parseInt(event.telematics_asset_id) : null,
@@ -905,7 +908,7 @@ export async function getAssetCurrentPosition(assetId: number): Promise<{
   try {
     const { supabase } = await import('@/integrations/supabase/client');
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('telematics_positions')
       .select('*')
       .eq('asset_id', assetId)
