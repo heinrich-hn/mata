@@ -11,8 +11,12 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    VitePWA({
+    // Only enable PWA in production
+    process.env.NODE_ENV === "production" && VitePWA({
       registerType: "autoUpdate",
+      devOptions: {
+        enabled: false,
+      },
       includeAssets: [
         "favicon-32x32.png",
         "favicon-16x16.png",
@@ -34,11 +38,7 @@ export default defineConfig({
             src: "pwa-192x192.png",
             sizes: "192x192",
             type: "image/png",
-          },
-          {
-            src: "pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
+            purpose: "any maskable",
           },
           {
             src: "pwa-512x512.png",
@@ -48,36 +48,19 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*supabase\.co\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "supabase-api",
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 5, // 5 minutes
-              },
-            },
-          },
-        ],
-      },
     }),
-  ],
+  ].filter(Boolean),
   resolve: {
     dedupe: ["react", "react-dom"],
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // Force all React imports to this project's node_modules to prevent
-      // duplicate React instances when parent workspace also has React
       "react": path.resolve(__dirname, "node_modules/react"),
       "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
     },
   },
   build: {
     sourcemap: true,
+    cssCodeSplit: false,
     rollupOptions: {
       output: {
         manualChunks: {

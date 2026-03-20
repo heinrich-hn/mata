@@ -4,7 +4,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { generateJobCardPDF, type JobCardExportData } from "@/lib/jobCardExport";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useQuery } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
@@ -191,63 +190,9 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
     refetchTasks();
   };
 
-  const handleExportPDF = () => {
-    const exportData: JobCardExportData = {
-      jobCard: {
-        id: jobCard.id,
-        job_number: jobCard.job_number,
-        title: jobCard.title,
-        status: jobCard.status,
-        priority: jobCard.priority,
-        assignee: jobCard.assignee,
-        due_date: jobCard.due_date,
-        created_at: jobCard.created_at,
-        description: jobCard.description,
-      },
-      vehicle: vehicle || null,
-      tasks: tasks.map(t => ({
-        id: t.id,
-        title: t.title || "",
-        status: t.status || "pending",
-        priority: t.priority || "medium",
-      })),
-      laborEntries: laborEntries.map(l => ({
-        id: l.id,
-        technician_name: l.technician_name,
-        description: l.description,
-        hours_worked: l.hours_worked,
-        hourly_rate: l.hourly_rate,
-        total_cost: l.total_cost || 0,
-        work_date: l.work_date || new Date().toISOString(),
-      })),
-      parts: parts.map(p => ({
-        id: p.id,
-        part_name: p.part_name,
-        part_number: p.part_number,
-        quantity: p.quantity,
-        status: p.status,
-        unit_price: p.unit_price,
-        total_price: p.total_price,
-        is_from_inventory: p.is_from_inventory,
-        is_service: p.is_service,
-        vendor_id: p.vendor_id,
-        vendors: p.vendors,
-        inventory: p.inventory,
-        document_url: p.document_url,
-        document_name: p.document_name,
-      })),
-    };
-
-    generateJobCardPDF(exportData);
-    toast({
-      title: "Success",
-      description: "Job card PDF exported successfully",
-    });
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] h-[95vh] p-0">
+      <DialogContent className="max-w-full sm:max-w-[95vw] h-full sm:h-[95vh] p-0 overflow-hidden">
         <VisuallyHidden>
           <DialogHeader>
             <DialogTitle>Job Card Details - {jobCard.job_number}</DialogTitle>
@@ -255,19 +200,13 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
           </DialogHeader>
         </VisuallyHidden>
         <ScrollArea className="h-full">
-          <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-            <div className="space-y-3">
-              <JobCardHeader
-                jobCard={jobCard}
-                onClose={() => onOpenChange(false)}
-                onStatusChange={handleStatusChange}
-                onPriorityChange={(priority) => handleJobCardUpdate({ priority })}
-              />
-              <Button onClick={handleExportPDF} size="sm" variant="outline" className="gap-2 w-full sm:w-auto">
-                <FileText className="h-4 w-4" />
-                Export PDF
-              </Button>
-            </div>
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 pb-safe">
+            <JobCardHeader
+              jobCard={jobCard}
+              onClose={() => onOpenChange(false)}
+              onStatusChange={handleStatusChange}
+              onPriorityChange={(priority) => handleJobCardUpdate({ priority })}
+            />
 
             <JobCardStats
               tasks={tasks}
@@ -276,12 +215,22 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
             />
 
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="flex w-full overflow-x-auto h-auto flex-nowrap">
-                <TabsTrigger value="overview" className="flex-1 min-w-[70px] text-xs sm:text-sm">Overview</TabsTrigger>
-                <TabsTrigger value="tasks" className="flex-1 min-w-[55px] text-xs sm:text-sm">Tasks</TabsTrigger>
-                <TabsTrigger value="parts" className="flex-1 min-w-[55px] text-xs sm:text-sm">Parts</TabsTrigger>
-                <TabsTrigger value="labor" className="flex-1 min-w-[55px] text-xs sm:text-sm">Labor</TabsTrigger>
-                <TabsTrigger value="notes" className="flex-1 min-w-[55px] text-xs sm:text-sm">Notes</TabsTrigger>
+              <TabsList className="grid grid-cols-5 w-full h-12 sm:h-10 p-1 gap-1">
+                <TabsTrigger value="overview" className="text-xs sm:text-sm px-1 py-2 h-full data-[state=active]:shadow-sm">
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="tasks" className="text-xs sm:text-sm px-1 py-2 h-full data-[state=active]:shadow-sm">
+                  Tasks
+                </TabsTrigger>
+                <TabsTrigger value="parts" className="text-xs sm:text-sm px-1 py-2 h-full data-[state=active]:shadow-sm">
+                  Parts
+                </TabsTrigger>
+                <TabsTrigger value="labor" className="text-xs sm:text-sm px-1 py-2 h-full data-[state=active]:shadow-sm">
+                  Labor
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="text-xs sm:text-sm px-1 py-2 h-full data-[state=active]:shadow-sm">
+                  Notes
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-4">

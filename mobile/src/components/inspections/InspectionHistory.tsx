@@ -25,7 +25,6 @@ import
   } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { generateInspectionPDF } from "@/lib/inspectionPdfExport";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDownUp, LayoutList, Plus, Printer, Search, TriangleAlert } from "lucide-react";
 import { Fragment, useState } from "react";
@@ -224,8 +223,6 @@ export function InspectionHistory() {
         severity: undefined, // Severity not in current schema
       }));
 
-      // Generate the PDF
-      await generateInspectionPDF(inspection, mappedItems);
 
       toast({
         title: "PDF Generated",

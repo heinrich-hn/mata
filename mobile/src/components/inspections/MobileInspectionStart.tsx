@@ -9,8 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { QrCode, Truck, Gauge, ClipboardCheck, FileText, Loader2 } from "lucide-react";
-import PositionQRScanner, { ScanResult } from "@/components/tyres/PositionQRScanner";
+import { Truck, Gauge, ClipboardCheck, FileText, Loader2 } from "lucide-react";
 import InspectorProfileSelector from "./InspectorProfileSelector";
 import { getFleetConfig } from "@/constants/fleetTyreConfig";
 import { toast } from "@/hooks/use-toast";
@@ -18,7 +17,6 @@ import { toast } from "@/hooks/use-toast";
 const MobileInspectionStart = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [showScanner, setShowScanner] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -58,7 +56,7 @@ const MobileInspectionStart = () => {
 
   const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId) || null;
 
-  // Parse URL parameters for deep link / QR support
+  // Parse URL parameters for deep link support
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const vehicleParam = searchParams.get('vehicle');
@@ -69,40 +67,11 @@ const MobileInspectionStart = () => {
         setSelectedVehicleId(match.id);
         toast({
           title: "Vehicle Loaded",
-          description: `${vehicleParam} loaded from QR code`,
+          description: `${vehicleParam} loaded from URL`,
         });
       }
     }
   }, [location.search, selectedVehicleId, vehicles]);
-
-  const handleScanSuccess = (result: ScanResult) => {
-    if (result.type === "vehicle") {
-      const scanned = result.data as { fleetNumber: string; registration: string; fullCode: string };
-      const fullReg = `${scanned.fleetNumber}-${scanned.registration}`;
-      const match = vehicles.find(v => v.registration_number === fullReg);
-      setShowScanner(false);
-
-      if (match) {
-        setSelectedVehicleId(match.id);
-        toast({
-          title: "Vehicle Scanned",
-          description: `${fullReg} selected`,
-        });
-      } else {
-        toast({
-          title: "Vehicle Not Found",
-          description: `${fullReg} is not in the fleet database`,
-          variant: "destructive",
-        });
-      }
-    } else {
-      toast({
-        title: "Invalid QR Code",
-        description: "Please scan a vehicle QR code",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleVehicleSelect = (vehicleId: string) => {
     setSelectedVehicleId(vehicleId);
@@ -190,14 +159,6 @@ const MobileInspectionStart = () => {
       </div>
 
       <div className="p-4 space-y-4 pb-24">
-        {/* QR Scanner Modal */}
-        {showScanner && (
-          <PositionQRScanner
-            onScanSuccess={handleScanSuccess}
-            onClose={() => setShowScanner(false)}
-          />
-        )}
-
         {/* Step 1: Select Vehicle */}
         <Card>
           <CardHeader>
@@ -205,7 +166,7 @@ const MobileInspectionStart = () => {
               <Truck className="w-5 h-5" />
               Step 1: Select Vehicle *
             </CardTitle>
-            <CardDescription>Choose a fleet vehicle or scan a QR code</CardDescription>
+            <CardDescription>Choose a fleet vehicle from the list</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Select value={selectedVehicleId || undefined} onValueChange={handleVehicleSelect}>
@@ -230,24 +191,6 @@ const MobileInspectionStart = () => {
                 ))}
               </SelectContent>
             </Select>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-
-            <Button
-              variant="outline"
-              onClick={() => setShowScanner(true)}
-              className="w-full h-11 rounded-xl"
-            >
-              <QrCode className="w-4 h-4 mr-2" />
-              Scan Vehicle QR Code
-            </Button>
           </CardContent>
         </Card>
 
@@ -349,7 +292,6 @@ const MobileInspectionStart = () => {
                 onChange={(e) => setOdometerReading(e.target.value)}
                 className="h-12 text-lg"
               />
-
             </div>
           </CardContent>
         </Card>

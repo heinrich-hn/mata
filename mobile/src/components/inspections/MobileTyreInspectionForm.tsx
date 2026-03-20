@@ -1,4 +1,3 @@
-import PositionQRScanner, { ScanResult } from "@/components/tyres/PositionQRScanner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -187,22 +186,7 @@ const MobileTyreInspectionForm = () => {
     );
   };
 
-  const handleQRScan = (result: ScanResult) => {
-    if (result.type === "tyre" && 'tin' in result.data) {
-      updateCurrentTyre("tyreCode", result.data.tin);
-      setShowQRScanner(false);
-      toast({
-        title: "Tyre Scanned",
-        description: `Code: ${result.data.tin}`,
-      });
-    } else {
-      toast({
-        title: "Invalid QR Code",
-        description: "Please scan a tyre QR code",
-        variant: "destructive",
-      });
-    }
-  };
+  // Removed handleQRScan function since QR scanning is disabled
 
   const saveInspection = useMutation({
     mutationFn: async () => {
@@ -662,15 +646,7 @@ const MobileTyreInspectionForm = () => {
                       placeholder="Enter DOT code"
                       className="h-12 text-base"
                     />
-                    <Button
-                      type="button"
-                      size="lg"
-                      variant="outline"
-                      onClick={() => setShowQRScanner(true)}
-                      className="h-12 w-12 p-0 shrink-0"
-                    >
-                      <Camera className="w-5 h-5" />
-                    </Button>
+                    {/* QR Scanner button removed */}
                   </div>
                 )}
               </div>
@@ -839,18 +815,7 @@ const MobileTyreInspectionForm = () => {
         </div>
       </div>
 
-      {/* QR Scanner Modal */}
-      <Modal
-        isOpen={showQRScanner}
-        onClose={() => setShowQRScanner(false)}
-        title="Scan Tyre QR Code"
-        maxWidth="lg"
-      >
-        <PositionQRScanner
-          onScanSuccess={handleQRScan}
-          onClose={() => setShowQRScanner(false)}
-        />
-      </Modal>
+      {/* QR Scanner Modal removed */}
     </div>
   );
 };

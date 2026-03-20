@@ -3,18 +3,115 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#F5B800" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <!-- Theme & App Settings -->
+    <meta name="theme-color" content="#F5B800" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1a1a2e" media="(prefers-color-scheme: dark)" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Workshop" />
-    <meta name="description" content="Fleet management, inspections & tyre tracking" />
+    <meta name="application-name" content="Matanuska Workshop" />
+    <meta name="msapplication-TileColor" content="#F5B800" />
+    
+    <!-- SEO & Description -->
+    <meta name="description" content="Fleet management, inspections & tyre tracking - Modern workshop management system" />
+    <meta name="keywords" content="fleet management, vehicle inspections, tyre tracking, maintenance, workshop" />
+    <meta name="author" content="Matanuska Workshop" />
+    <meta name="robots" content="index, follow" />
+    
+    <!-- Icons -->
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png" />
-    <title>Matanuska Workshop</title>
+    
+    <!-- Preconnect for Performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.supabase.co" />
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    
+    <!-- Title -->
+    <title>Matanuska Workshop | Fleet Management & Inspections</title>
+    
+    <!-- Initial Styles -->
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background: radial-gradient(circle at 0% 0%, rgba(245, 184, 0, 0.03) 0%, transparent 50%),
+                    radial-gradient(circle at 100% 100%, rgba(245, 184, 0, 0.03) 0%, transparent 50%),
+                    #f5f7fa;
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      
+      #root {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      /* Loading Animation */
+      .loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #f5f7fa 0%, #e9edf2 100%);
+        z-index: 9999;
+      }
+      
+      .loading-spinner {
+        width: 48px;
+        height: 48px;
+        border: 3px solid rgba(245, 184, 0, 0.1);
+        border-radius: 50%;
+        border-top-color: #F5B800;
+        animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      
+      @media (prefers-reduced-motion: reduce) {
+        .loading-spinner {
+          animation-duration: 1.5s;
+        }
+      }
+      
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: radial-gradient(circle at 0% 0%, rgba(245, 184, 0, 0.05) 0%, transparent 50%),
+                      radial-gradient(circle at 100% 100%, rgba(245, 184, 0, 0.05) 0%, transparent 50%),
+                      #0a0a0f;
+        }
+        .loading {
+          background: linear-gradient(135deg, #0a0a0f 0%, #111118 100%);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

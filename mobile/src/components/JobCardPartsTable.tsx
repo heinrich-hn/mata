@@ -1,14 +1,13 @@
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+AlertDialog,
+AlertDialogAction,
+AlertDialogCancel,
+AlertDialogContent,
+AlertDialogDescription,
+AlertDialogFooter,
+AlertDialogHeader,
+AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -181,9 +180,8 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh }: JobCardPartsTablePro
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <div
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${getSourceColor(part)} ${
-                            part.is_from_inventory ? 'cursor-pointer' : ''
-                          }`}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${getSourceColor(part)} ${part.is_from_inventory ? 'cursor-pointer' : ''
+                            }`}
                           onClick={() => part.is_from_inventory && handleInventoryClick(part.inventory_id || null)}
                         >
                           {getSourceIcon(part)}
@@ -248,173 +246,172 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh }: JobCardPartsTablePro
             </div>
             {/* Desktop table view */}
             <div className="hidden sm:block overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Name/Description</TableHead>
-                  <TableHead>Part #</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead>Doc</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {parts.map((part) => (
-                  <TableRow key={part.id}>
-                    {/* Source Indicator */}
-                    <TableCell>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <div
-                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${getSourceColor(part)} ${
-                                part.is_from_inventory ? 'cursor-pointer' : ''
-                              }`}
-                              onClick={() =>
-                                part.is_from_inventory && handleInventoryClick(part.inventory_id || null)
-                              }
-                            >
-                              {getSourceIcon(part)}
-                              {getSourceLabel(part)}
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {part.is_service
-                              ? "Service/Repair work"
-                              : part.is_from_inventory
-                              ? "Click to view inventory details"
-                              : "External vendor part"}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </TableCell>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Name/Description</TableHead>
+                    <TableHead>Part #</TableHead>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Price</TableHead>
+                    <TableHead>Doc</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Notes</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parts.map((part) => (
+                    <TableRow key={part.id}>
+                      {/* Source Indicator */}
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <div
+                                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${getSourceColor(part)} ${part.is_from_inventory ? 'cursor-pointer' : ''
+                                  }`}
+                                onClick={() =>
+                                  part.is_from_inventory && handleInventoryClick(part.inventory_id || null)
+                                }
+                              >
+                                {getSourceIcon(part)}
+                                {getSourceLabel(part)}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {part.is_service
+                                ? "Service/Repair work"
+                                : part.is_from_inventory
+                                  ? "Click to view inventory details"
+                                  : "External vendor part"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
 
-                    {/* Part Name / Service Description */}
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="font-medium">{part.part_name}</div>
-                        {part.is_service && part.service_description && (
-                          <div className="text-xs text-muted-foreground italic line-clamp-2">
-                            {part.service_description}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    {/* Part Number */}
-                    <TableCell className="text-sm">{part.part_number || "-"}</TableCell>
-
-                    {/* Vendor */}
-                    <TableCell className="text-sm">
-                      {part.vendors?.name || "-"}
-                    </TableCell>
-
-                    {/* Quantity */}
-                    <TableCell className="text-right">{part.quantity}</TableCell>
-
-                    {/* Price */}
-                    <TableCell className="text-right">
-                      {part.total_price ? (
+                      {/* Part Name / Service Description */}
+                      <TableCell>
                         <div className="space-y-1">
-                          <div className="font-semibold text-primary">
-                            ${part.total_price.toFixed(2)}
-                          </div>
-                          {part.unit_price && (
-                            <div className="text-xs text-muted-foreground">
-                              ${part.unit_price.toFixed(2)} each
+                          <div className="font-medium">{part.part_name}</div>
+                          {part.is_service && part.service_description && (
+                            <div className="text-xs text-muted-foreground italic line-clamp-2">
+                              {part.service_description}
                             </div>
                           )}
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
+                      </TableCell>
 
-                    {/* Document */}
-                    <TableCell>
-                      {part.document_url ? (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <a
-                                href={part.document_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="View document"
-                                className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 hover:bg-blue-200 transition-colors"
-                              >
-                                <FileText className="h-4 w-4 text-blue-700" />
-                              </a>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              View {part.document_name || "document"}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100">
-                          <FileText className="h-4 w-4 text-gray-400" />
-                        </div>
-                      )}
-                    </TableCell>
+                      {/* Part Number */}
+                      <TableCell className="text-sm">{part.part_number || "-"}</TableCell>
 
-                    {/* Status */}
-                    <TableCell>
-                      <Badge variant={getStatusVariant(part.status)}>
-                        {part.status}
-                      </Badge>
-                    </TableCell>
+                      {/* Vendor */}
+                      <TableCell className="text-sm">
+                        {part.vendors?.name || "-"}
+                      </TableCell>
 
-                    {/* Notes */}
-                    <TableCell>
-                      {part.notes ? (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <div className="text-sm text-muted-foreground line-clamp-2 max-w-[200px]">
-                                {part.notes}
+                      {/* Quantity */}
+                      <TableCell className="text-right">{part.quantity}</TableCell>
+
+                      {/* Price */}
+                      <TableCell className="text-right">
+                        {part.total_price ? (
+                          <div className="space-y-1">
+                            <div className="font-semibold text-primary">
+                              ${part.total_price.toFixed(2)}
+                            </div>
+                            {part.unit_price && (
+                              <div className="text-xs text-muted-foreground">
+                                ${part.unit_price.toFixed(2)} each
                               </div>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-sm">
-                              {part.notes}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
 
-                    {/* Actions */}
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setEditPart({ ...part })}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeletePartId(part.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      {/* Document */}
+                      <TableCell>
+                        {part.document_url ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <a
+                                  href={part.document_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="View document"
+                                  className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 hover:bg-blue-200 transition-colors"
+                                >
+                                  <FileText className="h-4 w-4 text-blue-700" />
+                                </a>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                View {part.document_name || "document"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800">
+                            <FileText className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                          </div>
+                        )}
+                      </TableCell>
+
+                      {/* Status */}
+                      <TableCell>
+                        <Badge variant={getStatusVariant(part.status)}>
+                          {part.status}
+                        </Badge>
+                      </TableCell>
+
+                      {/* Notes */}
+                      <TableCell>
+                        {part.notes ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <div className="text-sm text-muted-foreground line-clamp-2 max-w-[200px]">
+                                  {part.notes}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-sm">
+                                {part.notes}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                            onClick={() => setEditPart({ ...part })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeletePartId(part.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </>
         )}

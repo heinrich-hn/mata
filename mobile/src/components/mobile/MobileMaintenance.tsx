@@ -7,24 +7,222 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { MaintenanceSchedule } from "@/types/maintenance";
 import { cn } from "@/lib/utils";
+import { isReeferFleet } from "@/utils/fleetCategories";
 import { useQuery } from "@tanstack/react-query";
-import {
-  AlertCircle,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  Plus,
-  Truck,
-  Wrench,
-} from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
+// ============================================================================
+// Types & Constants
+// ============================================================================
+type UrgencyType = "overdue" | "today" | "upcoming" | "scheduled";
+
+const URGENCY_CONFIG = {
+  overdue: {
+    label: "Overdue",
+    badgeVariant: "destructive" as const,
+    bgColor: "bg-red-50/50 dark:bg-red-950/30",
+    borderColor: "border-l-red-500",
+    dot: "bg-red-500",
+    statColor: "text-red-700 dark:text-red-300",
+    statBg: "bg-red-50 dark:bg-red-900/50",
+    statGradient: "from-red-50 to-red-100/60 dark:from-red-950/50 dark:to-red-900/60",
+  },
+  today: {
+    label: "Today",
+    badgeVariant: "default" as const,
+    bgColor: "bg-orange-50/50 dark:bg-orange-950/30",
+    borderColor: "border-l-orange-500",
+    dot: "bg-orange-500",
+    statColor: "text-orange-700 dark:text-orange-300",
+    statBg: "bg-orange-50 dark:bg-orange-900/50",
+    statGradient: "from-orange-50 to-orange-100/60 dark:from-orange-950/50 dark:to-orange-900/60",
+  },
+  upcoming: {
+    label: "Soon",
+    badgeVariant: "outline" as const,
+    bgColor: "dark:bg-yellow-950/20",
+    borderColor: "border-l-yellow-500",
+    dot: "bg-yellow-500",
+    statColor: "text-yellow-700 dark:text-yellow-300",
+    statBg: "bg-yellow-50 dark:bg-yellow-900/50",
+    statGradient: "from-yellow-50 to-yellow-100/60 dark:from-yellow-950/50 dark:to-yellow-900/60",
+  },
+  scheduled: {
+    label: "Scheduled",
+    badgeVariant: "outline" as const,
+    bgColor: "",
+    borderColor: "border-l-gray-300 dark:border-l-gray-600",
+    dot: "bg-gray-500 dark:bg-gray-400",
+    statColor: "text-gray-700 dark:text-gray-300",
+    statBg: "bg-gray-50 dark:bg-gray-900/50",
+    statGradient: "from-gray-50 to-gray-100/60 dark:from-gray-900/50 dark:to-gray-800/60",
+  },
+} as const;
+
+const PRIORITY_STYLES = {
+  critical: "border-red-300 text-red-800 bg-red-50 dark:border-red-700 dark:text-red-200 dark:bg-red-900/50",
+  high: "border-orange-300 text-orange-800 bg-orange-50 dark:border-orange-700 dark:text-orange-200 dark:bg-orange-900/50",
+  medium: "border-blue-300 text-blue-800 bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:bg-blue-900/50",
+  low: "border-gray-300 text-gray-700 bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:bg-gray-800/50",
+} as const;
+
+// ============================================================================
+// Sub-components
+// ============================================================================
+const StatCard = ({
+  value,
+  label,
+  colorClass,
+  bgGradient
+}: {
+  value: number;
+  label: string;
+  colorClass: string;
+  bgGradient: string;
+}) => (
+  <Card className={cn("p-2.5 rounded-xl border border-border/40 shadow-sm bg-gradient-to-br", bgGradient)}>
+    <div>
+      <p className={cn("text-lg font-bold", colorClass)}>{value}</p>
+      <p className="text-[10px] text-muted-foreground font-medium">{label}</p>
+    </div>
+  </Card>
+);
+
+const ScheduleCard = ({
+  schedule,
+  vehicle,
+  urgency,
+  onComplete
+}: {
+  schedule: MaintenanceSchedule;
+  vehicle?: { fleet_number: string | null; registration_number: string | null };
+  urgency: UrgencyType;
+  onComplete: (id: string) => void;
+}) => {
+  const dueDate = new Date(schedule.next_due_date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const urgencyConfig = URGENCY_CONFIG[urgency];
+
+  const getUrgencyBadge = () => {
+    switch (urgency) {
+      case "overdue":
+        return (
+          <Badge variant="destructive" className="text-[11px] px-1.5 py-0.5">
+            {Math.abs(diffDays)}d overdue
+          </Badge>
+        );
+      case "today":
+        return (
+          <Badge className="bg-orange-500 text-white text-[11px] px-1.5 py-0.5">
+            Due today
+          </Badge>
+        );
+      case "upcoming":
+        return (
+          <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 border-yellow-300 text-yellow-700">
+            In {diffDays}d
+          </Badge>
+        );
+      default:
+        return (
+          <span className="text-[11px] text-muted-foreground">
+            In {diffDays}d
+          </span>
+        );
+    }
+  };
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onComplete(schedule.id);
+    }
+  }, [onComplete, schedule.id]);
+
+  return (
+    <Card
+      className={cn(
+        "border-l-4 active:scale-[0.98] transition-transform rounded-2xl shadow-sm border border-border/40",
+        urgencyConfig.borderColor,
+        urgencyConfig.bgColor
+      )}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-sm leading-tight truncate">
+              {schedule.title || schedule.service_type}
+            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+              {vehicle && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/60 font-medium">
+                  {vehicle.fleet_number || vehicle.registration_number}
+                </span>
+              )}
+              <span>
+                {dueDate.toLocaleDateString()}
+              </span>
+              {schedule.category && (
+                <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 h-5">
+                  {schedule.category}
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            {getUrgencyBadge()}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+          {schedule.priority && (
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[11px] px-1.5 py-0.5",
+                PRIORITY_STYLES[schedule.priority as keyof typeof PRIORITY_STYLES] || "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-200"
+              )}
+            >
+              {schedule.priority}
+            </Badge>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs gap-1.5 rounded-xl px-3 touch-target font-semibold"
+            onClick={(e) => {
+              e.stopPropagation();
+              onComplete(schedule.id);
+            }}
+            onKeyDown={handleKeyDown}
+          >
+            Complete
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// ============================================================================
+// Main Component
+// ============================================================================
 const MobileMaintenance = () => {
   const [quickCompleteOpen, setQuickCompleteOpen] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>("");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
-  const { data: schedules = [], refetch } = useQuery({
+  // Fetch schedules
+  const {
+    data: schedules = [],
+    refetch,
+    isLoading,
+    error
+  } = useQuery({
     queryKey: ["maintenance-schedules-mobile"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -39,260 +237,359 @@ const MobileMaintenance = () => {
         schedule_type: s.schedule_type as MaintenanceSchedule["schedule_type"],
       })) as MaintenanceSchedule[];
     },
+    staleTime: 30000,
+    gcTime: 300000,
   });
 
+  // Fetch vehicles for lookup
   const { data: vehicles = [] } = useQuery({
-    queryKey: ["vehicles-lookup"],
+    queryKey: ["vehicles-lookup-maintenance"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
-        .select("id, fleet_number, registration_number");
+        .select("id, fleet_number, registration_number, current_odometer");
       if (error) throw error;
       return data || [];
     },
+    staleTime: 300000,
   });
 
-  const vehicleMap = new Map(vehicles.map(v => [v.id, v]));
+  // Create vehicle map for O(1) lookups
+  const vehicleMap = useMemo(
+    () => new Map(vehicles.map(v => [v.id, v])),
+    [vehicles]
+  );
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Build fleet number → vehicle id map for reefer detection
+  const fleetMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    vehicles.forEach(v => { if (v.fleet_number) m[v.id] = v.fleet_number; });
+    return m;
+  }, [vehicles]);
 
-  const getScheduleUrgency = (schedule: MaintenanceSchedule) => {
+  // Fetch latest KM from trips for non-reefer vehicles with odometer-based schedules
+  const odometerVehicleIds = useMemo(() => {
+    return [...new Set(
+      schedules
+        .filter(s => s.odometer_based && s.vehicle_id && !isReeferFleet(fleetMap[s.vehicle_id] || ""))
+        .map(s => s.vehicle_id)
+    )];
+  }, [schedules, fleetMap]);
+
+  const { data: vehicleKmMap = {} } = useQuery({
+    queryKey: ["vehicle-km-map", odometerVehicleIds],
+    queryFn: async () => {
+      if (odometerVehicleIds.length === 0) return {};
+      const map: Record<string, number> = {};
+
+      // Get max ending_km per vehicle from trips
+      const { data: trips } = await supabase
+        .from("trips")
+        .select("fleet_vehicle_id, ending_km")
+        .in("fleet_vehicle_id", odometerVehicleIds)
+        .not("ending_km", "is", null)
+        .order("ending_km", { ascending: false });
+
+      (trips || []).forEach(t => {
+        const vid = t.fleet_vehicle_id as string;
+        const km = t.ending_km as number;
+        if (vid && km && (!map[vid] || km > map[vid])) map[vid] = km;
+      });
+
+      // Fallback to vehicles.current_odometer
+      vehicles.forEach(v => {
+        const odo = (v.current_odometer as number) || 0;
+        if (odometerVehicleIds.includes(v.id) && odo > (map[v.id] || 0)) {
+          map[v.id] = odo;
+        }
+      });
+
+      return map;
+    },
+    enabled: odometerVehicleIds.length > 0,
+    staleTime: 60000,
+  });
+
+  // Fetch latest reefer hours from reefer_diesel_records
+  const reeferFleetNumbers = useMemo(() => {
+    return [...new Set(
+      schedules
+        .filter(s => s.odometer_based && s.vehicle_id && isReeferFleet(fleetMap[s.vehicle_id] || ""))
+        .map(s => fleetMap[s.vehicle_id])
+        .filter(Boolean)
+    )];
+  }, [schedules, fleetMap]);
+
+  const { data: reeferHoursMap = {} } = useQuery({
+    queryKey: ["reefer-hours-map", reeferFleetNumbers],
+    queryFn: async () => {
+      if (reeferFleetNumbers.length === 0) return {};
+      const hoursMap: Record<string, number> = {};
+
+      for (const fleetNumber of reeferFleetNumbers) {
+        const { data } = await supabase
+          .from("reefer_diesel_records")
+          .select("operating_hours")
+          .eq("reefer_unit", fleetNumber)
+          .not("operating_hours", "is", null)
+          .order("date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data?.operating_hours) {
+          hoursMap[fleetNumber] = data.operating_hours;
+        }
+      }
+
+      return hoursMap;
+    },
+    enabled: reeferFleetNumbers.length > 0,
+    staleTime: 60000,
+  });
+
+  // Get today at midnight for date comparisons
+  const getToday = useCallback(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, []);
+
+  // Calculate schedule urgency (date-based, KM-based for trucks, hours-based for reefers)
+  const getScheduleUrgency = useCallback((schedule: MaintenanceSchedule): UrgencyType => {
+    const today = getToday();
+    const fleetNumber = schedule.vehicle_id ? fleetMap[schedule.vehicle_id] || "" : "";
+    const isReefer = isReeferFleet(fleetNumber);
+
+    // Hours-based overdue (reefers)
+    if (schedule.odometer_based && isReefer && fleetNumber && schedule.odometer_interval_km) {
+      const currentHours = reeferHoursMap[fleetNumber] || 0;
+      const lastReading = (schedule.last_odometer_reading as number) || 0;
+      const nextServiceHours = lastReading + (schedule.odometer_interval_km as number);
+      if (currentHours >= nextServiceHours) return "overdue";
+    }
+
+    // KM-based overdue (trucks)
+    if (schedule.odometer_based && !isReefer && schedule.vehicle_id && schedule.odometer_interval_km) {
+      const currentKm = vehicleKmMap[schedule.vehicle_id] || 0;
+      const lastReading = (schedule.last_odometer_reading as number) || 0;
+      const nextServiceKm = lastReading + (schedule.odometer_interval_km as number);
+      if (currentKm >= nextServiceKm) return "overdue";
+    }
+
+    // Date-based urgency
     const dueDate = new Date(schedule.next_due_date);
     dueDate.setHours(0, 0, 0, 0);
     const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) return "overdue";
     if (diffDays === 0) return "today";
-    if (diffDays <= 3) return "upcoming";
+    if (diffDays <= 7) return "upcoming";
     return "scheduled";
-  };
+  }, [getToday, fleetMap, reeferHoursMap, vehicleKmMap]);
 
-  const overdueSchedules = schedules.filter(s => getScheduleUrgency(s) === "overdue");
-  const todaySchedules = schedules.filter(s => getScheduleUrgency(s) === "today");
-  const upcomingSchedules = schedules.filter(s => getScheduleUrgency(s) === "upcoming");
-  const scheduledSchedules = schedules.filter(s => getScheduleUrgency(s) === "scheduled");
+  // Memoized grouped schedules
+  const groupedSchedules = useMemo(() => {
+    const groups = {
+      overdue: [] as MaintenanceSchedule[],
+      today: [] as MaintenanceSchedule[],
+      upcoming: [] as MaintenanceSchedule[],
+      scheduled: [] as MaintenanceSchedule[],
+    };
 
+    schedules.forEach(schedule => {
+      const urgency = getScheduleUrgency(schedule);
+      groups[urgency].push(schedule);
+    });
+
+    return groups;
+  }, [schedules, getScheduleUrgency]);
+
+  const { overdue, today: todaySchedules, upcoming, scheduled } = groupedSchedules;
+
+  // Fetch completed count for current month
   const { data: completedCount = 0 } = useQuery({
     queryKey: ["maintenance-completed-count"],
     queryFn: async () => {
+      const today = new Date();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
-      const { data } = await supabase
+      const { count, error } = await supabase
         .from("maintenance_schedule_history")
-        .select("id")
+        .select("*", { count: "exact", head: true })
         .eq("status", "completed")
         .gte("completed_date", startOfMonth);
-      return data?.length || 0;
+
+      if (error) throw error;
+      return count || 0;
     },
+    staleTime: 60000,
   });
 
-  const handleQuickComplete = (scheduleId: string) => {
+  // Handlers
+  const handleQuickComplete = useCallback((scheduleId: string) => {
     setSelectedScheduleId(scheduleId);
     setQuickCompleteOpen(true);
-  };
+  }, []);
 
-  const getUrgencyStyle = (urgency: string) => {
-    switch (urgency) {
-      case "overdue": return "border-l-red-500 bg-red-50/50";
-      case "today": return "border-l-orange-500 bg-orange-50/50";
-      case "upcoming": return "border-l-yellow-500";
-      default: return "border-l-gray-300";
-    }
-  };
+  const handleCompleteSuccess = useCallback(() => {
+    setQuickCompleteOpen(false);
+    refetch();
+  }, [refetch]);
 
-  const ScheduleCard = ({ schedule }: { schedule: MaintenanceSchedule }) => {
-    const vehicle = vehicleMap.get(schedule.vehicle_id);
-    const urgency = getScheduleUrgency(schedule);
-    const dueDate = new Date(schedule.next_due_date);
-    const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const handleAddSuccess = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
+  // Error state
+  if (error) {
     return (
-      <Card className={cn("border-l-4 active:scale-[0.98] transition-transform", getUrgencyStyle(urgency))}>
-        <CardContent className="p-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm leading-tight truncate">
-                {schedule.title || schedule.service_type}
-              </p>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
-                {vehicle && (
-                  <span className="flex items-center gap-1">
-                    <Truck className="h-3 w-3" />
-                    {vehicle.fleet_number || vehicle.registration_number}
-                  </span>
-                )}
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {dueDate.toLocaleDateString()}
-                </span>
-                {schedule.category && (
-                  <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 h-5">
-                    {schedule.category}
-                  </Badge>
-                )}
-              </div>
+      <div className="min-h-[50vh] flex items-center justify-center p-4">
+        <Card className="max-w-sm w-full">
+          <CardContent className="p-6 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 mx-auto mb-4 flex items-center justify-center">
+              <span className="text-2xl font-bold text-destructive">!</span>
             </div>
-
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              {urgency === "overdue" && (
-                <Badge variant="destructive" className="text-[11px] px-1.5 py-0.5">
-                  {Math.abs(diffDays)}d overdue
-                </Badge>
-              )}
-              {urgency === "today" && (
-                <Badge className="bg-orange-500 text-white text-[11px] px-1.5 py-0.5">
-                  Due today
-                </Badge>
-              )}
-              {urgency === "upcoming" && (
-                <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 border-yellow-300 text-yellow-700">
-                  In {diffDays}d
-                </Badge>
-              )}
-              {urgency === "scheduled" && (
-                <span className="text-[11px] text-muted-foreground">
-                  In {diffDays}d
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Complete Button */}
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-            {schedule.priority && (
-              <Badge
-                variant="outline"
-                className={cn("text-[11px] px-1.5 py-0.5", {
-                  "border-red-300 text-red-700": schedule.priority === "critical",
-                  "border-orange-300 text-orange-700": schedule.priority === "high",
-                  "border-blue-300 text-blue-700": schedule.priority === "medium",
-                  "border-gray-300 text-gray-600": schedule.priority === "low",
-                })}
-              >
-                {schedule.priority}
-              </Badge>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 text-xs gap-1.5 rounded-lg px-3"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleQuickComplete(schedule.id);
-              }}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Complete
+            <h3 className="font-bold mb-2">Failed to load maintenance schedules</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : "Please try again later"}
+            </p>
+            <Button onClick={() => refetch()} variant="outline">
+              Retry
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     );
-  };
+  }
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Wrench className="h-5 w-5" />
-            Maintenance
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {overdueSchedules.length > 0 && (
-              <span className="text-destructive font-medium">{overdueSchedules.length} overdue</span>
-            )}
-            {overdueSchedules.length > 0 && todaySchedules.length > 0 && " · "}
-            {todaySchedules.length > 0 && `${todaySchedules.length} due today`}
-            {(overdueSchedules.length > 0 || todaySchedules.length > 0) && " · "}
-            {completedCount} completed this month
-          </p>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-3 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-red-600">{overdueSchedules.length}</p>
-            <p className="text-[11px] text-muted-foreground">Overdue</p>
-          </div>
-        </Card>
-        <Card className="p-3 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center flex-shrink-0">
-            <Clock className="h-5 w-5 text-orange-500" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-orange-600">{todaySchedules.length}</p>
-            <p className="text-[11px] text-muted-foreground">Today</p>
-          </div>
-        </Card>
-        <Card className="p-3 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-yellow-50 flex items-center justify-center flex-shrink-0">
-            <Calendar className="h-5 w-5 text-yellow-500" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-yellow-600">{upcomingSchedules.length}</p>
-            <p className="text-[11px] text-muted-foreground">Soon</p>
-          </div>
-        </Card>
-        <Card className="p-3 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
-            <CheckCircle2 className="h-5 w-5 text-green-500" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-green-600">{completedCount}</p>
-            <p className="text-[11px] text-muted-foreground">Done</p>
-          </div>
-        </Card>
+    <div className="px-4 py-4 space-y-4 pb-safe-bottom">
+      {/* Quick Stats - Smaller cards */}
+      <div className="grid grid-cols-4 gap-2">
+        <StatCard
+          value={overdue.length}
+          label="Overdue"
+          colorClass={URGENCY_CONFIG.overdue.statColor}
+          bgGradient={URGENCY_CONFIG.overdue.statGradient}
+        />
+        <StatCard
+          value={todaySchedules.length}
+          label="Today"
+          colorClass={URGENCY_CONFIG.today.statColor}
+          bgGradient={URGENCY_CONFIG.today.statGradient}
+        />
+        <StatCard
+          value={upcoming.length}
+          label="Upcoming"
+          colorClass={URGENCY_CONFIG.upcoming.statColor}
+          bgGradient={URGENCY_CONFIG.upcoming.statGradient}
+        />
+        <StatCard
+          value={completedCount}
+          label="Done"
+          colorClass="text-green-600"
+          bgGradient="from-green-50 to-green-100/60"
+        />
       </div>
 
       {/* Tabs */}
       <Tabs defaultValue="urgent" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-10 rounded-xl">
-          <TabsTrigger value="urgent" className="text-xs rounded-lg">
-            Urgent ({overdueSchedules.length + todaySchedules.length})
+        <TabsList className="grid w-full grid-cols-3 h-11 rounded-xl bg-muted/50 p-1">
+          <TabsTrigger
+            value="urgent"
+            className="text-xs font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm touch-target"
+          >
+            Urgent ({overdue.length + todaySchedules.length})
           </TabsTrigger>
-          <TabsTrigger value="upcoming" className="text-xs rounded-lg">
-            Upcoming ({upcomingSchedules.length})
+          <TabsTrigger
+            value="upcoming"
+            className="text-xs font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm touch-target"
+          >
+            Upcoming ({upcoming.length})
           </TabsTrigger>
-          <TabsTrigger value="all" className="text-xs rounded-lg">
+          <TabsTrigger
+            value="all"
+            className="text-xs font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm touch-target"
+          >
             All ({schedules.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="urgent" className="mt-3 space-y-2">
-          {overdueSchedules.length === 0 && todaySchedules.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-400" />
-              No urgent maintenance tasks
-            </div>
+          {isLoading ? (
+            <ScheduleCardSkeleton count={3} />
+          ) : overdue.length === 0 && todaySchedules.length === 0 ? (
+            <EmptyState
+              title="All caught up!"
+              message="No urgent maintenance tasks"
+              variant="success"
+            />
           ) : (
             <>
-              {overdueSchedules.map(s => <ScheduleCard key={s.id} schedule={s} />)}
-              {todaySchedules.map(s => <ScheduleCard key={s.id} schedule={s} />)}
+              {overdue.map(schedule => (
+                <ScheduleCard
+                  key={schedule.id}
+                  schedule={schedule}
+                  vehicle={vehicleMap.get(schedule.vehicle_id)}
+                  urgency="overdue"
+                  onComplete={handleQuickComplete}
+                />
+              ))}
+              {todaySchedules.map(schedule => (
+                <ScheduleCard
+                  key={schedule.id}
+                  schedule={schedule}
+                  vehicle={vehicleMap.get(schedule.vehicle_id)}
+                  urgency="today"
+                  onComplete={handleQuickComplete}
+                />
+              ))}
             </>
           )}
         </TabsContent>
 
         <TabsContent value="upcoming" className="mt-3 space-y-2">
-          {upcomingSchedules.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">No upcoming tasks in the next 3 days</div>
+          {isLoading ? (
+            <ScheduleCardSkeleton count={3} />
+          ) : upcoming.length === 0 ? (
+            <EmptyState
+              title="No upcoming tasks"
+              message="No maintenance tasks due in the next 7 days"
+            />
           ) : (
-            upcomingSchedules.map(s => <ScheduleCard key={s.id} schedule={s} />)
+            upcoming.map(schedule => (
+              <ScheduleCard
+                key={schedule.id}
+                schedule={schedule}
+                vehicle={vehicleMap.get(schedule.vehicle_id)}
+                urgency="upcoming"
+                onComplete={handleQuickComplete}
+              />
+            ))
           )}
         </TabsContent>
 
         <TabsContent value="all" className="mt-3 space-y-2">
-          {schedules.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">No maintenance schedules</div>
+          {isLoading ? (
+            <ScheduleCardSkeleton count={3} />
+          ) : schedules.length === 0 ? (
+            <EmptyState
+              title="No maintenance schedules"
+              message="Create your first maintenance schedule to get started"
+              action={
+                <Button onClick={() => setAddDialogOpen(true)} className="mt-4 rounded-xl font-semibold">
+                  Add Schedule
+                </Button>
+              }
+            />
           ) : (
-            [...overdueSchedules, ...todaySchedules, ...upcomingSchedules, ...scheduledSchedules].map(s => (
-              <ScheduleCard key={s.id} schedule={s} />
+            [...overdue, ...todaySchedules, ...upcoming, ...scheduled].map(schedule => (
+              <ScheduleCard
+                key={schedule.id}
+                schedule={schedule}
+                vehicle={vehicleMap.get(schedule.vehicle_id)}
+                urgency={getScheduleUrgency(schedule)}
+                onComplete={handleQuickComplete}
+              />
             ))
           )}
         </TabsContent>
@@ -300,10 +597,11 @@ const MobileMaintenance = () => {
 
       {/* FAB - New Schedule */}
       <Button
-        className="fab h-14 w-14 rounded-2xl shadow-lg"
+        className="fixed bottom-6 right-4 h-12 px-4 rounded-xl shadow-lg active:scale-95 transition-transform z-20 touch-target font-semibold text-sm gap-1"
         onClick={() => setAddDialogOpen(true)}
+        aria-label="Add maintenance schedule"
       >
-        <Plus className="h-6 w-6" />
+        <span className="text-base">+</span> New
       </Button>
 
       {/* Dialogs */}
@@ -311,19 +609,75 @@ const MobileMaintenance = () => {
         open={quickCompleteOpen}
         onOpenChange={setQuickCompleteOpen}
         scheduleId={selectedScheduleId}
-        onSuccess={() => {
-          setQuickCompleteOpen(false);
-          refetch();
-        }}
+        onSuccess={handleCompleteSuccess}
       />
 
       <AddScheduleDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
-        onSuccess={refetch}
+        onSuccess={handleAddSuccess}
       />
     </div>
   );
 };
+
+// ============================================================================
+// Helper Components
+// ============================================================================
+const ScheduleCardSkeleton = ({ count = 3 }: { count?: number }) => (
+  <div className="space-y-2">
+    {Array.from({ length: count }).map((_, i) => (
+      <Card key={i} className="border-0 shadow-sm">
+        <CardContent className="p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1">
+              <Skeleton className="h-4 w-32 mb-2" />
+              <div className="flex gap-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+            <Skeleton className="h-6 w-16 rounded-full" />
+          </div>
+          <div className="flex items-center justify-between mt-2 pt-2 border-t">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-8 w-20 rounded-lg" />
+          </div>
+        </CardContent>
+      </Card>
+    ))}
+  </div>
+);
+
+const EmptyState = ({
+  title,
+  message,
+  action,
+  variant
+}: {
+  title: string;
+  message: string;
+  action?: React.ReactNode;
+  variant?: "success";
+}) => (
+  <div className="text-center py-8 px-4">
+    <div className={cn(
+      "w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center",
+      variant === "success"
+        ? "bg-gradient-to-br from-emerald-50 to-emerald-100"
+        : "bg-gradient-to-br from-muted to-muted/60"
+    )}>
+      <span className={cn(
+        "text-base font-bold",
+        variant === "success" ? "text-emerald-600" : "text-muted-foreground"
+      )}>
+        {variant === "success" ? "✓" : "0"}
+      </span>
+    </div>
+    <h3 className="font-semibold text-sm mb-1">{title}</h3>
+    <p className="text-xs text-muted-foreground">{message}</p>
+    {action}
+  </div>
+);
 
 export default MobileMaintenance;

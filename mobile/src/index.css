@@ -3,233 +3,512 @@
 @tailwind utilities;
 
 /* ============================================================================
-   Mobile-First Foundation
+   Modern HD Foundation - Professional Workshop System
    ============================================================================ */
 @layer base {
-  /* Prevent iOS zoom on input focus (inputs < 16px trigger zoom) */
+
+  /* Premium Base Settings */
   html {
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
 
   body {
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
     touch-action: manipulation;
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Prevent pull-to-refresh on the main wrapper */
   #root {
     overscroll-behavior: none;
     min-height: 100dvh;
+    isolation: isolate;
   }
 
-  /* Smooth scrolling for user interactions */
-  * {
-    scroll-behavior: smooth;
+  /* Enhanced Focus States */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: var(--radius);
   }
 
-  /* Ensure inputs don't zoom on iOS (minimum 16px) */
-  input, select, textarea {
-    font-size: 16px !important;
+  /* Premium Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Selection Styling */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--primary));
   }
 
   :root {
     /* ==========================================================================
-       Primitive Colors – raw palette (do not use directly in components)
+       Primitive Colors – Modern HD Palette
     ========================================================================== */
-    --color-neutral-0:   0 0% 100%;
-    --color-neutral-50:  210 40% 99%;
-    --color-neutral-100: 210 35% 97%;
-    --color-neutral-200: 210 30% 94%;
-    --color-neutral-300: 210 25% 89%;
-    --color-neutral-400: 210 20% 78%;
-    --color-neutral-500: 210 18% 55%;
-    --color-neutral-600: 210 20% 38%;
-    --color-neutral-700: 215 24% 26%;
-    --color-neutral-800: 215 28% 17%;
-    --color-neutral-900: 215 30% 11%;
-    --color-neutral-950: 215 35% 6%;
+    --color-neutral-0: 0 0% 100%;
+    --color-neutral-50: 210 40% 98%;
+    --color-neutral-100: 210 40% 96%;
+    --color-neutral-200: 214 32% 91%;
+    --color-neutral-300: 213 27% 84%;
+    --color-neutral-400: 215 20% 65%;
+    --color-neutral-500: 215 16% 47%;
+    --color-neutral-600: 215 19% 35%;
+    --color-neutral-700: 215 25% 27%;
+    --color-neutral-800: 217 33% 17%;
+    --color-neutral-900: 222 47% 11%;
+    --color-neutral-950: 229 84% 5%;
 
-    /* Soft primary – teal-cyan family, lowered chroma for calmness */
-    --color-primary-400: 170 35% 65%;
-    --color-primary-500: 170 38% 55%;
-    --color-primary-600: 170 42% 45%;
-    --color-primary-700: 170 45% 38%;
+    /* Primary – Modern Amber/Gold Accent */
+    --color-primary-50: 45 100% 97%;
+    --color-primary-100: 45 100% 92%;
+    --color-primary-200: 45 100% 84%;
+    --color-primary-300: 45 100% 74%;
+    --color-primary-400: 45 100% 64%;
+    --color-primary-500: 45 93% 55%;
+    --color-primary-600: 45 92% 48%;
+    --color-primary-700: 45 100% 40%;
+    --color-primary-800: 45 100% 32%;
+    --color-primary-900: 45 100% 26%;
 
-    /* Status palette – softer, less eye-searing */
-    --color-red-500:    353 65% 58%;
-    --color-green-500:  155 45% 52%;
-    --color-amber-500:   38 78% 58%;
-    --color-blue-500:   205 60% 55%;
+    /* Status Palette – Refined & Professional */
+    --color-red-500: 0 84% 60%;
+    --color-green-500: 142 71% 45%;
+    --color-amber-500: 38 92% 50%;
+    --color-blue-500: 217 91% 60%;
+    --color-purple-500: 271 91% 65%;
+    --color-cyan-500: 189 94% 43%;
 
-    /* Semantic tokens – what components should actually use */
-    --background:        var(--color-neutral-0);
-    --foreground:        var(--color-neutral-900);
+    /* Semantic Tokens – Professional Edition */
+    --background: var(--color-neutral-0);
+    --foreground: var(--color-neutral-900);
 
-    --surface:           var(--color-neutral-0);
-    --surface-hover:     var(--color-neutral-50);
-    --surface-active:    var(--color-neutral-100);
-    --surface-subtle:    var(--color-neutral-50);
+    --surface: var(--color-neutral-0);
+    --surface-hover: var(--color-neutral-50);
+    --surface-active: var(--color-neutral-100);
+    --surface-subtle: var(--color-neutral-50);
 
-    --card:              var(--color-neutral-0);
-    --card-foreground:   var(--color-neutral-900);
-    --card-border:       var(--color-neutral-200);
+    --card: var(--color-neutral-0);
+    --card-foreground: var(--color-neutral-900);
+    --card-border: var(--color-neutral-200);
+    --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
 
-    --popover:           var(--color-neutral-0);
+    --popover: var(--color-neutral-0);
     --popover-foreground: var(--color-neutral-900);
 
-    --primary:           var(--color-primary-500);
-    --primary-hover:     var(--color-primary-600);
-    --primary-active:    var(--color-primary-700);
+    --primary: var(--color-primary-500);
+    --primary-hover: var(--color-primary-600);
+    --primary-active: var(--color-primary-700);
     --primary-foreground: 0 0% 100%;
+    --primary-gradient: linear-gradient(135deg, hsl(var(--color-primary-500)), hsl(var(--color-primary-600)));
 
-    --secondary:         var(--color-neutral-100);
+    --secondary: var(--color-neutral-100);
     --secondary-foreground: var(--color-neutral-800);
 
-    --muted:             var(--color-neutral-100);
-    --muted-foreground:  var(--color-neutral-500);
+    --muted: var(--color-neutral-100);
+    --muted-foreground: var(--color-neutral-500);
 
-    --accent:            var(--color-neutral-100);
+    --accent: var(--color-neutral-100);
     --accent-foreground: var(--color-neutral-800);
 
-    --border:            var(--color-neutral-200);
-    --input:             var(--color-neutral-200);
-    --ring:              var(--primary);
+    --border: var(--color-neutral-200);
+    --input: var(--color-neutral-200);
+    --ring: var(--primary);
 
-    --destructive:       var(--color-red-500);
+    --destructive: var(--color-red-500);
     --destructive-foreground: 0 0% 100%;
 
-    --success:           var(--color-green-500);
+    --success: var(--color-green-500);
     --success-foreground: 0 0% 100%;
 
-    --warning:           var(--color-amber-500);
+    --warning: var(--color-amber-500);
     --warning-foreground: 0 0% 100%;
 
-    --info:              var(--color-blue-500);
-    --info-foreground:   0 0% 100%;
+    --info: var(--color-blue-500);
+    --info-foreground: 0 0% 100%;
 
-    /* UI sizing & shape */
-    --radius:     0.5rem;
-    --radius-lg:  0.75rem;
-    --radius-xl:  1rem;
+    /* Modern UI Sizing */
+    --radius: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.25rem;
+    --radius-2xl: 1.5rem;
 
-    /* Shadows – very soft, almost flat design friendly */
-    --shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.04);
-    --shadow-sm: 0 1px 3px hsl(0 0% 0% / 0.06), 0 1px 2px hsl(0 0% 0% / 0.04);
-    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.08), 0 2px 4px -1px hsl(0 0% 0% / 0.04);
-    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.09), 0 4px 6px -2px hsl(0 0% 0% / 0.05);
+    /* Premium Shadows */
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.03);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+    --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.15);
 
-    /* Animations */
-    --duration-fast:    150ms;
-    --duration-normal:  250ms;
-    --duration-slow:    400ms;
-    --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
-    --ease-in-out:      cubic-bezier(0.4, 0, 0.2, 1);
+    /* Smooth Animations */
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
+    --duration-slow: 400ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
-    /* Sidebar (kept but harmonized) */
+    /* Sidebar Premium */
     --sidebar-background: var(--color-neutral-50);
     --sidebar-foreground: var(--color-neutral-900);
-    --sidebar-border:     var(--color-neutral-200);
+    --sidebar-border: var(--color-neutral-200);
   }
 
+  /* Dark Mode - Premium Dark Theme */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      --background: var(--color-neutral-950);
+      --foreground: var(--color-neutral-50);
+
+      --surface: var(--color-neutral-900);
+      --surface-hover: var(--color-neutral-800);
+      --surface-active: var(--color-neutral-700);
+      --surface-subtle: var(--color-neutral-950);
+
+      --card: var(--color-neutral-900);
+      --card-foreground: var(--color-neutral-50);
+      --card-border: var(--color-neutral-800);
+      --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.2);
+
+      --popover: var(--color-neutral-900);
+      --popover-foreground: var(--color-neutral-50);
+
+      --primary: var(--color-primary-400);
+      --primary-hover: var(--color-primary-300);
+      --primary-active: var(--color-primary-500);
+      --primary-foreground: 0 0% 100%;
+
+      --secondary: var(--color-neutral-800);
+      --secondary-foreground: var(--color-neutral-200);
+
+      --muted: var(--color-neutral-800);
+      --muted-foreground: var(--color-neutral-300);
+
+      --accent: var(--color-neutral-800);
+      --accent-foreground: var(--color-neutral-200);
+
+      --border: var(--color-neutral-800);
+      --input: var(--color-neutral-800);
+      --ring: var(--primary);
+
+      --sidebar-background: var(--color-neutral-950);
+      --sidebar-foreground: var(--color-neutral-50);
+      --sidebar-border: var(--color-neutral-800);
+    }
+  }
+
+  /* Manual Dark Mode */
   .dark {
-    --background:        var(--color-neutral-950);
-    --foreground:        var(--color-neutral-100);
+    --background: var(--color-neutral-950);
+    --foreground: var(--color-neutral-50);
 
-    --surface:           var(--color-neutral-900);
-    --surface-hover:     var(--color-neutral-800);
-    --surface-active:    var(--color-neutral-700);
-    --surface-subtle:    var(--color-neutral-950);
+    --surface: var(--color-neutral-900);
+    --surface-hover: var(--color-neutral-800);
+    --surface-active: var(--color-neutral-700);
+    --surface-subtle: var(--color-neutral-950);
 
-    --card:              var(--color-neutral-900);
-    --card-foreground:   var(--color-neutral-100);
-    --card-border:       var(--color-neutral-800);
+    --card: var(--color-neutral-900);
+    --card-foreground: var(--color-neutral-50);
+    --card-border: var(--color-neutral-800);
 
-    --popover:           var(--color-neutral-900);
-    --popover-foreground: var(--color-neutral-100);
+    --popover: var(--color-neutral-900);
+    --popover-foreground: var(--color-neutral-50);
 
-    --primary:           var(--color-primary-400);          /* lighter in dark mode */
-    --primary-hover:     var(--color-primary-300);          /* you can add 300 if needed */
-    --primary-active:    var(--color-primary-500);
+    --primary: var(--color-primary-400);
+    --primary-hover: var(--color-primary-300);
+    --primary-active: var(--color-primary-500);
     --primary-foreground: 0 0% 100%;
 
-    --secondary:         var(--color-neutral-800);
+    --secondary: var(--color-neutral-800);
     --secondary-foreground: var(--color-neutral-200);
 
-    --muted:             var(--color-neutral-800);
-    --muted-foreground:  var(--color-neutral-400);
+    --muted: var(--color-neutral-800);
+    --muted-foreground: var(--color-neutral-300);
 
-    --accent:            var(--color-neutral-800);
+    --accent: var(--color-neutral-800);
     --accent-foreground: var(--color-neutral-200);
 
-    --border:            var(--color-neutral-800);
-    --input:             var(--color-neutral-800);
-    --ring:              var(--primary);
+    --border: var(--color-neutral-800);
+    --input: var(--color-neutral-800);
+    --ring: var(--primary);
 
     --sidebar-background: var(--color-neutral-950);
-    --sidebar-foreground: var(--color-neutral-100);
-    --sidebar-border:     var(--color-neutral-800);
+    --sidebar-foreground: var(--color-neutral-50);
+    --sidebar-border: var(--color-neutral-800);
   }
 }
 
 /* ============================================================================
-   Safe Area Utilities (iOS notch / home indicator / Android nav bar)
+   Premium Animations & Effects
+   ============================================================================ */
+@layer utilities {
+
+  /* Glassmorphism Effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .dark .glass {
+    background: rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Gradient Text */
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-600)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Smooth Entrance Animations */
+  .animate-enter {
+    animation: enter var(--duration-normal) var(--ease-out);
+  }
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Hover Lift Effect */
+  .hover-lift {
+    transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Pulse Animation */
+  .animate-pulse-slow {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse {
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* Shimmer Effect */
+  .shimmer {
+    background: linear-gradient(105deg,
+        transparent 0%,
+        transparent 40%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 60%,
+        transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: -200% 0;
+    }
+
+    to {
+      background-position: 200% 0;
+    }
+  }
+}
+
+/* ============================================================================
+   Safe Area Utilities
    ============================================================================ */
 @layer utilities {
   .safe-area-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
+
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+
   .safe-area-left {
     padding-left: env(safe-area-inset-left, 0px);
   }
+
   .safe-area-right {
     padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .safe-area-inset {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Shorthand safe area utilities */
+  .pb-safe {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pb-safe-bottom {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pt-safe {
+    padding-top: calc(1rem + env(safe-area-inset-top, 0px));
   }
 }
 
 /* ============================================================================
-   Mobile Component Overrides
+   Premium Component Styles
    ============================================================================ */
 @layer components {
-  /* Ensure all interactive elements meet 44px minimum touch target */
+
+  /* Enhanced Touch Targets */
   .touch-target {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 48px;
+    min-width: 48px;
+    transition: all var(--duration-fast) var(--ease-out);
   }
 
-  /* Active press feedback for mobile cards */
-  .press-scale {
-    transition: transform 100ms ease-out;
+  /* Premium Card */
+  .premium-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--card-border));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--card-shadow);
+    transition: all var(--duration-normal) var(--ease-out);
   }
+
+  .premium-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Press Feedback */
+  .press-scale {
+    transition: transform var(--duration-fast) var(--ease-out);
+  }
+
   .press-scale:active {
     transform: scale(0.97);
   }
 
-  /* Scrollable horizontal row (for filter chips) */
+  /* Scroll Row */
   .scroll-row {
     display: flex;
+    flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  .scroll-row::-webkit-scrollbar {
-    display: none;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
   }
 
-  /* FAB positioning helper */
+  .scroll-row::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .scroll-row::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll-row::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 10px;
+  }
+
+  /* FAB - Premium Floating Action Button */
   .fab {
     position: fixed;
-    bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
-    right: 1rem;
+    bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+    right: max(1.5rem, env(safe-area-inset-right, 1.5rem));
     z-index: 40;
+    background: var(--primary-gradient);
+    color: white;
+    box-shadow: var(--shadow-lg);
+    transition: all var(--duration-fast) var(--ease-out);
+  }
+
+  .fab:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .fab:active {
+    transform: scale(0.95);
+  }
+
+  /* Badge Premium */
+  .badge-premium {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+  }
+}
+
+/* ============================================================================
+   Accessibility & Reduced Motion
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-contrast: high) {
+  :root {
+    --border: var(--color-neutral-500);
+    --card-border: var(--color-neutral-500);
+    --input: var(--color-neutral-500);
   }
 }

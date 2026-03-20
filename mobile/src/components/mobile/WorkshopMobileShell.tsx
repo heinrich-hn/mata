@@ -2,25 +2,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { useGeofenceNotifications } from "@/hooks/useGeofenceNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import {
-  AlertTriangle,
-  Calendar,
-  CircleDot,
-  ClipboardCheck,
-  ClipboardList,
-  ExternalLink,
-  LogOut,
-  Menu,
-  Search,
-  Settings,
-  Wrench,
-} from "lucide-react";
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
+// ============================================================================
+// Types & Constants
+// ============================================================================
 export type WorkshopTab = "job-cards" | "inspections" | "maintenance" | "tyres" | "follow-ups";
 
 interface WorkshopMobileShellProps {
@@ -39,49 +28,188 @@ interface WorkshopMobileShellProps {
 interface TabConfig {
   id: WorkshopTab;
   label: string;
-  icon: typeof ClipboardList;
-  activeIcon?: typeof ClipboardList;
+  shortLabel: string;
   color: string;
+  activeBg: string;
+  alertThreshold?: number;
 }
 
-const tabs: TabConfig[] = [
+const TABS_CONFIG: TabConfig[] = [
   {
     id: "job-cards",
     label: "Job Cards",
-    icon: ClipboardList,
-    activeIcon: ClipboardList,
-    color: "text-blue-500"
+    shortLabel: "Jobs",
+    color: "text-blue-600",
+    activeBg: "bg-blue-50 border-blue-200",
+    alertThreshold: 10,
   },
   {
     id: "inspections",
     label: "Inspections",
-    icon: Search,
-    activeIcon: ClipboardCheck,
-    color: "text-amber-500"
+    shortLabel: "Inspect",
+    color: "text-amber-600",
+    activeBg: "bg-amber-50 border-amber-200",
+    alertThreshold: 5,
   },
   {
     id: "maintenance",
     label: "Maintenance",
-    icon: Calendar,
-    activeIcon: Wrench,
-    color: "text-emerald-500"
+    shortLabel: "Maint.",
+    color: "text-emerald-600",
+    activeBg: "bg-emerald-50 border-emerald-200",
+    alertThreshold: 3,
   },
   {
     id: "tyres",
     label: "Tyres",
-    icon: CircleDot,
-    activeIcon: CircleDot,
-    color: "text-purple-500"
+    shortLabel: "Tyres",
+    color: "text-purple-600",
+    activeBg: "bg-purple-50 border-purple-200",
+    alertThreshold: 2,
   },
   {
     id: "follow-ups",
     label: "Follow-ups",
-    icon: ExternalLink,
-    activeIcon: ExternalLink,
-    color: "text-rose-500"
+    shortLabel: "Follow",
+    color: "text-rose-600",
+    activeBg: "bg-rose-50 border-rose-200",
+    alertThreshold: 3,
   },
-];
+] as const;
 
+const APP_VERSION = "2.0.0";
+const APP_NAME = "Mobile Workshop";
+
+// ============================================================================
+// Sub-components
+// ============================================================================
+const TabButton = ({
+  tab,
+  isActive,
+  hasBadge,
+  badgeCount,
+  onClick
+}: {
+  tab: TabConfig;
+  isActive: boolean;
+  hasBadge: boolean;
+  badgeCount?: number;
+  onClick: () => void;
+}) => {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-all duration-200 touch-target rounded-xl mx-0.5",
+        isActive
+          ? cn("border", tab.activeBg, tab.color, "scale-[1.02]")
+          : "text-muted-foreground hover:text-foreground active:scale-95 hover:bg-muted/50"
+      )}
+      aria-label={tab.label}
+      aria-current={isActive ? "page" : undefined}
+    >
+      {isActive && (
+        <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-current opacity-80" />
+      )}
+
+      <span className={cn(
+        "text-[11px] leading-tight font-semibold tracking-tight",
+        isActive ? "font-bold" : "font-medium"
+      )}>
+        {tab.shortLabel}
+      </span>
+
+      {hasBadge && badgeCount ? (
+        <span className={cn(
+          "text-[9px] font-bold leading-none px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
+          isActive
+            ? "bg-current/10 text-inherit"
+            : "bg-rose-100 text-rose-600"
+        )}>
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      ) : (
+        <span className="text-[9px] leading-none opacity-0 px-1.5 py-0.5">0</span>
+      )}
+    </button>
+  );
+};
+
+const UserProfile = ({ userName, email }: { userName: string | null; email?: string }) => (
+  <div className="px-6 py-5 border-y border-border/50 bg-gradient-to-r from-primary/5 via-primary/3 to-transparent">
+    <div className="flex items-center gap-3">
+      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-bold text-lg shadow-md shadow-primary/20">
+        {userName?.charAt(0).toUpperCase() || 'U'}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-sm truncate">{userName || 'Workshop User'}</p>
+        {email && (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{email}</p>
+        )}
+        <p className="text-[10px] text-muted-foreground/70 mt-0.5 font-medium uppercase tracking-wider">Workshop Portal</p>
+      </div>
+    </div>
+  </div>
+);
+
+const QuickStats = ({ badgeCounts }: { badgeCounts: WorkshopMobileShellProps["badgeCounts"] }) => (
+  <div>
+    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+      Quick Stats
+    </p>
+    <div className="grid grid-cols-2 gap-2.5 mb-4 px-3">
+      <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-3 border border-blue-100">
+        <p className="text-[10px] text-blue-600/80 font-medium uppercase tracking-wider">Active Jobs</p>
+        <p className="text-2xl font-bold text-blue-700 mt-0.5">{badgeCounts?.jobCards || 0}</p>
+      </div>
+      <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-xl p-3 border border-amber-100">
+        <p className="text-[10px] text-amber-600/80 font-medium uppercase tracking-wider">Open Faults</p>
+        <p className="text-2xl font-bold text-amber-700 mt-0.5">{badgeCounts?.inspections || 0}</p>
+      </div>
+      <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-xl p-3 border border-emerald-100">
+        <p className="text-[10px] text-emerald-600/80 font-medium uppercase tracking-wider">Overdue Maint.</p>
+        <p className="text-2xl font-bold text-emerald-700 mt-0.5">{badgeCounts?.maintenance || 0}</p>
+      </div>
+      <div className="bg-gradient-to-br from-rose-50 to-rose-100/50 rounded-xl p-3 border border-rose-100">
+        <p className="text-[10px] text-rose-600/80 font-medium uppercase tracking-wider">Follow-ups</p>
+        <p className="text-2xl font-bold text-rose-700 mt-0.5">{badgeCounts?.followUps || 0}</p>
+      </div>
+    </div>
+  </div>
+);
+
+const CriticalAlert = ({
+  count,
+  tab,
+  onView
+}: {
+  count: number;
+  tab: WorkshopTab;
+  onView: () => void;
+}) => (
+  <div className="fixed bottom-24 left-4 right-4 z-40 animate-in slide-in-from-bottom-2 duration-300">
+    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 shadow-lg shadow-rose-100/50 flex items-center gap-3">
+      <span className="flex-shrink-0 w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-xs">
+        {count}
+      </span>
+      <p className="text-xs text-rose-700 flex-1 font-medium">
+        {tab === "inspections" ? "faults" : "items"} require attention
+      </p>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-8 text-xs font-semibold text-rose-700 hover:text-rose-800 hover:bg-rose-100 rounded-lg"
+        onClick={onView}
+      >
+        View
+      </Button>
+    </div>
+  </div>
+);
+
+// ============================================================================
+// Main Component
+// ============================================================================
 const WorkshopMobileShell = ({
   children,
   activeTab,
@@ -92,9 +220,8 @@ const WorkshopMobileShell = ({
   const { toast } = useToast();
   const [moreOpen, setMoreOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  useGeofenceNotifications();
 
   // Fetch user info for profile
   useEffect(() => {
@@ -102,12 +229,14 @@ const WorkshopMobileShell = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserName(user.email?.split('@')[0] || 'User');
+        setUserEmail(user.email || null);
       }
     };
     getUser();
   }, []);
 
-  const handleLogout = async () => {
+  // Handle logout
+  const handleLogout = useCallback(async () => {
     try {
       setIsLoading(true);
       await supabase.auth.signOut();
@@ -116,8 +245,8 @@ const WorkshopMobileShell = ({
         title: "Logged out successfully",
         description: "See you next time!",
       });
-    } catch {
-      // Error variable not needed - using empty catch
+    } catch (error) {
+      console.error("Logout error:", error);
       toast({
         title: "Error logging out",
         description: "Please try again",
@@ -126,58 +255,65 @@ const WorkshopMobileShell = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [navigate, toast]);
 
-  const handleTabPress = (tab: TabConfig) => {
-    onTabChange(tab.id);
-  };
+  // Handle settings navigation
+  const handleSettings = useCallback(() => {
+    setMoreOpen(false);
+    navigate("/settings");
+  }, [navigate]);
 
-  const getBadge = (tabId: WorkshopTab) => {
-    const count =
-      tabId === "job-cards" ? badgeCounts.jobCards :
-        tabId === "inspections" ? badgeCounts.inspections :
-          tabId === "maintenance" ? badgeCounts.maintenance :
-            tabId === "tyres" ? badgeCounts.tyres :
-              badgeCounts.followUps;
+  // Check for critical alerts
+  const criticalAlerts = useMemo(() => {
+    const alerts: { count: number; tab: WorkshopTab }[] = [];
 
-    if (!count || count === 0) return null;
+    if (badgeCounts.inspections && badgeCounts.inspections > 5) {
+      alerts.push({ count: badgeCounts.inspections, tab: "inspections" });
+    }
+    if (badgeCounts.maintenance && badgeCounts.maintenance > 3) {
+      alerts.push({ count: badgeCounts.maintenance, tab: "maintenance" });
+    }
+    if (badgeCounts.followUps && badgeCounts.followUps > 3) {
+      alerts.push({ count: badgeCounts.followUps, tab: "follow-ups" });
+    }
 
-    return (
-      <div className="absolute -top-1.5 -right-1.5">
-        <Badge
-          variant="destructive"
-          className="h-5 min-w-[20px] px-1 text-[10px] font-bold flex items-center justify-center"
-        >
-          {count > 99 ? "99+" : count}
-        </Badge>
-      </div>
-    );
-  };
+    return alerts;
+  }, [badgeCounts]);
 
-  const getBadgeColor = (tabId: WorkshopTab) => {
-    if (tabId === "inspections" && badgeCounts.inspections) return "text-rose-500";
-    if (tabId === "maintenance" && badgeCounts.maintenance) return "text-amber-500";
-    if (tabId === "tyres" && badgeCounts.tyres) return "text-purple-500";
-    if (tabId === "follow-ups" && badgeCounts.followUps) return "text-rose-500";
-    return "";
-  };
+  // Handle critical alert navigation
+  const handleCriticalAlert = useCallback((tab: WorkshopTab) => {
+    onTabChange(tab);
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [onTabChange]);
+
+  // Memoize badge presence for each tab
+  const tabBadges = useMemo(() => ({
+    "job-cards": badgeCounts.jobCards ? { has: true, count: badgeCounts.jobCards } : { has: false, count: 0 },
+    "inspections": badgeCounts.inspections ? { has: true, count: badgeCounts.inspections } : { has: false, count: 0 },
+    "maintenance": badgeCounts.maintenance ? { has: true, count: badgeCounts.maintenance } : { has: false, count: 0 },
+    "tyres": badgeCounts.tyres ? { has: true, count: badgeCounts.tyres } : { has: false, count: 0 },
+    "follow-ups": badgeCounts.followUps ? { has: true, count: badgeCounts.followUps } : { has: false, count: 0 },
+  }), [badgeCounts]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex flex-col">
-      {/* Mobile Header with safe-area */}
-      <header className="fixed top-0 left-0 right-0 border-b border-border/40 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 z-50 safe-area-top">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30 flex flex-col">
+      {/* Mobile Header */}
+      <header className="fixed top-0 left-0 right-0 border-b border-border/30 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 z-50 safe-area-top">
         <div className="h-16 flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary via-primary to-primary/80 flex items-center justify-center shadow-md">
-              <span className="text-primary-foreground font-bold text-sm">MW</span>
+            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20">
+              <span className="text-primary-foreground font-extrabold text-sm tracking-tight">
+                {APP_NAME.split(' ').map(word => word[0]).join('')}
+              </span>
             </div>
             <div>
               <h1 className="text-base font-bold text-foreground tracking-tight">
-                Mobile Workshop
+                {APP_NAME}
               </h1>
-              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live updates every 30s
+                <span className="font-medium">Live</span>
               </p>
             </div>
           </div>
@@ -186,77 +322,48 @@ const WorkshopMobileShell = ({
             <SheetTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-10 w-10 rounded-xl hover:bg-muted transition-colors"
+                size="sm"
+                className="h-10 px-3 rounded-xl hover:bg-muted transition-colors touch-target font-semibold text-xs"
+                aria-label="Open menu"
               >
-                <Menu className="h-5 w-5" />
+                Menu
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-72 p-0">
-              <SheetHeader className="p-6 pb-2">
-                <SheetTitle className="text-left">Menu</SheetTitle>
+            <SheetContent side="right" className="w-80 p-0">
+              <SheetHeader className="p-6 pb-3">
+                <SheetTitle className="text-left text-lg">Menu</SheetTitle>
               </SheetHeader>
 
-              {/* User Info */}
-              <div className="px-6 py-4 border-y border-border/50 bg-muted/20">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
-                    {userName?.charAt(0).toUpperCase() || 'U'}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">{userName || 'Workshop User'}</p>
-                    <p className="text-xs text-muted-foreground">Workshop Portal</p>
-                  </div>
-                </div>
-              </div>
+              <UserProfile userName={userName} email={userEmail || undefined} />
 
               <nav className="p-4 space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
-                  Quick Stats
-                </p>
-                <div className="grid grid-cols-2 gap-2 mb-4 px-3">
-                  <div className="bg-muted/50 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground">Active Jobs</p>
-                    <p className="text-xl font-bold">{badgeCounts.jobCards || 0}</p>
-                  </div>
-                  <div className="bg-muted/50 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground">Open Faults</p>
-                    <p className="text-xl font-bold">{badgeCounts.inspections || 0}</p>
-                  </div>
-                </div>
+                <QuickStats badgeCounts={badgeCounts} />
 
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
-                  Settings
-                </p>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-3 px-3 h-11"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    // Navigate to settings if needed
-                  }}
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-3 px-3 h-11 text-rose-600 hover:text-rose-600 hover:bg-rose-50"
-                  onClick={handleLogout}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-rose-600 border-t-transparent" />
-                  ) : (
-                    <LogOut className="h-4 w-4" />
-                  )}
-                  Logout
-                </Button>
+                <div className="pt-3 border-t border-border/50 mt-3 space-y-1">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-3 h-11 touch-target font-medium"
+                    onClick={handleSettings}
+                  >
+                    Settings
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-3 h-11 text-rose-600 hover:text-rose-600 hover:bg-rose-50 touch-target font-medium"
+                    onClick={handleLogout}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-rose-600 border-t-transparent" />
+                    ) : null}
+                    Logout
+                  </Button>
+                </div>
               </nav>
 
               <div className="absolute bottom-6 left-0 right-0 text-center">
-                <p className="text-[10px] text-muted-foreground">
-                  Version 2.0.0 • Workshop Mobile
+                <p className="text-[10px] text-muted-foreground/60 font-medium">
+                  v{APP_VERSION} · {APP_NAME}
                 </p>
               </div>
             </SheetContent>
@@ -272,70 +379,32 @@ const WorkshopMobileShell = ({
       </main>
 
       {/* Bottom Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-t border-border/40 z-50 safe-area-bottom">
-        <div className="flex items-center justify-around h-20 px-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const ActiveIcon = tab.activeIcon || tab.icon;
-            const isActive = activeTab === tab.id;
-            const hasBadge = getBadge(tab.id);
-            const badgeColor = getBadgeColor(tab.id);
+      <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-t border-border/30 z-50 safe-area-bottom">
+        <div className="flex items-center justify-around h-[68px] px-1.5">
+          {TABS_CONFIG.map((tab) => {
+            const badge = tabBadges[tab.id];
 
             return (
-              <button
+              <TabButton
                 key={tab.id}
-                onClick={() => handleTabPress(tab)}
-                className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full gap-1 relative transition-all duration-200",
-                  isActive
-                    ? "text-primary scale-105"
-                    : "text-muted-foreground hover:text-foreground active:scale-95"
-                )}
-              >
-                {isActive && (
-                  <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-12 h-1 rounded-full bg-primary shadow-lg shadow-primary/25" />
-                )}
-
-                <div className="relative">
-                  {isActive ? (
-                    <ActiveIcon className={cn("h-6 w-6 stroke-[2]", badgeColor)} />
-                  ) : (
-                    <Icon className="h-5 w-5" />
-                  )}
-                  {hasBadge}
-                </div>
-
-                <span className={cn(
-                  "text-[10px] leading-tight font-medium",
-                  isActive && "font-semibold",
-                  hasBadge && badgeColor
-                )}>
-                  {tab.label}
-                </span>
-              </button>
+                tab={tab}
+                isActive={activeTab === tab.id}
+                hasBadge={badge.has}
+                badgeCount={badge.count}
+                onClick={() => onTabChange(tab.id)}
+              />
             );
           })}
         </div>
       </nav>
 
-      {/* Floating Alert for critical items */}
-      {(badgeCounts.inspections && badgeCounts.inspections > 5) && (
-        <div className="fixed bottom-24 left-4 right-4 z-40 animate-in slide-in-from-bottom-2 duration-300">
-          <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 shadow-lg flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-rose-500 flex-shrink-0" />
-            <p className="text-xs text-rose-700 flex-1">
-              {badgeCounts.inspections} open faults require attention
-            </p>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-100"
-              onClick={() => onTabChange("inspections")}
-            >
-              View
-            </Button>
-          </div>
-        </div>
+      {/* Critical Alerts */}
+      {criticalAlerts.length > 0 && (
+        <CriticalAlert
+          count={criticalAlerts[0].count}
+          tab={criticalAlerts[0].tab}
+          onView={() => handleCriticalAlert(criticalAlerts[0].tab)}
+        />
       )}
     </div>
   );
