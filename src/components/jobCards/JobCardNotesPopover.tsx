@@ -8,7 +8,7 @@ import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
+import { Check, MessageSquarePlus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 interface JobCardNotesPopoverProps {
@@ -89,6 +89,23 @@ const JobCardNotesPopover = ({ jobCardId, jobNumber, notesCount }: JobCardNotesP
         setEditingId(null);
         setEditText("");
         queryClient.invalidateQueries({ queryKey: ["job_card_notes_popover", jobCardId] });
+    };
+
+    const handleDeleteNote = async (noteId: string) => {
+        const { error } = await supabase
+            .from("job_card_notes")
+            .delete()
+            .eq("id", noteId);
+
+        if (error) {
+            toast({ title: "Error", description: "Failed to delete note", variant: "destructive" });
+            return;
+        }
+
+        toast({ title: "Note deleted" });
+        requestGoogleSheetsSync("workshop");
+        queryClient.invalidateQueries({ queryKey: ["job_card_notes_popover", jobCardId] });
+        queryClient.invalidateQueries({ queryKey: ["job_cards_with_vehicles"] });
     };
 
     const startEdit = (note: Note) => {
@@ -180,14 +197,24 @@ const JobCardNotesPopover = ({ jobCardId, jobNumber, notesCount }: JobCardNotesP
                                         <>
                                             <div className="flex items-start justify-between gap-1">
                                                 <p className="text-sm leading-snug flex-1">{note.note}</p>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                                    onClick={() => startEdit(note)}
-                                                >
-                                                    <Pencil className="h-3 w-3" />
-                                                </Button>
+                                                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0"
+                                                        onClick={() => startEdit(note)}
+                                                    >
+                                                        <Pencil className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                                        onClick={() => handleDeleteNote(note.id)}
+                                                    >
+                                                        <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1">
                                                 <span>{note.created_by || "Unknown"}</span>

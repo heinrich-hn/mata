@@ -265,6 +265,21 @@ const JobCards = () => {
     return grouped;
   };
 
+  // Fetch inspector profiles for assignee dropdown
+  const { data: inspectorProfiles = [] } = useQuery({
+    queryKey: ["inspector_profiles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inspector_profiles")
+        .select("id, name")
+        .order("name");
+
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Fetch job cards with vehicle data
   const { data: jobCards = [], refetch, isLoading, error: queryError } = useQuery({
     queryKey: ["job_cards_with_vehicles"],
@@ -1471,12 +1486,18 @@ const JobCards = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="follow-up-assignee">Assignee (optional)</Label>
-                  <Input
-                    id="follow-up-assignee"
-                    value={followUpAssignee}
-                    onChange={(e) => setFollowUpAssignee(e.target.value)}
-                    placeholder="e.g. Procurement Team"
-                  />
+                  <Select value={followUpAssignee} onValueChange={setFollowUpAssignee}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select assignee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inspectorProfiles.map((inspector) => (
+                        <SelectItem key={inspector.id} value={inspector.name}>
+                          {inspector.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="follow-up-due-date">Due Date (optional)</Label>

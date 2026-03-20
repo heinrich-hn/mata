@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, ExternalLink, ListPlus, Send } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, ListPlus, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 interface FollowUp {
@@ -114,6 +114,23 @@ const JobCardFollowUpsPopover = ({ jobCardId, jobNumber, followUpCount }: JobCar
         setReplyText("");
         setReplyingTo(null);
         queryClient.invalidateQueries({ queryKey: ["job_card_followups", jobCardId] });
+    };
+
+    const handleDeleteFollowUp = async (followUpId: string) => {
+        const { error } = await supabase
+            .from("action_items")
+            .delete()
+            .eq("id", followUpId);
+
+        if (error) {
+            toast({ title: "Error", description: "Failed to delete follow-up", variant: "destructive" });
+            return;
+        }
+
+        toast({ title: "Follow-up deleted" });
+        setExpandedId(null);
+        queryClient.invalidateQueries({ queryKey: ["job_card_followups", jobCardId] });
+        queryClient.invalidateQueries({ queryKey: ["job_cards_with_vehicles"] });
     };
 
     const handleStatusToggle = async (followUp: FollowUp) => {
@@ -262,6 +279,15 @@ const JobCardFollowUpsPopover = ({ jobCardId, jobNumber, followUpCount }: JobCar
                                                             onClick={() => handleStatusToggle(fu)}
                                                         >
                                                             {fu.status === "completed" ? "Reopen" : "Mark Complete"}
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 text-xs text-destructive hover:text-destructive"
+                                                            onClick={() => handleDeleteFollowUp(fu.id)}
+                                                        >
+                                                            <Trash2 className="h-3 w-3 mr-1" />
+                                                            Delete
                                                         </Button>
                                                     </div>
                                                 )}
