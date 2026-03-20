@@ -55,28 +55,28 @@ interface PriorityFilter {
 }
 
 const PRIORITY_FILTERS: PriorityFilter[] = [
-  { value: "all", label: "All", color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100", borderColor: "border-gray-300 dark:border-gray-600" },
-  { value: "urgent", label: "Urgent", color: "bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200", borderColor: "border-rose-300 dark:border-rose-700" },
-  { value: "high", label: "High", color: "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200", borderColor: "border-orange-300 dark:border-orange-700" },
-  { value: "medium", label: "Medium", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200", borderColor: "border-blue-300 dark:border-blue-700" },
-  { value: "low", label: "Low", color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100", borderColor: "border-gray-300 dark:border-gray-600" },
+  { value: "all", label: "All", color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100", borderColor: "border-gray-300 dark:border-gray-500" },
+  { value: "urgent", label: "Urgent", color: "bg-rose-100 text-rose-800 dark:bg-rose-800/40 dark:text-rose-100", borderColor: "border-rose-300 dark:border-rose-600" },
+  { value: "high", label: "High", color: "bg-orange-100 text-orange-800 dark:bg-orange-800/40 dark:text-orange-100", borderColor: "border-orange-300 dark:border-orange-600" },
+  { value: "medium", label: "Medium", color: "bg-blue-100 text-blue-800 dark:bg-blue-800/40 dark:text-blue-100", borderColor: "border-blue-300 dark:border-blue-600" },
+  { value: "low", label: "Low", color: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100", borderColor: "border-gray-300 dark:border-gray-500" },
 ];
 
 const STATUS_CONFIG = {
   pending: {
-    variant: "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700",
+    variant: "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-800/40 dark:text-amber-100 dark:border-amber-600",
     dot: "bg-amber-500",
   },
   in_progress: {
-    variant: "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700",
+    variant: "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-800/40 dark:text-blue-100 dark:border-blue-600",
     dot: "bg-blue-500",
   },
   completed: {
-    variant: "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700",
+    variant: "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-800/40 dark:text-emerald-100 dark:border-emerald-600",
     dot: "bg-emerald-500",
   },
   on_hold: {
-    variant: "bg-orange-50 text-orange-800 border-orange-300 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-700",
+    variant: "bg-orange-50 text-orange-800 border-orange-300 dark:bg-orange-800/40 dark:text-orange-100 dark:border-orange-600",
     dot: "bg-orange-500",
   },
 } as const;
@@ -89,10 +89,10 @@ const PRIORITY_COLORS = {
 } as const;
 
 const PRIORITY_BG = {
-  urgent: "bg-gradient-to-r from-rose-50 to-transparent dark:from-rose-950/30 dark:to-transparent",
-  high: "bg-gradient-to-r from-orange-50 to-transparent dark:from-orange-950/30 dark:to-transparent",
-  medium: "bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/30 dark:to-transparent",
-  low: "bg-gradient-to-r from-gray-50 to-transparent dark:from-gray-900/30 dark:to-transparent",
+  urgent: "bg-gradient-to-r from-rose-50 to-transparent dark:from-rose-900/20 dark:to-transparent",
+  high: "bg-gradient-to-r from-orange-50 to-transparent dark:from-orange-900/20 dark:to-transparent",
+  medium: "bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-900/20 dark:to-transparent",
+  low: "bg-gradient-to-r from-gray-50 to-transparent dark:from-gray-800/30 dark:to-transparent",
 } as const;
 
 type StatusKey = keyof typeof STATUS_CONFIG;
@@ -103,7 +103,7 @@ type StatusKey = keyof typeof STATUS_CONFIG;
 const StatusBadge = ({ status }: { status: string }) => {
   const normalizedStatus = status?.toLowerCase().replace(" ", "_") as StatusKey;
   const config = STATUS_CONFIG[normalizedStatus] || {
-    variant: "bg-gray-50 text-gray-800 border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600",
+    variant: "bg-gray-50 text-gray-800 border-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-500",
     dot: "bg-gray-500",
   };
 

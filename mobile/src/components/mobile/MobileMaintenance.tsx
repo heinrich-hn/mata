@@ -21,50 +21,50 @@ const URGENCY_CONFIG = {
   overdue: {
     label: "Overdue",
     badgeVariant: "destructive" as const,
-    bgColor: "bg-red-50/50 dark:bg-red-950/30",
+    bgColor: "bg-red-50/50 dark:bg-red-900/20",
     borderColor: "border-l-red-500",
     dot: "bg-red-500",
-    statColor: "text-red-700 dark:text-red-300",
-    statBg: "bg-red-50 dark:bg-red-900/50",
-    statGradient: "from-red-50 to-red-100/60 dark:from-red-950/50 dark:to-red-900/60",
+    statColor: "text-red-700 dark:text-red-200",
+    statBg: "bg-red-50 dark:bg-red-800/40",
+    statGradient: "from-red-50 to-red-100/60 dark:from-red-900/30 dark:to-red-800/40",
   },
   today: {
     label: "Today",
     badgeVariant: "default" as const,
-    bgColor: "bg-orange-50/50 dark:bg-orange-950/30",
+    bgColor: "bg-orange-50/50 dark:bg-orange-900/20",
     borderColor: "border-l-orange-500",
     dot: "bg-orange-500",
-    statColor: "text-orange-700 dark:text-orange-300",
-    statBg: "bg-orange-50 dark:bg-orange-900/50",
-    statGradient: "from-orange-50 to-orange-100/60 dark:from-orange-950/50 dark:to-orange-900/60",
+    statColor: "text-orange-700 dark:text-orange-200",
+    statBg: "bg-orange-50 dark:bg-orange-800/40",
+    statGradient: "from-orange-50 to-orange-100/60 dark:from-orange-900/30 dark:to-orange-800/40",
   },
   upcoming: {
     label: "Soon",
     badgeVariant: "outline" as const,
-    bgColor: "dark:bg-yellow-950/20",
+    bgColor: "dark:bg-yellow-900/20",
     borderColor: "border-l-yellow-500",
     dot: "bg-yellow-500",
-    statColor: "text-yellow-700 dark:text-yellow-300",
-    statBg: "bg-yellow-50 dark:bg-yellow-900/50",
-    statGradient: "from-yellow-50 to-yellow-100/60 dark:from-yellow-950/50 dark:to-yellow-900/60",
+    statColor: "text-yellow-700 dark:text-yellow-200",
+    statBg: "bg-yellow-50 dark:bg-yellow-800/40",
+    statGradient: "from-yellow-50 to-yellow-100/60 dark:from-yellow-900/30 dark:to-yellow-800/40",
   },
   scheduled: {
     label: "Scheduled",
     badgeVariant: "outline" as const,
     bgColor: "",
-    borderColor: "border-l-gray-300 dark:border-l-gray-600",
+    borderColor: "border-l-gray-300 dark:border-l-gray-500",
     dot: "bg-gray-500 dark:bg-gray-400",
-    statColor: "text-gray-700 dark:text-gray-300",
-    statBg: "bg-gray-50 dark:bg-gray-900/50",
-    statGradient: "from-gray-50 to-gray-100/60 dark:from-gray-900/50 dark:to-gray-800/60",
+    statColor: "text-gray-700 dark:text-gray-200",
+    statBg: "bg-gray-50 dark:bg-gray-700/50",
+    statGradient: "from-gray-50 to-gray-100/60 dark:from-gray-800/40 dark:to-gray-700/50",
   },
 } as const;
 
 const PRIORITY_STYLES = {
-  critical: "border-red-300 text-red-800 bg-red-50 dark:border-red-700 dark:text-red-200 dark:bg-red-900/50",
-  high: "border-orange-300 text-orange-800 bg-orange-50 dark:border-orange-700 dark:text-orange-200 dark:bg-orange-900/50",
-  medium: "border-blue-300 text-blue-800 bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:bg-blue-900/50",
-  low: "border-gray-300 text-gray-700 bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:bg-gray-800/50",
+  critical: "border-red-300 text-red-800 bg-red-50 dark:border-red-600 dark:text-red-100 dark:bg-red-800/40",
+  high: "border-orange-300 text-orange-800 bg-orange-50 dark:border-orange-600 dark:text-orange-100 dark:bg-orange-800/40",
+  medium: "border-blue-300 text-blue-800 bg-blue-50 dark:border-blue-600 dark:text-blue-100 dark:bg-blue-800/40",
+  low: "border-gray-300 text-gray-700 bg-gray-50 dark:border-gray-500 dark:text-gray-100 dark:bg-gray-700/50",
 } as const;
 
 // ============================================================================
@@ -184,7 +184,7 @@ const ScheduleCard = ({
               variant="outline"
               className={cn(
                 "text-[11px] px-1.5 py-0.5",
-                PRIORITY_STYLES[schedule.priority as keyof typeof PRIORITY_STYLES] || "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-200"
+                PRIORITY_STYLES[schedule.priority as keyof typeof PRIORITY_STYLES] || "border-gray-300 text-gray-700 dark:border-gray-500 dark:text-gray-100"
               )}
             >
               {schedule.priority}
