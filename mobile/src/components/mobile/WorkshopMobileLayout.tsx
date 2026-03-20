@@ -1,3 +1,4 @@
+import MobileFollowUps from "@/components/mobile/MobileFollowUps";
 import MobileInspectionsTab from "@/components/mobile/MobileInspectionsTab";
 import MobileJobCards from "@/components/mobile/MobileJobCards";
 import MobileMaintenance from "@/components/mobile/MobileMaintenance";
@@ -18,7 +19,7 @@ const WorkshopMobileLayout = () => {
         .from("job_cards")
         .select("*", { count: "exact", head: true })
         .in("status", ["pending", "in_progress", "in progress"]);
-      
+
       if (error) throw error;
       return count || 0;
     },
@@ -34,7 +35,7 @@ const WorkshopMobileLayout = () => {
         .select("*", { count: "exact", head: true })
         .eq("is_active", true)
         .lt("next_due_date", today);
-      
+
       if (error) throw error;
       return count || 0;
     },
@@ -49,7 +50,7 @@ const WorkshopMobileLayout = () => {
         .select("*", { count: "exact", head: true })
         .eq("has_fault", true)
         .is("fault_resolved", false);
-      
+
       if (error) throw error;
       return count || 0;
     },
@@ -65,13 +66,13 @@ const WorkshopMobileLayout = () => {
         // Since we don't have pressure data, we'll check for tyres that have been mounted for too long
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        
+
         const { count: oldTyresCount, error: oldTyresError } = await supabase
           .from("tyre_positions")
           .select("*", { count: "exact", head: true })
           .eq("active", true)
           .lt("mounted_at", sixMonthsAgo.toISOString());
-        
+
         if (!oldTyresError) {
           return oldTyresCount || 0;
         }
@@ -81,7 +82,7 @@ const WorkshopMobileLayout = () => {
           .from("tyre_catalogue")
           .select("*", { count: "exact", head: true })
           .lt("stock_quantity", 5); // Adjust threshold as needed
-        
+
         if (!lowStockError) {
           return lowStockCount || 0;
         }
@@ -95,6 +96,22 @@ const WorkshopMobileLayout = () => {
     retry: false,
   });
 
+  const { data: pendingFollowUpsCount = 0 } = useQuery({
+    queryKey: ["mobile-badge-followups"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("action_items")
+        .select("*", { count: "exact", head: true })
+        .eq("related_entity_type", "job_card")
+        .eq("category", "external_follow_up")
+        .eq("status", "pending");
+
+      if (error) throw error;
+      return count || 0;
+    },
+    refetchInterval: 30000,
+  });
+
   const renderContent = () => {
     switch (activeTab) {
       case "job-cards":
@@ -105,6 +122,8 @@ const WorkshopMobileLayout = () => {
         return <MobileMaintenance />;
       case "tyres":
         return <MobileTyresTab />;
+      case "follow-ups":
+        return <MobileFollowUps />;
       default:
         return <MobileJobCards />;
     }
@@ -119,6 +138,7 @@ const WorkshopMobileLayout = () => {
         inspections: openFaultsCount > 0 ? openFaultsCount : undefined,
         maintenance: overdueMaintenanceCount > 0 ? overdueMaintenanceCount : undefined,
         tyres: tyreAlertCount > 0 ? tyreAlertCount : undefined,
+        followUps: pendingFollowUpsCount > 0 ? pendingFollowUpsCount : undefined,
       }}
     >
       {renderContent()}

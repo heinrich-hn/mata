@@ -5,6 +5,7 @@ import JobCardDetailsDialog from "@/components/dialogs/JobCardDetailsDialog";
 import JobCardWeeklyCostReport from "@/components/maintenance/JobCardWeeklyCostReport";
 import JobCardNotesPopover from "@/components/jobCards/JobCardNotesPopover";
 import JobCardFollowUpsPopover from "@/components/jobCards/JobCardFollowUpsPopover";
+import JobCardFollowUpsTab from "@/components/jobCards/JobCardFollowUpsTab";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog,
@@ -1171,6 +1172,9 @@ const JobCards = () => {
             <TabsTrigger value="cost-reports" className="px-5 py-2.5 text-base">
               Cost Reports
             </TabsTrigger>
+            <TabsTrigger value="follow-ups" className="px-5 py-2.5 text-base">
+              Follow-ups
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="job-cards" className="space-y-6 mt-6">
@@ -1389,6 +1393,10 @@ const JobCards = () => {
 
           <TabsContent value="cost-reports" className="mt-6">
             <JobCardWeeklyCostReport />
+          </TabsContent>
+
+          <TabsContent value="follow-ups" className="mt-6">
+            <JobCardFollowUpsTab />
           </TabsContent>
         </Tabs>
 

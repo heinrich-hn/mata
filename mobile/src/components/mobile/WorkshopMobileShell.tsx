@@ -11,6 +11,7 @@ import {
   CircleDot,
   ClipboardCheck,
   ClipboardList,
+  ExternalLink,
   LogOut,
   Menu,
   Search,
@@ -20,7 +21,7 @@ import {
 import { ReactNode, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-export type WorkshopTab = "job-cards" | "inspections" | "maintenance" | "tyres";
+export type WorkshopTab = "job-cards" | "inspections" | "maintenance" | "tyres" | "follow-ups";
 
 interface WorkshopMobileShellProps {
   children: ReactNode;
@@ -31,6 +32,7 @@ interface WorkshopMobileShellProps {
     inspections?: number;
     maintenance?: number;
     tyres?: number;
+    followUps?: number;
   };
 }
 
@@ -43,33 +45,40 @@ interface TabConfig {
 }
 
 const tabs: TabConfig[] = [
-  { 
-    id: "job-cards", 
-    label: "Job Cards", 
-    icon: ClipboardList, 
+  {
+    id: "job-cards",
+    label: "Job Cards",
+    icon: ClipboardList,
     activeIcon: ClipboardList,
-    color: "text-blue-500" 
+    color: "text-blue-500"
   },
-  { 
-    id: "inspections", 
-    label: "Inspections", 
-    icon: Search, 
+  {
+    id: "inspections",
+    label: "Inspections",
+    icon: Search,
     activeIcon: ClipboardCheck,
-    color: "text-amber-500" 
+    color: "text-amber-500"
   },
-  { 
-    id: "maintenance", 
-    label: "Maintenance", 
-    icon: Calendar, 
+  {
+    id: "maintenance",
+    label: "Maintenance",
+    icon: Calendar,
     activeIcon: Wrench,
-    color: "text-emerald-500" 
+    color: "text-emerald-500"
   },
-  { 
-    id: "tyres", 
-    label: "Tyres", 
-    icon: CircleDot, 
+  {
+    id: "tyres",
+    label: "Tyres",
+    icon: CircleDot,
     activeIcon: CircleDot,
-    color: "text-purple-500" 
+    color: "text-purple-500"
+  },
+  {
+    id: "follow-ups",
+    label: "Follow-ups",
+    icon: ExternalLink,
+    activeIcon: ExternalLink,
+    color: "text-rose-500"
   },
 ];
 
@@ -103,7 +112,7 @@ const WorkshopMobileShell = ({
       setIsLoading(true);
       await supabase.auth.signOut();
       navigate("/auth");
-      toast({ 
+      toast({
         title: "Logged out successfully",
         description: "See you next time!",
       });
@@ -124,18 +133,19 @@ const WorkshopMobileShell = ({
   };
 
   const getBadge = (tabId: WorkshopTab) => {
-    const count = 
+    const count =
       tabId === "job-cards" ? badgeCounts.jobCards :
-      tabId === "inspections" ? badgeCounts.inspections :
-      tabId === "maintenance" ? badgeCounts.maintenance :
-      badgeCounts.tyres;
+        tabId === "inspections" ? badgeCounts.inspections :
+          tabId === "maintenance" ? badgeCounts.maintenance :
+            tabId === "tyres" ? badgeCounts.tyres :
+              badgeCounts.followUps;
 
     if (!count || count === 0) return null;
-    
+
     return (
       <div className="absolute -top-1.5 -right-1.5">
-        <Badge 
-          variant="destructive" 
+        <Badge
+          variant="destructive"
           className="h-5 min-w-[20px] px-1 text-[10px] font-bold flex items-center justify-center"
         >
           {count > 99 ? "99+" : count}
@@ -148,6 +158,7 @@ const WorkshopMobileShell = ({
     if (tabId === "inspections" && badgeCounts.inspections) return "text-rose-500";
     if (tabId === "maintenance" && badgeCounts.maintenance) return "text-amber-500";
     if (tabId === "tyres" && badgeCounts.tyres) return "text-purple-500";
+    if (tabId === "follow-ups" && badgeCounts.followUps) return "text-rose-500";
     return "";
   };
 
@@ -173,9 +184,9 @@ const WorkshopMobileShell = ({
 
           <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
             <SheetTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="h-10 w-10 rounded-xl hover:bg-muted transition-colors"
               >
                 <Menu className="h-5 w-5" />
@@ -185,7 +196,7 @@ const WorkshopMobileShell = ({
               <SheetHeader className="p-6 pb-2">
                 <SheetTitle className="text-left">Menu</SheetTitle>
               </SheetHeader>
-              
+
               {/* User Info */}
               <div className="px-6 py-4 border-y border-border/50 bg-muted/20">
                 <div className="flex items-center gap-3">
@@ -276,15 +287,15 @@ const WorkshopMobileShell = ({
                 onClick={() => handleTabPress(tab)}
                 className={cn(
                   "flex flex-col items-center justify-center flex-1 h-full gap-1 relative transition-all duration-200",
-                  isActive 
-                    ? "text-primary scale-105" 
+                  isActive
+                    ? "text-primary scale-105"
                     : "text-muted-foreground hover:text-foreground active:scale-95"
                 )}
               >
                 {isActive && (
                   <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-12 h-1 rounded-full bg-primary shadow-lg shadow-primary/25" />
                 )}
-                
+
                 <div className="relative">
                   {isActive ? (
                     <ActiveIcon className={cn("h-6 w-6 stroke-[2]", badgeColor)} />
@@ -293,7 +304,7 @@ const WorkshopMobileShell = ({
                   )}
                   {hasBadge}
                 </div>
-                
+
                 <span className={cn(
                   "text-[10px] leading-tight font-medium",
                   isActive && "font-semibold",
@@ -315,9 +326,9 @@ const WorkshopMobileShell = ({
             <p className="text-xs text-rose-700 flex-1">
               {badgeCounts.inspections} open faults require attention
             </p>
-            <Button 
-              size="sm" 
-              variant="ghost" 
+            <Button
+              size="sm"
+              variant="ghost"
               className="h-7 text-xs text-rose-700 hover:text-rose-800 hover:bg-rose-100"
               onClick={() => onTabChange("inspections")}
             >
