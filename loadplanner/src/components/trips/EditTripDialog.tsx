@@ -34,6 +34,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import loadFormConfig from "@/constants/tripFormConfig";
 import { useClients } from "@/hooks/useClients";
+import { useCustomLocations } from "@/hooks/useCustomLocations";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useFleetVehicles } from "@/hooks/useFleetVehicles";
 import { type Load, useUpdateLoad } from "@/hooks/useTrips";
@@ -122,6 +123,7 @@ export function EditLoadDialog({
   load,
 }: EditLoadDialogProps) {
   const { data: clients = [] } = useClients();
+  const { data: customLocations = [] } = useCustomLocations();
   const { data: drivers = [] } = useDrivers();
   const { data: fleetVehicles = [] } = useFleetVehicles();
   const updateLoad = useUpdateLoad();
@@ -156,9 +158,17 @@ export function EditLoadDialog({
   const hasBackload = form.watch("hasBackload");
   const selectedCargoType = form.watch("cargoType");
 
-  // Get available destinations based on cargo type
+  // Get available destinations based on cargo type, including custom locations
+  const customOrigins = customLocations
+    .filter((loc) => loc.type === "farm")
+    .map((loc) => loc.name);
+  const customDestinations = customLocations
+    .filter((loc) => loc.type !== "farm")
+    .map((loc) => loc.name);
   const availableDestinations =
-    selectedCargoType === "Export" ? loadFormConfig.exportDestinations : loadFormConfig.destinations;
+    selectedCargoType === "Export"
+      ? [...loadFormConfig.exportDestinations, ...customDestinations]
+      : [...loadFormConfig.destinations, ...customDestinations];
 
   // Track whether the form has been initialized for the current dialog session.
   // This prevents the 10-second query poll from resetting the form while the
@@ -642,6 +652,18 @@ export function EditLoadDialog({
                               {origin} Farm
                             </SelectItem>
                           ))}
+                          {customOrigins.length > 0 && (
+                            <>
+                              <SelectItem disabled value="__custom_divider__">
+                                <span className="text-xs text-muted-foreground">── Custom Locations ──</span>
+                              </SelectItem>
+                              {customOrigins.map((name) => (
+                                <SelectItem key={name} value={name}>
+                                  ★ {name}
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -781,11 +803,26 @@ export function EditLoadDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {availableDestinations.map((dest) => (
+                          {(selectedCargoType === "Export"
+                            ? loadFormConfig.exportDestinations
+                            : loadFormConfig.destinations
+                          ).map((dest) => (
                             <SelectItem key={dest} value={dest}>
                               {dest}
                             </SelectItem>
                           ))}
+                          {customDestinations.length > 0 && (
+                            <>
+                              <SelectItem disabled value="__custom_dest_divider__">
+                                <span className="text-xs text-muted-foreground">── Custom Locations ──</span>
+                              </SelectItem>
+                              {customDestinations.map((name) => (
+                                <SelectItem key={name} value={name}>
+                                  ★ {name}
+                                </SelectItem>
+                              ))}
+                            </>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
