@@ -275,8 +275,9 @@ export default function ClientLiveMapPage() {
     });
   }, [loads, telematicsAssets]);
 
+  const trackableStatuses = new Set(['scheduled', 'in-transit']);
   const inTransitMatchedLoads = useMemo(
-    () => matchedLoads.filter(({ load }) => load.status === 'in-transit'),
+    () => matchedLoads.filter(({ load }) => trackableStatuses.has(load.status)),
     [matchedLoads]
   );
 
