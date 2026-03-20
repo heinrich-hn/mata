@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+    AlertTriangle,
     CheckCircle2,
     ChevronDown,
     ChevronUp,
@@ -17,6 +18,7 @@ import {
     Search,
     Send,
     Trash2,
+    Truck,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 
@@ -24,6 +26,13 @@ interface FollowUpComment {
     text: string;
     author: string;
     date: string;
+}
+
+interface Fault {
+    id: string;
+    fault_description: string;
+    severity: string | null;
+    corrective_action_status: string | null;
 }
 
 interface FollowUpItem {
@@ -41,10 +50,18 @@ interface FollowUpItem {
     job_card?: {
         job_number: string;
         title: string;
+        inspection_id: string | null;
         vehicle?: {
             registration_number: string;
             fleet_number: string | null;
+            make: string | null;
+            model: string | null;
         } | null;
+        inspection?: {
+            inspection_number: string;
+            inspection_type: string | null;
+        } | null;
+        faults?: Fault[];
     } | null;
 }
 
@@ -93,23 +110,59 @@ const JobCardFollowUpsTab = () => {
 
             // Fetch job card info for each follow-up
             const entityIds = [...new Set((data || []).map((d) => d.related_entity_id).filter(Boolean))];
-            let jobCardsMap: Record<string, { job_number: string; title: string; vehicle?: { registration_number: string; fleet_number: string | null } | null }> = {};
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let jobCardsMap: Record<string, any> = {};
 
             if (entityIds.length > 0) {
                 const { data: jobCards } = await supabase
                     .from("job_cards")
-                    .select("id, job_number, title, vehicle:vehicles(registration_number, fleet_number)")
+                    .select("id, job_number, title, inspection_id, vehicle:vehicles(registration_number, fleet_number, make, model)")
                     .in("id", entityIds);
 
                 if (jobCards) {
+                    // Fetch inspections for job cards that have inspection_id
+                    const inspectionIds = jobCards.map((jc) => jc.inspection_id).filter(Boolean) as string[];
+                    let inspectionsMap: Record<string, { inspection_number: string; inspection_type: string | null }> = {};
+
+                    if (inspectionIds.length > 0) {
+                        const { data: inspections } = await supabase
+                            .from("vehicle_inspections")
+                            .select("id, inspection_number, inspection_type")
+                            .in("id", inspectionIds);
+                        if (inspections) {
+                            inspectionsMap = Object.fromEntries(
+                                inspections.map((ins) => [ins.id, { inspection_number: ins.inspection_number, inspection_type: ins.inspection_type }])
+                            );
+                        }
+                    }
+
+                    // Fetch faults linked to these job cards
+                    const { data: faults } = await supabase
+                        .from("inspection_faults")
+                        .select("id, fault_description, severity, corrective_action_status, job_card_id")
+                        .in("job_card_id", entityIds);
+
+                    const faultsByJobCard: Record<string, Fault[]> = {};
+                    if (faults) {
+                        for (const f of faults) {
+                            if (f.job_card_id) {
+                                if (!faultsByJobCard[f.job_card_id]) faultsByJobCard[f.job_card_id] = [];
+                                faultsByJobCard[f.job_card_id].push(f);
+                            }
+                        }
+                    }
+
                     jobCardsMap = Object.fromEntries(
                         jobCards.map((jc) => [
                             jc.id,
                             {
                                 job_number: jc.job_number,
                                 title: jc.title,
+                                inspection_id: jc.inspection_id,
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 vehicle: (jc.vehicle as any) || null,
+                                inspection: jc.inspection_id ? inspectionsMap[jc.inspection_id] || null : null,
+                                faults: faultsByJobCard[jc.id] || [],
                             },
                         ])
                     );
@@ -308,21 +361,49 @@ const JobCardFollowUpsTab = () => {
                                 >
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
+                                            {/* Main header: Vehicle | Job Card | Inspection */}
+                                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                                {fu.job_card?.vehicle && (
+                                                    <div className="flex items-center gap-1">
+                                                        <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        <span className="text-sm font-semibold">
+                                                            {fu.job_card.vehicle.fleet_number && (
+                                                                <span className="font-mono text-xs mr-1">[{fu.job_card.vehicle.fleet_number}]</span>
+                                                            )}
+                                                            {fu.job_card.vehicle.registration_number}
+                                                        </span>
+                                                        {(fu.job_card.vehicle.make || fu.job_card.vehicle.model) && (
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {fu.job_card.vehicle.make} {fu.job_card.vehicle.model}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                 {fu.job_card && (
-                                                    <Badge variant="outline" className="text-xs font-mono shrink-0">
-                                                        #{fu.job_card.job_number}
+                                                    <Badge variant="outline" className="text-xs font-mono">
+                                                        Job #{fu.job_card.job_number}
                                                     </Badge>
                                                 )}
-                                                {fu.job_card?.vehicle && (
-                                                    <Badge variant="secondary" className="text-xs shrink-0">
-                                                        {fu.job_card.vehicle.fleet_number || fu.job_card.vehicle.registration_number}
+                                                {fu.job_card?.inspection && (
+                                                    <Badge variant="outline" className="text-xs font-mono bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                        Insp #{fu.job_card.inspection.inspection_number}
                                                     </Badge>
                                                 )}
                                             </div>
                                             <p className={`text-sm font-medium leading-snug ${fu.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
                                                 {fu.title}
                                             </p>
+                                            {/* Faults preview */}
+                                            {fu.job_card?.faults && fu.job_card.faults.length > 0 && (
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                                    <span className="text-xs text-amber-700">
+                                                        {fu.job_card.faults.length} fault{fu.job_card.faults.length > 1 ? "s" : ""}
+                                                    </span>
+                                                </div>
+                                            )}
                                             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                                 <Badge variant="outline" className={`text-[11px] px-1.5 py-0 ${statusColors[fu.status || "pending"] || ""}`}>
                                                     {(fu.status || "pending").replace("_", " ")}
@@ -366,6 +447,37 @@ const JobCardFollowUpsTab = () => {
                                                 {fu.created_at && <span>{new Date(fu.created_at).toLocaleDateString()}</span>}
                                             </div>
                                         </div>
+
+                                        {/* Faults */}
+                                        {fu.job_card?.faults && fu.job_card.faults.length > 0 && (
+                                            <div className="space-y-1.5">
+                                                <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
+                                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                                    Faults ({fu.job_card.faults.length})
+                                                </p>
+                                                <div className="space-y-1 pl-1">
+                                                    {fu.job_card.faults.map((fault) => (
+                                                        <div key={fault.id} className="flex items-start gap-2 text-xs border rounded px-2 py-1.5 bg-amber-50/50">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={`text-[10px] px-1.5 py-0 shrink-0 ${fault.severity === "critical" ? "bg-red-50 text-red-700 border-red-200" :
+                                                                        fault.severity === "major" ? "bg-orange-50 text-orange-700 border-orange-200" :
+                                                                            "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                                                    }`}
+                                                            >
+                                                                {fault.severity || "unknown"}
+                                                            </Badge>
+                                                            <span className="text-foreground flex-1">{fault.fault_description}</span>
+                                                            {fault.corrective_action_status && (
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                                                                    {fault.corrective_action_status.replace("_", " ")}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Comments thread */}
                                         {fu.comments && fu.comments.length > 0 && (
