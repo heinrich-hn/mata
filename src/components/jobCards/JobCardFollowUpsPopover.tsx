@@ -102,7 +102,8 @@ const JobCardFollowUpsPopover = ({ jobCardId, jobNumber, followUpCount }: JobCar
 
         const { error } = await supabase
             .from("action_items")
-            .update({ comments: updatedComments as unknown as Record<string, unknown>[] })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .update({ comments: updatedComments as any })
             .eq("id", followUpId);
 
         if (error) {
