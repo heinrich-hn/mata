@@ -10,11 +10,11 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useQuery } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
 import JobCardGeneralInfo from "../jobCards/JobCardGeneralInfo";
-import JobCardHeader from "../JobCardHeader";
+import JobCardHeader from "../jobCards/JobCardHeader";
 import JobCardLaborTable from "../jobCards/JobCardLaborTable";
-import JobCardNotes from "../JobCardNotes";
+import JobCardNotes from "../jobCards/JobCardNotes";
 import JobCardPartsTable from "../jobCards/JobCardPartsTable";
-import JobCardStats from "../JobCardStats";
+import JobCardStats from "../jobCards/JobCardStats";
 import JobCardTasksTable from "../jobCards/JobCardTasksTable";
 
 interface JobCardDetailsDialogProps {
