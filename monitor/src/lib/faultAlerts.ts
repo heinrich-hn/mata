@@ -34,10 +34,10 @@ export async function createFaultAlert(fault: FaultData) {
     : 'Unknown Vehicle';
 
   return ensureAlert({
-    sourceType: 'maintenance',
+    sourceType: 'vehicle',
     sourceId: fault.id,
     sourceLabel: `Fault: ${fault.fault_number}`,
-    category: 'maintenance_due',
+    category: 'vehicle_fault',
     severity,
     title: `Vehicle Fault: ${fault.fault_description.substring(0, 60)}${fault.fault_description.length > 60 ? '...' : ''}`,
     message: `${vehicleInfo} - ${fault.fault_description}`,
@@ -67,7 +67,7 @@ export async function updateFaultAlert(fault: FaultData) {
     .from('alerts')
     .select('id, status')
     .eq('source_id', fault.id)
-    .eq('category', 'maintenance_due')
+    .in('category', ['vehicle_fault', 'maintenance_due'])
     .in('status', ['active', 'acknowledged'])
     .maybeSingle();
 

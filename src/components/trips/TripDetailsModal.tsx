@@ -129,6 +129,25 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
 
       if (error) throw error;
 
+      // Auto-resolve any active "no costs" alert for this trip
+      if (trip?.id) {
+        supabase
+          .from('alerts')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolution_comment: 'System costs generated',
+          })
+          .eq('source_type', 'trip')
+          .eq('source_id', trip.id)
+          .eq('category', 'fuel_anomaly')
+          .eq('status', 'active')
+          .filter('metadata->>issue_type', 'eq', 'no_costs')
+          .then(({ error: resolveErr }) => {
+            if (resolveErr) console.error('Error auto-resolving no_costs alert:', resolveErr);
+          });
+      }
+
       toast({
         title: 'Success',
         description: `${generatedCosts.length} system costs added successfully`,

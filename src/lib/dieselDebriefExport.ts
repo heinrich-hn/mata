@@ -101,9 +101,6 @@ export const generateDieselDebriefPDF = (record: any, norm?: any) => {
         if (record.km_per_litre < norm.min_acceptable) {
           status = "BELOW";
           statusColor = [220, 38, 38];
-        } else if (record.km_per_litre > norm.max_acceptable) {
-          status = "ABOVE";
-          statusColor = [234, 179, 8];
         }
 
         doc.setFont("helvetica", "bold");

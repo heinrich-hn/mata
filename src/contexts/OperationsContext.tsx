@@ -271,6 +271,26 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
     toast.success('Cost entry added');
     requestGoogleSheetsSync('trips');
+
+    // Auto-resolve any active "no costs" alert for this trip
+    if (costData.trip_id) {
+      supabase
+        .from('alerts')
+        .update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString(),
+          resolution_comment: 'Cost entry added',
+        })
+        .eq('source_type', 'trip')
+        .eq('source_id', costData.trip_id)
+        .eq('category', 'fuel_anomaly')
+        .eq('status', 'active')
+        .filter('metadata->>issue_type', 'eq', 'no_costs')
+        .then(({ error: resolveError }) => {
+          if (resolveError) console.error('Error auto-resolving no_costs alert:', resolveError);
+        });
+    }
+
     return data.id;
   };
 

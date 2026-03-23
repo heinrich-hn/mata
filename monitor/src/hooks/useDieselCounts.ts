@@ -5,31 +5,20 @@ export function useDieselCounts() {
   return useQuery({
     queryKey: ["diesel-counts"],
     queryFn: async () => {
-      // Get all active fuel anomaly alerts
-      const { data, error } = await supabase
-        .from("alerts")
-        .select("severity, metadata")
-        .eq("category", "fuel_anomaly")
-        .eq("status", "active");
+      const { count, error } = await supabase
+        .from("diesel_records")
+        .select("id", { count: "exact", head: true })
+        .eq("requires_debrief", true)
+        .eq("debrief_signed", false)
+        .not("fleet_number", "is", null)
+        .not("driver_name", "is", null);
 
       if (error) throw error;
 
-      // Filter to ONLY missing debrief alerts
-      const missingDebriefAlerts = (data || []).filter(alert => {
-        const metadata = alert.metadata as { issue_type?: string };
-        return metadata?.issue_type === 'missing_debrief';
-      });
-
-      const counts = {
-        total: missingDebriefAlerts.length,
-        active: missingDebriefAlerts.length,
-        critical: missingDebriefAlerts.filter(a => a.severity === 'critical').length || 0,
-        high: missingDebriefAlerts.filter(a => a.severity === 'high').length || 0,
-        medium: missingDebriefAlerts.filter(a => a.severity === 'medium').length || 0,
-        low: missingDebriefAlerts.filter(a => a.severity === 'low').length || 0,
+      return {
+        total: count ?? 0,
+        active: count ?? 0,
       };
-
-      return counts;
     },
     refetchInterval: 30000,
   });

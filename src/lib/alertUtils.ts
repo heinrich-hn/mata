@@ -12,9 +12,19 @@ export interface AlertPayload {
   fleetNumber?: string | null; // Optional fleet number for better context
 }
 
+// UUID v4 regex for validating source_id before DB operations
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUUID(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
 /**
  * Ensures an alert exists - either returns existing active alert ID or creates a new one
  * Integrates with Wialon fleet system by optionally adding fleet context to metadata
+ *
+ * When sourceId is not a valid UUID (e.g. a POD number like "4H18/03"),
+ * the value is stored in metadata instead and source_id is set to null.
+ * Dedup queries then match on metadata->>source_reference + category.
  */
 export async function ensureAlert(payload: AlertPayload) {
   const {
@@ -29,11 +39,17 @@ export async function ensureAlert(payload: AlertPayload) {
     fleetNumber
   } = payload;
 
+  // Determine if sourceId can be used as a UUID column value
+  const sourceIdIsUUID = sourceId !== null && isValidUUID(sourceId);
+  const dbSourceId = sourceIdIsUUID ? sourceId : null;
+
   // Add fleet context to metadata if provided
   const enrichedMetadata = {
     ...metadata,
     ...(fleetNumber && { fleet_number: fleetNumber }),
-    created_from: 'monitor-app',
+    // Store non-UUID sourceId in metadata for dedup lookups
+    ...(!sourceIdIsUUID && sourceId ? { source_reference: sourceId } : {}),
+    created_from: 'dashboard-app',
     created_at: new Date().toISOString(),
   };
 
@@ -45,8 +61,12 @@ export async function ensureAlert(payload: AlertPayload) {
     .eq('category', category)
     .eq('status', 'active');
 
-  if (sourceId !== null) {
-    query = query.eq('source_id', sourceId);
+  if (dbSourceId !== null) {
+    query = query.eq('source_id', dbSourceId);
+  } else if (sourceId !== null) {
+    // Non-UUID sourceId — match via metadata
+    query = query.is('source_id', null)
+      .filter('metadata->>source_reference', 'eq', sourceId);
   } else {
     query = query.is('source_id', null);
   }
@@ -54,7 +74,6 @@ export async function ensureAlert(payload: AlertPayload) {
   const { data: existing } = await query.maybeSingle();
 
   if (existing) {
-    console.log(`Active alert already exists for ${sourceType}:${sourceId} ${category}`);
     return existing.id;
   }
 
@@ -63,7 +82,7 @@ export async function ensureAlert(payload: AlertPayload) {
     .from('alerts')
     .insert({
       source_type: sourceType,
-      source_id: sourceId ?? null,
+      source_id: dbSourceId,
       source_label: sourceLabel,
       title,
       message,
@@ -80,7 +99,6 @@ export async function ensureAlert(payload: AlertPayload) {
     throw error;
   }
 
-  console.log(`Created new alert ${data.id} for ${sourceType}:${sourceId} ${category}`);
   return data.id;
 }
 

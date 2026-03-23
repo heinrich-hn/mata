@@ -166,6 +166,7 @@ const CompletedTripEditModal = ({
 
   const resolveMissingRevenueAlert = async (tripId: string) => {
     try {
+      // Resolve alert — missing revenue alerts use category 'load_exception' with issue_type 'missing_revenue'
       const { error } = await supabase
         .from('alerts')
         .update({
@@ -173,12 +174,11 @@ const CompletedTripEditModal = ({
           resolved_at: new Date().toISOString(),
           resolved_by: userName || 'System'
         })
-        .match({
-          source_type: 'trip',
-          source_id: tripId,
-          category: 'missing_revenue',
-          status: 'active'
-        });
+        .eq('source_type', 'trip')
+        .eq('source_id', tripId)
+        .eq('category', 'load_exception')
+        .eq('status', 'active')
+        .filter('metadata->>issue_type', 'eq', 'missing_revenue');
 
       if (error) {
         console.error('Error resolving missing revenue alert:', error);

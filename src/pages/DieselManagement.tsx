@@ -1967,14 +1967,14 @@ const DieselManagement = () => {
 
             {/* Pending Cost Alert Banner */}
             {pendingCostRecords.length > 0 && (
-              <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg">
+              <div className="mb-6 p-4 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <div className="flex items-start gap-3">
-                  <DollarSign className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <DollarSign className="h-5 w-5 text-amber-500 dark:text-amber-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <h3 className="font-semibold text-amber-800 dark:text-amber-300">
+                    <h3 className="font-semibold text-amber-700 dark:text-amber-300">
                       {pendingCostRecords.length} diesel record{pendingCostRecords.length !== 1 ? 's' : ''} pending cost
                     </h3>
-                    <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                    <p className="text-sm text-amber-600 dark:text-amber-400/80 mt-1">
                       These records were submitted by drivers at stations without a configured price per litre. Click &quot;Edit Record&quot; on each transaction to add the cost.
                     </p>
                     <div className="flex flex-wrap gap-2 mt-3">
@@ -1982,14 +1982,14 @@ const DieselManagement = () => {
                         <Badge
                           key={r.id}
                           variant="outline"
-                          className="border-amber-400 text-amber-700 dark:text-amber-300 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                          className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 cursor-pointer hover:bg-amber-100/80 dark:hover:bg-amber-900/30"
                           onClick={() => openEditRecord(r)}
                         >
                           {r.fleet_number} — {formatDate(r.date)} — {formatNumber(r.litres_filled)} L
                         </Badge>
                       ))}
                       {pendingCostRecords.length > 5 && (
-                        <Badge variant="outline" className="border-amber-400 text-amber-600">
+                        <Badge variant="outline" className="border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400">
                           +{pendingCostRecords.length - 5} more
                         </Badge>
                       )}
@@ -2180,7 +2180,7 @@ const DieselManagement = () => {
                                                           )}
                                                         </div>
                                                       </td>
-                                                      <td className={`px-4 py-3 text-right font-mono ${outsideNorm ? 'text-destructive font-bold' : 'text-green-600 dark:text-green-400'}`}>
+                                                      <td className={`px-4 py-3 text-right font-mono ${outsideNorm ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-emerald-600 dark:text-emerald-400'}`}>
                                                         {kmPerLitre ? (
                                                           <span>{formatNumber(kmPerLitre, 2)}</span>
                                                         ) : (
@@ -2190,42 +2190,42 @@ const DieselManagement = () => {
                                                       <td className="px-4 py-3">
                                                         <div className="flex flex-wrap items-center justify-center gap-1">
                                                           {hasPendingCost && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap border-amber-400 text-amber-600 dark:text-amber-400">
+                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300">
                                                               <DollarSign className="h-3 w-3 mr-1" />
                                                               Pending Cost
                                                             </Badge>
                                                           )}
                                                           {outsideNorm && !record.debrief_signed && (
-                                                            <Badge variant="destructive" className="text-xs whitespace-nowrap">
+                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-rose-50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300">
                                                               <AlertCircle className="h-3 w-3 mr-1" />
                                                               Debrief
                                                             </Badge>
                                                           )}
                                                           {record.debrief_signed && (
-                                                            <Badge variant="default" className="bg-green-600 text-xs whitespace-nowrap">
+                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300">
                                                               <CheckCircle className="h-3 w-3 mr-1" />
                                                               Debriefed
                                                             </Badge>
                                                           )}
                                                           {record.probe_verified && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap border-blue-500 text-blue-600">
+                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-sky-50 dark:bg-sky-950/20 border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300">
                                                               <CheckCircle className="h-3 w-3 mr-1" />
                                                               Probe OK
                                                             </Badge>
                                                           )}
                                                           {!record.probe_verified && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap border-orange-400 text-orange-500">
+                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-300">
                                                               Probe Pending
                                                             </Badge>
                                                           )}
                                                           {hasLinkedReefer && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap border-cyan-500 text-cyan-600">
+                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-teal-50 dark:bg-teal-950/20 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300">
                                                               <Snowflake className="h-3 w-3 mr-1" />
                                                               Reefer
                                                             </Badge>
                                                           )}
                                                           {record.trip_id && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap border-purple-500 text-purple-600">
+                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-violet-50 dark:bg-violet-950/20 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">
                                                               <Link className="h-3 w-3 mr-1" />
                                                               Trip Linked
                                                             </Badge>
@@ -2732,7 +2732,7 @@ const DieselManagement = () => {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      className="h-7 px-2 text-xs border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                                      className="h-7 px-2 text-xs border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectedFleetForBatch(fleet);

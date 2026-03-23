@@ -149,16 +149,34 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
     });
   };
 
+  // Stable query key — use trip IDs instead of full objects to prevent
+  // query key changes on every parent re-render (which overwrites optimistic updates)
+  const tripIds = useMemo(() => trips.map(t => t.id).sort().join(','), [trips]);
+
   // Fetch all cost entries with trip information
   const { data: expenses = [], isLoading, refetch } = useQuery({
-    queryKey: ['all-expenses', trips, wialonVehicles],
+    queryKey: ['all-expenses', tripIds],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('cost_entries')
-        .select('*')
-        .order('date', { ascending: false });
+      // Fetch ALL cost_entries using pagination to bypass Supabase's 1000-row default limit
+      type CostRow = NonNullable<Awaited<ReturnType<typeof supabase.from<'cost_entries'>['select']>>['data']>[number];
+      let allData: CostRow[] = [];
+      let from = 0;
+      const PAGE_SIZE = 1000;
 
-      if (error) throw error;
+      while (true) {
+        const { data: page, error } = await supabase
+          .from('cost_entries')
+          .select('*')
+          .order('date', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (!page || page.length === 0) break;
+
+        allData = [...allData, ...page];
+        if (page.length < PAGE_SIZE) break; // Last page
+        from += PAGE_SIZE;
+      }
 
       // Create a map of trips by id for quick lookup
       const tripMap = new Map(trips.map((trip) => [trip.id, trip]));
@@ -167,7 +185,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
       const wialonMap = new Map(wialonVehicles.map((v) => [v.id, extractFleetNumber(v.fleet_number || v.name)]));
 
       // Transform data to include trip information
-      return (data || []).map((expense) => {
+      return (allData || []).map((expense) => {
         const tripData = expense.trip_id ? tripMap.get(expense.trip_id) : null;
         // Get fleet number from wialon vehicle via trip's vehicle_id
         const fleetNumber = tripData?.vehicle_id ? wialonMap.get(tripData.vehicle_id) : undefined;
@@ -225,10 +243,11 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
 
       // Status filter - now includes missing slips and unverified costs as needing attention
       if (filterStatus !== 'all') {
-        const hasUnresolvedFlag = expense.is_flagged && expense.investigation_status !== 'resolved';
+        const isResolved = expense.investigation_status === 'resolved';
+        const hasUnresolvedFlag = expense.is_flagged && !isResolved;
         const isMissingSlip = !expense.attachments || expense.attachments.length === 0;
-        const isUnverified = expense.investigation_status !== 'resolved';
-        const needsAttention = hasUnresolvedFlag || isMissingSlip || isUnverified;
+        // Once approved/resolved, the cost no longer needs attention
+        const needsAttention = isResolved ? false : (hasUnresolvedFlag || isMissingSlip);
         
         if (filterStatus === 'needs-attention' && !needsAttention) {
           return false;
@@ -236,7 +255,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
         if (filterStatus === 'flagged' && !hasUnresolvedFlag) {
           return false;
         }
-        if (filterStatus === 'missing-slip' && !isMissingSlip) {
+        if (filterStatus === 'missing-slip' && (!isMissingSlip || isResolved)) {
           return false;
         }
         if (filterStatus === 'resolved' && expense.investigation_status !== 'resolved') {
@@ -461,8 +480,8 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
       const currency = (expense.currency as 'ZAR' | 'USD') || 'USD';
       totalExpenses[currency] += expense.amount || 0;
 
-      // Check for missing slips
-      if (!expense.attachments || expense.attachments.length === 0) {
+      // Only count missing slips for non-resolved costs
+      if (expense.investigation_status !== 'resolved' && (!expense.attachments || expense.attachments.length === 0)) {
         missingSlipCount++;
       }
 
@@ -849,9 +868,48 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
     setShowFlagModal(true);
   };
 
+  /**
+   * After resolving/approving a flagged cost, check if all flagged costs for that
+   * trip are now resolved. If so, resolve the corresponding alert in the alerts table.
+   */
+  const tryResolveFlaggedCostAlert = async (tripId: string | undefined) => {
+    if (!tripId) return;
+    try {
+      // Check if there are any remaining unresolved flagged costs for this trip
+      const { count } = await supabase
+        .from('cost_entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('trip_id', tripId)
+        .eq('is_flagged', true)
+        .neq('investigation_status', 'resolved');
+
+      if (count === 0) {
+        // All flagged costs are resolved — resolve the alert
+        await supabase
+          .from('alerts')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolution_note: 'All flagged costs resolved',
+          })
+          .eq('source_type', 'trip')
+          .eq('source_id', tripId)
+          .eq('category', 'fuel_anomaly')
+          .eq('status', 'active')
+          .filter('metadata->>issue_type', 'eq', 'flagged_costs');
+      }
+    } catch (err) {
+      console.error('Error checking/resolving flagged cost alert:', err);
+    }
+  };
+
   const handleApproveCost = async () => {
     if (!costToApprove) return;
 
+    const tripId = costToApprove.trip_id;
+    const costId = costToApprove.id;
+    const now = new Date().toISOString();
+    const approver = user?.email || 'admin';
     setIsApproving(true);
     try {
       const { error } = await supabase
@@ -859,22 +917,37 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
         .update({
           investigation_status: 'resolved',
           investigation_notes: costToApprove.investigation_notes
-            ? `${costToApprove.investigation_notes}\n\n--- APPROVED ---\nApproved by ${user?.email || 'admin'} on ${new Date().toLocaleDateString('en-ZA')}`
-            : `Approved by ${user?.email || 'admin'} on ${new Date().toLocaleDateString('en-ZA')}`,
-          resolved_at: new Date().toISOString(),
-          resolved_by: user?.email || 'admin',
+            ? `${costToApprove.investigation_notes}\n\n--- APPROVED ---\nApproved by ${approver} on ${new Date().toLocaleDateString('en-ZA')}`
+            : `Approved by ${approver} on ${new Date().toLocaleDateString('en-ZA')}`,
+          resolved_at: now,
+          resolved_by: approver,
         })
-        .eq('id', costToApprove.id);
+        .eq('id', costId);
 
       if (error) throw error;
+
+      // Resolve the alert if all flagged costs for this trip are now resolved
+      tryResolveFlaggedCostAlert(tripId);
 
       toast({
         title: 'Cost Approved',
         description: `${costToApprove.category}${costToApprove.sub_category ? ' – ' + costToApprove.sub_category : ''} has been approved.`,
       });
 
+      // Optimistically update the cache so the item disappears without a full refetch.
+      // This keeps the trip expanded and scroll position intact.
+      queryClient.setQueriesData<ExpenseWithTrip[]>(
+        { queryKey: ['all-expenses'] },
+        (old) => old?.map(e =>
+          e.id === costId
+            ? { ...e, investigation_status: 'resolved', resolved_at: now, resolved_by: approver }
+            : e
+        ),
+      );
+
       setCostToApprove(null);
-      refetch();
+      // Background refresh for consistency — won't flash because data is already cached
+      queryClient.invalidateQueries({ queryKey: ['all-expenses'] });
       queryClient.invalidateQueries({ queryKey: ['cost-entries'] });
     } catch (err) {
       console.error('Error approving cost:', err);
@@ -1494,10 +1567,28 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
           setSelectedFlaggedCost(null);
         }}
         onResolve={() => {
-          refetch();
+          const costId = selectedFlaggedCost?.id;
+          const tripId = selectedFlaggedCost?.trip_id;
+
+          // Optimistically update the cache so the item disappears without a full refetch
+          if (costId) {
+            queryClient.setQueriesData<ExpenseWithTrip[]>(
+              { queryKey: ['all-expenses'] },
+              (old) => old?.map(e =>
+                e.id === costId
+                  ? { ...e, investigation_status: 'resolved', resolved_at: new Date().toISOString() }
+                  : e
+              ),
+            );
+          }
+
+          // Background refresh for consistency
+          queryClient.invalidateQueries({ queryKey: ['all-expenses'] });
           queryClient.invalidateQueries({ queryKey: ['cost-entries'] });
           setShowFlagModal(false);
           setSelectedFlaggedCost(null);
+          // Resolve alert if all flagged costs for this trip are now resolved
+          tryResolveFlaggedCostAlert(tripId);
         }}
       />
 

@@ -58,14 +58,14 @@ export async function ensureAlert(payload: AlertPayload): Promise<string> {
     enrichedMetadata.original_source_id = sourceId;
   }
 
-  try {
+    try {
     // Check if active alert exists
     let query = supabase
       .from('alerts')
       .select('id, status')
       .eq('source_type', sourceType)
       .eq('category', category)
-      .eq('status', 'active');
+        .eq('status', 'active');
 
     // Only add source_id filter if it's a valid UUID
     if (sourceId !== null) {
@@ -114,7 +114,7 @@ export async function ensureAlert(payload: AlertPayload): Promise<string> {
       severity,
       metadata: enrichedMetadata,
       status: 'active',
-    };
+        };
 
     // Only set source_id if it's a valid UUID
     if (sourceId !== null && isValidUUID(sourceId)) {
@@ -141,7 +141,7 @@ export async function ensureAlert(payload: AlertPayload): Promise<string> {
   } catch (err) {
     console.error('Error in ensureAlert:', err);
     throw err;
-  }
+    }
 }
 
 /**
@@ -160,7 +160,7 @@ export async function resolveAlert(alertId: string, resolutionNote?: string): Pr
   if (error) {
     console.error('Failed to resolve alert:', error);
     throw error;
-  }
+        }
 
   console.log(`Resolved alert ${alertId}`);
   return true;
@@ -176,15 +176,15 @@ export async function resolveAlertsBySource(sourceType: string, sourceId: string
     .eq('source_type', sourceType)
     .eq('source_id', sourceId)
     .eq('status', 'active');
-
+      
   if (error) {
     console.error('Error fetching alerts to resolve:', error);
     return;
-  }
-
+      }
+      
   for (const alert of alerts || []) {
     await resolveAlert(alert.id, `Resolved by source ${sourceType}:${sourceId}`);
-  }
+      }
 }
 
 // Note: acknowledgeAlert function has been removed as it's no longer needed

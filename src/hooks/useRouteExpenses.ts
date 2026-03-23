@@ -110,9 +110,9 @@ export const useRouteExpenses = (route: string | undefined | null) => {
           `)
           .ilike('route', route)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
-        if (error) {
+        if (error || !data) {
           // Try to find in defaults
           const defaultRoute = DEFAULT_ROUTE_EXPENSES.find(
             (r) => r.route.toUpperCase() === route.toUpperCase()

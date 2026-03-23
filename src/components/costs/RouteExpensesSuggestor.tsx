@@ -179,6 +179,25 @@ const RouteExpensesSuggestor = ({
 
       if (error) throw error;
 
+      // Auto-resolve any active "no costs" alert for this trip
+      if (tripId) {
+        supabase
+          .from('alerts')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolution_comment: 'Route expenses added',
+          })
+          .eq('source_type', 'trip')
+          .eq('source_id', tripId)
+          .eq('category', 'fuel_anomaly')
+          .eq('status', 'active')
+          .filter('metadata->>issue_type', 'eq', 'no_costs')
+          .then(({ error: resolveErr }) => {
+            if (resolveErr) console.error('Error auto-resolving no_costs alert:', resolveErr);
+          });
+      }
+
       toast({
         title: 'Expenses Added',
         description: `${expensesToAdd.length} expense(s) have been added to this trip`,

@@ -179,6 +179,25 @@ export const CostForm = ({ tripId, cost, onSubmit, onCancel }: CostFormProps) =>
 
         if (insertError) throw insertError;
 
+        // Auto-resolve any active "no costs" alert for this trip
+        if (tripId) {
+          supabase
+            .from('alerts')
+            .update({
+              status: 'resolved',
+              resolved_at: new Date().toISOString(),
+              resolution_comment: 'Cost entry added',
+            })
+            .eq('source_type', 'trip')
+            .eq('source_id', tripId)
+            .eq('category', 'fuel_anomaly')
+            .eq('status', 'active')
+            .filter('metadata->>issue_type', 'eq', 'no_costs')
+            .then(({ error: resolveErr }) => {
+              if (resolveErr) console.error('Error auto-resolving no_costs alert:', resolveErr);
+            });
+        }
+
         if (selectedFiles && selectedFiles.length > 0) {
           await uploadFiles(selectedFiles, newCost.id);
         }

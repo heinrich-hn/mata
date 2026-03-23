@@ -125,7 +125,7 @@ export const resolveNoCostsAlert = async (
   return resolveAlert({
     sourceId: tripId,
     sourceType: 'trip',
-    category: 'load_exception',
+    category: 'fuel_anomaly',
     issueType: 'no_costs',
     resolutionComment: comment,
     resolvedBy,

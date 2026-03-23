@@ -98,7 +98,7 @@ export function useFaultAlerts(enabled: boolean = true) {
                     resolution_note: 'Fault deleted',
                   })
                   .eq('source_id', oldId)
-                  .eq('category', 'maintenance_due')
+                  .in('category', ['vehicle_fault', 'maintenance_due'])
                   .in('status', ['active', 'acknowledged']);
               }
             } else {

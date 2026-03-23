@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { TripAlertMetadata } from '@/types/tripAlerts';
+import { navigateToTrip } from '@/lib/crossAppNavigation';
 
 export function TripAlertsDashboard() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export function TripAlertsDashboard() {
       const { data, error } = await supabase
         .from('alerts')
         .select('*')
-        .in('category', ['duplicate_pod', 'load_exception', 'trip_delay', 'fuel_anomaly'])
+        .in('category', ['duplicate_pod', 'load_exception', 'fuel_anomaly'])
         .eq('status', 'active') // Only fetch active alerts
         .order('severity', { ascending: false })
         .order('created_at', { ascending: false })
@@ -81,7 +82,7 @@ export function TripAlertsDashboard() {
             <div
               key={alert.id}
               className="flex items-start gap-2 p-2 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors"
-              onClick={() => navigate(`/trips/${metadata.trip_id}`)} // Navigate directly to the trip
+              onClick={() => metadata?.trip_id ? navigateToTrip(metadata.trip_id) : navigate(`/alerts/${alert.id}`)}
             >
               <div className="mt-0.5">{getAlertIcon(alert.category)}</div>
               <div className="flex-1 min-w-0">

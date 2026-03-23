@@ -127,33 +127,34 @@ export function useKPISummary(filters: AlertFilters) {
   return useQuery({
     queryKey: ["kpi-summary", filters.startDate, filters.endDate],
     queryFn: async () => {
-      // Active alerts count (current)
-      const { count: activeCount } = await supabase
-        .from("alerts")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "active");
-
-      // Critical active alerts
-      const { count: criticalCount } = await supabase
-        .from("alerts")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "active")
-        .eq("severity", "critical");
-
-      // Total alerts in period
-      const { count: totalCount } = await supabase
-        .from("alerts")
-        .select("*", { count: "exact", head: true })
-        .gte("triggered_at", filters.startDate.toISOString())
-        .lte("triggered_at", filters.endDate.toISOString());
-
-      // Resolved in period
-      const { count: resolvedCount } = await supabase
-        .from("alerts")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "resolved")
-        .gte("triggered_at", filters.startDate.toISOString())
-        .lte("triggered_at", filters.endDate.toISOString());
+      // Run all count queries in parallel for performance
+      const [
+        { count: activeCount },
+        { count: criticalCount },
+        { count: totalCount },
+        { count: resolvedCount },
+      ] = await Promise.all([
+        supabase
+          .from("alerts")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "active"),
+        supabase
+          .from("alerts")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "active")
+          .eq("severity", "critical"),
+        supabase
+          .from("alerts")
+          .select("*", { count: "exact", head: true })
+          .gte("triggered_at", filters.startDate.toISOString())
+          .lte("triggered_at", filters.endDate.toISOString()),
+        supabase
+          .from("alerts")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "resolved")
+          .gte("triggered_at", filters.startDate.toISOString())
+          .lte("triggered_at", filters.endDate.toISOString()),
+      ]);
 
       const total = totalCount ?? 0;
       const resolved = resolvedCount ?? 0;

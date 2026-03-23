@@ -7,19 +7,19 @@ import { useOperations } from '@/contexts/OperationsContext';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/formatters';
 import type { DieselConsumptionRecord, Trip } from '@/types/operations';
 import {
-    AlertCircle,
-    Calendar,
-    CheckCircle,
-    Clock,
-    DollarSign,
-    FileText,
-    Fuel,
-    Gauge,
-    Route,
-    Snowflake,
-    Truck,
-    User,
-    XCircle
+  AlertCircle,
+  Calendar,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  FileText,
+  Fuel,
+  Gauge,
+  Route,
+  Snowflake,
+  Truck,
+  User,
+  XCircle
 } from 'lucide-react';
 import { useMemo } from 'react';
 
@@ -116,7 +116,7 @@ const DieselTransactionViewModal = ({
       avgLph:
         linkedReeferRecords.filter((r) => r.litres_per_hour).length > 0
           ? linkedReeferRecords.reduce((sum, r) => sum + (r.litres_per_hour || 0), 0) /
-            linkedReeferRecords.filter((r) => r.litres_per_hour).length
+          linkedReeferRecords.filter((r) => r.litres_per_hour).length
           : 0,
     };
   }, [linkedReeferRecords]);
@@ -229,95 +229,95 @@ const DieselTransactionViewModal = ({
 
           {/* Distance & Efficiency Card (Trucks) OR Operating Hours & Efficiency Card (Reefers) */}
           {isReefer ? (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Operating Hours & Efficiency
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Operating Hours</p>
-                  <p className="font-medium">
-                    {reeferData?.operatingHours != null ? formatNumber(reeferData.operatingHours, 1) + ' hrs' : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Previous Hours</p>
-                  <p className="font-medium">
-                    {reeferData?.previousOperatingHours != null ? formatNumber(reeferData.previousOperatingHours, 1) + ' hrs' : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Hours Operated</p>
-                  <p className="font-medium">
-                    {reeferData?.hoursOperated != null ? formatNumber(reeferData.hoursOperated, 1) + ' hrs' : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Efficiency</p>
-                  <p className="font-bold text-cyan-600">
-                    {reeferData?.litresPerHour != null ? formatNumber(reeferData.litresPerHour, 2) + ' L/hr' : 'N/A'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          ) : (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Gauge className="h-4 w-4" />
-                Distance & Efficiency
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">KM Reading</p>
-                  <p className="font-medium">{formatNumber(record.km_reading)} km</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Previous KM</p>
-                  <p className="font-medium">
-                    {record.previous_km_reading ? formatNumber(record.previous_km_reading) + ' km' : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Distance Travelled</p>
-                  <p className="font-medium">
-                    {record.distance_travelled ? formatNumber(record.distance_travelled) + ' km' : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Efficiency</p>
-                  <p className={`font-bold ${isOutsideNorm ? 'text-destructive' : 'text-success'}`}>
-                    {kmPerLitre ? formatNumber(kmPerLitre, 2) + ' km/L' : 'N/A'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Norm Comparison */}
-              {norm && kmPerLitre && (
-                <div className="mt-3 p-3 rounded-lg bg-muted/50">
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                    <span>Expected: {formatNumber(norm.expected_km_per_litre, 2)} km/L</span>
-                    <span>
-                      Range: {formatNumber(norm.min_acceptable, 2)} - {formatNumber(norm.max_acceptable, 2)} km/L
-                    </span>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Operating Hours & Efficiency
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Operating Hours</p>
+                    <p className="font-medium">
+                      {reeferData?.operatingHours != null ? formatNumber(reeferData.operatingHours, 1) + ' hrs' : 'N/A'}
+                    </p>
                   </div>
-                  {variance !== null && (
-                    <div className={`text-sm font-medium ${variance < -10 ? 'text-destructive' : 'text-green-600'}`}>
-                      {variance > 0 ? '+' : ''}
-                      {variance.toFixed(1)}% from expected
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-muted-foreground">Previous Hours</p>
+                    <p className="font-medium">
+                      {reeferData?.previousOperatingHours != null ? formatNumber(reeferData.previousOperatingHours, 1) + ' hrs' : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Hours Operated</p>
+                    <p className="font-medium">
+                      {reeferData?.hoursOperated != null ? formatNumber(reeferData.hoursOperated, 1) + ' hrs' : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Efficiency</p>
+                    <p className="font-bold text-cyan-600">
+                      {reeferData?.litresPerHour != null ? formatNumber(reeferData.litresPerHour, 2) + ' L/hr' : 'N/A'}
+                    </p>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Gauge className="h-4 w-4" />
+                  Distance & Efficiency
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">KM Reading</p>
+                    <p className="font-medium">{formatNumber(record.km_reading)} km</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Previous KM</p>
+                    <p className="font-medium">
+                      {record.previous_km_reading ? formatNumber(record.previous_km_reading) + ' km' : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Distance Travelled</p>
+                    <p className="font-medium">
+                      {record.distance_travelled ? formatNumber(record.distance_travelled) + ' km' : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Efficiency</p>
+                    <p className={`font-bold ${isOutsideNorm ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      {kmPerLitre ? formatNumber(kmPerLitre, 2) + ' km/L' : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Norm Comparison */}
+                {norm && kmPerLitre && (
+                  <div className="mt-3 p-3 rounded-lg bg-muted/50">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                      <span>Expected: {formatNumber(norm.expected_km_per_litre, 2)} km/L</span>
+                      <span>
+                        Range: {formatNumber(norm.min_acceptable, 2)} - {formatNumber(norm.max_acceptable, 2)} km/L
+                      </span>
+                    </div>
+                    {variance !== null && (
+                      <div className={`text-sm font-medium ${variance < -10 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {variance > 0 ? '+' : ''}
+                        {variance.toFixed(1)}% from expected
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -620,8 +620,8 @@ const DieselTransactionViewModal = ({
                   <span>
                     {formatCurrency(
                       (record.vehicle_fuel_cost ?? record.total_cost) +
-                        (record.trailer_fuel_cost ?? 0) +
-                        (totalReeferStats?.totalCost ?? 0)
+                      (record.trailer_fuel_cost ?? 0) +
+                      (totalReeferStats?.totalCost ?? 0)
                     )}
                   </span>
                 </div>

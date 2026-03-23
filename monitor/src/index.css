@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    /* Professional Light Mode Palette */
+    /* Professional Light Mode Palette - Removed severity colors */
     --background: 220 14% 96%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
@@ -20,18 +20,9 @@
     --muted-foreground: 220 9% 46%;
     --accent: 220 14% 93%;
     --accent-foreground: 222 47% 11%;
-    /* Professional destructive red */
+    /* Subtle destructive - kept minimal for errors only */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    /* Success green */
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
-    /* Warning amber */
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 0%;
-    /* Info blue */
-    --info: 199 89% 48%;
-    --info-foreground: 0 0% 100%;
     /* Subtle borders */
     --border: 220 13% 88%;
     --input: 220 13% 88%;
@@ -56,18 +47,9 @@
     --muted-foreground: 220 9% 60%;
     --accent: 222 47% 18%;
     --accent-foreground: 220 14% 96%;
-    /* Professional destructive */
+    /* Minimal destructive */
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
-    /* Success green - lighter for dark mode */
-    --success: 142 70% 45%;
-    --success-foreground: 0 0% 100%;
-    /* Warning amber - lighter for dark mode */
-    --warning: 38 92% 54%;
-    --warning-foreground: 0 0% 0%;
-    /* Info blue - lighter for dark mode */
-    --info: 199 89% 52%;
-    --info-foreground: 0 0% 100%;
     /* Subtle borders */
     --border: 217 19% 27%;
     --input: 217 19% 27%;
@@ -164,19 +146,6 @@
   }
 }
 
-/* Pulse ring for live indicators */
-@keyframes pulse-ring {
-  0% {
-    transform: scale(0.8);
-    opacity: 1;
-  }
-
-  100% {
-    transform: scale(2);
-    opacity: 0;
-  }
-}
-
 /* Shimmer effect for skeleton loading */
 @keyframes shimmer {
   0% {
@@ -229,10 +198,6 @@
 
 .animate-slide-in-from-left {
   animation: slide-in-from-left 0.3s ease-out forwards;
-}
-
-.animate-pulse-ring {
-  animation: pulse-ring 1.5s ease-out infinite;
 }
 
 .animate-shimmer {
@@ -316,14 +281,6 @@
   background: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(222 47% 35%) 100%);
 }
 
-.gradient-critical {
-  background: linear-gradient(135deg, hsl(0 72% 51%) 0%, hsl(0 84% 40%) 100%);
-}
-
-.gradient-success {
-  background: linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(160 84% 30%) 100%);
-}
-
 .gradient-subtle {
   background: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--card)) 100%);
 }
@@ -334,23 +291,8 @@
   @apply relative;
 }
 
-.live-indicator::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: currentColor;
-  animation: pulse-ring 1.5s ease-out infinite;
-}
-
 .live-dot {
-  @apply relative w-2 h-2 rounded-full bg-green-500;
-}
-
-.live-dot::before {
-  content: '';
-  @apply absolute inset-0 rounded-full bg-green-500;
-  animation: pulse-ring 1.5s ease-out infinite;
+  @apply relative w-2 h-2 rounded-full bg-primary;
 }
 
 /* ==================== HOVER EFFECTS ==================== */
@@ -371,38 +313,6 @@
 
 .hover-scale:hover {
   transform: scale(1.02);
-}
-
-/* ==================== SEVERITY STYLES ==================== */
-
-/* Severity border colors */
-.severity-critical {
-  @apply border-l-4 border-l-destructive;
-}
-
-.severity-high {
-  @apply border-l-4 border-l-severity-high;
-}
-
-.severity-medium {
-  @apply border-l-4 border-l-severity-medium;
-}
-
-.severity-low {
-  @apply border-l-4 border-l-severity-low;
-}
-
-.severity-info {
-  @apply border-l-4 border-l-severity-info;
-}
-
-/* Severity glow effects */
-.severity-critical-glow {
-  box-shadow: 0 0 20px -5px hsl(0 72% 51% / 0.4);
-}
-
-.severity-high-glow {
-  box-shadow: 0 0 15px -5px hsl(25 95% 53% / 0.3);
 }
 
 /* ==================== SCROLLBAR STYLING ==================== */
@@ -447,24 +357,6 @@
 
 .dark * {
   scrollbar-color: hsl(var(--muted-foreground) / 0.4) hsl(var(--secondary));
-}
-
-/* ==================== SEVERITY PULSE ==================== */
-
-@keyframes severity-pulse {
-
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.15);
-  }
-
-  50% {
-    box-shadow: 0 0 0 3px hsl(var(--destructive) / 0.05);
-  }
-}
-
-.critical-pulse {
-  animation: severity-pulse 2s ease-in-out infinite;
 }
 
 /* ==================== SELECTION & TRANSITIONS ==================== */

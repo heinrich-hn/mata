@@ -15,14 +15,26 @@ export function useDocumentCounts() {
   return useQuery({
     queryKey: ["document-counts"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("alerts")
-        .select("metadata")
-        .eq("category", "maintenance_due")
-        .eq("metadata->>issue_type", "document_expiry")
-        .eq("status", "active"); // Only count active alerts
+      // Fetch both new category (document_expiry) and legacy (maintenance_due with issue_type)
+      const [{ data: newAlerts, error: e1 }, { data: legacyAlerts, error: e2 }] = await Promise.all([
+        supabase
+          .from("alerts")
+          .select("metadata")
+          .eq("category", "document_expiry")
+          .eq("status", "active"),
+        supabase
+          .from("alerts")
+          .select("metadata")
+          .eq("category", "maintenance_due")
+          .eq("metadata->>issue_type", "document_expiry")
+          .eq("status", "active"),
+      ]);
 
-      if (error) throw error;
+      if (e1) throw e1;
+      if (e2) throw e2;
+
+      // Deduplicate by combining both result sets
+      const data = [...(newAlerts || []), ...(legacyAlerts || [])];
 
       const now = new Date();
       const counts = {

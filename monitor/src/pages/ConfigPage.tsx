@@ -4,7 +4,6 @@ import { useAlertConfigs, useCreateAlertConfig, useUpdateAlertConfig, useDeleteA
 import type { AlertConfiguration, AlertCategory, AlertSeverity } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import SeverityBadge from "@/components/alerts/SeverityBadge";
 
 // ─── Category labels ──────────────────────────────────────────────────────────
 const CATEGORIES: { value: AlertCategory; label: string }[] = [
@@ -79,25 +78,24 @@ interface RuleCardProps {
 function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardProps) {
   return (
     <div className={cn(
-      "bg-card border border-border rounded-xl p-4 space-y-3 transition-opacity",
-      !config.is_active && "opacity-50"
+      "bg-white border border-slate-200 rounded-xl p-4 space-y-3 transition-opacity",
+      !config.is_active && "opacity-60"
     )}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <SeverityBadge severity={config.severity} dot />
-            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+            <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
               {CATEGORIES.find((c) => c.value === config.category)?.label ?? config.category}
             </span>
             {!config.is_active && (
-              <span className="text-[10px] text-muted-foreground border border-border px-2 py-0.5 rounded">
+              <span className="text-[10px] text-slate-500 border border-slate-200 px-2 py-0.5 rounded">
                 DISABLED
               </span>
             )}
           </div>
-          <p className="text-sm font-semibold text-foreground">{config.name}</p>
+          <p className="text-sm font-semibold text-slate-900">{config.name}</p>
           {config.description && (
-            <p className="text-xs text-muted-foreground mt-1">{config.description}</p>
+            <p className="text-xs text-slate-500 mt-1">{config.description}</p>
           )}
         </div>
 
@@ -105,17 +103,17 @@ function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardPr
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => onToggle(config)}
-            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="p-1.5 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             title={config.is_active ? "Disable rule" : "Enable rule"}
           >
             {config.is_active
-              ? <ToggleRight className="h-4 w-4 text-primary" />
+              ? <ToggleRight className="h-4 w-4 text-slate-700" />
               : <ToggleLeft className="h-4 w-4" />
             }
           </button>
           <button
             onClick={() => onEdit(config)}
-            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="p-1.5 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             title="Edit rule"
           >
             <Pencil className="h-4 w-4" />
@@ -123,7 +121,7 @@ function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardPr
           <button
             onClick={() => onDelete(config.id)}
             disabled={isDeleting}
-            className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            className="p-1.5 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
             title="Delete rule"
           >
             <Trash2 className="h-4 w-4" />
@@ -133,23 +131,23 @@ function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardPr
 
       {/* Notification badges */}
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground">Notify via:</span>
+        <span className="text-[10px] text-slate-500">Notify via:</span>
         {config.notify_in_app && (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
             <Bell className="h-2.5 w-2.5" /> In-App
           </span>
         )}
         {config.notify_push && (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
             <Smartphone className="h-2.5 w-2.5" /> Push
           </span>
         )}
         {config.notify_email && (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400">
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
             <Mail className="h-2.5 w-2.5" /> Email
           </span>
         )}
-        <span className="ml-auto text-[10px] text-muted-foreground">
+        <span className="ml-auto text-[10px] text-slate-500">
           Cooldown: {config.cooldown_minutes}m
         </span>
       </div>
@@ -170,44 +168,44 @@ interface FormModalProps {
 function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSaving }: FormModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl overflow-y-auto max-h-[90vh]">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-y-auto max-h-[90vh]">
         <div className="p-6 space-y-5">
-          <h2 className="text-base font-bold text-foreground">
+          <h2 className="text-base font-bold text-slate-900">
             {editingId ? "Edit Alert Rule" : "New Alert Rule"}
           </h2>
 
           {/* Name */}
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground font-medium">Rule Name *</label>
+            <label className="text-xs text-slate-600 font-medium">Rule Name *</label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => onFieldChange("name", e.target.value)}
               placeholder="e.g. Speed Violation — Highway"
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300"
             />
           </div>
 
           {/* Description */}
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground font-medium">Description</label>
+            <label className="text-xs text-slate-600 font-medium">Description</label>
             <textarea
               value={form.description}
               onChange={(e) => onFieldChange("description", e.target.value)}
               rows={2}
               placeholder="Optional description…"
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 resize-none"
             />
           </div>
 
           {/* Category + Severity */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">Category</label>
+              <label className="text-xs text-slate-600 font-medium">Category</label>
               <select
                 value={form.category}
                 onChange={(e) => onFieldChange("category", e.target.value as AlertCategory)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
@@ -215,11 +213,11 @@ function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSavin
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">Default Severity</label>
+              <label className="text-xs text-slate-600 font-medium">Default Severity</label>
               <select
                 value={form.severity}
                 onChange={(e) => onFieldChange("severity", e.target.value as AlertSeverity)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300"
               >
                 {SEVERITIES.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -230,7 +228,7 @@ function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSavin
 
           {/* Cooldown */}
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground font-medium">
+            <label className="text-xs text-slate-600 font-medium">
               Cooldown (minutes) — prevent duplicate alerts
             </label>
             <input
@@ -239,13 +237,13 @@ function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSavin
               max={1440}
               value={form.cooldown_minutes}
               onChange={(e) => onFieldChange("cooldown_minutes", Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300"
             />
           </div>
 
           {/* Notifications */}
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground font-medium">Notification Channels</p>
+            <p className="text-xs text-slate-600 font-medium">Notification Channels</p>
             <div className="grid grid-cols-3 gap-2">
               {([
                 { key: "notify_in_app", icon: Bell,        label: "In-App" },
@@ -259,8 +257,8 @@ function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSavin
                   className={cn(
                     "flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg border font-medium transition-all",
                     form[key]
-                      ? "bg-primary/20 border-primary/40 text-primary"
-                      : "bg-muted border-border text-muted-foreground hover:text-foreground"
+                      ? "bg-slate-900 border-slate-900 text-white"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -273,15 +271,15 @@ function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSavin
           {/* Active toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-foreground">Rule Active</p>
-              <p className="text-xs text-muted-foreground">Disable to pause without deleting</p>
+              <p className="text-sm font-medium text-slate-900">Rule Active</p>
+              <p className="text-xs text-slate-500">Disable to pause without deleting</p>
             </div>
             <button
               type="button"
               onClick={() => onFieldChange("is_active", !form.is_active)}
               className={cn(
                 "relative inline-flex h-6 w-11 rounded-full transition-colors focus:outline-none",
-                form.is_active ? "bg-primary" : "bg-muted border border-border"
+                form.is_active ? "bg-slate-900" : "bg-slate-200"
               )}
             >
               <span
@@ -294,17 +292,17 @@ function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSavin
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
             <button
               onClick={onCancel}
-              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors"
+              className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onSubmit}
               disabled={!form.name.trim() || isSaving}
-              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
             >
               {isSaving ? "Saving…" : editingId ? "Update Rule" : "Create Rule"}
             </button>
@@ -385,17 +383,17 @@ export default function ConfigPage() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Settings className="h-5 w-5 text-primary" />
+            <Settings className="h-5 w-5 text-slate-600" />
             <div>
-              <h1 className="text-lg font-bold text-foreground">Alert Rules</h1>
-              <p className="text-xs text-muted-foreground">
+              <h1 className="text-lg font-bold text-slate-900">Alert Rules</h1>
+              <p className="text-xs text-slate-500">
                 {activeCount} active · {disabledCount} disabled
               </p>
             </div>
           </div>
           <button
             onClick={openCreate}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
           >
             <Plus className="h-4 w-4" />
             New Rule
@@ -403,11 +401,11 @@ export default function ConfigPage() {
         </div>
 
         {/* Info banner */}
-        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">How alert rules work</p>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
+          <p className="font-medium text-slate-900 mb-1">How alert rules work</p>
           <p>
             Rules define how alerts are categorized and who gets notified. They are evaluated by the{" "}
-            <code className="text-primary text-xs bg-primary/10 px-1 rounded">alert-processor</code>{" "}
+            <code className="text-slate-700 text-xs bg-slate-100 px-1 rounded">alert-processor</code>{" "}
             Supabase Edge Function when new events arrive from vehicles, drivers, and operations.
           </p>
         </div>
@@ -416,21 +414,21 @@ export default function ConfigPage() {
         {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-28 bg-muted animate-pulse rounded-xl" />
+              <div key={i} className="h-28 bg-slate-100 animate-pulse rounded-xl" />
             ))}
           </div>
         ) : configs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-4 bg-card border border-dashed border-border rounded-xl">
-            <Settings className="h-8 w-8 text-muted-foreground/40" />
+          <div className="flex flex-col items-center justify-center py-16 gap-4 bg-white border border-dashed border-slate-200 rounded-xl">
+            <Settings className="h-8 w-8 text-slate-300" />
             <div className="text-center">
-              <p className="text-sm font-medium text-foreground">No alert rules yet</p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-sm font-medium text-slate-900">No alert rules yet</p>
+              <p className="text-xs text-slate-500 mt-1">
                 Create rules to configure how alerts are triggered and who is notified.
               </p>
             </div>
             <button
               onClick={openCreate}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
             >
               <Plus className="h-4 w-4" />
               Create First Rule

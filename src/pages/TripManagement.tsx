@@ -91,20 +91,25 @@ const TripManagement = () => {
       }>> = {};
 
       if (tripIds.length > 0) {
-        const { data: costData } = await supabase
-          .from('cost_entries')
-          .select('id, trip_id, amount, currency, category, sub_category, is_flagged, investigation_status, flag_reason')
-          .in('trip_id', tripIds);
+        // Batch to avoid Supabase URL length limits with many trip IDs
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < tripIds.length; i += BATCH_SIZE) {
+          const batch = tripIds.slice(i, i + BATCH_SIZE);
+          const { data: costData } = await supabase
+            .from('cost_entries')
+            .select('id, trip_id, amount, currency, category, sub_category, is_flagged, investigation_status, flag_reason')
+            .in('trip_id', batch);
 
-        // Group costs by trip_id
-        (costData || []).forEach(cost => {
-          if (cost.trip_id) {
-            if (!costEntriesMap[cost.trip_id]) {
-              costEntriesMap[cost.trip_id] = [];
+          // Group costs by trip_id
+          (costData || []).forEach(cost => {
+            if (cost.trip_id) {
+              if (!costEntriesMap[cost.trip_id]) {
+                costEntriesMap[cost.trip_id] = [];
+              }
+              costEntriesMap[cost.trip_id].push(cost);
             }
-            costEntriesMap[cost.trip_id].push(cost);
-          }
-        });
+          });
+        }
       }
 
       return (tripsData || []).map(trip => {

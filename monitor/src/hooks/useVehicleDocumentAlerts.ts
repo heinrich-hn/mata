@@ -87,7 +87,7 @@ export function useVehicleDocumentAlerts(enabled: boolean = true) {
               sourceType: "vehicle",
               sourceId: vehicle.id,
               sourceLabel,
-              category: "maintenance_due",
+              category: "document_expiry",
               severity: isOverdue ? "critical" : "high",
               title: `${doc.document_type?.toUpperCase() || 'Document'} ${isOverdue ? 'Expired' : 'Expiring Soon'}`,
               message: `${doc.title || doc.document_number} ${isOverdue ? 'expired on' : 'expires on'} ${formatDate(expiry)}`,

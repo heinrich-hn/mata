@@ -10,21 +10,9 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { useTheme } from "@/contexts/ThemeContext";
-import {
-  BarChart3,
-  Bell,
-  FileText,
-  Fuel,
-  Moon,
-  RefreshCw,
-  Search,
-  Settings,
-  Sun,
-  Truck,
-  Wrench,
-} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -34,13 +22,13 @@ interface CommandPaletteProps {
 }
 
 const NAV_ITEMS = [
-  { to: "/alerts", icon: Bell, label: "Go to Alerts", shortcut: "1" },
-  { to: "/trip-alerts", icon: Truck, label: "Go to Trip Alerts", shortcut: "2" },
-  { to: "/faults", icon: Wrench, label: "Go to Faults", shortcut: "3" },
-  { to: "/documents", icon: FileText, label: "Go to Documents", shortcut: "4" },
-  { to: "/diesel-alerts", icon: Fuel, label: "Go to Diesel Alerts", shortcut: "5" },
-  { to: "/analytics", icon: BarChart3, label: "Go to Analytics", shortcut: "6" },
-  { to: "/config", icon: Settings, label: "Go to Alert Rules", shortcut: "7" },
+  { to: "/alerts", label: "Go to Alerts", shortcut: "1" },
+  { to: "/trip-alerts", label: "Go to Trip Alerts", shortcut: "2" },
+  { to: "/faults", label: "Go to Faults", shortcut: "3" },
+  { to: "/documents", label: "Go to Documents", shortcut: "4" },
+  { to: "/diesel-alerts", label: "Go to Diesel Alerts", shortcut: "5" },
+  { to: "/analytics", label: "Go to Analytics", shortcut: "6" },
+  { to: "/config", label: "Go to Alert Rules", shortcut: "7" },
 ];
 
 export default function CommandPalette({ open, setOpen }: CommandPaletteProps) {
@@ -73,28 +61,28 @@ export default function CommandPalette({ open, setOpen }: CommandPaletteProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="p-0 gap-0 max-w-[600px] overflow-hidden">
+      <DialogContent className="p-0 gap-0 max-w-[600px] overflow-hidden" aria-describedby={undefined}>
+        <DialogTitle className="sr-only">Command Palette</DialogTitle>
         <Command className="border-0 shadow-dialog">
           <CommandInput
-            placeholder="Search commands, navigate..."
-            className="border-b border-border"
+            placeholder="Type a command or search..."
+            className="border-b border-slate-200 text-slate-900 placeholder:text-slate-400"
           />
           <CommandList className="max-h-[400px] p-2">
-            <CommandEmpty className="py-6 text-sm text-muted-foreground">
+            <CommandEmpty className="py-6 text-sm text-slate-500">
               No results found.
             </CommandEmpty>
 
-            <CommandGroup heading="Navigation">
+            <CommandGroup heading="Navigation" className="text-slate-500 text-xs font-medium uppercase tracking-wider">
               {NAV_ITEMS.map((item) => (
                 <CommandItem
                   key={item.to}
                   value={item.label}
                   onSelect={() => handleSelect(() => navigate(item.to))}
-                  className="cursor-pointer"
+                  className="cursor-pointer text-slate-700 hover:bg-slate-50 data-[selected=true]:bg-slate-50"
                 >
-                  <item.icon className="mr-2 h-4 w-4" />
                   <span>{item.label}</span>
-                  <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                  <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 font-mono text-[10px] font-medium text-slate-500">
                     <span className="text-xs">⌘</span>
                     {item.shortcut}
                   </kbd>
@@ -102,17 +90,16 @@ export default function CommandPalette({ open, setOpen }: CommandPaletteProps) {
               ))}
             </CommandGroup>
 
-            <CommandSeparator className="my-2" />
+            <CommandSeparator className="my-2 bg-slate-200" />
 
-            <CommandGroup heading="Actions">
+            <CommandGroup heading="Actions" className="text-slate-500 text-xs font-medium uppercase tracking-wider">
               <CommandItem
                 value="Refresh data"
                 onSelect={() => handleSelect(() => window.location.reload())}
-                className="cursor-pointer"
+                className="cursor-pointer text-slate-700 hover:bg-slate-50 data-[selected=true]:bg-slate-50"
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
                 <span>Refresh Data</span>
-                <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 font-mono text-[10px] font-medium text-slate-500">
                   <span className="text-xs">⌘</span>
                   R
                 </kbd>
@@ -122,15 +109,10 @@ export default function CommandPalette({ open, setOpen }: CommandPaletteProps) {
                 <CommandItem
                   value={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                   onSelect={() => handleSelect(toggleTheme)}
-                  className="cursor-pointer"
+                  className="cursor-pointer text-slate-700 hover:bg-slate-50 data-[selected=true]:bg-slate-50"
                 >
-                  {theme === "dark" ? (
-                    <Sun className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Moon className="mr-2 h-4 w-4" />
-                  )}
                   <span>{theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}</span>
-                  <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                  <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 font-mono text-[10px] font-medium text-slate-500">
                     <span className="text-xs">⌘</span>
                     D
                   </kbd>
@@ -138,17 +120,16 @@ export default function CommandPalette({ open, setOpen }: CommandPaletteProps) {
               )}
             </CommandGroup>
 
-            <CommandSeparator className="my-2" />
+            <CommandSeparator className="my-2 bg-slate-200" />
 
-            <CommandGroup heading="Search">
+            <CommandGroup heading="Search" className="text-slate-500 text-xs font-medium uppercase tracking-wider">
               <CommandItem
                 value="Search alerts"
                 onSelect={() => handleSelect(() => navigate("/alerts"))}
-                className="cursor-pointer"
+                className="cursor-pointer text-slate-700 hover:bg-slate-50 data-[selected=true]:bg-slate-50"
               >
-                <Search className="mr-2 h-4 w-4" />
                 <span>Search Alerts</span>
-                <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 font-mono text-[10px] font-medium text-slate-500">
                   /
                 </kbd>
               </CommandItem>
@@ -168,11 +149,10 @@ export function CommandPaletteHint() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground bg-muted/50 hover:bg-muted border border-border rounded-md transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-500 bg-white hover:bg-slate-50 border border-slate-200 rounded-md transition-colors"
       >
-        <Search className="h-4 w-4" />
         <span className="hidden sm:inline">Search...</span>
-        <kbd className="hidden sm:inline-flex pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+        <kbd className="hidden sm:inline-flex pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 font-mono text-[10px] font-medium text-slate-500">
           <span className="text-xs">⌘</span>K
         </kbd>
       </button>

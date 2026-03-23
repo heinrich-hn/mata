@@ -12,44 +12,40 @@ interface DieselRecord extends DieselRecordData {
   updated_at?: string;
   debrief_signed?: boolean;
   debrief_signed_at?: string;
+  requires_debrief?: boolean;
 }
 
 export function useDieselAlerts(enabled: boolean = true) {
   const processedRecords = useRef<Set<string>>(new Set());
   const previousRecordStates = useRef<Map<string, DieselRecord>>(new Map());
 
-  // First, clean up any existing alerts for debriefed records on mount
+  // On mount, clean up stale alerts: debriefed records OR records that no longer require debrief
   useEffect(() => {
-    const cleanupExistingAlerts = async () => {
-      console.log('Running initial cleanup of alerts for debriefed records...');
-
+    const cleanupStaleAlerts = async () => {
       const { data: alerts, error } = await supabase
         .from('alerts')
         .select('id, source_id')
         .eq('source_type', 'fuel')
         .eq('status', 'active');
 
-      if (error) {
-        console.error('Error fetching alerts for cleanup:', error);
-        return;
-      }
+      if (error || !alerts?.length) return;
 
-      for (const alert of alerts || []) {
+      for (const alert of alerts) {
         const { data: record } = await supabase
           .from('diesel_records')
-          .select('debrief_signed')
+          .select('debrief_signed, requires_debrief')
           .eq('id', alert.source_id)
           .single();
 
-        if (record?.debrief_signed) {
-          console.log(`Cleaning up alert ${alert.id} for debriefed record ${alert.source_id}`);
+        // Resolve if debriefed, no longer requires debrief, or record deleted
+        if (!record || record.debrief_signed || !record.requires_debrief) {
           await resolveDieselRecordAlerts(alert.source_id);
         }
       }
     };
 
     if (enabled) {
-      cleanupExistingAlerts();
+      cleanupStaleAlerts();
     }
   }, [enabled]);
 
@@ -62,6 +58,8 @@ export function useDieselAlerts(enabled: boolean = true) {
       const { data: records, error } = await supabase
         .from('diesel_records')
         .select('*')
+        .eq('requires_debrief', true)
+        .eq('debrief_signed', false)
         .order('date', { ascending: false });
 
       if (error) {
@@ -70,72 +68,33 @@ export function useDieselAlerts(enabled: boolean = true) {
       }
 
       const today = new Date();
-      const resolvedRecords = new Set<string>();
 
-      // First, resolve alerts for ANY debriefed record we find
+      // These records all have requires_debrief=true, debrief_signed=false
+      // Create alerts for any we haven't processed yet
       for (const record of (records as DieselRecord[] || [])) {
-        if (record.debrief_signed) {
-          console.log(`Record ${record.id} (${record.fleet_number}) is debriefed, ensuring alerts are resolved`);
-          await resolveDieselRecordAlerts(record.id);
-          processedRecords.current.add(record.id);
-          previousRecordStates.current.set(record.id, { ...record });
-        }
-      }
+        if (processedRecords.current.has(record.id)) continue;
 
-      // Check for resolved missing debrief issues by comparing with previous state
-      for (const record of (records as DieselRecord[] || [])) {
-        // Skip debriefed records - they're already handled
-        if (record.debrief_signed) continue;
-
-        const previousRecord = previousRecordStates.current.get(record.id);
-
-        if (previousRecord) {
-          // Check if missing debrief was resolved
-          const hadMissingDebrief = !previousRecord.debrief_signed;
-          const hasMissingDebriefNow = !record.debrief_signed;
-
-          // If missing debrief was resolved, mark for alert resolution
-          if (hadMissingDebrief && !hasMissingDebriefNow) {
-            console.log(`Record ${record.id} was debriefed, marking for alert resolution`);
-            resolvedRecords.add(record.id);
-          }
-        }
-
-        // Update previous state
-        previousRecordStates.current.set(record.id, { ...record });
-      }
-
-      // Resolve alerts for records that were debriefed
-      if (resolvedRecords.size > 0) {
-        console.log(`Resolving alerts for ${resolvedRecords.size} records that were debriefed`);
-        for (const recordId of resolvedRecords) {
-          try {
-            await resolveDieselRecordAlerts(recordId);
-            processedRecords.current.delete(recordId);
-          } catch (error) {
-            console.error('Error resolving alerts for diesel record:', recordId, error);
-          }
-        }
-      }
-
-      // Check for new missing debriefs (only for non-debriefed records)
-      for (const record of (records as DieselRecord[] || [])) {
-        // Skip if already processed OR if record is debriefed
-        if (processedRecords.current.has(record.id) || record.debrief_signed) {
-          continue;
-        }
-
-        // ONLY check for missing debrief - removed all other alert types
         if (record.date) {
           const recordDate = new Date(record.date);
           const daysOld = Math.ceil((today.getTime() - recordDate.getTime()) / (1000 * 60 * 60 * 24));
 
-          if (daysOld >= 1) { // Alert after 1 day
+          if (daysOld >= 1) {
             await createMissingDebriefAlert(record, daysOld);
           }
         }
 
         processedRecords.current.add(record.id);
+        previousRecordStates.current.set(record.id, { ...record });
+      }
+
+      // Resolve alerts for records no longer in the result set (debriefed or no longer require debrief)
+      for (const [recordId] of previousRecordStates.current) {
+        const stillPending = (records as DieselRecord[] || []).some(r => r.id === recordId);
+        if (!stillPending) {
+          await resolveDieselRecordAlerts(recordId);
+          processedRecords.current.delete(recordId);
+          previousRecordStates.current.delete(recordId);
+        }
       }
     };
 

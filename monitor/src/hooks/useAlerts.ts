@@ -1,5 +1,6 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveFlaggedCostEntries } from "@/lib/resolveAlerts";
 import type { Alert, AlertFilters, AlertComment } from "@/types";
 
 // ─── Fetch paginated alerts ───────────────────────────────────────────────────
@@ -126,6 +127,21 @@ export function useResolveAlert() {
       alertId: string;
       note?: string;
     }) => {
+      // Fetch the alert to check if it's a flagged cost alert
+      const { data: alert } = await supabase
+        .from("alerts")
+        .select("category, source_id, metadata")
+        .eq("id", alertId)
+        .single();
+
+      // If this is a flagged cost alert, also resolve the underlying cost entries
+      if (alert?.category === "fuel_anomaly" && alert.source_id) {
+        const metadata = alert.metadata as Record<string, unknown> | null;
+        if (metadata?.issue_type === "flagged_costs") {
+          await resolveFlaggedCostEntries(alert.source_id);
+        }
+      }
+
       const { error } = await supabase
         .from("alerts")
         .update({
@@ -140,6 +156,9 @@ export function useResolveAlert() {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
       queryClient.invalidateQueries({ queryKey: ["alert-counts"] });
       queryClient.invalidateQueries({ queryKey: ["kpi-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["all-trips-recent"] });
+      queryClient.invalidateQueries({ queryKey: ["trip-alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["trip-alert-counts"] });
     },
   });
 }

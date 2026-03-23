@@ -2,7 +2,7 @@
 const isDevelopment = import.meta.env.DEV;
 const mainAppUrl = isDevelopment
   ? 'http://localhost:5173' // Main app dev port
-  : 'https://your-main-app.com'; // Production URL
+  : 'https://workshop-eight-xi.vercel.app/'; // Production URL
 
 export function navigateToMainApp(path: string) {
   window.open(`${mainAppUrl}${path}`, '_blank');

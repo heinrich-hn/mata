@@ -65,22 +65,22 @@ async function fetchReeferHours(vehicleIds: string[], vehicleFleetMap: Record<st
 
   if (fleetNumbers.length === 0) return {};
 
+  // Batch query: get latest reefer diesel record per unit
+  const { data } = await supabase
+    .from("reefer_diesel_records")
+    .select("reefer_unit, operating_hours, date")
+    .in("reefer_unit", fleetNumbers)
+    .not("operating_hours", "is", null)
+    .order("date", { ascending: false });
+
   const hoursMap: Record<string, ReeferHoursData> = {};
 
-  for (const fleetNumber of fleetNumbers) {
-    const { data } = await supabase
-      .from("reefer_diesel_records")
-      .select("operating_hours, date")
-      .eq("reefer_unit", fleetNumber)
-      .not("operating_hours", "is", null)
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (data?.operating_hours) {
-      hoursMap[fleetNumber] = {
-        hours: data.operating_hours,
-        date: data.date,
+  // Take the first (most recent) record per reefer_unit
+  for (const record of data || []) {
+    if (!hoursMap[record.reefer_unit] && record.operating_hours) {
+      hoursMap[record.reefer_unit] = {
+        hours: record.operating_hours,
+        date: record.date,
       };
     }
   }
@@ -156,44 +156,7 @@ export function useOverdueMaintenance() {
         const vehicleId = schedule.vehicle_id;
         const fleetNumber = vehicleId ? fleetMap[vehicleId] || "" : "";
         const isReefer = isReeferFleet(fleetNumber);
-
-        // Check date-based overdue
-        if (schedule.next_due_date && !schedule.odometer_interval_km) {
-          const dueDate = new Date(schedule.next_due_date);
-          const todayDate = new Date();
-
-          if (dueDate < todayDate) {
-            const daysOverdue = Math.ceil(
-              (todayDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
-            );
-
-            const vehicle = vehicleId ? vehiclesMap[vehicleId] : null;
-
-            overdueItems.push({
-              id: schedule.id,
-              title: schedule.service_type || schedule.title || 'Maintenance',
-              description: schedule.description ?? null,
-              priority: (schedule.priority as 'low' | 'medium' | 'high' | 'critical') || 'medium',
-              due_date: schedule.next_due_date,
-              interval_km: schedule.odometer_interval_km,
-              last_odometer: schedule.last_odometer_reading,
-              current_odometer: null,
-              vehicle_id: schedule.vehicle_id,
-              assigned_to: schedule.assigned_to ?? null,
-              service_type: schedule.service_type ?? null,
-              is_reefer: isReefer,
-              overdue_type: 'date',
-              overdue_amount: daysOverdue,
-              vehicles: vehicle ? {
-                fleet_number: vehicle.fleet_number,
-                registration_number: vehicle.registration_number,
-                make: vehicle.make,
-                model: vehicle.model,
-              } : null,
-            });
-          }
-          continue;
-        }
+        let matched = false;
 
         // Check KM-based overdue (trucks)
         if (schedule.odometer_interval_km && vehicleId && !isReefer) {
@@ -201,7 +164,7 @@ export function useOverdueMaintenance() {
           const lastReading = schedule.last_odometer_reading || 0;
           const nextServiceKm = lastReading + schedule.odometer_interval_km;
 
-          if (currentKm >= nextServiceKm) {
+          if (currentKm > 0 && currentKm >= nextServiceKm) {
             const kmOverdue = currentKm - nextServiceKm;
             const vehicle = vehiclesMap[vehicleId];
 
@@ -227,21 +190,59 @@ export function useOverdueMaintenance() {
                 model: vehicle.model,
               } : null,
             });
+            matched = true;
           }
-          continue;
         }
 
         // Check hours-based overdue (reefers)
-        if (schedule.odometer_interval_km && isReefer && fleetNumber) {
+        if (!matched && schedule.odometer_interval_km && isReefer && fleetNumber) {
           const reeferData = reeferHoursMap[fleetNumber];
-          if (!reeferData) continue;
+          if (reeferData) {
+            const currentHours = reeferData.hours;
+            const lastReading = schedule.last_odometer_reading || 0;
+            const nextServiceHours = lastReading + schedule.odometer_interval_km;
 
-          const currentHours = reeferData.hours;
-          const lastReading = schedule.last_odometer_reading || 0;
-          const nextServiceHours = lastReading + schedule.odometer_interval_km;
+            if (currentHours >= nextServiceHours) {
+              const hoursOverdue = currentHours - nextServiceHours;
+              const vehicle = vehicleId ? vehiclesMap[vehicleId] : null;
 
-          if (currentHours >= nextServiceHours) {
-            const hoursOverdue = currentHours - nextServiceHours;
+              overdueItems.push({
+                id: schedule.id,
+                title: schedule.service_type || schedule.title || 'Maintenance',
+                description: schedule.description ?? null,
+                priority: (schedule.priority as 'low' | 'medium' | 'high' | 'critical') || 'medium',
+                due_date: reeferData.date,
+                interval_km: schedule.odometer_interval_km,
+                last_odometer: lastReading,
+                current_odometer: currentHours,
+                vehicle_id: vehicleId,
+                assigned_to: schedule.assigned_to ?? null,
+                service_type: schedule.service_type ?? null,
+                is_reefer: true,
+                overdue_type: 'hours',
+                overdue_amount: hoursOverdue,
+                vehicles: vehicle ? {
+                  fleet_number: vehicle.fleet_number,
+                  registration_number: vehicle.registration_number,
+                  make: vehicle.make,
+                  model: vehicle.model,
+                } : null,
+              });
+              matched = true;
+            }
+          }
+        }
+
+        // Check date-based overdue (fallback for all, including schedules with no odometer data)
+        if (!matched && schedule.next_due_date) {
+          const dueDate = new Date(schedule.next_due_date);
+          const todayDate = new Date();
+
+          if (dueDate < todayDate) {
+            const daysOverdue = Math.ceil(
+              (todayDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
+            );
+
             const vehicle = vehicleId ? vehiclesMap[vehicleId] : null;
 
             overdueItems.push({
@@ -249,16 +250,16 @@ export function useOverdueMaintenance() {
               title: schedule.service_type || schedule.title || 'Maintenance',
               description: schedule.description ?? null,
               priority: (schedule.priority as 'low' | 'medium' | 'high' | 'critical') || 'medium',
-              due_date: reeferData.date, // Use the date of the last reading
+              due_date: schedule.next_due_date,
               interval_km: schedule.odometer_interval_km,
-              last_odometer: lastReading,
-              current_odometer: currentHours,
-              vehicle_id: vehicleId,
+              last_odometer: schedule.last_odometer_reading,
+              current_odometer: null,
+              vehicle_id: schedule.vehicle_id,
               assigned_to: schedule.assigned_to ?? null,
               service_type: schedule.service_type ?? null,
-              is_reefer: true,
-              overdue_type: 'hours',
-              overdue_amount: hoursOverdue,
+              is_reefer: isReefer,
+              overdue_type: 'date',
+              overdue_amount: daysOverdue,
               vehicles: vehicle ? {
                 fleet_number: vehicle.fleet_number,
                 registration_number: vehicle.registration_number,

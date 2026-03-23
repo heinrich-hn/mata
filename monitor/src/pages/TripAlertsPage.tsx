@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +9,6 @@ import { formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
   CheckCircle2,
-  Clock,
   DollarSign,
   Filter,
   Flag,
@@ -22,8 +20,8 @@ import {
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-// Types for trip alerts - ONLY active and resolved statuses
-type TripCategory = 'duplicate_pod' | 'load_exception' | 'trip_delay';
+// Types for trip alerts
+type TripCategory = 'duplicate_pod' | 'load_exception' | 'fuel_anomaly';
 
 interface TripAlert {
   id: string;
@@ -55,59 +53,28 @@ interface TripAlert {
   };
 }
 
-// Configuration for different alert types
+// Configuration for different alert types - no severity colors
 const ALERT_TYPE_CONFIG = {
   duplicate_pod: {
     icon: AlertTriangle,
-    color: "text-severity-medium",
-    bgColor: "bg-severity-medium/10",
     label: "Duplicate POD",
     description: "Multiple trips with same POD number"
   },
   missing_revenue: {
     icon: DollarSign,
-    color: "text-severity-medium",
-    bgColor: "bg-severity-medium/10",
     label: "Missing Revenue",
     description: "Trips without base revenue set"
   },
   no_costs: {
     icon: XCircle,
-    color: "text-destructive",
-    bgColor: "bg-destructive/10",
     label: "No Costs",
     description: "Trips with no costs recorded"
   },
   flagged_costs: {
     icon: Flag,
-    color: "text-destructive",
-    bgColor: "bg-destructive/10",
     label: "Flagged Costs",
     description: "Costs flagged for investigation"
   },
-  long_running: {
-    icon: Clock,
-    color: "text-severity-high",
-    bgColor: "bg-severity-high/10",
-    label: "Long Running",
-    description: "Trips in progress for over 14 days"
-  },
-  flagged_trip: {
-    icon: Flag,
-    color: "text-destructive",
-    bgColor: "bg-destructive/10",
-    label: "Flagged Trip",
-    description: "Trips marked for review"
-  }
-};
-
-/* Professional severity colors */
-const SEVERITY_COLORS = {
-  critical: "bg-destructive/10 text-destructive border-destructive/20",
-  high: "bg-severity-high/10 text-severity-high border-severity-high/20",
-  medium: "bg-severity-medium/10 text-severity-medium border-severity-medium/20",
-  low: "bg-severity-low/10 text-severity-low border-severity-low/20",
-  info: "bg-muted text-muted-foreground border-border",
 };
 
 export default function TripAlertsPage() {
@@ -118,19 +85,29 @@ export default function TripAlertsPage() {
   const { data: alerts = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['trip-alerts'],
     queryFn: async () => {
-      // Fetch ONLY active trip-related alerts
-      const { data, error } = await supabase
-        .from('alerts')
-        .select('*')
-        .in('category', ['duplicate_pod', 'load_exception', 'trip_delay'])
-        .eq('status', 'active') // Only fetch active alerts
-        .order('severity', { ascending: false })
-        .order('created_at', { ascending: false });
+      // Fetch trip-related alerts (both active and resolved) — paginate to get all
+      let allAlerts: TripAlert[] = [];
+      let from = 0;
+      const PAGE_SIZE = 1000;
 
-      if (error) throw error;
+      while (true) {
+        const { data, error } = await supabase
+          .from('alerts')
+          .select('*')
+          .in('category', ['duplicate_pod', 'load_exception', 'fuel_anomaly'])
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allAlerts = [...allAlerts, ...(data as TripAlert[])];
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
 
       // Filter out any remaining fuel-related alerts by issue_type
-      return (data as TripAlert[]).filter(alert => {
+      return allAlerts.filter(alert => {
         const issueType = alert.metadata?.issue_type as string;
         const fuelIssueTypes = ['low_efficiency', 'probe_discrepancy', 'missing_debrief', 'high_consumption'];
 
@@ -156,7 +133,6 @@ export default function TripAlertsPage() {
           table: 'alerts'
         },
         () => {
-          // Refetch alerts when any change occurs
           queryClient.invalidateQueries({ queryKey: ['trip-alerts'] });
         }
       )
@@ -167,15 +143,25 @@ export default function TripAlertsPage() {
     };
   }, [queryClient]);
 
-  // Group alerts by type
+  // Only count active alerts for tab badges
+  const activeAlerts = alerts.filter(a => a.status === 'active');
+
+  // Group alerts by type (show all for browsing, count only active for badges)
   const groupedAlerts = {
     duplicate_pod: alerts.filter(a => a.metadata?.issue_type === 'duplicate_pod' || a.category === 'duplicate_pod'),
     missing_revenue: alerts.filter(a => a.metadata?.issue_type === 'missing_revenue'),
     no_costs: alerts.filter(a => a.metadata?.issue_type === 'no_costs'),
-    flagged_trip: alerts.filter(a => a.metadata?.is_flagged === true || a.metadata?.needs_review === true),
+    flagged_costs: alerts.filter(a => a.metadata?.issue_type === 'flagged_costs'),
   };
 
-  // Filter by search
+  const activeCounts = {
+    duplicate_pod: activeAlerts.filter(a => a.metadata?.issue_type === 'duplicate_pod' || a.category === 'duplicate_pod').length,
+    missing_revenue: activeAlerts.filter(a => a.metadata?.issue_type === 'missing_revenue').length,
+    no_costs: activeAlerts.filter(a => a.metadata?.issue_type === 'no_costs').length,
+    flagged_costs: activeAlerts.filter(a => a.metadata?.issue_type === 'flagged_costs').length,
+  };
+
+  // Filter by search and sort active first
   const filteredAlerts = groupedAlerts[activeTab as keyof typeof groupedAlerts]?.filter(alert => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -186,6 +172,11 @@ export default function TripAlertsPage() {
       alert.metadata?.fleet_number?.toLowerCase().includes(query) ||
       alert.metadata?.driver_name?.toLowerCase().includes(query)
     );
+  }).sort((a, b) => {
+    // Active alerts first, resolved last
+    if (a.status === 'active' && b.status !== 'active') return -1;
+    if (a.status !== 'active' && b.status === 'active') return 1;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
   const getAlertConfig = (alert: TripAlert) => {
@@ -194,82 +185,69 @@ export default function TripAlertsPage() {
       return ALERT_TYPE_CONFIG[issueType as keyof typeof ALERT_TYPE_CONFIG];
     }
     if (alert.category === 'duplicate_pod') return ALERT_TYPE_CONFIG.duplicate_pod;
-    if (alert.category === 'trip_delay') return ALERT_TYPE_CONFIG.long_running;
-    return ALERT_TYPE_CONFIG.flagged_trip;
+    if (alert.category === 'fuel_anomaly') return ALERT_TYPE_CONFIG.flagged_costs;
+    return ALERT_TYPE_CONFIG.no_costs;
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-muted-foreground">Loading trip alerts...</p>
+          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+          <p className="text-sm text-slate-500">Loading trip alerts...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Truck className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold">Active Trip Alerts</h1>
-            <p className="text-xs text-muted-foreground">
-              {alerts.length} alert{alerts.length !== 1 ? 's' : ''} need attention
-            </p>
-          </div>
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Search and Refresh */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Input
+            placeholder="Search by trip, fleet, or driver..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 pl-8 text-sm border-slate-200 focus:ring-slate-400"
+          />
+          <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
         </div>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={() => refetch()}
           disabled={isRefetching}
-          className="h-8 px-2"
+          className="h-9 px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", isRefetching && "animate-spin")} />
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Input
-          placeholder="Search alerts by trip, fleet, or driver..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-8 pl-8 text-sm"
-        />
-        <Filter className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-      </div>
-
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full h-auto flex flex-wrap gap-1 p-1">
-          <TabsTrigger value="duplicate_pod" className="text-xs px-2 py-1 h-7">
-            Duplicate ({groupedAlerts.duplicate_pod.length})
+        <TabsList className="w-full h-auto flex flex-wrap gap-1 p-1 bg-slate-100 border border-slate-200">
+          <TabsTrigger value="duplicate_pod" className="text-xs px-3 py-1.5 h-auto data-[state=active]:bg-white data-[state=active]:text-slate-900">
+            Duplicate ({activeCounts.duplicate_pod})
           </TabsTrigger>
-          <TabsTrigger value="missing_revenue" className="text-xs px-2 py-1 h-7">
-            Revenue ({groupedAlerts.missing_revenue.length})
+          <TabsTrigger value="missing_revenue" className="text-xs px-3 py-1.5 h-auto data-[state=active]:bg-white data-[state=active]:text-slate-900">
+            Revenue ({activeCounts.missing_revenue})
           </TabsTrigger>
-          <TabsTrigger value="no_costs" className="text-xs px-2 py-1 h-7">
-            No Costs ({groupedAlerts.no_costs.length})
+          <TabsTrigger value="no_costs" className="text-xs px-3 py-1.5 h-auto data-[state=active]:bg-white data-[state=active]:text-slate-900">
+            No Costs ({activeCounts.no_costs})
           </TabsTrigger>
-          <TabsTrigger value="flagged_trip" className="text-xs px-2 py-1 h-7">
-            Flagged ({groupedAlerts.flagged_trip.length})
+          <TabsTrigger value="flagged_costs" className="text-xs px-3 py-1.5 h-auto data-[state=active]:bg-white data-[state=active]:text-slate-900">
+            Flagged ({activeCounts.flagged_costs})
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value={activeTab} className="mt-3 space-y-2">
+        <TabsContent value={activeTab} className="mt-4 space-y-3">
           {filteredAlerts?.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground text-sm">
-                <div className="flex flex-col items-center gap-2">
-                  <CheckCircle2 className="h-8 w-8 text-green-500" />
-                  <p>No active alerts in this category</p>
+            <Card className="border-slate-200">
+              <CardContent className="py-12 text-center">
+                <div className="flex flex-col items-center gap-3">
+                  <CheckCircle2 className="h-12 w-12 text-slate-300" />
+                  <p className="text-slate-500 text-sm">No alerts in this category</p>
                 </div>
               </CardContent>
             </Card>
@@ -277,78 +255,79 @@ export default function TripAlertsPage() {
             filteredAlerts?.map((alert) => {
               const config = getAlertConfig(alert);
               const Icon = config.icon;
+              const isResolved = alert.status === 'resolved';
 
               return (
                 <Link
                   key={alert.id}
-                  to={`/trips/${alert.metadata?.trip_id}`}
+                  to={`/alerts/${alert.id}`}
                   className="block"
                 >
-                  <Card className="hover:shadow-sm transition-shadow cursor-pointer">
-                    <CardContent className="p-3">
-                      <div className="flex items-start gap-2">
+                  <Card className={cn(
+                    "border-slate-200 hover:shadow-md transition-shadow duration-200 cursor-pointer",
+                    isResolved && "opacity-50"
+                  )}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
                         {/* Icon */}
-                        <div className={cn("w-6 h-6 rounded flex items-center justify-center shrink-0", config.bgColor)}>
-                          <Icon className={cn("h-3.5 w-3.5", config.color)} />
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                          isResolved ? "bg-emerald-50" : "bg-slate-100"
+                        )}>
+                          {isResolved
+                            ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            : <Icon className="h-4 w-4 text-slate-600" />
+                          }
                         </div>
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-medium truncate">{alert.title}</span>
-                            <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4">
-                              ACTIVE
-                            </Badge>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-slate-900">
+                              {alert.title}
+                            </span>
                           </div>
 
-                          <p className="text-[11px] text-muted-foreground line-clamp-1">
+                          <p className="text-xs text-slate-600 mb-2">
                             {alert.metadata?.trip_number && (
-                              <span className="font-medium text-foreground mr-1">
-                                #{alert.metadata.trip_number}
+                              <span className="font-medium text-slate-700 mr-1">
+                                Trip #{alert.metadata.trip_number}
                               </span>
                             )}
                             {alert.message}
                           </p>
 
-                          {/* Compact metadata */}
-                          <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                          {/* Metadata row */}
+                          <div className="flex items-center gap-3 text-xs text-slate-500">
                             {alert.metadata?.fleet_number && (
-                              <span className="flex items-center gap-0.5">
-                                <Truck className="h-2.5 w-2.5" />
+                              <span className="flex items-center gap-1">
+                                <Truck className="h-3 w-3" />
                                 {alert.metadata.fleet_number}
                               </span>
                             )}
                             {alert.metadata?.driver_name && (
-                              <span className="flex items-center gap-0.5">
-                                <User className="h-2.5 w-2.5" />
+                              <span className="flex items-center gap-1">
+                                <User className="h-3 w-3" />
                                 {alert.metadata.driver_name.split(' ')[0]}
                               </span>
                             )}
                             {alert.metadata?.duplicate_count && (
-                              <span className="text-amber-600">
+                              <span>
                                 {alert.metadata.duplicate_count}x duplicate
                               </span>
                             )}
-                            {alert.metadata?.days_in_progress && (
-                              <span className="text-orange-600">
-                                {alert.metadata.days_in_progress}d
-                              </span>
-                            )}
                             {alert.metadata?.flagged_count && (
-                              <span className="text-red-600">
+                              <span>
                                 {alert.metadata.flagged_count} flagged
                               </span>
                             )}
                           </div>
 
-                          {/* Time and Severity */}
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-[10px] text-muted-foreground">
+                          {/* Time */}
+                          <div className="mt-2">
+                            <span className="text-xs text-slate-400">
                               {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
                             </span>
-                            <Badge variant="outline" className={cn("text-[9px] px-1 py-0 h-4", SEVERITY_COLORS[alert.severity])}>
-                              {alert.severity}
-                            </Badge>
                           </div>
                         </div>
                       </div>

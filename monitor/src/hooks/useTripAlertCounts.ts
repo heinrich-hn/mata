@@ -8,7 +8,7 @@ export function useTripAlertCounts() {
       const { data, error } = await supabase
         .from("alerts")
         .select("severity")
-        .in("category", ["duplicate_pod", "load_exception", "trip_delay"])
+        .in("category", ["duplicate_pod", "load_exception", "fuel_anomaly"])
         .eq("status", "active"); // Only count active alerts
 
       if (error) throw error;

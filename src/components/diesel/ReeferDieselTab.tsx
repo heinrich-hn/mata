@@ -141,7 +141,7 @@ const ReeferDieselTab = () => {
                     </p>
                   )}
                   {record.litres_per_hour !== null && record.litres_per_hour > 0 && (
-                    <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 mt-1">
+                    <Badge className="bg-sky-50 dark:bg-sky-950/20 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 mt-1">
                       {record.litres_per_hour.toFixed(2)} L/hr
                     </Badge>
                   )}
@@ -248,7 +248,7 @@ const ReeferDieselTab = () => {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Avg L/hr</p>
-                  <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">
+                  <Badge className="bg-sky-50 dark:bg-sky-950/20 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
                     {summary.avg_litres_per_hour.toFixed(2)} L/hr
                   </Badge>
                 </div>
@@ -303,7 +303,7 @@ const ReeferDieselTab = () => {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Combined Cost</p>
-                  <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                  <Badge className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                     {formatCurrency(data.combined_cost)}
                   </Badge>
                 </div>
@@ -318,9 +318,9 @@ const ReeferDieselTab = () => {
   return (
     <div className="space-y-6">
       {/* Header with info badge */}
-      <div className="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-        <Snowflake className="h-5 w-5 text-blue-500" />
-        <span className="text-sm text-blue-700 dark:text-blue-300">
+      <div className="flex items-center gap-2 p-3 bg-sky-50/70 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800 rounded-lg">
+        <Snowflake className="h-5 w-5 text-sky-500 dark:text-sky-400" />
+        <span className="text-sm text-sky-700 dark:text-sky-300">
           <strong>Reefer Diesel</strong> tracks refrigeration unit fuel consumption in <strong>Litres per Hour (L/hr)</strong>,
           separate from truck diesel which is tracked in km/L.
         </span>

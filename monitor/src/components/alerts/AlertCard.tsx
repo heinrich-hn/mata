@@ -1,6 +1,7 @@
 import { useResolveAlert } from "@/hooks/useAlerts";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { navigateToTrip } from "@/lib/crossAppNavigation";
 import type { Alert } from "@/types";
 import { format, formatDistanceToNow } from "date-fns";
 import {
@@ -130,7 +131,7 @@ export default function AlertCard({ alert }: AlertCardProps) {
   const handleViewTrip = (e: React.MouseEvent) => {
     e.preventDefault();
     if (metadata?.trip_id) {
-      window.open(`/trips/${metadata.trip_id}`, '_blank');
+      navigateToTrip(metadata.trip_id);
     }
   };
 

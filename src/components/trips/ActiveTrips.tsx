@@ -263,17 +263,21 @@ const ActiveTrips = ({
 
   useEffect(() => {
     duplicatePods.forEach(async ({ pod, count }) => {
-      const duplicateTrips = trips.filter(t => t.trip_number === pod).map(t => t.id);
-      await ensureAlert({
-        sourceType: 'system',
-        sourceId: pod,
-        sourceLabel: `Duplicate POD ${pod}`,
-        category: 'duplicate_pod',
-        severity: 'medium',
-        title: 'Duplicate POD Detected in Active Trips',
-        message: `POD number ${pod} is used in ${count} active trips`,
-        metadata: { pod_number: pod, count, tripIds: duplicateTrips }
-      });
+      try {
+        const duplicateTrips = trips.filter(t => t.trip_number === pod).map(t => t.id);
+        await ensureAlert({
+          sourceType: 'system',
+          sourceId: pod,
+          sourceLabel: `Duplicate POD ${pod}`,
+          category: 'duplicate_pod',
+          severity: 'medium',
+          title: 'Duplicate POD Detected in Active Trips',
+          message: `POD number ${pod} is used in ${count} active trips`,
+          metadata: { pod_number: pod, count, tripIds: duplicateTrips }
+        });
+      } catch (err) {
+        console.error('Alert creation skipped for pod:', pod, err);
+      }
     });
   }, [duplicatePods, trips]);
 
