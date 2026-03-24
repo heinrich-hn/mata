@@ -61,13 +61,13 @@ export function FaultsWidget() {
               <span>{stats.identified} identified</span>
             </div>
             <div className="flex items-center gap-1 text-muted-foreground">
-              <Clock className="h-3 w-3 text-amber-500" />
+              <Clock className="h-3 w-3 text-amber-600" />
               <span>{stats.acknowledged} acknowledged</span>
             </div>
           </div>
 
           {stats.high > 0 && (
-            <div className="text-xs text-orange-500 bg-orange-500/10 p-2 rounded-lg">
+            <div className="text-xs text-orange-700 bg-orange-50 border border-orange-200 p-2 rounded-lg">
               {stats.high} high severity fault{stats.high > 1 ? 's' : ''} need attention
             </div>
           )}

@@ -68,6 +68,10 @@ interface TripForAlerts {
   hasFlaggedCosts?: boolean;
   flaggedCostCount?: number;
   hasNoCosts?: boolean;
+  hasUnverifiedCosts?: boolean;
+  unverifiedCostCount?: number;
+  hasMissingDocuments?: boolean;
+  missingDocumentCount?: number;
   daysInProgress?: number;
   departure_date?: string;
   // Fields to detect flagged trips
@@ -153,7 +157,7 @@ function AppContent() {
 
       // Fetch cost_entries for these trips to get real flagged cost status
       const tripIds = (data || []).map(t => (t as unknown as RawTripData).id);
-      const costEntriesMap: Record<string, { hasCosts: boolean; flaggedCount: number }> = {};
+      const costEntriesMap: Record<string, { hasCosts: boolean; flaggedCount: number; unverifiedCount: number; missingDocCount: number }> = {};
 
       if (tripIds.length > 0) {
         // Fetch in batches of 50 to stay well within Supabase row limits
@@ -161,7 +165,7 @@ function AppContent() {
           const batch = tripIds.slice(i, i + 50);
           const { data: costData } = await supabase
             .from('cost_entries')
-            .select('trip_id, is_flagged, investigation_status')
+            .select('trip_id, is_flagged, investigation_status, attachments')
             .in('trip_id', batch)
             .limit(5000);
 
@@ -169,11 +173,20 @@ function AppContent() {
             for (const cost of costData) {
               if (!cost.trip_id) continue;
               if (!costEntriesMap[cost.trip_id]) {
-                costEntriesMap[cost.trip_id] = { hasCosts: false, flaggedCount: 0 };
+                costEntriesMap[cost.trip_id] = { hasCosts: false, flaggedCount: 0, unverifiedCount: 0, missingDocCount: 0 };
               }
               costEntriesMap[cost.trip_id].hasCosts = true;
               if (cost.is_flagged && cost.investigation_status !== 'resolved') {
                 costEntriesMap[cost.trip_id].flaggedCount++;
+              }
+              // Unverified = any cost not yet approved/verified by an operator
+              if (cost.investigation_status !== 'resolved') {
+                costEntriesMap[cost.trip_id].unverifiedCount++;
+              }
+              // Missing document = cost entry without any attachments/slips
+              const attachments = cost.attachments as unknown[] | null;
+              if (!attachments || (Array.isArray(attachments) && attachments.length === 0)) {
+                costEntriesMap[cost.trip_id].missingDocCount++;
               }
             }
           }
@@ -191,6 +204,8 @@ function AppContent() {
         const costInfo = costEntriesMap[trip.id];
         const hasCostEntries = costInfo?.hasCosts ?? false;
         const flaggedCostCount = costInfo?.flaggedCount ?? 0;
+        const unverifiedCostCount = costInfo?.unverifiedCount ?? 0;
+        const missingDocCount = costInfo?.missingDocCount ?? 0;
 
         // Extract fleet_number from joined vehicle data
         const vehicleData = Array.isArray(trip.vehicles)
@@ -229,6 +244,10 @@ function AppContent() {
           hasFlaggedCosts: flaggedCostCount > 0,
           flaggedCostCount: flaggedCostCount,
           hasNoCosts: !hasCostEntries && !trip.verified_no_costs,
+          hasUnverifiedCosts: hasCostEntries && unverifiedCostCount > 0,
+          unverifiedCostCount: unverifiedCostCount,
+          hasMissingDocuments: hasCostEntries && missingDocCount > 0,
+          missingDocumentCount: missingDocCount,
           daysInProgress: daysInProgress,
           hasIssues: hasIssues,
         };

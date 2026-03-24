@@ -51,6 +51,27 @@ export default function DriverBehaviorPage() {
         return acc;
     }, {} as Record<string, number>);
 
+    const typeBadgeClasses = [
+        "bg-blue-50 text-blue-700 border-blue-200",
+        "bg-amber-50 text-amber-700 border-amber-200",
+        "bg-rose-50 text-rose-700 border-rose-200",
+        "bg-emerald-50 text-emerald-700 border-emerald-200",
+    ];
+
+    const severityClasses = (severity?: string | null) => {
+        switch (severity) {
+            case 'critical':
+            case 'high':
+                return "border-l-rose-400";
+            case 'medium':
+                return "border-l-amber-400";
+            case 'low':
+                return "border-l-emerald-400";
+            default:
+                return "border-l-blue-300";
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-[calc(100vh-200px)]">
@@ -63,34 +84,34 @@ export default function DriverBehaviorPage() {
     }
 
     return (
-        <div className="p-6 space-y-6 max-w-7xl mx-auto">
-            {/* Stats Cards - Neutral colors */}
+        <div className="monitor-page">
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="border-slate-200">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/55 to-white">
+                    <CardHeader className="pb-1 pt-2 px-3">
+                        <CardTitle className="text-xs font-medium uppercase tracking-wider text-blue-700/80">
                             Total Events
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{stats.total}</div>
+                    <CardContent className="px-3 pb-2 pt-0">
+                        <div className="text-xl font-bold text-blue-700">{stats.total}</div>
                     </CardContent>
                 </Card>
-                <Card className="border-slate-200">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                <Card className="border-amber-200/80 bg-gradient-to-br from-amber-50/55 to-white">
+                    <CardHeader className="pb-1 pt-2 px-3">
+                        <CardTitle className="text-xs font-medium uppercase tracking-wider text-amber-700/80">
                             Pending Debrief
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{stats.pending}</div>
+                    <CardContent className="px-3 pb-2 pt-0">
+                        <div className="text-xl font-bold text-amber-700">{stats.pending}</div>
                     </CardContent>
                 </Card>
             </div>
 
             {/* Event type breakdown */}
             {Object.keys(byType).length > 0 && (
-                <Card className="border-slate-200">
+                <Card className="monitor-soft-panel">
                     <CardHeader>
                         <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500">
                             By Event Type
@@ -99,7 +120,11 @@ export default function DriverBehaviorPage() {
                     <CardContent>
                         <div className="flex flex-wrap gap-2">
                             {Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
-                                <Badge key={type} variant="secondary" className="text-sm bg-slate-100 text-slate-600 border-slate-200">
+                                <Badge
+                                    key={type}
+                                    variant="secondary"
+                                    className={`text-xs ${typeBadgeClasses[count % typeBadgeClasses.length]}`}
+                                >
                                     {type}: {count}
                                 </Badge>
                             ))}
@@ -111,20 +136,20 @@ export default function DriverBehaviorPage() {
             {/* Events List */}
             <div className="space-y-3">
                 {events.length === 0 ? (
-                    <Card className="border-slate-200">
+                    <Card className="monitor-soft-panel">
                         <CardContent className="p-8 text-center">
                             <p className="text-slate-500 text-sm">No pending driver behavior events</p>
                         </CardContent>
                     </Card>
                 ) : (
                     events.map(event => (
-                        <Card key={event.id} className="border-slate-200 hover:shadow-md transition-shadow">
+                        <Card key={event.id} className={`monitor-soft-entry border-l-2 ${severityClasses(event.severity)} hover:shadow-md transition-shadow`}>
                             <CardContent className="p-4">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 space-y-2">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="font-semibold text-slate-900">{event.driver_name}</span>
-                                            <Badge variant="outline" className="border-slate-200 text-slate-600">
+                                            <span className="font-medium text-slate-900">{event.driver_name}</span>
+                                            <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
                                                 {formatType(event.event_type)}
                                             </Badge>
                                         </div>
@@ -150,8 +175,8 @@ export default function DriverBehaviorPage() {
                                     </div>
                                     {event.points != null && (
                                         <div className="text-right">
-                                            <p className="text-xs text-slate-400">Points</p>
-                                            <p className="font-semibold text-slate-900">{event.points}</p>
+                                            <p className="text-xs text-slate-500">Points</p>
+                                            <p className="font-semibold text-blue-700">{event.points}</p>
                                         </div>
                                     )}
                                 </div>

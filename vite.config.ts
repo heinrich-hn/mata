@@ -161,6 +161,7 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
+        cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,webmanifest}'],
         globIgnores: ['**/node_modules/**/*', 'sw.js', 'workbox-*.js', '**/*.map'],
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB

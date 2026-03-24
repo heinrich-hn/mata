@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/table";
 import {
     useDismissBreakdown,
+    useDeleteFleetBreakdown,
     useFleetBreakdowns,
-    useScheduleBreakdownForInspection,
     useUpdateFleetBreakdown,
     type FleetBreakdown,
 } from "@/hooks/useFleetBreakdowns";
@@ -37,12 +37,29 @@ import {
     CheckCircle,
     Clock,
     ClipboardCheck,
+    Link2,
     MoreVertical,
+    Pencil,
+    Plus,
+    Trash2,
     Truck,
     Wrench,
     XCircle,
 } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import StartInspectionDialog from "../dialogs/StartInspectionDialog";
+import { LogBreakdownDialog } from "./LogBreakdownDialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 function getSeverityVariant(severity: string): "default" | "destructive" | "secondary" {
     switch (severity) {
@@ -75,10 +92,16 @@ function getStatusConfig(status: string) {
 
 export function BreakdownsList() {
     const { data: breakdowns = [], isLoading } = useFleetBreakdowns();
-    const scheduleForInspection = useScheduleBreakdownForInspection();
     const dismissBreakdown = useDismissBreakdown();
     const updateBreakdown = useUpdateFleetBreakdown();
+    const deleteBreakdown = useDeleteFleetBreakdown();
+    const navigate = useNavigate();
     const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [inspectionDialogOpen, setInspectionDialogOpen] = useState(false);
+    const [selectedBreakdown, setSelectedBreakdown] = useState<FleetBreakdown | null>(null);
+    const [logDialogOpen, setLogDialogOpen] = useState(false);
+    const [editBreakdown, setEditBreakdown] = useState<FleetBreakdown | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<FleetBreakdown | null>(null);
 
     const filteredBreakdowns = statusFilter === "all"
         ? breakdowns
@@ -141,19 +164,25 @@ export function BreakdownsList() {
                             <CardTitle>Fleet Breakdowns</CardTitle>
                             <CardDescription>Breakdowns received from Load Planner for inspection scheduling</CardDescription>
                         </div>
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Filter by status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                <SelectItem value="pending_review">Pending Review</SelectItem>
-                                <SelectItem value="scheduled_for_inspection">Scheduled</SelectItem>
-                                <SelectItem value="inspection_created">Inspection Created</SelectItem>
-                                <SelectItem value="resolved">Resolved</SelectItem>
-                                <SelectItem value="dismissed">Dismissed</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-2">
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Filter by status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    <SelectItem value="pending_review">Pending Review</SelectItem>
+                                    <SelectItem value="scheduled_for_inspection">Scheduled</SelectItem>
+                                    <SelectItem value="inspection_created">Inspection Created</SelectItem>
+                                    <SelectItem value="resolved">Resolved</SelectItem>
+                                    <SelectItem value="dismissed">Dismissed</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Button onClick={() => { setEditBreakdown(null); setLogDialogOpen(true); }}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Log Breakdown
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -232,6 +261,15 @@ export function BreakdownsList() {
                                                         {statusConfig.icon}
                                                         <span className="text-sm font-medium">{statusConfig.label}</span>
                                                     </div>
+                                                    {bd.linked_inspection_id && (
+                                                        <button
+                                                            onClick={() => navigate(`/inspections`)}
+                                                            className="flex items-center gap-1 text-xs text-blue-500 hover:underline mt-1"
+                                                        >
+                                                            <Link2 className="h-3 w-3" />
+                                                            View Inspection
+                                                        </button>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
                                                     <DropdownMenu>
@@ -244,7 +282,10 @@ export function BreakdownsList() {
                                                             {bd.status === "pending_review" && (
                                                                 <>
                                                                     <DropdownMenuItem
-                                                                        onClick={() => scheduleForInspection.mutate(bd.id)}
+                                                                        onClick={() => {
+                                                                            setSelectedBreakdown(bd);
+                                                                            setInspectionDialogOpen(true);
+                                                                        }}
                                                                     >
                                                                         <Calendar className="h-4 w-4 mr-2" />
                                                                         Schedule for Inspection
@@ -279,6 +320,23 @@ export function BreakdownsList() {
                                                                     Reopen
                                                                 </DropdownMenuItem>
                                                             )}
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                onClick={() => {
+                                                                    setEditBreakdown(bd);
+                                                                    setLogDialogOpen(true);
+                                                                }}
+                                                            >
+                                                                <Pencil className="h-4 w-4 mr-2" />
+                                                                Edit
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                onClick={() => setDeleteTarget(bd)}
+                                                                className="text-destructive focus:text-destructive"
+                                                            >
+                                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                                Delete
+                                                            </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </TableCell>
@@ -291,6 +349,64 @@ export function BreakdownsList() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Start Inspection dialog triggered from breakdown */}
+            <StartInspectionDialog
+                open={inspectionDialogOpen}
+                onOpenChange={(open) => {
+                    setInspectionDialogOpen(open);
+                    if (!open) setSelectedBreakdown(null);
+                }}
+                onInspectionCreated={(inspectionId) => {
+                    navigate(`/inspections/${inspectionId}`);
+                }}
+                breakdownPrefill={selectedBreakdown ? {
+                    breakdownId: selectedBreakdown.id,
+                    vehicleId: selectedBreakdown.vehicle_id,
+                    vehicleRegistration: selectedBreakdown.vehicle_registration,
+                    vehicleMake: selectedBreakdown.vehicle_make,
+                    vehicleModel: selectedBreakdown.vehicle_model,
+                    notes: `Breakdown: ${selectedBreakdown.description}${selectedBreakdown.location ? ` @ ${selectedBreakdown.location}` : ""}`,
+                } : null}
+            />
+
+            {/* Log / Edit Breakdown dialog */}
+            <LogBreakdownDialog
+                open={logDialogOpen}
+                onOpenChange={(open) => {
+                    setLogDialogOpen(open);
+                    if (!open) setEditBreakdown(null);
+                }}
+                editBreakdown={editBreakdown}
+            />
+
+            {/* Delete confirmation */}
+            <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Breakdown</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this breakdown record
+                            {deleteTarget?.source_breakdown_number ? ` (${deleteTarget.source_breakdown_number})` : ""}?
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive hover:bg-destructive/90"
+                            onClick={() => {
+                                if (deleteTarget) {
+                                    deleteBreakdown.mutate(deleteTarget.id);
+                                    setDeleteTarget(null);
+                                }
+                            }}
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

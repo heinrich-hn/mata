@@ -45,6 +45,12 @@ export default function IncidentsPage() {
         processing: incidents.filter(i => i.status === 'processing').length,
     };
 
+    const statusClass = (status: string) => {
+        if (status === 'open') return 'border-rose-200 text-rose-700 bg-rose-50';
+        if (status === 'processing') return 'border-amber-200 text-amber-700 bg-amber-50';
+        return 'border-slate-200 text-slate-600 bg-slate-50';
+    };
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-[calc(100vh-200px)]">
@@ -57,37 +63,37 @@ export default function IncidentsPage() {
     }
 
     return (
-        <div className="p-6 space-y-6 max-w-7xl mx-auto">
-            {/* Stats Cards - Neutral colors */}
+        <div className="monitor-page">
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="border-slate-200">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/55 to-white">
+                    <CardHeader className="pb-1 pt-2 px-3">
+                        <CardTitle className="text-xs font-medium uppercase tracking-wider text-blue-700/80">
                             Total Open
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{stats.total}</div>
+                    <CardContent className="px-3 pb-2 pt-0">
+                        <div className="text-xl font-bold text-blue-700">{stats.total}</div>
                     </CardContent>
                 </Card>
-                <Card className="border-slate-200">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                <Card className="border-rose-200/80 bg-gradient-to-br from-rose-50/55 to-white">
+                    <CardHeader className="pb-1 pt-2 px-3">
+                        <CardTitle className="text-xs font-medium uppercase tracking-wider text-rose-700/80">
                             Open
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{stats.open}</div>
+                    <CardContent className="px-3 pb-2 pt-0">
+                        <div className="text-xl font-bold text-rose-700">{stats.open}</div>
                     </CardContent>
                 </Card>
-                <Card className="border-slate-200">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                <Card className="border-amber-200/80 bg-gradient-to-br from-amber-50/55 to-white">
+                    <CardHeader className="pb-1 pt-2 px-3">
+                        <CardTitle className="text-xs font-medium uppercase tracking-wider text-amber-700/80">
                             Processing
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{stats.processing}</div>
+                    <CardContent className="px-3 pb-2 pt-0">
+                        <div className="text-xl font-bold text-amber-700">{stats.processing}</div>
                     </CardContent>
                 </Card>
             </div>
@@ -95,23 +101,23 @@ export default function IncidentsPage() {
             {/* Incidents List */}
             <div className="space-y-3">
                 {incidents.length === 0 ? (
-                    <Card className="border-slate-200">
+                    <Card className="monitor-soft-panel">
                         <CardContent className="p-8 text-center">
                             <p className="text-slate-500 text-sm">No open incidents</p>
                         </CardContent>
                     </Card>
                 ) : (
                     incidents.map(incident => (
-                        <Card key={incident.id} className="border-slate-200 hover:shadow-md transition-shadow">
+                        <Card key={incident.id} className={`monitor-soft-entry border-l-2 ${incident.status === 'open' ? 'border-l-rose-400' : 'border-l-amber-400'} hover:shadow-md transition-shadow`}>
                             <CardContent className="p-4">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 space-y-2">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="font-semibold text-slate-900">{incident.incident_number}</span>
-                                            <Badge variant="outline" className="border-slate-200 text-slate-600">
+                                            <span className="font-medium text-slate-900">{incident.incident_number}</span>
+                                            <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
                                                 {formatType(incident.incident_type)}
                                             </Badge>
-                                            <Badge variant="outline" className="border-slate-200 text-slate-600">
+                                            <Badge variant="outline" className={statusClass(incident.status)}>
                                                 {incident.status}
                                             </Badge>
                                         </div>
@@ -142,8 +148,8 @@ export default function IncidentsPage() {
                                     </div>
                                     {incident.total_cost != null && incident.total_cost > 0 && (
                                         <div className="text-right">
-                                            <p className="text-xs text-slate-400">Est. Cost</p>
-                                            <p className="font-semibold text-slate-900">R {incident.total_cost.toLocaleString()}</p>
+                                            <p className="text-xs text-slate-500">Est. Cost</p>
+                                            <p className="font-semibold text-rose-700">R {incident.total_cost.toLocaleString()}</p>
                                         </div>
                                     )}
                                 </div>

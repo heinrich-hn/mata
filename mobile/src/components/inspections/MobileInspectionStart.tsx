@@ -60,6 +60,7 @@ const MobileInspectionStart = () => {
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const vehicleParam = searchParams.get('vehicle');
+    const notesParam = searchParams.get('notes');
 
     if (vehicleParam && !selectedVehicleId) {
       const match = vehicles.find(v => v.registration_number === vehicleParam);
@@ -70,6 +71,10 @@ const MobileInspectionStart = () => {
           description: `${vehicleParam} loaded from URL`,
         });
       }
+    }
+
+    if (notesParam && !notes) {
+      setNotes(decodeURIComponent(notesParam));
     }
   }, [location.search, selectedVehicleId, vehicles]);
 
@@ -98,6 +103,9 @@ const MobileInspectionStart = () => {
 
     setLoading(true);
     try {
+      const searchParams = new URLSearchParams(location.search);
+      const breakdownId = searchParams.get('breakdownId');
+      const isFromBreakdown = !!breakdownId;
       const inspectionNumber = `INS-${Date.now()}`;
       const { data, error } = await supabase
         .from("vehicle_inspections")
@@ -115,12 +123,25 @@ const MobileInspectionStart = () => {
           odometer_reading: odometerReading ? parseInt(odometerReading) : null,
           notes: notes || null,
           status: "in_progress",
-          initiated_via: "mobile_app",
+          initiated_via: isFromBreakdown ? "breakdown" : "mobile_app",
         })
         .select()
         .single();
 
       if (error) throw error;
+
+      // If created from a breakdown, link the inspection back
+      if (breakdownId) {
+        const dbAny = supabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        await dbAny
+          .from("fleet_breakdowns")
+          .update({
+            status: "scheduled_for_inspection",
+            linked_inspection_id: data.id,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq("id", breakdownId);
+      }
 
       toast({
         title: "Inspection Started",

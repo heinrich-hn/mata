@@ -145,10 +145,10 @@ export default function DieselAlertsPage() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="max-w-[1600px] mx-auto w-full flex flex-col">
+    <div className="h-full overflow-y-auto">
+      <div className="monitor-page-wide w-full">
         {/* Stats and Actions Bar */}
-        <div className="flex-shrink-0 px-6 py-4 border-b border-slate-200">
+        <div className="flex-shrink-0 px-6 py-4 border border-slate-200/90 rounded-xl bg-gradient-to-r from-cyan-50/70 via-white to-blue-50/65 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div>
@@ -196,7 +196,7 @@ export default function DieselAlertsPage() {
         </div>
 
         {/* Driver list */}
-        <div className="flex-1 min-h-0 px-6 py-4 space-y-2">
+        <div className="flex-1 min-h-0 px-6 py-4 space-y-2 monitor-soft-panel rounded-xl">
           {records.length === 0 ? (
             <div className="flex items-center justify-center h-64 border border-slate-200 rounded-lg bg-slate-50/50">
               <div className="text-center">
@@ -272,7 +272,7 @@ export default function DieselAlertsPage() {
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-3">
-                              <span className="font-semibold text-sm text-slate-900">{record.fleet_number}</span>
+                              <span className="font-medium text-sm text-slate-900">{record.fleet_number}</span>
                               <span className="text-sm text-slate-500">
                                 {format(new Date(record.date), "dd MMM yyyy")}
                               </span>

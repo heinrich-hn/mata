@@ -7,16 +7,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+interface BreakdownPrefill {
+  breakdownId: string;
+  vehicleId?: string | null;
+  vehicleRegistration?: string | null;
+  vehicleMake?: string | null;
+  vehicleModel?: string | null;
+  notes?: string;
+}
 
 interface StartInspectionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onInspectionCreated: (inspectionId: string) => void;
+  breakdownPrefill?: BreakdownPrefill | null;
 }
 
-const StartInspectionDialog = ({ open, onOpenChange, onInspectionCreated }: StartInspectionDialogProps) => {
+const StartInspectionDialog = ({ open, onOpenChange, onInspectionCreated, breakdownPrefill }: StartInspectionDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     vehicle_id: undefined as string | undefined,
@@ -30,6 +40,20 @@ const StartInspectionDialog = ({ open, onOpenChange, onInspectionCreated }: Star
     odometer_reading: "",
     notes: "",
   });
+
+  // Pre-fill from breakdown when dialog opens
+  useEffect(() => {
+    if (breakdownPrefill && open) {
+      setFormData(prev => ({
+        ...prev,
+        vehicle_id: breakdownPrefill.vehicleId || undefined,
+        vehicle_registration: breakdownPrefill.vehicleRegistration || "",
+        vehicle_make: breakdownPrefill.vehicleMake || "",
+        vehicle_model: breakdownPrefill.vehicleModel || "",
+        notes: breakdownPrefill.notes || "",
+      }));
+    }
+  }, [breakdownPrefill, open]);
 
   const { data: vehicles = [] } = useQuery({
     queryKey: ["vehicles"],
@@ -130,11 +154,25 @@ const StartInspectionDialog = ({ open, onOpenChange, onInspectionCreated }: Star
           odometer_reading: formData.odometer_reading ? parseInt(formData.odometer_reading) : null,
           notes: formData.notes || null,
           status: "in_progress",
+          ...(breakdownPrefill?.breakdownId ? { initiated_via: "breakdown" } : {}),
         })
         .select()
         .single();
 
       if (error) throw error;
+
+      // If created from a breakdown, link the inspection back
+      if (breakdownPrefill?.breakdownId) {
+        const dbAny = supabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        await dbAny
+          .from("fleet_breakdowns")
+          .update({
+            status: "scheduled_for_inspection",
+            linked_inspection_id: data.id,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq("id", breakdownPrefill.breakdownId);
+      }
 
       toast.success("Inspection started successfully");
       onInspectionCreated(data.id);

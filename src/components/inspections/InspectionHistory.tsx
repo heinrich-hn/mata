@@ -1,27 +1,25 @@
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+AlertDialog,
+AlertDialogAction,
+AlertDialogCancel,
+AlertDialogContent,
+AlertDialogDescription,
+AlertDialogFooter,
+AlertDialogHeader,
+AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import
-  {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-  } from "@/components/ui/table";
+import {
+Table,
+TableBody,
+TableCell,
+TableHead,
+TableHeader,
+TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { generateInspectionPDF } from "@/lib/inspectionPdfExport";
@@ -50,6 +48,7 @@ interface InspectionHistoryRecord {
   corrective_action_status: string;
   linked_work_order?: string;
   inspection_type?: string;
+  initiated_via?: string;
   notes?: string;
   status: string;
 }
@@ -100,7 +99,8 @@ export function InspectionHistory() {
           inspector_name,
           notes,
           status,
-          inspection_type
+          inspection_type,
+          initiated_via
         `)
         .order("inspection_date", { ascending: false });
 
@@ -124,18 +124,18 @@ export function InspectionHistory() {
             .eq("inspection_id", inspection.id);
 
           // Count only REAL faults (not NA/default)
-          const realFaultCount = (faults || []).filter(f => 
-            f.fault_description && 
-            f.fault_description !== "NA" && 
-            f.fault_description !== "N/A" && 
+          const realFaultCount = (faults || []).filter(f =>
+            f.fault_description &&
+            f.fault_description !== "NA" &&
+            f.fault_description !== "N/A" &&
             f.fault_description.trim() !== ""
           ).length;
 
           // Check if any REAL faults have pending or no corrective action
-          const hasPendingAction = (faults || []).some(f => 
-            f.fault_description && 
-            f.fault_description !== "NA" && 
-            f.fault_description !== "N/A" && 
+          const hasPendingAction = (faults || []).some(f =>
+            f.fault_description &&
+            f.fault_description !== "NA" &&
+            f.fault_description !== "N/A" &&
             f.fault_description.trim() !== "" &&
             (!f.corrective_action_status || f.corrective_action_status === 'pending')
           );
@@ -166,6 +166,7 @@ export function InspectionHistory() {
             corrective_action_status: correctiveActionStatus,
             linked_work_order: workOrders?.job_number,
             inspection_type: inspection.inspection_type,
+            initiated_via: inspection.initiated_via || undefined,
             notes: inspection.notes || undefined,
             status: inspection.status,
           };
@@ -223,10 +224,10 @@ export function InspectionHistory() {
     }
 
     // Filter out NA/default faults
-    const realFaults = (faults || []).filter(f => 
-      f.fault_description && 
-      f.fault_description !== "NA" && 
-      f.fault_description !== "N/A" && 
+    const realFaults = (faults || []).filter(f =>
+      f.fault_description &&
+      f.fault_description !== "NA" &&
+      f.fault_description !== "N/A" &&
       f.fault_description.trim() !== ""
     );
 
@@ -261,10 +262,10 @@ export function InspectionHistory() {
     }
 
     // Filter out NA/default faults
-    const realFaults = (faults || []).filter(f => 
-      f.fault_description && 
-      f.fault_description !== "NA" && 
-      f.fault_description !== "N/A" && 
+    const realFaults = (faults || []).filter(f =>
+      f.fault_description &&
+      f.fault_description !== "NA" &&
+      f.fault_description !== "N/A" &&
       f.fault_description.trim() !== ""
     );
 
@@ -641,169 +642,176 @@ export function InspectionHistory() {
       {/* Table */}
       <Card>
         <div className="overflow-x-auto">
-        <Table className="min-w-[800px]">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[80px]">Action</TableHead>
-              <TableHead
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => handleSort("inspection_number")}
-              >
-                Report Number {sortColumn === "inspection_number" && (sortDirection === "asc" ? "↑" : "↓")}
-              </TableHead>
-              <TableHead
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => handleSort("inspection_date")}
-              >
-                Date {sortColumn === "inspection_date" && (sortDirection === "asc" ? "↑" : "↓")}
-              </TableHead>
-              <TableHead>Vehicle</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead>Inspector</TableHead>
-              <TableHead className="text-center">Fault</TableHead>
-              <TableHead className="text-center">Corrective Action</TableHead>
-              <TableHead>Linked WO</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
+          <Table className="min-w-[800px]">
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                  Loading inspections...
-                </TableCell>
+                <TableHead className="w-[80px]">Action</TableHead>
+                <TableHead
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => handleSort("inspection_number")}
+                >
+                  Report Number {sortColumn === "inspection_number" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
+                <TableHead
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => handleSort("inspection_date")}
+                >
+                  Date {sortColumn === "inspection_date" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
+                <TableHead>Vehicle</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Inspector</TableHead>
+                <TableHead className="text-center">Fault</TableHead>
+                <TableHead className="text-center">Corrective Action</TableHead>
+                <TableHead>Linked WO</TableHead>
               </TableRow>
-            ) : filteredInspections.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                  No inspections found
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredInspections.map((inspection) => (
-                <Fragment key={inspection.id}>
-                  <TableRow>
-                    <TableCell>
-                      <InspectionActionsMenu
-                        inspectionId={inspection.id}
-                        inspectionNumber={inspection.inspection_number}
-                        onView={() => handleView(inspection)}
-                        onShare={() => handleShare(inspection)}
-                        onCreateWorkOrder={() => handleCreateWorkOrder(inspection)}
-                        onCorrectiveAction={() => handleCorrectiveAction(inspection)}
-                        onRootCauseAnalysis={() => handleRootCauseAnalysis(inspection)}
-                        onViewPDF={() => handleViewPDF(inspection)}
-                        onArchive={() => handleArchive(inspection)}
-                        onDelete={() => handleDelete(inspection)}
-                        hasFaultsNeedingAction={inspection.fault_count > 0 && inspection.corrective_action_status === "PENDING"}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{inspection.inspection_number}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div>{new Date(inspection.inspection_date).toLocaleDateString("en-GB", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric"
-                        })}</div>
-                        <div className="text-muted-foreground text-xs">
-                          {new Date(inspection.inspection_date).toLocaleTimeString("en-US", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: true
-                          })}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div className="font-medium">{inspection.vehicle_registration}</div>
-                        {(inspection.vehicle_make || inspection.vehicle_model) && (
-                          <div className="text-muted-foreground text-xs">
-                            {inspection.vehicle_make} {inspection.vehicle_model}
-                          </div>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    Loading inspections...
+                  </TableCell>
+                </TableRow>
+              ) : filteredInspections.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    No inspections found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredInspections.map((inspection) => (
+                  <Fragment key={inspection.id}>
+                    <TableRow>
+                      <TableCell>
+                        <InspectionActionsMenu
+                          inspectionId={inspection.id}
+                          inspectionNumber={inspection.inspection_number}
+                          onView={() => handleView(inspection)}
+                          onShare={() => handleShare(inspection)}
+                          onCreateWorkOrder={() => handleCreateWorkOrder(inspection)}
+                          onCorrectiveAction={() => handleCorrectiveAction(inspection)}
+                          onRootCauseAnalysis={() => handleRootCauseAnalysis(inspection)}
+                          onViewPDF={() => handleViewPDF(inspection)}
+                          onArchive={() => handleArchive(inspection)}
+                          onDelete={() => handleDelete(inspection)}
+                          hasFaultsNeedingAction={inspection.fault_count > 0 && inspection.corrective_action_status === "PENDING"}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {inspection.inspection_number}
+                        {inspection.initiated_via === "breakdown" && (
+                          <Badge className="ml-2 bg-orange-100 text-orange-700 hover:bg-orange-100 text-[10px] px-1.5 py-0">
+                            Breakdown
+                          </Badge>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>Zimbabwe</TableCell>
-                    <TableCell>{inspection.inspector_name}</TableCell>
-                    <TableCell className="text-center">
-                      {inspection.fault_count > 0 ? (
-                        <Badge 
-                          variant="destructive" 
-                          className="gap-1 cursor-pointer hover:bg-red-700 transition-colors"
-                          onClick={() => handleViewFaults(inspection)}
-                          title="Click to view faults"
-                        >
-                          <TriangleAlert className="h-3 w-3" />
-                          {inspection.fault_count}
-                        </Badge>
-                      ) : (
-                        <Badge 
-                          variant="outline" 
-                          className="text-muted-foreground cursor-default"
-                        >
-                          None
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {inspection.corrective_action_status === "TAKEN" ? (
-                        <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                          TAKEN
-                        </Badge>
-                      ) : inspection.corrective_action_status === "PENDING" ? (
-                        <Badge variant="default" className="bg-yellow-600 hover:bg-yellow-700">
-                          PENDING
-                        </Badge>
-                      ) : null /* Show nothing when there are no faults */}
-                    </TableCell>
-                    <TableCell>
-                      {inspection.linked_work_order ? (
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="text-blue-600 hover:text-blue-800 p-0 h-auto"
-                          onClick={() => {
-                            navigate(`/job-cards?search=${inspection.linked_work_order}`);
-                          }}
-                        >
-                          {inspection.linked_work_order}
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Expandable details row */}
-                  {inspection.inspection_type && (
-                    <TableRow className="bg-muted/30">
-                      <TableCell colSpan={9} className="py-2">
-                        <div className="flex items-center gap-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">Inspection Checklist:</span>
-                            <span className="text-muted-foreground">
-                              {inspection.inspection_type}
-                            </span>
-                            <Button variant="ghost" size="sm" className="h-6 px-2">
-                              <Printer className="h-3 w-3" />
-                            </Button>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div>{new Date(inspection.inspection_date).toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric"
+                          })}</div>
+                          <div className="text-muted-foreground text-xs">
+                            {new Date(inspection.inspection_date).toLocaleTimeString("en-US", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true
+                            })}
                           </div>
-                          {inspection.notes && (
-                            <div className="flex items-start gap-2 flex-1">
-                              <span className="font-medium">Note:</span>
-                              <span className="text-muted-foreground">{inspection.notes}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div className="font-medium">{inspection.vehicle_registration}</div>
+                          {(inspection.vehicle_make || inspection.vehicle_model) && (
+                            <div className="text-muted-foreground text-xs">
+                              {inspection.vehicle_make} {inspection.vehicle_model}
                             </div>
                           )}
                         </div>
                       </TableCell>
+                      <TableCell>Zimbabwe</TableCell>
+                      <TableCell>{inspection.inspector_name}</TableCell>
+                      <TableCell className="text-center">
+                        {inspection.fault_count > 0 ? (
+                          <Badge
+                            variant="destructive"
+                            className="gap-1 cursor-pointer hover:bg-red-700 transition-colors"
+                            onClick={() => handleViewFaults(inspection)}
+                            title="Click to view faults"
+                          >
+                            <TriangleAlert className="h-3 w-3" />
+                            {inspection.fault_count}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-muted-foreground cursor-default"
+                          >
+                            None
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {inspection.corrective_action_status === "TAKEN" ? (
+                          <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                            TAKEN
+                          </Badge>
+                        ) : inspection.corrective_action_status === "PENDING" ? (
+                          <Badge variant="default" className="bg-yellow-600 hover:bg-yellow-700">
+                            PENDING
+                          </Badge>
+                        ) : null /* Show nothing when there are no faults */}
+                      </TableCell>
+                      <TableCell>
+                        {inspection.linked_work_order ? (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="text-blue-600 hover:text-blue-800 p-0 h-auto"
+                            onClick={() => {
+                              navigate(`/job-cards?search=${inspection.linked_work_order}`);
+                            }}
+                          >
+                            {inspection.linked_work_order}
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  )}
-                </Fragment>
-              ))
-            )}
-          </TableBody>
-        </Table>
+
+                    {/* Expandable details row */}
+                    {inspection.inspection_type && (
+                      <TableRow className="bg-muted/30">
+                        <TableCell colSpan={9} className="py-2">
+                          <div className="flex items-center gap-4 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Inspection Checklist:</span>
+                              <span className="text-muted-foreground">
+                                {inspection.inspection_type}
+                              </span>
+                              <Button variant="ghost" size="sm" className="h-6 px-2">
+                                <Printer className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            {inspection.notes && (
+                              <div className="flex items-start gap-2 flex-1">
+                                <span className="font-medium">Note:</span>
+                                <span className="text-muted-foreground">{inspection.notes}</span>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
 
         {/* Pagination */}

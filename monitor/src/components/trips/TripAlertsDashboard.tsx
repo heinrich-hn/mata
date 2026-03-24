@@ -35,11 +35,11 @@ export function TripAlertsDashboard() {
       case 'duplicate_pod':
         return <AlertTriangle className="h-4 w-4 text-destructive" />;
       case 'load_exception':
-        return <DollarSign className="h-4 w-4 text-amber-500" />;
+        return <DollarSign className="h-4 w-4 text-amber-600" />;
       case 'trip_delay':
-        return <Clock className="h-4 w-4 text-blue-500" />;
+        return <Clock className="h-4 w-4 text-blue-600" />;
       case 'fuel_anomaly':
-        return <Fuel className="h-4 w-4 text-orange-500" />;
+        return <Fuel className="h-4 w-4 text-orange-600" />;
       default:
         return <AlertCircle className="h-4 w-4 text-muted-foreground" />;
     }
@@ -50,11 +50,11 @@ export function TripAlertsDashboard() {
       case 'critical':
         return 'bg-destructive/10 text-destructive border-destructive/20';
       case 'high':
-        return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
+        return 'bg-orange-50 text-orange-700 border-orange-200';
       case 'medium':
-        return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+        return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'low':
-        return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
+        return 'bg-blue-50 text-blue-700 border-blue-200';
       default:
         return 'bg-muted text-muted-foreground border-border';
     }

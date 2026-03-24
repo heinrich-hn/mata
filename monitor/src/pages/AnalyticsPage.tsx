@@ -11,10 +11,10 @@ export default function AnalyticsPage() {
   const { filters } = filterState;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50/50">
-      <div className="px-8 py-8 space-y-8 max-w-[1600px] mx-auto">
+    <div className="h-full overflow-y-auto">
+      <div className="monitor-page-wide space-y-8">
         {/* Filters */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="monitor-soft-panel rounded-xl">
           <AlertFilterBar {...filterState} />
         </div>
 
@@ -23,24 +23,24 @@ export default function AnalyticsPage() {
 
         {/* Charts row 1: Trend + Category */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="lg:col-span-2 monitor-soft-panel rounded-xl overflow-hidden">
             <div className="px-6 pt-5 pb-3 border-b border-slate-100">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-500">
                 Alert Volume Trend
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">Time-series analysis of total alert volume</p>
+              <p className="text-xs text-slate-500 mt-0.5">Time-series analysis of total alert volume</p>
             </div>
             <div className="p-5">
               <AlertTrendChart filters={filters} />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="monitor-soft-panel rounded-xl overflow-hidden">
             <div className="px-6 pt-5 pb-3 border-b border-slate-100">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-500">
                 Category Distribution
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">Breakdown by alert classification</p>
+              <p className="text-xs text-slate-500 mt-0.5">Breakdown by alert classification</p>
             </div>
             <div className="p-5">
               <AlertCategoryChart filters={filters} />
@@ -50,24 +50,24 @@ export default function AnalyticsPage() {
 
         {/* Charts row 2: Daily bar + Source table */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="monitor-soft-panel rounded-xl overflow-hidden">
             <div className="px-6 pt-5 pb-3 border-b border-slate-100">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-500">
                 Daily Alert Volume
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">Last 7 days total volume</p>
+              <p className="text-xs text-slate-500 mt-0.5">Last 7 days total volume</p>
             </div>
             <div className="p-5">
               <DailyBarChart />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="monitor-soft-panel rounded-xl overflow-hidden">
             <div className="px-6 pt-5 pb-3 border-b border-slate-100">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-slate-500">
                 Top Alert Sources
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">Highest volume alert sources</p>
+              <p className="text-xs text-slate-500 mt-0.5">Highest volume alert sources</p>
             </div>
             <div className="overflow-x-auto">
               <AlertsBySourceTable filters={filters} />

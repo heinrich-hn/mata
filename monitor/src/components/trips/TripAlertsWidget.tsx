@@ -34,11 +34,11 @@ export function TripAlertsWidget() {
       case 'duplicate_pod':
         return <AlertTriangle className="h-4 w-4 text-destructive" />;
       case 'load_exception':
-        return <DollarSign className="h-4 w-4 text-amber-500" />;
+        return <DollarSign className="h-4 w-4 text-amber-600" />;
       case 'trip_delay':
-        return <Clock className="h-4 w-4 text-blue-500" />;
+        return <Clock className="h-4 w-4 text-blue-600" />;
       case 'fuel_anomaly':
-        return <Fuel className="h-4 w-4 text-orange-500" />;
+        return <Fuel className="h-4 w-4 text-orange-600" />;
       default:
         return <AlertTriangle className="h-4 w-4 text-muted-foreground" />;
     }

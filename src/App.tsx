@@ -16,34 +16,46 @@ import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
+// Retry dynamic imports once on failure (handles stale chunks after redeployment)
+function lazyWithRetry(importFn: () => Promise<{ default: React.ComponentType }>) {
+  return React.lazy(() =>
+    importFn().catch(() => {
+      // If chunk fails to load, reload the page to get fresh index.html
+      window.location.reload();
+      // Return a never-resolving promise to prevent rendering stale UI
+      return new Promise(() => { });
+    })
+  );
+}
+
 // Heavy pages lazy-loaded for code splitting
-const ActionLog = React.lazy(() => import("./pages/ActionLog"));
-const Admin = React.lazy(() => import("./pages/Admin"));
-const Analytics = React.lazy(() => import("./pages/Analytics"));
-const CostManagement = React.lazy(() => import("./pages/CostManagement"));
-const DieselManagement = React.lazy(() => import("./pages/DieselManagement"));
-const DriverManagement = React.lazy(() => import("./pages/DriverManagement"));
-const FuelBunkers = React.lazy(() => import("./pages/FuelBunkers"));
-const Incidents = React.lazy(() => import("./pages/Incidents"));
-const InspectionDetails = React.lazy(() => import("./pages/InspectionDetails"));
-const Inspections = React.lazy(() => import("./pages/Inspections"));
-const InspectorProfiles = React.lazy(() => import("./pages/InspectorProfiles"));
-const Invoicing = React.lazy(() => import("./pages/Invoicing"));
-const JobCardDetails = React.lazy(() => import("./pages/JobCardDetails"));
-const JobCards = React.lazy(() => import("./pages/JobCards"));
-const MaintenanceScheduling = React.lazy(() => import("./pages/MaintenanceScheduling"));
-const MobileInspections = React.lazy(() => import("./pages/MobileInspections"));
-const PerformanceAnalytics = React.lazy(() => import("./pages/PerformanceAnalytics"));
-const Procurement = React.lazy(() => import("./pages/Procurement"));
-const TripManagement = React.lazy(() => import("./pages/TripManagement"));
-const TyreInspections = React.lazy(() => import("./pages/TyreInspections"));
-const TyreManagement = React.lazy(() => import("./pages/TyreManagement"));
-const UnifiedMapPage = React.lazy(() => import("./pages/UnifiedMapPage"));
-const Vehicles = React.lazy(() => import("./pages/Vehicles"));
-const Vendors = React.lazy(() => import("./pages/Vendors"));
+const ActionLog = lazyWithRetry(() => import("./pages/ActionLog"));
+const Admin = lazyWithRetry(() => import("./pages/Admin"));
+const Analytics = lazyWithRetry(() => import("./pages/Analytics"));
+const CostManagement = lazyWithRetry(() => import("./pages/CostManagement"));
+const DieselManagement = lazyWithRetry(() => import("./pages/DieselManagement"));
+const DriverManagement = lazyWithRetry(() => import("./pages/DriverManagement"));
+const FuelBunkers = lazyWithRetry(() => import("./pages/FuelBunkers"));
+const Incidents = lazyWithRetry(() => import("./pages/Incidents"));
+const InspectionDetails = lazyWithRetry(() => import("./pages/InspectionDetails"));
+const Inspections = lazyWithRetry(() => import("./pages/Inspections"));
+const InspectorProfiles = lazyWithRetry(() => import("./pages/InspectorProfiles"));
+const Invoicing = lazyWithRetry(() => import("./pages/Invoicing"));
+const JobCardDetails = lazyWithRetry(() => import("./pages/JobCardDetails"));
+const JobCards = lazyWithRetry(() => import("./pages/JobCards"));
+const MaintenanceScheduling = lazyWithRetry(() => import("./pages/MaintenanceScheduling"));
+const MobileInspections = lazyWithRetry(() => import("./pages/MobileInspections"));
+const PerformanceAnalytics = lazyWithRetry(() => import("./pages/PerformanceAnalytics"));
+const Procurement = lazyWithRetry(() => import("./pages/Procurement"));
+const TripManagement = lazyWithRetry(() => import("./pages/TripManagement"));
+const TyreInspections = lazyWithRetry(() => import("./pages/TyreInspections"));
+const TyreManagement = lazyWithRetry(() => import("./pages/TyreManagement"));
+const UnifiedMapPage = lazyWithRetry(() => import("./pages/UnifiedMapPage"));
+const Vehicles = lazyWithRetry(() => import("./pages/Vehicles"));
+const Vendors = lazyWithRetry(() => import("./pages/Vendors"));
 
 // Lazy-loaded sub-route component
-const InspectionTypeSelector = React.lazy(() => import("./components/inspections/InspectionTypeSelector"));
+const InspectionTypeSelector = lazyWithRetry(() => import("./components/inspections/InspectionTypeSelector"));
 
 const queryClient = new QueryClient();
 

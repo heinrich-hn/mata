@@ -70,6 +70,7 @@ import {
   Calendar,
   CheckCircle2,
   ClipboardList,
+  DollarSign,
   Droplets,
   Edit,
   FileSpreadsheet,
@@ -94,6 +95,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import Layout from "../Layout";
+import SupplierPriceTracker from "./SupplierPriceTracker";
 import { DatePicker } from "../ui/date-picker";
 
 const FUEL_TYPES = ["Diesel", "Petrol", "LPG", "CNG", "Electric"];
@@ -636,6 +638,10 @@ const FuelBunkerManagement = () => {
               <TabsTrigger value="transactions" className="gap-2 data-[state=active]:bg-background px-4 py-2">
                 <History className="h-4 w-4" />
                 Transaction History
+              </TabsTrigger>
+              <TabsTrigger value="supplier-prices" className="gap-2 data-[state=active]:bg-background px-4 py-2">
+                <DollarSign className="h-4 w-4" />
+                Supplier Prices
               </TabsTrigger>
             </TabsList>
             {/* Bunkers Tab */}
@@ -1275,6 +1281,11 @@ const FuelBunkerManagement = () => {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Supplier Prices Tab */}
+            <TabsContent value="supplier-prices">
+              <SupplierPriceTracker />
             </TabsContent>
           </Tabs>
           {/* All Dialog Components (unchanged) */}
@@ -2064,10 +2075,10 @@ const FuelBunkerManagement = () => {
                               <div className="text-muted-foreground">Variance</div>
                               <div
                                 className={`font-mono font-bold ${Math.abs(liveVariance) <= 10
-                                    ? "text-green-600"
-                                    : liveVariance > 0
-                                      ? "text-red-600"
-                                      : "text-orange-500"
+                                  ? "text-green-600"
+                                  : liveVariance > 0
+                                    ? "text-red-600"
+                                    : "text-orange-500"
                                   }`}
                               >
                                 {liveVariance.toLocaleString()} L

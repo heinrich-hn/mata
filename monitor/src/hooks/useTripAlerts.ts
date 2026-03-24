@@ -4,6 +4,8 @@ import {
   createMissingRevenueAlert,
   createFlaggedCostAlert,
   createNoCostsAlert,
+  createUnverifiedCostsAlert,
+  createMissingDocumentsAlert,
 } from '@/lib/tripAlerts';
 import { resolveAlertsByTrip, resolveDuplicatePODAlerts } from '@/lib/resolveAlerts';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,6 +62,10 @@ export interface Trip {
   hasFlaggedCosts?: boolean;
   flaggedCostCount?: number;
   hasNoCosts?: boolean;
+  hasUnverifiedCosts?: boolean;
+  unverifiedCostCount?: number;
+  hasMissingDocuments?: boolean;
+  missingDocumentCount?: number;
   daysInProgress?: number;
   costs?: Cost[];
   additional_costs?: AdditionalCost[];
@@ -108,7 +114,7 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
       for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
       return chunks;
     };
-    const BATCH = 40; // Keep well under URL length limits (~40 UUIDs ≈ 1500 chars)
+    const BATCH = 20; // Keep well under URL length limits (~20 UUIDs ≈ 800 chars)
     const PAGE_SIZE = 1000;
 
     try {
@@ -139,6 +145,8 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
         'missing_revenue': 'missing-revenue',
         'flagged_costs': 'flagged-costs',
         'no_costs': 'no-costs',
+        'unverified_costs': 'unverified-costs',
+        'missing_documents': 'missing-documents',
         'duplicate_pod': 'duplicate-pod',
         'long_running': 'long-running',
       };
@@ -309,6 +317,16 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
           issuesResolved.push('no-costs');
         }
 
+        // Check if unverified costs were resolved (all costs now verified)
+        if (previousTrip.hasUnverifiedCosts && !trip.hasUnverifiedCosts) {
+          issuesResolved.push('unverified-costs');
+        }
+
+        // Check if missing documents were resolved (documents uploaded)
+        if (previousTrip.hasMissingDocuments && !trip.hasMissingDocuments) {
+          issuesResolved.push('missing-documents');
+        }
+
         if (issuesResolved.length > 0) {
           resolvedIssues.set(trip.id, issuesResolved);
         }
@@ -349,6 +367,8 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
               'missing-revenue': { categories: ['load_exception'], issueType: 'missing_revenue' },
               'flagged-costs': { categories: ['fuel_anomaly'], issueType: 'flagged_costs' },
               'no-costs': { categories: ['fuel_anomaly'], issueType: 'no_costs' },
+              'unverified-costs': { categories: ['fuel_anomaly'], issueType: 'unverified_costs' },
+              'missing-documents': { categories: ['fuel_anomaly'], issueType: 'missing_documents' },
             };
             const resolution = resolutionMap[issue];
             if (resolution) {
@@ -457,6 +477,38 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
                 }
               } catch (error) {
                 console.error('Error creating no costs alert:', error);
+              }
+            }
+          }
+
+          // Check for unverified expenses — only completed trips (active trips are still being worked on)
+          if (trip.hasUnverifiedCosts && trip.unverifiedCostCount && trip.status === 'completed') {
+            const alertKey = `unverified-costs-${trip.id}`;
+            if (!processedAlerts.current.has(alertKey)) {
+              try {
+                const alertId = await createUnverifiedCostsAlert(trip.id, trip.trip_number, trip.unverifiedCostCount, context);
+                if (alertId) {
+                  processedAlerts.current.add(alertKey);
+                  onAlertCreated?.(alertId, 'unverified_costs');
+                }
+              } catch (error) {
+                console.error('Error creating unverified costs alert:', error);
+              }
+            }
+          }
+
+          // Check for missing documents — only completed trips (active trips may still get docs uploaded)
+          if (trip.hasMissingDocuments && trip.missingDocumentCount && trip.status === 'completed') {
+            const alertKey = `missing-documents-${trip.id}`;
+            if (!processedAlerts.current.has(alertKey)) {
+              try {
+                const alertId = await createMissingDocumentsAlert(trip.id, trip.trip_number, trip.missingDocumentCount, context);
+                if (alertId) {
+                  processedAlerts.current.add(alertKey);
+                  onAlertCreated?.(alertId, 'missing_documents');
+                }
+              } catch (error) {
+                console.error('Error creating missing documents alert:', error);
               }
             }
           }

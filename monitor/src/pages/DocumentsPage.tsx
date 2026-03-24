@@ -203,74 +203,62 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="border-b border-slate-200 pb-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Document Expiry Alerts
-          </h1>
-          <p className="text-sm text-slate-500 font-normal">
-            Monitor expiring and expired documents
-          </p>
-        </div>
-      </div>
-
-      {/* Stats Cards - Neutral colors */}
+    <div className="monitor-page">
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="border-slate-200">
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+        <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/55 to-white">
+          <CardHeader className="pb-1 pt-2 px-3">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-blue-700/80">
               Total Alerts
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <div className="text-2xl font-bold text-slate-900">{stats.total}</div>
-            <p className="text-[10px] text-slate-400">{stats.vehicle} vehicle · {stats.driver} driver</p>
+          <CardContent className="pb-2 px-3">
+            <div className="text-xl font-bold text-blue-700">{stats.total}</div>
+            <p className="text-xs text-slate-500">{stats.vehicle} vehicle · {stats.driver} driver</p>
           </CardContent>
         </Card>
-        <Card className="border-slate-200">
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+        <Card className="border-rose-200/80 bg-gradient-to-br from-rose-50/55 to-white">
+          <CardHeader className="pb-1 pt-2 px-3">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-rose-700/80">
               Overdue
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <div className="text-2xl font-bold text-slate-700">{stats.overdue}</div>
-            <p className="text-[10px] text-slate-400">Requires action</p>
+          <CardContent className="pb-2 px-3">
+            <div className="text-xl font-bold text-rose-700">{stats.overdue}</div>
+            <p className="text-xs text-slate-500">Requires action</p>
           </CardContent>
         </Card>
-        <Card className="border-slate-200">
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+        <Card className="border-amber-200/80 bg-gradient-to-br from-amber-50/55 to-white">
+          <CardHeader className="pb-1 pt-2 px-3">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-amber-700/80">
               Expiring Soon
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <div className="text-2xl font-bold text-slate-700">{stats.expiringSoon}</div>
-            <p className="text-[10px] text-slate-400">Within 30 days</p>
+          <CardContent className="pb-2 px-3">
+            <div className="text-xl font-bold text-amber-700">{stats.expiringSoon}</div>
+            <p className="text-xs text-slate-500">Within 30 days</p>
           </CardContent>
         </Card>
-        <Card className="border-slate-200">
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+        <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50/55 to-white">
+          <CardHeader className="pb-1 pt-2 px-3">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-emerald-700/80">
               Vehicles
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <div className="text-2xl font-bold text-slate-900">{stats.vehicle}</div>
-            <p className="text-[10px] text-slate-400">With alerts</p>
+          <CardContent className="pb-2 px-3">
+            <div className="text-xl font-bold text-emerald-700">{stats.vehicle}</div>
+            <p className="text-xs text-slate-500">With alerts</p>
           </CardContent>
         </Card>
-        <Card className="border-slate-200">
-          <CardHeader className="pb-2 pt-3 px-4">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+        <Card className="border-cyan-200/80 bg-gradient-to-br from-cyan-50/55 to-white">
+          <CardHeader className="pb-1 pt-2 px-3">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-cyan-700/80">
               Drivers
             </CardTitle>
           </CardHeader>
-          <CardContent className="pb-3 px-4">
-            <div className="text-2xl font-bold text-slate-900">{stats.driver}</div>
-            <p className="text-[10px] text-slate-400">With alerts</p>
+          <CardContent className="pb-2 px-3">
+            <div className="text-xl font-bold text-cyan-700">{stats.driver}</div>
+            <p className="text-xs text-slate-500">With alerts</p>
           </CardContent>
         </Card>
       </div>
@@ -318,12 +306,12 @@ export default function DocumentsPage() {
 
       {/* Tabs */}
       <Tabs value={entityFilter} onValueChange={(v) => setEntityFilter(v as EntityType)} className="w-full">
-        <TabsList className="w-full sm:w-auto bg-slate-100 border border-slate-200">
-          <TabsTrigger value="vehicle" className="gap-1.5 flex-1 sm:flex-none text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900">
+        <TabsList className="w-full sm:w-auto bg-slate-100 border border-slate-200 p-0.5">
+          <TabsTrigger value="vehicle" className="gap-1.5 flex-1 sm:flex-none text-xs border-b-2 border-transparent data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:border-emerald-500">
             <Truck className="h-3.5 w-3.5" />
             Vehicles ({stats.vehicle})
           </TabsTrigger>
-          <TabsTrigger value="driver" className="gap-1.5 flex-1 sm:flex-none text-xs data-[state=active]:bg-white data-[state=active]:text-slate-900">
+          <TabsTrigger value="driver" className="gap-1.5 flex-1 sm:flex-none text-xs border-b-2 border-transparent data-[state=active]:bg-cyan-50 data-[state=active]:text-cyan-700 data-[state=active]:border-cyan-500">
             <User className="h-3.5 w-3.5" />
             Drivers ({stats.driver})
           </TabsTrigger>
@@ -332,7 +320,7 @@ export default function DocumentsPage() {
 
       {/* Alerts List */}
       {filtered.length === 0 ? (
-        <Card className="border-slate-200">
+        <Card className="monitor-soft-panel">
           <CardContent className="py-12">
             <div className="flex flex-col items-center text-center">
               <FileText className="h-12 w-12 text-slate-300 mb-3" />
@@ -344,7 +332,7 @@ export default function DocumentsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 overflow-hidden">
+        <div className="monitor-soft-panel rounded-lg divide-y divide-slate-100 overflow-hidden">
           {filtered.map((row) => {
             const exportAlert: DocumentAlert = {
               entityType: row.entityType,
@@ -360,7 +348,7 @@ export default function DocumentsPage() {
             return (
               <div
                 key={row.id}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+                className={`flex items-center gap-3 px-4 py-3 transition-colors ${row.isOverdue ? 'hover:bg-rose-50/40' : 'hover:bg-amber-50/40'}`}
               >
                 {/* Document info */}
                 <div className="min-w-0 flex-1">
@@ -369,12 +357,12 @@ export default function DocumentsPage() {
                     {row.entityDetail && (
                       <span className="text-xs text-slate-500">{row.entityDetail}</span>
                     )}
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-slate-200 text-slate-600">
+                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 border-blue-200 text-blue-700 bg-blue-50">
                       {formatDocumentType(row.documentType)}
                     </Badge>
                   </div>
                   {row.documentNumber && (
-                    <span className="text-[11px] text-slate-400 font-mono">{row.documentNumber}</span>
+                    <span className="text-xs text-slate-500 font-mono">{row.documentNumber}</span>
                   )}
                 </div>
 
@@ -384,7 +372,7 @@ export default function DocumentsPage() {
                     <CalendarDays className="h-3 w-3 text-slate-400" />
                     {format(new Date(row.expiryDate), "dd MMM yyyy")}
                   </div>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-xs text-slate-500">
                     {row.isOverdue
                       ? `${Math.abs(row.daysUntilExpiry)}d overdue`
                       : `${row.daysUntilExpiry}d remaining`}
@@ -393,7 +381,7 @@ export default function DocumentsPage() {
 
                 {/* Status badge - neutral */}
                 <div className="shrink-0">
-                  <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-600 border-slate-200">
+                  <Badge className={`text-xs px-1.5 py-0.5 ${row.isOverdue ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                     {row.isOverdue ? "OVERDUE" : "EXPIRING"}
                   </Badge>
                 </div>

@@ -1,45 +1,41 @@
 import { CostForm } from '@/components/costs/CostForm';
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from '@/components/ui/alert-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-  } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from '@/components/ui/select';
-import
-  {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-  } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   Tooltip,
   TooltipContent,
@@ -56,25 +52,24 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import
-  {
-    AlertTriangle,
-    CheckCircle,
-    ChevronDown,
-    ChevronRight,
-    DollarSign,
-    Download,
-    Edit,
-    Eye,
-    FileText,
-    FileWarning,
-    Flag,
-    RotateCcw,
-    Search,
-    ShieldCheck,
-    Trash2,
-    Truck
-  } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  DollarSign,
+  Download,
+  Edit,
+  Eye,
+  FileText,
+  FileWarning,
+  Flag,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Truck
+} from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -118,8 +113,9 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
   const [isVerifying, setIsVerifying] = useState(false);
   const [selectedTripsForVerify, setSelectedTripsForVerify] = useState<Set<string>>(new Set());
   const [isBulkVerifying, setIsBulkVerifying] = useState(false);
-  const [costToApprove, setCostToApprove] = useState<CostEntry | null>(null);
-  const [isApproving, setIsApproving] = useState(false);
+  const [verifyingCostIds, setVerifyingCostIds] = useState<Set<string>>(new Set());
+  const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
+  const [isBulkVerifyingExpenses, setIsBulkVerifyingExpenses] = useState(false);
 
   // Fetch wialon vehicles for fleet mapping
   const { data: wialonVehicles = [] } = useWialonVehicles();
@@ -158,8 +154,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
     queryKey: ['all-expenses', tripIds],
     queryFn: async () => {
       // Fetch ALL cost_entries using pagination to bypass Supabase's 1000-row default limit
-      type CostRow = NonNullable<Awaited<ReturnType<typeof supabase.from<'cost_entries'>['select']>>['data']>[number];
-      let allData: CostRow[] = [];
+      let allData: any[] = [];
       let from = 0;
       const PAGE_SIZE = 1000;
 
@@ -248,7 +243,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
         const isMissingSlip = !expense.attachments || expense.attachments.length === 0;
         // Once approved/resolved, the cost no longer needs attention
         const needsAttention = isResolved ? false : (hasUnresolvedFlag || isMissingSlip);
-        
+
         if (filterStatus === 'needs-attention' && !needsAttention) {
           return false;
         }
@@ -286,7 +281,18 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
   }, [expenses, searchQuery, filterStatus, filterTripStatus, filterCategory, filterFleet]);
 
   // Group filtered expenses by trip
+  // In "needs-attention" mode, show ALL expenses for trips that have at least one
+  // item needing attention — so verifying one expense doesn't collapse the group.
   const expensesByTrip = useMemo(() => {
+    // First, identify trip IDs that matched the filter
+    const filteredTripIds = new Set(filteredExpenses.map(e => e.trip_id || 'no-trip'));
+
+    // For needs-attention, use ALL expenses for those trips (gives full context)
+    // For other filters, only show the filtered expenses
+    const expensesToGroup = filterStatus === 'needs-attention'
+      ? expenses.filter(e => filteredTripIds.has(e.trip_id || 'no-trip'))
+      : filteredExpenses;
+
     const grouped: Record<string, {
       tripId: string;
       tripNumber: string;
@@ -301,11 +307,11 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
       missingSlipCount: number;
     }> = {};
 
-    filteredExpenses.forEach((expense) => {
+    expensesToGroup.forEach((expense) => {
       const tripId = expense.trip_id || 'no-trip';
       const hasUnresolvedFlag = expense.is_flagged && expense.investigation_status !== 'resolved';
       const isMissingSlip = !expense.attachments || expense.attachments.length === 0;
-      
+
       if (!grouped[tripId]) {
         grouped[tripId] = {
           tripId,
@@ -343,16 +349,16 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
       }
       return (a.tripNumber || '').localeCompare(b.tripNumber || '');
     });
-  }, [filteredExpenses]);
+  }, [filteredExpenses, expenses, filterStatus]);
 
   // Get trips with no expenses that need attention (both active AND completed)
   // Exclude trips that have been verified as intentionally having no costs
   const tripsWithNoExpenses = useMemo(() => {
     if (filterStatus !== 'needs-attention') return [];
-    
+
     const tripsWithCosts = new Set(expenses.map(e => e.trip_id).filter(Boolean));
-    return trips.filter(trip => 
-      !tripsWithCosts.has(trip.id) && 
+    return trips.filter(trip =>
+      !tripsWithCosts.has(trip.id) &&
       !trip.verified_no_costs // Exclude verified trips
     );
   }, [trips, expenses, filterStatus]);
@@ -360,7 +366,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
   // Handle marking a trip as verified no costs
   const handleVerifyNoCosts = async () => {
     if (!tripToVerifyNoCosts) return;
-    
+
     setIsVerifying(true);
     try {
       const { error } = await supabase
@@ -378,14 +384,14 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
         title: 'Trip Verified',
         description: `POD #${tripToVerifyNoCosts.trip_number} marked as verified with no costs.`,
       });
-      
+
       // Close dialog first
       setTripToVerifyNoCosts(null);
-      
+
       // Force refetch queries immediately (not just invalidate)
       await queryClient.refetchQueries({ queryKey: ['trips'] });
       await queryClient.refetchQueries({ queryKey: ['all-expenses'] });
-      
+
     } catch (err) {
       console.error('Error verifying trip:', err);
       toast({
@@ -401,7 +407,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
   // Handle bulk verification of multiple trips
   const handleBulkVerifyNoCosts = async () => {
     if (selectedTripsForVerify.size === 0) return;
-    
+
     setIsBulkVerifying(true);
     const tripIds = Array.from(selectedTripsForVerify);
 
@@ -419,7 +425,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
       if (error) {
         throw error;
       }
-      
+
       toast({
         title: 'Bulk Verification Complete',
         description: `${tripIds.length} trip(s) marked as verified with no costs.`,
@@ -427,11 +433,11 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
 
       // Clear selection
       setSelectedTripsForVerify(new Set());
-      
+
       // Force refetch
       await queryClient.refetchQueries({ queryKey: ['trips'] });
       await queryClient.refetchQueries({ queryKey: ['all-expenses'] });
-      
+
     } catch (err) {
       console.error('Error bulk verifying trips:', err);
       toast({
@@ -903,22 +909,79 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
     }
   };
 
-  const handleApproveCost = async () => {
-    if (!costToApprove) return;
+  /**
+   * After approving a cost, check if ALL costs for that trip are now resolved.
+   * If so, resolve the unverified_costs and missing_documents alerts.
+   */
+  const tryResolveVerificationAlerts = async (tripId: string | undefined) => {
+    if (!tripId) return;
+    try {
+      const { count } = await supabase
+        .from('cost_entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('trip_id', tripId)
+        .neq('investigation_status', 'resolved');
 
-    const tripId = costToApprove.trip_id;
-    const costId = costToApprove.id;
+      if (count === 0) {
+        // All costs verified — resolve unverified_costs alert
+        await supabase
+          .from('alerts')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolution_note: 'All expenses verified',
+          })
+          .eq('source_type', 'trip')
+          .eq('source_id', tripId)
+          .eq('category', 'fuel_anomaly')
+          .eq('status', 'active')
+          .filter('metadata->>issue_type', 'eq', 'unverified_costs');
+
+        // Also resolve missing_documents alert
+        await supabase
+          .from('alerts')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolution_note: 'All expenses verified',
+          })
+          .eq('source_type', 'trip')
+          .eq('source_id', tripId)
+          .eq('category', 'fuel_anomaly')
+          .eq('status', 'active')
+          .filter('metadata->>issue_type', 'eq', 'missing_documents');
+      }
+    } catch (err) {
+      console.error('Error resolving verification alerts:', err);
+    }
+  };
+
+  // Verification reason options for the inline select
+  const VERIFY_REASONS = [
+    { value: 'verified', label: 'Verified' },
+    { value: 'not_needed', label: 'Not needed' },
+    { value: 'small_amount', label: 'Too small amount' },
+    { value: 'recurring_fee', label: 'Recurring fee' },
+    { value: 'driver_confirmed', label: 'Driver confirmed' },
+    { value: 'management_approved', label: 'Management approved' },
+  ] as const;
+
+  const handleVerifyCost = async (expense: ExpenseWithTrip, reason: string) => {
+    const costId = expense.id;
+    const tripId = expense.trip_id;
     const now = new Date().toISOString();
     const approver = user?.email || 'admin';
-    setIsApproving(true);
+    const reasonLabel = VERIFY_REASONS.find(r => r.value === reason)?.label || reason;
+
+    setVerifyingCostIds(prev => new Set(prev).add(costId));
     try {
       const { error } = await supabase
         .from('cost_entries')
         .update({
           investigation_status: 'resolved',
-          investigation_notes: costToApprove.investigation_notes
-            ? `${costToApprove.investigation_notes}\n\n--- APPROVED ---\nApproved by ${approver} on ${new Date().toLocaleDateString('en-ZA')}`
-            : `Approved by ${approver} on ${new Date().toLocaleDateString('en-ZA')}`,
+          investigation_notes: expense.investigation_notes
+            ? `${expense.investigation_notes}\n\n--- VERIFIED ---\n${reasonLabel} by ${approver} on ${new Date().toLocaleDateString('en-ZA')}`
+            : `${reasonLabel} by ${approver} on ${new Date().toLocaleDateString('en-ZA')}`,
           resolved_at: now,
           resolved_by: approver,
         })
@@ -926,16 +989,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
 
       if (error) throw error;
 
-      // Resolve the alert if all flagged costs for this trip are now resolved
-      tryResolveFlaggedCostAlert(tripId);
-
-      toast({
-        title: 'Cost Approved',
-        description: `${costToApprove.category}${costToApprove.sub_category ? ' – ' + costToApprove.sub_category : ''} has been approved.`,
-      });
-
-      // Optimistically update the cache so the item disappears without a full refetch.
-      // This keeps the trip expanded and scroll position intact.
+      // Optimistically update cache — keeps trip expanded, no flash
       queryClient.setQueriesData<ExpenseWithTrip[]>(
         { queryKey: ['all-expenses'] },
         (old) => old?.map(e =>
@@ -945,20 +999,116 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
         ),
       );
 
-      setCostToApprove(null);
-      // Background refresh for consistency — won't flash because data is already cached
+      // Resolve monitor alerts if all costs for this trip are now verified
+      tryResolveFlaggedCostAlert(tripId);
+      tryResolveVerificationAlerts(tripId);
+
+      // Background refresh
       queryClient.invalidateQueries({ queryKey: ['all-expenses'] });
       queryClient.invalidateQueries({ queryKey: ['cost-entries'] });
     } catch (err) {
-      console.error('Error approving cost:', err);
+      console.error('Error verifying cost:', err);
       toast({
         title: 'Error',
-        description: 'Failed to approve cost entry.',
+        description: 'Failed to verify cost entry.',
         variant: 'destructive',
       });
     } finally {
-      setIsApproving(false);
+      setVerifyingCostIds(prev => {
+        const next = new Set(prev);
+        next.delete(costId);
+        return next;
+      });
     }
+  };
+
+  const handleBulkVerifyExpenses = async (reason: string) => {
+    if (selectedExpenses.size === 0) return;
+    setIsBulkVerifyingExpenses(true);
+    const now = new Date().toISOString();
+    const approver = user?.email || 'admin';
+    const reasonLabel = VERIFY_REASONS.find(r => r.value === reason)?.label || reason;
+    const ids = Array.from(selectedExpenses);
+
+    try {
+      // Batch in groups of 40 to avoid URL length limits
+      for (let i = 0; i < ids.length; i += 40) {
+        const batch = ids.slice(i, i + 40);
+        const { error } = await supabase
+          .from('cost_entries')
+          .update({
+            investigation_status: 'resolved',
+            investigation_notes: `${reasonLabel} (bulk) by ${approver} on ${new Date().toLocaleDateString('en-ZA')}`,
+            resolved_at: now,
+            resolved_by: approver,
+          })
+          .in('id', batch);
+        if (error) throw error;
+      }
+
+      toast({
+        title: 'Bulk Verification Complete',
+        description: `${ids.length} expense(s) verified as "${reasonLabel}".`,
+      });
+
+      // Optimistically update cache
+      const idSet = new Set(ids);
+      queryClient.setQueriesData<ExpenseWithTrip[]>(
+        { queryKey: ['all-expenses'] },
+        (old) => old?.map(e =>
+          idSet.has(e.id)
+            ? { ...e, investigation_status: 'resolved', resolved_at: now, resolved_by: approver }
+            : e
+        ),
+      );
+
+      // Resolve alerts for affected trips
+      const affectedTripIds = new Set(
+        expenses.filter(e => idSet.has(e.id) && e.trip_id).map(e => e.trip_id!)
+      );
+      for (const tripId of affectedTripIds) {
+        tryResolveFlaggedCostAlert(tripId);
+        tryResolveVerificationAlerts(tripId);
+      }
+
+      setSelectedExpenses(new Set());
+      queryClient.invalidateQueries({ queryKey: ['all-expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['cost-entries'] });
+    } catch (err) {
+      console.error('Error bulk verifying expenses:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to bulk verify expenses.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsBulkVerifyingExpenses(false);
+    }
+  };
+
+  // Toggle selection of a single expense
+  const toggleExpenseSelection = (expenseId: string) => {
+    setSelectedExpenses(prev => {
+      const next = new Set(prev);
+      if (next.has(expenseId)) next.delete(expenseId);
+      else next.add(expenseId);
+      return next;
+    });
+  };
+
+  // Select/deselect all unverified expenses in a trip group
+  const toggleSelectAllExpenses = (tripExpenses: ExpenseWithTrip[]) => {
+    const unverified = tripExpenses.filter(e => e.investigation_status !== 'resolved');
+    const allSelected = unverified.every(e => selectedExpenses.has(e.id));
+    setSelectedExpenses(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        unverified.forEach(e => next.delete(e.id));
+      } else {
+        unverified.forEach(e => next.add(e.id));
+      }
+      return next;
+    });
   };
 
   const getStatusBadge = (expense: ExpenseWithTrip) => {
@@ -1092,11 +1242,10 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
 
           {/* Flag Status Filter */}
           <Select value={filterStatus} onValueChange={(value: typeof filterStatus) => setFilterStatus(value)}>
-            <SelectTrigger className={`h-9 w-[150px] text-sm rounded-lg ${
-              filterStatus === 'needs-attention' 
-                ? 'bg-amber-100 border-amber-300 text-amber-800' 
-                : 'bg-background/80 border-border/50'
-            }`}>
+            <SelectTrigger className={`h-9 w-[150px] text-sm rounded-lg ${filterStatus === 'needs-attention'
+              ? 'bg-amber-100 border-amber-300 text-amber-800'
+              : 'bg-background/80 border-border/50'
+              }`}>
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -1163,8 +1312,8 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
           {filterStatus !== 'needs-attention' && filterStatus !== 'all' && (
             <Badge variant="secondary" className="gap-1 text-xs h-6">
               {filterStatus === 'flagged' ? 'Flagged Only' :
-               filterStatus === 'resolved' ? 'Resolved' :
-               filterStatus === 'verified' ? 'Verified' : filterStatus}
+                filterStatus === 'resolved' ? 'Resolved' :
+                  filterStatus === 'verified' ? 'Verified' : filterStatus}
               <button onClick={() => setFilterStatus('needs-attention')} className="ml-0.5 hover:text-destructive">×</button>
             </Badge>
           )}
@@ -1224,13 +1373,12 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
             {tripsWithNoExpenses.map((trip) => {
               const isSelected = selectedTripsForVerify.has(trip.id);
               return (
-                <Card 
-                  key={trip.id} 
-                  className={`p-4 transition-colors cursor-pointer ${
-                    isSelected 
-                      ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800' 
-                      : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100/60'
-                  }`}
+                <Card
+                  key={trip.id}
+                  className={`p-4 transition-colors cursor-pointer ${isSelected
+                    ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800'
+                    : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100/60'
+                    }`}
                   onClick={() => onViewTrip?.(trip)}
                 >
                   <div className="flex items-center justify-between">
@@ -1243,9 +1391,8 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
                           className="h-5 w-5"
                         />
                       </div>
-                      <div className={`flex items-center justify-center w-12 h-12 rounded-lg ${
-                        isSelected ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-rose-100 dark:bg-rose-900/30'
-                      }`}>
+                      <div className={`flex items-center justify-center w-12 h-12 rounded-lg ${isSelected ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-rose-100 dark:bg-rose-900/30'
+                        }`}>
                         {isSelected ? (
                           <CheckCircle className="h-5 w-5 text-emerald-600" />
                         ) : (
@@ -1255,11 +1402,10 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-semibold">POD #{trip.trip_number}</span>
-                          <Badge variant="outline" className={`text-xs ${
-                            isSelected 
-                              ? 'bg-emerald-100 text-emerald-700 border-emerald-300' 
-                              : 'bg-rose-100 text-rose-700 border-rose-300'
-                          }`}>
+                          <Badge variant="outline" className={`text-xs ${isSelected
+                            ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                            : 'bg-rose-100 text-rose-700 border-rose-300'
+                            }`}>
                             {isSelected ? 'Selected for verification' : 'No costs recorded'}
                           </Badge>
                         </div>
@@ -1269,9 +1415,9 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="text-emerald-700 border-emerald-300 hover:bg-emerald-100"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1281,9 +1427,9 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
                         <CheckCircle className="h-4 w-4 mr-1.5" />
                         Verify
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="text-rose-700 border-rose-300 hover:bg-rose-100"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1315,7 +1461,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
           <div className="rounded-xl border border-border/60 bg-card/80 py-12 text-center">
             <CheckCircle className="h-8 w-8 text-emerald-500 mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">
-              {filterStatus === 'needs-attention' 
+              {filterStatus === 'needs-attention'
                 ? 'All flags have been resolved! No items need attention.'
                 : 'No expenses found matching your filters'}
             </p>
@@ -1334,24 +1480,22 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
                   open={isExpanded}
                   onOpenChange={() => toggleTripExpansion(tripGroup.tripId)}
                 >
-                  <Card className={`overflow-hidden transition-all ${
-                    hasUnresolved ? 'border-amber-300 bg-amber-50/30 dark:bg-amber-950/10' :
+                  <Card className={`overflow-hidden transition-all ${hasUnresolved ? 'border-amber-300 bg-amber-50/30 dark:bg-amber-950/10' :
                     hasMissingSlips ? 'border-rose-300 bg-rose-50/30 dark:bg-rose-950/10' : ''
-                  }`}>
+                    }`}>
                     <CollapsibleTrigger asChild>
                       <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors">
                         <div className="flex items-center gap-4">
-                          <div className={`flex items-center justify-center w-10 h-10 rounded-lg ${
-                            hasUnresolved ? 'bg-amber-100 dark:bg-amber-900/30' :
+                          <div className={`flex items-center justify-center w-10 h-10 rounded-lg ${hasUnresolved ? 'bg-amber-100 dark:bg-amber-900/30' :
                             hasMissingSlips ? 'bg-rose-100 dark:bg-rose-900/30' : 'bg-muted'
-                          }`}>
+                            }`}>
                             {isExpanded ? (
                               <ChevronDown className={`h-5 w-5 ${needsAttention ? (hasUnresolved ? 'text-amber-600' : 'text-rose-600') : 'text-muted-foreground'}`} />
                             ) : (
                               <ChevronRight className={`h-5 w-5 ${needsAttention ? (hasUnresolved ? 'text-amber-600' : 'text-rose-600') : 'text-muted-foreground'}`} />
                             )}
                           </div>
-                          
+
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               {tripGroup.fleetNumber && (
@@ -1413,112 +1557,187 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
                     </CollapsibleTrigger>
 
                     <CollapsibleContent>
+                      {/* Bulk verify bar for selected expenses */}
+                      {(() => {
+                        const unverifiedInGroup = tripGroup.expenses.filter(e => e.investigation_status !== 'resolved');
+                        const selectedInGroup = unverifiedInGroup.filter(e => selectedExpenses.has(e.id));
+                        if (selectedInGroup.length === 0) return null;
+                        return (
+                          <div className="border-t bg-emerald-50 dark:bg-emerald-950/20 px-4 py-2 flex items-center gap-3">
+                            <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                              {selectedInGroup.length} selected
+                            </span>
+                            <Select
+                              onValueChange={(reason) => handleBulkVerifyExpenses(reason)}
+                              disabled={isBulkVerifyingExpenses}
+                            >
+                              <SelectTrigger className="w-[180px] h-8 text-xs">
+                                <SelectValue placeholder={isBulkVerifyingExpenses ? 'Verifying...' : 'Verify selected as...'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {VERIFY_REASONS.map(r => (
+                                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-xs text-muted-foreground"
+                              onClick={() => {
+                                setSelectedExpenses(prev => {
+                                  const next = new Set(prev);
+                                  selectedInGroup.forEach(e => next.delete(e.id));
+                                  return next;
+                                });
+                              }}
+                            >
+                              Clear
+                            </Button>
+                          </div>
+                        );
+                      })()}
                       <div className="border-t overflow-x-auto">
                         <Table className="min-w-[550px]">
                           <TableHeader>
                             <TableRow className="hover:bg-transparent bg-muted/30">
+                              <TableHead className="w-[36px] px-2">
+                                <Checkbox
+                                  checked={(() => {
+                                    const unverified = tripGroup.expenses.filter(e => e.investigation_status !== 'resolved');
+                                    return unverified.length > 0 && unverified.every(e => selectedExpenses.has(e.id));
+                                  })()}
+                                  onCheckedChange={() => toggleSelectAllExpenses(tripGroup.expenses)}
+                                  aria-label="Select all unverified"
+                                />
+                              </TableHead>
                               <TableHead className="text-xs font-medium">Category</TableHead>
                               <TableHead className="text-xs font-medium text-right">Amount</TableHead>
                               <TableHead className="w-[90px] text-xs font-medium">Date</TableHead>
                               <TableHead className="w-[100px] text-xs font-medium">Status</TableHead>
-                              <TableHead className="w-[120px] text-xs font-medium text-right">Actions</TableHead>
+                              <TableHead className="w-[160px] text-xs font-medium">Verify</TableHead>
+                              <TableHead className="w-[90px] text-xs font-medium text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {tripGroup.expenses.map((expense) => {
                               const isMissingSlip = !expense.attachments || expense.attachments.length === 0;
                               const hasUnresolvedFlag = expense.is_flagged && expense.investigation_status !== 'resolved';
-                              
+                              const isVerified = expense.investigation_status === 'resolved';
+                              const isVerifying = verifyingCostIds.has(expense.id);
+
                               return (
-                              <TableRow
-                                key={expense.id}
-                                className={
-                                  hasUnresolvedFlag ? 'bg-amber-50/50 dark:bg-amber-950/20' :
-                                  isMissingSlip ? 'bg-rose-50/50 dark:bg-rose-950/20' : ''
-                                }
-                              >
-                                <TableCell className="py-2">
-                                  <div className="flex flex-col gap-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-sm">{expense.category}</span>
-                                      {isMissingSlip && (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <FileWarning className="h-3.5 w-3.5 text-rose-500" />
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                              <p>Missing slip/attachment</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
+                                <TableRow
+                                  key={expense.id}
+                                  className={
+                                    hasUnresolvedFlag ? 'bg-amber-50/50 dark:bg-amber-950/20' :
+                                      isMissingSlip ? 'bg-rose-50/50 dark:bg-rose-950/20' : ''
+                                  }
+                                >
+                                  <TableCell className="py-2 px-2 w-[36px]">
+                                    {!isVerified && (
+                                      <Checkbox
+                                        checked={selectedExpenses.has(expense.id)}
+                                        onCheckedChange={() => toggleExpenseSelection(expense.id)}
+                                        aria-label={`Select ${expense.category}`}
+                                      />
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="py-2">
+                                    <div className="flex flex-col gap-0.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-sm">{expense.category}</span>
+                                        {isMissingSlip && (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <FileWarning className="h-3.5 w-3.5 text-rose-500" />
+                                              </TooltipTrigger>
+                                              <TooltipContent>
+                                                <p>Missing slip/attachment</p>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )}
+                                      </div>
+                                      {expense.sub_category && (
+                                        <span className="text-xs text-muted-foreground">{expense.sub_category}</span>
                                       )}
                                     </div>
-                                    {expense.sub_category && (
-                                      <span className="text-xs text-muted-foreground">{expense.sub_category}</span>
+                                  </TableCell>
+                                  <TableCell className="py-2 text-right font-medium tabular-nums text-sm">
+                                    {formatCurrency(expense.amount, expense.currency || 'USD')}
+                                  </TableCell>
+                                  <TableCell className="py-2 text-xs text-muted-foreground">
+                                    {formatDate(expense.date)}
+                                  </TableCell>
+                                  <TableCell className="py-2">
+                                    {isMissingSlip && !isVerified ? (
+                                      <Badge variant="outline" className="bg-rose-100 text-rose-700 border-rose-300 gap-1">
+                                        <FileWarning className="w-3 h-3" />
+                                        No Slip
+                                      </Badge>
+                                    ) : getStatusBadge(expense)}
+                                  </TableCell>
+                                  <TableCell className="py-2">
+                                    {isVerified ? (
+                                      <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                                        <ShieldCheck className="w-3 h-3" /> Done
+                                      </span>
+                                    ) : isVerifying ? (
+                                      <span className="text-xs text-muted-foreground">Verifying...</span>
+                                    ) : (
+                                      <Select
+                                        onValueChange={(reason) => handleVerifyCost(expense, reason)}
+                                        disabled={isVerifying}
+                                      >
+                                        <SelectTrigger className="h-7 w-[140px] text-xs">
+                                          <SelectValue placeholder="Verify as..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {VERIFY_REASONS.map(r => (
+                                            <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
                                     )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-2 text-right font-medium tabular-nums text-sm">
-                                  {formatCurrency(expense.amount, expense.currency || 'USD')}
-                                </TableCell>
-                                <TableCell className="py-2 text-xs text-muted-foreground">
-                                  {formatDate(expense.date)}
-                                </TableCell>
-                                <TableCell className="py-2">
-                                  {isMissingSlip ? (
-                                    <Badge variant="outline" className="bg-rose-100 text-rose-700 border-rose-300 gap-1">
-                                      <FileWarning className="w-3 h-3" />
-                                      No Slip
-                                    </Badge>
-                                  ) : getStatusBadge(expense)}
-                                </TableCell>
-                                <TableCell className="py-2 text-right">
-                                  <div className="flex items-center justify-end gap-0.5">
-                                    {!expense.is_flagged && expense.investigation_status !== 'resolved' && (
+                                  </TableCell>
+                                  <TableCell className="py-2 text-right">
+                                    <div className="flex items-center justify-end gap-0.5">
+                                      {hasUnresolvedFlag && (
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7 text-amber-600"
+                                          onClick={() => handleResolveFlag(expense)}
+                                          title="Resolve Flag"
+                                        >
+                                          <Flag className="w-3.5 h-3.5" />
+                                        </Button>
+                                      )}
                                       <Button
                                         size="icon"
                                         variant="ghost"
-                                        className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                        onClick={() => setCostToApprove(expense)}
-                                        title="Verify Cost"
+                                        className="h-7 w-7"
+                                        onClick={() => handleEdit(expense)}
+                                        title="Edit"
                                       >
-                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                        <Edit className="w-3.5 h-3.5" />
                                       </Button>
-                                    )}
-                                    {hasUnresolvedFlag && (
                                       <Button
                                         size="icon"
                                         variant="ghost"
-                                        className="h-7 w-7 text-amber-600"
-                                        onClick={() => handleResolveFlag(expense)}
-                                        title="Resolve Flag"
+                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                        onClick={() => setCostToDelete(expense)}
+                                        title="Delete"
                                       >
-                                        <Flag className="w-3.5 h-3.5" />
+                                        <Trash2 className="w-3.5 h-3.5" />
                                       </Button>
-                                    )}
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-7 w-7"
-                                      onClick={() => handleEdit(expense)}
-                                      title="Edit"
-                                    >
-                                      <Edit className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-7 w-7 text-destructive hover:text-destructive"
-                                      onClick={() => setCostToDelete(expense)}
-                                      title="Delete"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );})}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>
@@ -1528,11 +1747,12 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
               );
             })}
           </div>
-        )}
-      </div>
+        )
+        }
+      </div >
 
       {/* Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+      < Dialog open={showEditDialog} onOpenChange={setShowEditDialog} >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Expense</DialogTitle>
@@ -1556,10 +1776,10 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
             />
           )}
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* Flag Resolution Modal */}
-      <FlagResolutionModal
+      < FlagResolutionModal
         cost={selectedFlaggedCost}
         isOpen={showFlagModal}
         onClose={() => {
@@ -1615,52 +1835,6 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Approve Cost Confirmation Dialog */}
-      <AlertDialog open={!!costToApprove} onOpenChange={() => setCostToApprove(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-600" />
-              Approve Cost
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p>Are you sure you want to approve this cost entry?</p>
-                {costToApprove && (
-                  <div className="rounded-lg border bg-muted/50 p-3 space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Category</span>
-                      <span className="font-medium">{costToApprove.category}{costToApprove.sub_category ? ` – ${costToApprove.sub_category}` : ''}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Amount</span>
-                      <span className="font-medium">{formatCurrency(costToApprove.amount, costToApprove.currency || 'USD')}</span>
-                    </div>
-                    {costToApprove.flag_reason && (
-                      <div className="pt-2 border-t">
-                        <span className="text-muted-foreground">Flag Reason</span>
-                        <p className="mt-1 text-amber-700 font-medium">{costToApprove.flag_reason}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">This will mark the cost as verified and approved.</p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isApproving}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleApproveCost}
-              disabled={isApproving}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              {isApproving ? 'Approving...' : 'Approve Cost'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Verify No Costs Confirmation Dialog */}
       <AlertDialog open={!!tripToVerifyNoCosts} onOpenChange={() => setTripToVerifyNoCosts(null)}>
         <AlertDialogContent>
@@ -1672,16 +1846,16 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
                 This confirms that this trip intentionally has no expenses recorded, and it will be removed from the "Needs Attention" list.
               </span>
               <span className="block mt-2 text-muted-foreground text-sm">
-                Route: {tripToVerifyNoCosts?.origin && tripToVerifyNoCosts?.destination 
-                  ? `${tripToVerifyNoCosts.origin} → ${tripToVerifyNoCosts.destination}` 
+                Route: {tripToVerifyNoCosts?.origin && tripToVerifyNoCosts?.destination
+                  ? `${tripToVerifyNoCosts.origin} → ${tripToVerifyNoCosts.destination}`
                   : tripToVerifyNoCosts?.route || 'No route'}
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isVerifying}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleVerifyNoCosts} 
+            <AlertDialogAction
+              onClick={handleVerifyNoCosts}
               disabled={isVerifying}
               className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
@@ -1690,7 +1864,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 };
 

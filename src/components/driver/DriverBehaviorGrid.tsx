@@ -1,17 +1,16 @@
 // src/components/driver/DriverBehaviorGrid.tsx
 'use client';
 
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,11 +19,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBulkDeleteDriverBehaviorEvents, useDeleteDriverBehaviorEvent, useDriverBehaviorEvents } from "@/hooks/useDriverBehaviorEvents";
+import { useDriverCoaching } from "@/hooks/useDriverCoaching";
 import { useRealtimeDriverBehaviorEvents } from "@/hooks/useRealtimeDriverBehaviorEvents";
 import type { Database } from "@/integrations/supabase/types";
 import { generateDriverCoachingPDF } from "@/lib/driverBehaviorExport";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Car, CheckCircle, Clock, Edit2, Eye, FileText, List, MapPin, MessageSquare, Search, Trash2, User } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Car, CheckCircle, Clock, Edit2, Eye, FileText, List, MapPin, MessageSquare, Search, Share2, Trash2, User } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useCallback, useMemo, useState } from "react";
 import { useDebounce } from "use-debounce";
 import DriverBehaviorDetailsDialog from "./DriverBehaviorDetailsDialog";
@@ -35,10 +36,37 @@ import DriverPerformanceSummary from "./DriverPerformanceSummary";
 type Event = Database["public"]["Tables"]["driver_behavior_events"]["Row"];
 type SortOption = "date-desc" | "date-asc" | "severity" | "driver";
 
+function formatWhatsAppMessage(event: Event): string {
+  const date = format(new Date(event.event_date), "dd MMM yyyy");
+  const lines = [
+    `⚠️ *Driver Behavior Event*`,
+    ``,
+    `*Driver:* ${event.driver_name}`,
+    `*Event:* ${event.event_type}`,
+    `*Date:* ${date}${event.event_time ? ` at ${event.event_time}` : ''}`,
+    `*Severity:* ${(event.severity ?? 'N/A').toUpperCase()}`,
+    `*Fleet:* ${event.fleet_number ?? 'N/A'}`,
+  ];
+  if (event.location && event.location !== 'View on Map') {
+    lines.push(`*Location:* ${event.location}`);
+  }
+  if (event.description) {
+    lines.push(``, `*Details:* ${event.description}`);
+  }
+  if (event.debriefed_at) {
+    lines.push(``, `✅ *Debriefed:* ${format(new Date(event.debriefed_at), "dd MMM yyyy")}`);
+    if (event.debrief_notes) lines.push(`*Notes:* ${event.debrief_notes}`);
+    if (event.coaching_action_plan) lines.push(`*Action Plan:* ${event.coaching_action_plan}`);
+  }
+  return lines.join('\n');
+}
+
 export default function DriverBehaviorGrid() {
   const { data: events = [], isLoading } = useDriverBehaviorEvents();
   const deleteEvent = useDeleteDriverBehaviorEvent();
   const bulkDeleteEvents = useBulkDeleteDriverBehaviorEvents();
+  const { saveCoachingSession } = useDriverCoaching();
+  const { toast } = useToast();
   useRealtimeDriverBehaviorEvents();
 
   const [selected, setSelected] = useState<Event | null>(null);
@@ -99,6 +127,35 @@ export default function DriverBehaviorGrid() {
   const startDebrief = () => { setDetailsOpen(false); openCoaching(selected!); };
   const exportPDF = () => selected && generateDriverCoachingPDF(selected);
   const exportEventPDF = (e: Event) => generateDriverCoachingPDF(e);
+
+  const handleShareWhatsApp = async (event: Event) => {
+    const message = formatWhatsAppMessage(event);
+    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+
+    // Mark as debriefed if not already
+    if (!event.debriefed_at) {
+      try {
+        await saveCoachingSession(event.id, {
+          debriefed_at: new Date().toISOString(),
+          debrief_date: format(new Date(), "yyyy-MM-dd"),
+          debrief_conducted_by: "WhatsApp Export",
+          debrief_notes: "Event shared via WhatsApp",
+          status: "resolved",
+        });
+        toast({
+          title: "Event Debriefed",
+          description: `${event.driver_name} — ${event.event_type} marked as debriefed via WhatsApp.`,
+        });
+      } catch {
+        toast({
+          title: "Debrief Failed",
+          description: "WhatsApp opened but failed to mark event as debriefed.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
   const handleConfirmDelete = async () => {
     if (eventToDelete) {
       await deleteEvent.mutateAsync(eventToDelete.id);
@@ -375,6 +432,15 @@ export default function DriverBehaviorGrid() {
                         Debrief
                       </Button>
                       <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleShareWhatsApp(event)}
+                        title="Share via WhatsApp"
+                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => openDelete(event)}
@@ -507,6 +573,15 @@ export default function DriverBehaviorGrid() {
                       >
                         <FileText className="w-4 h-4 mr-1" />
                         Export
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleShareWhatsApp(event)}
+                        title="Share via WhatsApp"
+                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                      >
+                        <Share2 className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"

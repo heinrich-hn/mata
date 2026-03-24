@@ -129,27 +129,36 @@ export default function TripCycleTrackerView({ tripId }: TripCycleTrackerViewPro
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Use type assertion to bypass the TypeScript error
-      const trackerRes = await supabase
+      // Fetch cycle tracker data
+      const { data: trackerData, error: trackerError } = await supabase
         .from('trip_cycle_tracker')
         .select('*')
         .eq('trip_id', tripId)
-        .maybeSingle() as unknown as CycleTracker | null;
-
-      const { data: trackerData, error: trackerError } = trackerRes;
+        .maybeSingle();
 
       if (trackerError && trackerError.code !== 'PGRST116') throw trackerError;
 
-      setTracker(trackerData);
+      // Transform the data to ensure truck_type matches the expected type
+      if (trackerData) {
+        const transformedData: CycleTracker = {
+          ...trackerData,
+          // Cast truck_type to the expected union type, defaulting to null if invalid
+          truck_type: (trackerData.truck_type === 'reefer' || trackerData.truck_type === 'flatbed') 
+            ? trackerData.truck_type 
+            : null,
+        };
+        setTracker(transformedData);
+      } else {
+        setTracker(null);
+      }
 
+      // Fetch transit stops if tracker exists
       if (trackerData?.id) {
-        const stopsRes = await supabase
+        const { data: stopsData, error: stopsError } = await supabase
           .from('trip_transit_stops')
           .select('*')
           .eq('tracker_id', trackerData.id)
-          .order('sort_order', { ascending: true }) as unknown as TransitStop[];
-
-        const { data: stopsData, error: stopsError } = stopsRes;
+          .order('sort_order', { ascending: true });
 
         if (stopsError) {
           console.error('Stops fetch error:', stopsError);
@@ -357,7 +366,7 @@ export default function TripCycleTrackerView({ tripId }: TripCycleTrackerViewPro
                   <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Time In</th>
                   <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Time Out</th>
                   <th className="text-right py-2 font-medium text-muted-foreground">Duration</th>
-                </tr>
+                 </tr>
               </thead>
               <tbody>
                 {stops.map((stop) => (

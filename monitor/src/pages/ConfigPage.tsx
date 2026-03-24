@@ -7,24 +7,24 @@ import { toast } from "sonner";
 
 // ─── Category labels ──────────────────────────────────────────────────────────
 const CATEGORIES: { value: AlertCategory; label: string }[] = [
-  { value: "speed_violation",  label: "Speed Violation" },
-  { value: "geofence_breach",  label: "Geofence Breach" },
-  { value: "fuel_anomaly",     label: "Fuel Anomaly" },
-  { value: "maintenance_due",  label: "Maintenance Due" },
-  { value: "driver_behavior",  label: "Driver Behavior" },
-  { value: "vehicle_fault",    label: "Vehicle Fault" },
-  { value: "trip_delay",       label: "Trip Delay" },
-  { value: "load_exception",   label: "Load Exception" },
-  { value: "tyre_pressure",    label: "Tyre Pressure" },
-  { value: "custom",           label: "Custom" },
+  { value: "speed_violation", label: "Speed Violation" },
+  { value: "geofence_breach", label: "Geofence Breach" },
+  { value: "fuel_anomaly", label: "Fuel Anomaly" },
+  { value: "maintenance_due", label: "Maintenance Due" },
+  { value: "driver_behavior", label: "Driver Behavior" },
+  { value: "vehicle_fault", label: "Vehicle Fault" },
+  { value: "trip_delay", label: "Trip Delay" },
+  { value: "load_exception", label: "Load Exception" },
+  { value: "tyre_pressure", label: "Tyre Pressure" },
+  { value: "custom", label: "Custom" },
 ];
 
 const SEVERITIES: { value: AlertSeverity; label: string }[] = [
   { value: "critical", label: "Critical" },
-  { value: "high",     label: "High" },
-  { value: "medium",   label: "Medium" },
-  { value: "low",      label: "Low" },
-  { value: "info",     label: "Info" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+  { value: "info", label: "Info" },
 ];
 
 // ─── Config form ──────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ interface RuleCardProps {
 function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardProps) {
   return (
     <div className={cn(
-      "bg-white border border-slate-200 rounded-xl p-4 space-y-3 transition-opacity",
+      "monitor-soft-entry rounded-xl p-4 space-y-3 transition-opacity",
       !config.is_active && "opacity-60"
     )}>
       <div className="flex items-start justify-between gap-3">
@@ -88,12 +88,12 @@ function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardPr
               {CATEGORIES.find((c) => c.value === config.category)?.label ?? config.category}
             </span>
             {!config.is_active && (
-              <span className="text-[10px] text-slate-500 border border-slate-200 px-2 py-0.5 rounded">
+              <span className="text-xs text-slate-500 border border-slate-200 px-2 py-0.5 rounded">
                 DISABLED
               </span>
             )}
           </div>
-          <p className="text-sm font-semibold text-slate-900">{config.name}</p>
+          <p className="text-sm font-medium text-slate-900">{config.name}</p>
           {config.description && (
             <p className="text-xs text-slate-500 mt-1">{config.description}</p>
           )}
@@ -131,23 +131,23 @@ function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardPr
 
       {/* Notification badges */}
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-slate-500">Notify via:</span>
+        <span className="text-xs text-slate-500">Notify via:</span>
         {config.notify_in_app && (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
             <Bell className="h-2.5 w-2.5" /> In-App
           </span>
         )}
         {config.notify_push && (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
             <Smartphone className="h-2.5 w-2.5" /> Push
           </span>
         )}
         {config.notify_email && (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
             <Mail className="h-2.5 w-2.5" /> Email
           </span>
         )}
-        <span className="ml-auto text-[10px] text-slate-500">
+        <span className="ml-auto text-xs text-slate-500">
           Cooldown: {config.cooldown_minutes}m
         </span>
       </div>
@@ -168,7 +168,7 @@ interface FormModalProps {
 function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSaving }: FormModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-y-auto max-h-[90vh]">
+      <div className="monitor-soft-panel rounded-2xl w-full max-w-lg shadow-2xl overflow-y-auto max-h-[90vh]">
         <div className="p-6 space-y-5">
           <h2 className="text-base font-bold text-slate-900">
             {editingId ? "Edit Alert Rule" : "New Alert Rule"}
@@ -246,9 +246,9 @@ function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSavin
             <p className="text-xs text-slate-600 font-medium">Notification Channels</p>
             <div className="grid grid-cols-3 gap-2">
               {([
-                { key: "notify_in_app", icon: Bell,        label: "In-App" },
-                { key: "notify_push",   icon: Smartphone,  label: "Push" },
-                { key: "notify_email",  icon: Mail,        label: "Email" },
+                { key: "notify_in_app", icon: Bell, label: "In-App" },
+                { key: "notify_push", icon: Smartphone, label: "Push" },
+                { key: "notify_email", icon: Mail, label: "Email" },
               ] as const).map(({ key, icon: Icon, label }) => (
                 <button
                   key={key}
@@ -374,14 +374,14 @@ export default function ConfigPage() {
     }
   };
 
-  const activeCount  = configs.filter((c) => c.is_active).length;
+  const activeCount = configs.filter((c) => c.is_active).length;
   const disabledCount = configs.filter((c) => !c.is_active).length;
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-6 pt-6 pb-8 space-y-6">
+      <div className="monitor-page max-w-3xl pb-8">
         {/* Header */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 monitor-page-header p-4">
           <div className="flex items-center gap-3">
             <Settings className="h-5 w-5 text-slate-600" />
             <div>
@@ -401,7 +401,7 @@ export default function ConfigPage() {
         </div>
 
         {/* Info banner */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600">
+        <div className="monitor-soft-panel rounded-xl p-4 text-sm text-slate-600">
           <p className="font-medium text-slate-900 mb-1">How alert rules work</p>
           <p>
             Rules define how alerts are categorized and who gets notified. They are evaluated by the{" "}
@@ -418,7 +418,7 @@ export default function ConfigPage() {
             ))}
           </div>
         ) : configs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-4 bg-white border border-dashed border-slate-200 rounded-xl">
+          <div className="flex flex-col items-center justify-center py-16 gap-4 monitor-soft-panel border-dashed rounded-xl">
             <Settings className="h-8 w-8 text-slate-300" />
             <div className="text-center">
               <p className="text-sm font-medium text-slate-900">No alert rules yet</p>

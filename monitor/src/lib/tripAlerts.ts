@@ -260,6 +260,86 @@ export async function createNoCostsAlert(
   return data.id;
 }
 
+export async function createUnverifiedCostsAlert(
+  tripId: string,
+  tripNumber: string,
+  unverifiedCount: number,
+  context?: TripAlertContext
+): Promise<string | null> {
+  if (!isValidUUID(tripId)) {
+    console.warn(`createUnverifiedCostsAlert: tripId "${tripId}" is not a valid UUID, skipping`);
+    return null;
+  }
+
+  const existingId = await findExistingTripAlert(tripId, 'fuel_anomaly', 'unverified_costs');
+  if (existingId) return existingId;
+
+  const metadata = mapContextToMetadata(context!, 'unverified_costs', {
+    unverified_count: unverifiedCount,
+    needs_review: true
+  });
+
+  const { data, error } = await supabase
+    .from('alerts')
+    .insert({
+      source_type: 'trip',
+      source_id: tripId,
+      source_label: `Trip ${tripNumber}`,
+      category: 'fuel_anomaly',
+      severity: 'medium',
+      title: 'Unverified Expenses',
+      message: `Trip ${tripNumber} has ${unverifiedCount} unverified expense(s)`,
+      metadata,
+      status: 'active',
+      triggered_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+export async function createMissingDocumentsAlert(
+  tripId: string,
+  tripNumber: string,
+  missingCount: number,
+  context?: TripAlertContext
+): Promise<string | null> {
+  if (!isValidUUID(tripId)) {
+    console.warn(`createMissingDocumentsAlert: tripId "${tripId}" is not a valid UUID, skipping`);
+    return null;
+  }
+
+  const existingId = await findExistingTripAlert(tripId, 'fuel_anomaly', 'missing_documents');
+  if (existingId) return existingId;
+
+  const metadata = mapContextToMetadata(context!, 'missing_documents', {
+    missing_document_count: missingCount,
+    needs_review: true
+  });
+
+  const { data, error } = await supabase
+    .from('alerts')
+    .insert({
+      source_type: 'trip',
+      source_id: tripId,
+      source_label: `Trip ${tripNumber}`,
+      category: 'fuel_anomaly',
+      severity: 'medium',
+      title: 'Missing Documents',
+      message: `Trip ${tripNumber} has ${missingCount} expense(s) without supporting documents`,
+      metadata,
+      status: 'active',
+      triggered_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
 export async function createLongRunningTripAlert(
   tripId: string,
   tripNumber: string,

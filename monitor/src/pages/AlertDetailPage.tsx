@@ -120,7 +120,7 @@ export default function AlertDetailPage() {
 
   return (
     <div className="h-full overflow-y-auto pb-10">
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="monitor-page max-w-4xl">
         {/* Navigation */}
         <Link
           to="/alerts"
@@ -131,7 +131,7 @@ export default function AlertDetailPage() {
         </Link>
 
         {/* Primary Header Card */}
-        <div className="bg-white border border-slate-200 shadow-sm rounded-md overflow-hidden">
+        <div className="monitor-soft-panel rounded-md overflow-hidden">
           <div className="p-6">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
               <div className="flex gap-4">
@@ -141,13 +141,13 @@ export default function AlertDetailPage() {
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-3">
                     <span className={cn(
-                      "text-[11px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-sm border",
+                      "text-xs uppercase tracking-wider font-medium px-2 py-0.5 rounded-sm border",
                       "bg-slate-100 text-slate-700 border-slate-200"
                     )}>
                       {alert.status}
                     </span>
                   </div>
-                  <h2 className="text-xl font-semibold text-slate-900 tracking-tight">{alert.title}</h2>
+                  <h2 className="text-xl font-medium text-slate-900 tracking-tight">{alert.title}</h2>
                   {alert.source_label && (
                     <p className="text-sm font-medium text-slate-500">{alert.source_label}</p>
                   )}
@@ -166,7 +166,7 @@ export default function AlertDetailPage() {
             </div>
 
             {/* Timeline Row */}
-            <div className="flex flex-wrap gap-6 text-[13px] text-slate-500 border-t border-slate-100 mt-6 pt-4">
+            <div className="flex flex-wrap gap-6 text-sm text-slate-500 border-t border-slate-100 mt-6 pt-4">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-slate-400" />
                 <span className="font-medium text-slate-700">Triggered:</span>
@@ -188,9 +188,9 @@ export default function AlertDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Trip Info Panel */}
             {isTripAlert && metadata?.trip_number && (
-              <div className="bg-white border border-slate-200 rounded-md shadow-sm p-6">
+              <div className="monitor-soft-panel rounded-md p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-slate-700 flex items-center gap-2">
                     <Truck className="h-4 w-4 text-slate-500" />
                     Trip Context
                   </h3>
@@ -207,19 +207,19 @@ export default function AlertDetailPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 p-4 bg-slate-50 border border-slate-200 rounded-md">
                   <div className="space-y-1">
-                    <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Trip No.</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Trip No.</p>
                     <p className="text-sm font-medium text-slate-900">{metadata.trip_number}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Fleet ID</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Fleet ID</p>
                     <p className="text-sm font-medium text-slate-900">{displayFleetNumber}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Driver</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Driver</p>
                     <p className="text-sm font-medium text-slate-900">{metadata.driver_name || "Unassigned"}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Client</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Client</p>
                     <p className="text-sm font-medium text-slate-900">{metadata.client_name || "N/A"}</p>
                   </div>
                 </div>
@@ -227,41 +227,41 @@ export default function AlertDetailPage() {
             )}
 
             {/* General Metadata Panel */}
-            <div className="bg-white border border-slate-200 rounded-md shadow-sm p-6">
-              <h3 className="text-sm font-semibold text-slate-700 mb-4">Alert Details</h3>
+            <div className="monitor-soft-panel rounded-md p-6">
+              <h3 className="text-sm font-medium text-slate-700 mb-4">Alert Details</h3>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
                 <div className="space-y-1">
-                  <dt className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Category</dt>
+                  <dt className="text-xs text-slate-500 uppercase tracking-wider font-medium">Category</dt>
                   <dd className="text-sm text-slate-900 font-medium capitalize">{alert.category.replace(/_/g, " ")}</dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Source Type</dt>
+                  <dt className="text-xs text-slate-500 uppercase tracking-wider font-medium">Source Type</dt>
                   <dd className="text-sm text-slate-900 font-medium capitalize">{alert.source_type}</dd>
                 </div>
 
                 {metadata.duplicate_count !== undefined && (
                   <div className="space-y-1">
-                    <dt className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Duplicate Count</dt>
+                    <dt className="text-xs text-slate-500 uppercase tracking-wider font-medium">Duplicate Count</dt>
                     <dd className="text-sm font-medium text-slate-900">{metadata.duplicate_count}</dd>
                   </div>
                 )}
                 {metadata.days_in_progress !== undefined && (
                   <div className="space-y-1">
-                    <dt className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Days In Progress</dt>
+                    <dt className="text-xs text-slate-500 uppercase tracking-wider font-medium">Days In Progress</dt>
                     <dd className="text-sm font-medium text-slate-900">{metadata.days_in_progress}</dd>
                   </div>
                 )}
                 {metadata.flagged_count !== undefined && (
                   <div className="space-y-1">
-                    <dt className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Flagged Costs</dt>
+                    <dt className="text-xs text-slate-500 uppercase tracking-wider font-medium">Flagged Costs</dt>
                     <dd className="text-sm font-medium text-slate-900">{metadata.flagged_count}</dd>
                   </div>
                 )}
 
                 {metaEntries.map(([key, value]) => (
                   <div key={key} className="space-y-1">
-                    <dt className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">
+                    <dt className="text-xs text-slate-500 uppercase tracking-wider font-medium">
                       {key.replace(/_/g, " ")}
                     </dt>
                     <dd className="text-sm text-slate-900 font-medium">{String(value)}</dd>
@@ -271,7 +271,7 @@ export default function AlertDetailPage() {
 
               {alert.resolution_note && (
                 <div className="mt-6 pt-4 border-t border-slate-100">
-                  <dt className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Resolution Note</dt>
+                  <dt className="text-xs text-slate-500 uppercase tracking-wider font-medium mb-1.5">Resolution Note</dt>
                   <dd className="text-sm text-slate-700 bg-slate-50 p-3 rounded-md border border-slate-200">
                     {alert.resolution_note}
                   </dd>
@@ -281,9 +281,9 @@ export default function AlertDetailPage() {
           </div>
 
           {/* Activity Sidebar */}
-          <div className="bg-white border border-slate-200 rounded-md shadow-sm flex flex-col h-[500px]">
+          <div className="monitor-soft-panel rounded-md flex flex-col h-[500px]">
             <div className="p-4 border-b border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <h3 className="text-sm font-medium text-slate-700 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-slate-500" />
                 Activity & Notes ({comments.length})
               </h3>
@@ -299,20 +299,20 @@ export default function AlertDetailPage() {
                 comments.map((comment) => (
                   <div key={comment.id} className="flex gap-3">
                     <div className="w-8 h-8 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-semibold text-slate-700 uppercase">
+                      <span className="text-xs font-medium text-slate-700 uppercase">
                         {(comment.profile?.full_name ?? "U").charAt(0)}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                        <span className="text-[13px] font-semibold text-slate-900">
+                        <span className="text-sm font-medium text-slate-900">
                           {comment.profile?.full_name ?? "System User"}
                         </span>
-                        <span className="text-[11px] text-slate-400 shrink-0">
+                        <span className="text-xs text-slate-500 shrink-0">
                           {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                         </span>
                       </div>
-                      <p className="text-[13px] text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-md border border-slate-200 mt-1">
+                      <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-md border border-slate-200 mt-1">
                         {comment.comment}
                       </p>
                     </div>
@@ -329,7 +329,7 @@ export default function AlertDetailPage() {
                   onChange={(e) => setCommentText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleComment()}
                   placeholder="Add a resolution note or comment..."
-                  className="w-full bg-white border border-slate-200 rounded-md pl-3 pr-10 py-2.5 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 transition-all shadow-sm"
+                  className="w-full bg-white border border-slate-200 rounded-md pl-3 pr-10 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 transition-all shadow-sm"
                 />
                 <button
                   onClick={handleComment}
