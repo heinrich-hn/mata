@@ -17,8 +17,8 @@ export interface KmScheduleStatus {
 
 /**
  * Get the latest ending_km for each vehicle from trips.
- * This is the most reliable source of current odometer since
- * the current_odometer column may not be populated.
+ * Uses the most recent trip by departure date (not the highest km)
+ * to avoid picking up data-entry errors.
  */
 export async function getVehicleLatestKm(
   vehicleIds: string[]
@@ -27,24 +27,25 @@ export async function getVehicleLatestKm(
 
   const map: Record<string, number> = {};
 
-  // Fetch the max ending_km per vehicle from trips
+  // Fetch the most recent ending_km per vehicle from completed trips only
   const { data: trips, error } = await supabase
     .from("trips")
-    .select("fleet_vehicle_id, ending_km")
+    .select("fleet_vehicle_id, ending_km, departure_date")
     .in("fleet_vehicle_id", vehicleIds)
+    .in("status", ["completed", "invoiced", "paid"])
     .not("ending_km", "is", null)
-    .order("ending_km", { ascending: false });
+    .order("departure_date", { ascending: false });
 
   if (error) {
     console.error("Error fetching trip ending_km:", error);
     return map;
   }
 
-  // Keep only the highest ending_km per vehicle
+  // Keep only the ending_km from the most recent trip per vehicle
   (trips || []).forEach((t) => {
     const vid = t.fleet_vehicle_id as string;
     const km = t.ending_km as number;
-    if (vid && km && (!map[vid] || km > map[vid])) {
+    if (vid && km && !map[vid]) {
       map[vid] = km;
     }
   });

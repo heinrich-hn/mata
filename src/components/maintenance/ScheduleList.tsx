@@ -17,8 +17,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye } from "lucide-react";
+import { Eye, RefreshCw, Wrench } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ScheduleDetailsDialog } from "./ScheduleDetailsDialog";
+import { UpdateServiceReadingDialog } from "./UpdateServiceReadingDialog";
 import { exportSchedulesToPDF, exportSchedulesToExcel } from "@/lib/maintenanceExport";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,10 +34,14 @@ type SubcategoryFilter = FleetSubcategory | "all";
 
 export function ScheduleList({ schedules, onUpdate, showOverdueOnly }: ScheduleListProps) {
   const [selectedSchedule, setSelectedSchedule] = useState<MaintenanceSchedule | null>(null);
+  const [serviceReadingSchedule, setServiceReadingSchedule] = useState<MaintenanceSchedule | null>(null);
+  const [serviceReadingIsReefer, setServiceReadingIsReefer] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [priorityFilter] = useState("all");
   const [subcategoryFilter] = useState<SubcategoryFilter>("all");
+  const [refreshing, setRefreshing] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const vehicleIds = useMemo(
     () => [...new Set(schedules.filter(s => s.vehicle_id).map(s => s.vehicle_id!))],
@@ -254,13 +260,30 @@ export function ScheduleList({ schedules, onUpdate, showOverdueOnly }: ScheduleL
 
         return (
           <div key={subcat} className="border rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b bg-muted/40 flex justify-between">
+            <div className="px-4 py-3 border-b bg-muted/40 flex justify-between items-center">
               <div>
                 <div className="font-semibold">{subcat}</div>
                 <div className="text-xs text-muted-foreground">
                   {items.length} schedules • {overdueCount} overdue • {soonCount} due soon
                 </div>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={refreshing}
+                title="Refresh current km / hours"
+                onClick={async () => {
+                  setRefreshing(true);
+                  await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: ["vehicle-odometers"] }),
+                    queryClient.invalidateQueries({ queryKey: ["reefer-hours-map"] }),
+                  ]);
+                  setRefreshing(false);
+                  toast({ title: "Readings refreshed" });
+                }}
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              </Button>
             </div>
 
             <Table>
@@ -316,13 +339,28 @@ export function ScheduleList({ schedules, onUpdate, showOverdueOnly }: ScheduleL
                     </TableCell>
 
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedSchedule(schedule)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedSchedule(schedule)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {schedule.odometer_based && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title={`Update service ${schedule.subcategory === "REEFERS" ? "hours" : "km"}`}
+                            onClick={() => {
+                              setServiceReadingSchedule(schedule);
+                              setServiceReadingIsReefer(schedule.subcategory === "REEFERS");
+                            }}
+                          >
+                            <Wrench className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -344,6 +382,19 @@ export function ScheduleList({ schedules, onUpdate, showOverdueOnly }: ScheduleL
           open={!!selectedSchedule}
           onOpenChange={open => !open && setSelectedSchedule(null)}
           onUpdate={onUpdate}
+        />
+      )}
+
+      {serviceReadingSchedule && (
+        <UpdateServiceReadingDialog
+          open={!!serviceReadingSchedule}
+          onOpenChange={open => !open && setServiceReadingSchedule(null)}
+          schedule={serviceReadingSchedule}
+          isReefer={serviceReadingIsReefer}
+          onComplete={() => {
+            setServiceReadingSchedule(null);
+            onUpdate();
+          }}
         />
       )}
     </div>

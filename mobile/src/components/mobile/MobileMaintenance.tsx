@@ -143,68 +143,42 @@ const ScheduleCard = ({
   }, [onComplete, schedule.id]);
 
   return (
-    <Card
+    <div
       className={cn(
-        "border-l-4 active:scale-[0.98] transition-transform rounded-2xl shadow-sm border border-border/40",
+        "border-l-4 rounded-xl border border-border/40 bg-card px-3 py-2 flex items-center gap-2 active:scale-[0.98] transition-all",
         urgencyConfig.borderColor,
         urgencyConfig.bgColor
       )}
     >
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm leading-tight truncate">
-              {schedule.title || schedule.service_type}
-            </p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
-              {vehicle && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/60 font-medium">
-                  {vehicle.fleet_number || vehicle.registration_number}
-                </span>
-              )}
-              <span>
-                {dueDate.toLocaleDateString()}
-              </span>
-              {schedule.category && (
-                <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 h-5">
-                  {schedule.category}
-                </Badge>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            {getUrgencyBadge()}
-          </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold leading-tight truncate">
+            {schedule.title || schedule.service_type}
+          </p>
+          {getUrgencyBadge()}
         </div>
-
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-          {schedule.priority && (
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-[11px] px-1.5 py-0.5",
-                PRIORITY_STYLES[schedule.priority as keyof typeof PRIORITY_STYLES] || "border-gray-300 text-gray-700 dark:border-gray-500 dark:text-gray-100"
-              )}
-            >
-              {schedule.priority}
-            </Badge>
+        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+          {vehicle && (
+            <span className="font-medium">
+              {vehicle.fleet_number || vehicle.registration_number}
+            </span>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs gap-1.5 rounded-xl px-3 touch-target font-semibold"
-            onClick={(e) => {
-              e.stopPropagation();
-              onComplete(schedule.id);
-            }}
-            onKeyDown={handleKeyDown}
-          >
-            Complete
-          </Button>
+          <span>{dueDate.toLocaleDateString()}</span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-[11px] rounded-lg px-2.5 flex-shrink-0 font-semibold"
+        onClick={(e) => {
+          e.stopPropagation();
+          onComplete(schedule.id);
+        }}
+        onKeyDown={handleKeyDown}
+      >
+        Done
+      </Button>
+    </div>
   );
 };
 
@@ -462,38 +436,10 @@ const MobileMaintenance = () => {
   }
 
   return (
-    <div className="px-4 py-4 space-y-4 pb-safe-bottom">
-      {/* Quick Stats - Smaller cards */}
-      <div className="grid grid-cols-4 gap-2">
-        <StatCard
-          value={overdue.length}
-          label="Overdue"
-          colorClass={URGENCY_CONFIG.overdue.statColor}
-          bgGradient={URGENCY_CONFIG.overdue.statGradient}
-        />
-        <StatCard
-          value={todaySchedules.length}
-          label="Today"
-          colorClass={URGENCY_CONFIG.today.statColor}
-          bgGradient={URGENCY_CONFIG.today.statGradient}
-        />
-        <StatCard
-          value={upcoming.length}
-          label="Upcoming"
-          colorClass={URGENCY_CONFIG.upcoming.statColor}
-          bgGradient={URGENCY_CONFIG.upcoming.statGradient}
-        />
-        <StatCard
-          value={completedCount}
-          label="Done"
-          colorClass="text-green-600"
-          bgGradient="from-green-50 to-green-100/60"
-        />
-      </div>
-
+    <div className="px-4 py-3 space-y-3 pb-safe-bottom">
       {/* Tabs */}
       <Tabs defaultValue="urgent" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-11 rounded-xl bg-muted/50 p-1">
+        <TabsList className="sticky top-0 z-10 grid w-full grid-cols-3 h-11 rounded-xl bg-muted/80 backdrop-blur-sm p-1">
           <TabsTrigger
             value="urgent"
             className="text-xs font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm touch-target"
@@ -514,7 +460,7 @@ const MobileMaintenance = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="urgent" className="mt-3 space-y-2">
+        <TabsContent value="urgent" className="mt-2 space-y-1.5">
           {isLoading ? (
             <ScheduleCardSkeleton count={3} />
           ) : overdue.length === 0 && todaySchedules.length === 0 ? (
@@ -547,7 +493,7 @@ const MobileMaintenance = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="upcoming" className="mt-3 space-y-2">
+        <TabsContent value="upcoming" className="mt-2 space-y-1.5">
           {isLoading ? (
             <ScheduleCardSkeleton count={3} />
           ) : upcoming.length === 0 ? (
@@ -568,7 +514,7 @@ const MobileMaintenance = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="all" className="mt-3 space-y-2">
+        <TabsContent value="all" className="mt-2 space-y-1.5">
           {isLoading ? (
             <ScheduleCardSkeleton count={3} />
           ) : schedules.length === 0 ? (

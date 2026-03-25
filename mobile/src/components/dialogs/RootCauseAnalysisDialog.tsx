@@ -1,23 +1,22 @@
 import { Button } from "@/components/ui/button";
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-  } from "@/components/ui/dialog";
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogHeader,
+DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "@/components/ui/select";
+import {
+Select,
+SelectContent,
+SelectItem,
+SelectTrigger,
+SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { UserSelect } from "@/components/ui/user-select";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Save, X } from "lucide-react";
@@ -156,25 +155,23 @@ export function RootCauseAnalysisDialog({
             <Label htmlFor="conducted-by">
               *RCA Conducted By:
             </Label>
-            <Input
-              id="conducted-by"
+            <UserSelect
               value={formData.conducted_by}
-              onChange={(e) =>
-                setFormData({ ...formData, conducted_by: e.target.value })
+              onValueChange={(value) =>
+                setFormData({ ...formData, conducted_by: value })
               }
-              placeholder="Enter name or select from list"
+              placeholder="Select person"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="responsible-person">Responsible Person:</Label>
-            <Input
-              id="responsible-person"
+            <UserSelect
               value={formData.responsible_person}
-              onChange={(e) =>
-                setFormData({ ...formData, responsible_person: e.target.value })
+              onValueChange={(value) =>
+                setFormData({ ...formData, responsible_person: value })
               }
-              placeholder="Enter name or select from list"
+              placeholder="Select responsible person"
             />
           </div>
 

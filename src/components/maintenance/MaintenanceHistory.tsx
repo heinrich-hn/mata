@@ -4,20 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import
-  {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-  } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { exportHistoryToExcel, exportHistoryToPDF } from "@/lib/maintenanceExport";
 import { format } from "date-fns";
-import { FileSpreadsheet, FileText } from "lucide-react";
+import { FileSpreadsheet, FileText, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -70,13 +69,34 @@ export function MaintenanceHistory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
 
-  const filteredHistory = history.filter((record) =>
-    record.maintenance_schedules?.service_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.notes?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredHistory = history.filter((record) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      record.maintenance_schedules?.service_type?.toLowerCase().includes(term) ||
+      record.notes?.toLowerCase().includes(term) ||
+      record.completed_by?.toLowerCase().includes(term)
+    );
+  });
 
   const totalCost = filteredHistory.reduce((sum, record) => sum + (record.total_cost || 0), 0);
   const totalHours = filteredHistory.reduce((sum, record) => sum + (record.duration_hours || 0), 0);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this history record?")) return;
+    try {
+      const { error } = await supabase
+        .from("maintenance_schedule_history")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      setHistory((prev) => prev.filter((r) => r.id !== id));
+      toast.success("Record deleted");
+    } catch (error) {
+      console.error("Error deleting record:", error);
+      toast.error("Failed to delete record");
+    }
+  };
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -189,13 +209,16 @@ export function MaintenanceHistory() {
             ) : (
               <div className="rounded-md border">
                 <Table>
-                                    <TableHeader>
+                  <TableHeader>
                     <TableRow>
                       <TableHead>Service Type</TableHead>
                       <TableHead>Completed Date</TableHead>
+                      <TableHead>Completed By</TableHead>
+                      <TableHead>Reading</TableHead>
                       <TableHead>Duration</TableHead>
                       <TableHead>Cost</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -208,6 +231,12 @@ export function MaintenanceHistory() {
                           {format(new Date(record.completed_date), "MMM dd, yyyy HH:mm")}
                         </TableCell>
                         <TableCell>
+                          {record.completed_by || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {record.odometer_reading ? record.odometer_reading.toLocaleString() : "-"}
+                        </TableCell>
+                        <TableCell>
                           {record.duration_hours ? `${record.duration_hours}h` : "-"}
                         </TableCell>
                         <TableCell>
@@ -217,6 +246,17 @@ export function MaintenanceHistory() {
                           <Badge className={getStatusColor(record.status)}>
                             {record.status}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(record.id)}
+                            title="Delete record"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

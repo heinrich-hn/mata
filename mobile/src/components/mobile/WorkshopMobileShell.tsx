@@ -4,7 +4,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { ReactNode, useState, useEffect, useMemo, useCallback } from "react";
+import { Wrench, ClipboardCheck, CalendarClock, CircleDot, BellRing, type LucideIcon } from "lucide-react";
+import { ReactNode, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 // ============================================================================
@@ -29,6 +30,7 @@ interface TabConfig {
   id: WorkshopTab;
   label: string;
   shortLabel: string;
+  icon: LucideIcon;
   color: string;
   activeBg: string;
   alertThreshold?: number;
@@ -39,6 +41,7 @@ const TABS_CONFIG: TabConfig[] = [
     id: "job-cards",
     label: "Job Cards",
     shortLabel: "Jobs",
+    icon: Wrench,
     color: "text-blue-600",
     activeBg: "bg-blue-50 border-blue-200",
     alertThreshold: 10,
@@ -47,6 +50,7 @@ const TABS_CONFIG: TabConfig[] = [
     id: "inspections",
     label: "Inspections",
     shortLabel: "Inspect",
+    icon: ClipboardCheck,
     color: "text-amber-600",
     activeBg: "bg-amber-50 border-amber-200",
     alertThreshold: 5,
@@ -55,6 +59,7 @@ const TABS_CONFIG: TabConfig[] = [
     id: "maintenance",
     label: "Maintenance",
     shortLabel: "Maint.",
+    icon: CalendarClock,
     color: "text-emerald-600",
     activeBg: "bg-emerald-50 border-emerald-200",
     alertThreshold: 3,
@@ -63,6 +68,7 @@ const TABS_CONFIG: TabConfig[] = [
     id: "tyres",
     label: "Tyres",
     shortLabel: "Tyres",
+    icon: CircleDot,
     color: "text-purple-600",
     activeBg: "bg-purple-50 border-purple-200",
     alertThreshold: 2,
@@ -71,6 +77,7 @@ const TABS_CONFIG: TabConfig[] = [
     id: "follow-ups",
     label: "Follow-ups",
     shortLabel: "Follow",
+    icon: BellRing,
     color: "text-rose-600",
     activeBg: "bg-rose-50 border-rose-200",
     alertThreshold: 3,
@@ -96,6 +103,7 @@ const TabButton = ({
   badgeCount?: number;
   onClick: () => void;
 }) => {
+  const Icon = tab.icon;
   return (
     <button
       onClick={onClick}
@@ -112,8 +120,10 @@ const TabButton = ({
         <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-current opacity-80" />
       )}
 
+      <Icon className="h-5 w-5" />
+
       <span className={cn(
-        "text-[11px] leading-tight font-semibold tracking-tight",
+        "text-[10px] leading-tight font-semibold tracking-tight",
         isActive ? "font-bold" : "font-medium"
       )}>
         {tab.shortLabel}
@@ -121,16 +131,14 @@ const TabButton = ({
 
       {hasBadge && badgeCount ? (
         <span className={cn(
-          "text-[9px] font-bold leading-none px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
+          "absolute -top-1 -right-0.5 text-[9px] font-bold leading-none px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
           isActive
             ? "bg-current/10 text-inherit"
             : "bg-rose-100 text-rose-600"
         )}>
           {badgeCount > 99 ? "99+" : badgeCount}
         </span>
-      ) : (
-        <span className="text-[9px] leading-none opacity-0 px-1.5 py-0.5">0</span>
-      )}
+      ) : null}
     </button>
   );
 };
@@ -296,6 +304,32 @@ const WorkshopMobileShell = ({
     "follow-ups": badgeCounts.followUps ? { has: true, count: badgeCounts.followUps } : { has: false, count: 0 },
   }), [badgeCounts]);
 
+  // Auto-hide bottom tab bar on scroll down, show on scroll up
+  const [tabBarVisible, setTabBarVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const scrollThreshold = 8;
+
+  useEffect(() => {
+    const mainEl = document.getElementById("workshop-main-content");
+    if (!mainEl) return;
+
+    const handleScroll = () => {
+      const currentY = mainEl.scrollTop;
+      const delta = currentY - lastScrollY.current;
+
+      if (delta > scrollThreshold) {
+        setTabBarVisible(false);
+      } else if (delta < -scrollThreshold) {
+        setTabBarVisible(true);
+      }
+
+      lastScrollY.current = currentY;
+    };
+
+    mainEl.addEventListener("scroll", handleScroll, { passive: true });
+    return () => mainEl.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30 flex flex-col">
       {/* Mobile Header */}
@@ -372,14 +406,17 @@ const WorkshopMobileShell = ({
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 pt-16 pb-20 safe-area-bottom">
+      <main id="workshop-main-content" className="flex-1 min-h-0 pt-16 pb-20 safe-area-bottom overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="relative">
           {children}
         </div>
       </main>
 
       {/* Bottom Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-t border-border/30 z-50 safe-area-bottom">
+      <nav className={cn(
+        "fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-t border-border/30 z-50 safe-area-bottom transition-transform duration-300 ease-in-out",
+        !tabBarVisible && "translate-y-full"
+      )}>
         <div className="flex items-center justify-around h-[68px] px-1.5">
           {TABS_CONFIG.map((tab) => {
             const badge = tabBadges[tab.id];
@@ -398,8 +435,8 @@ const WorkshopMobileShell = ({
         </div>
       </nav>
 
-      {/* Critical Alerts */}
-      {criticalAlerts.length > 0 && (
+      {/* Critical Alerts - only show when viewing the relevant tab */}
+      {criticalAlerts.length > 0 && criticalAlerts[0].tab === activeTab && (
         <CriticalAlert
           count={criticalAlerts[0].count}
           tab={criticalAlerts[0].tab}

@@ -1,4 +1,14 @@
+export const ADMIN_USERS = [
+  'Heinrich',
+  'Alec',
+  'Vimbai',
+  'Paul',
+  'Tanaka',
+  'Cain',
+] as const;
+
 export const RESPONSIBLE_PERSONS = [
+  ...ADMIN_USERS,
   'Operations Manager',
   'Fleet Manager',
   'Maintenance Manager',
@@ -6,7 +16,7 @@ export const RESPONSIBLE_PERSONS = [
   'Safety Officer',
   'Finance Manager',
   'Logistics Coordinator',
-  'HR Manager'
+  'HR Manager',
 ] as const;
 
 export const ACTION_ITEM_PRIORITIES = [

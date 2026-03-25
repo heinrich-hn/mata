@@ -9,30 +9,31 @@ import { Label } from '@/components/ui/label';
 import Modal from '@/components/ui/modal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ACTION_ITEM_PRIORITIES, ACTION_ITEM_STATUSES, RESPONSIBLE_PERSONS } from '@/constants/actionItems';
+import { ACTION_ITEM_PRIORITIES, ACTION_ITEM_STATUSES, ADMIN_USERS, RESPONSIBLE_PERSONS } from '@/constants/actionItems';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOperations } from '@/contexts/OperationsContext';
 import { ActionItem, ActionItemComment } from '@/types/operations';
 import { formatDate } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import
-  {
-    AlertTriangle,
-    Calendar,
-    CheckCircle,
-    ClipboardList,
-    Clock,
-    Download,
-    Eye,
-    FileSpreadsheet,
-    FileText,
-    Plus,
-    Save,
-    Trash2,
-    User,
-    X
-  } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle,
+  ClipboardList,
+  Clock,
+  Download,
+  Eye,
+  FileSpreadsheet,
+  FileText,
+  Plus,
+  Save,
+  Trash2,
+  User,
+  UserCog,
+  X
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -40,6 +41,7 @@ const ActionLog = () => {
   const { userName } = useAuth();
   const { actionItems, addActionItem, updateActionItem, deleteActionItem } = useOperations();
 
+  const [activeTab, setActiveTab] = useState(ADMIN_USERS[0] as string);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null);
@@ -78,25 +80,36 @@ const ActionLog = () => {
     });
   }, [actionItems]);
 
-  // Apply filters
+  // Apply tab + filters
   const filteredItems = useMemo(() => {
     return enhancedActionItems.filter(item => {
+      // Tab filter — always scoped to a user
+      if (item.assigned_to !== activeTab) return false;
       if (filters.status !== 'all' && item.status !== filters.status) return false;
       if (filters.assignedTo !== 'all' && item.assigned_to !== filters.assignedTo) return false;
       if (filters.priority !== 'all' && item.priority !== filters.priority) return false;
       if (filters.overdue && !item.isOverdue) return false;
       return true;
     });
-  }, [enhancedActionItems, filters]);
+  }, [enhancedActionItems, filters, activeTab]);
+
+  // Count items per admin tab
+  const tabCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const user of ADMIN_USERS) {
+      counts[user] = enhancedActionItems.filter(i => i.assigned_to === user).length;
+    }
+    return counts;
+  }, [enhancedActionItems]);
 
   // Sort items: incomplete first, then by due date
   const sortedItems = useMemo(() => {
     return [...filteredItems].sort((a, b) => {
       // Completed/cancelled items at the bottom
       if ((a.status === 'completed' || a.status === 'cancelled') &&
-          b.status !== 'completed' && b.status !== 'cancelled') return 1;
+        b.status !== 'completed' && b.status !== 'cancelled') return 1;
       if ((b.status === 'completed' || b.status === 'cancelled') &&
-          a.status !== 'completed' && a.status !== 'cancelled') return -1;
+        a.status !== 'completed' && a.status !== 'cancelled') return -1;
 
       // Sort by overdue first
       if (a.isOverdue && !b.isOverdue) return -1;
@@ -110,13 +123,14 @@ const ActionLog = () => {
     });
   }, [filteredItems]);
 
-  // Calculate summary statistics
+  // Calculate summary statistics (scoped to active tab)
   const summary = useMemo(() => {
-    const total = enhancedActionItems.length;
-    const completed = enhancedActionItems.filter(item => item.status === 'completed').length;
-    const inProgress = enhancedActionItems.filter(item => item.status === 'in_progress').length;
-    const open = enhancedActionItems.filter(item => item.status === 'open').length;
-    const overdue = enhancedActionItems.filter(item => item.isOverdue).length;
+    const items = enhancedActionItems.filter(i => i.assigned_to === activeTab);
+    const total = items.length;
+    const completed = items.filter(item => item.status === 'completed').length;
+    const inProgress = items.filter(item => item.status === 'in_progress').length;
+    const open = items.filter(item => item.status === 'open').length;
+    const overdue = items.filter(item => item.isOverdue).length;
 
     return {
       total,
@@ -126,7 +140,7 @@ const ActionLog = () => {
       overdue,
       completionRate: total > 0 ? (completed / total) * 100 : 0
     };
-  }, [enhancedActionItems]);
+  }, [enhancedActionItems, activeTab]);
 
   // Handle form changes
   const handleFormChange = (field: string, value: string) => {
@@ -210,8 +224,10 @@ const ActionLog = () => {
         updates.completed_date = new Date().toISOString().split('T')[0];
       }
 
+      // Strip computed fields before sending to DB
+      const { isOverdue, overdueBy, ...cleanItem } = item as any;
       await updateActionItem({
-        ...item,
+        ...cleanItem,
         ...updates
       });
 
@@ -233,8 +249,10 @@ const ActionLog = () => {
         created_at: new Date().toISOString()
       };
 
+      // Strip computed fields before sending to DB
+      const { isOverdue, overdueBy, ...cleanItem } = item as any;
       await updateActionItem({
-        ...item,
+        ...cleanItem,
         comments: [...(item.comments || []), newComment]
       });
 
@@ -249,6 +267,22 @@ const ActionLog = () => {
       }
     } catch (error) {
       toast.error('Failed to add comment');
+      console.error(error);
+    }
+  };
+
+  // Handle reassign to admin user
+  const handleReassign = async (item: ActionItem & { isOverdue?: boolean; overdueBy?: number }, newUser: string) => {
+    try {
+      // Strip computed fields before sending to DB
+      const { isOverdue, overdueBy, ...cleanItem } = item as any;
+      await updateActionItem({
+        ...cleanItem,
+        assigned_to: newUser,
+      });
+      toast.success(`Reassigned to ${newUser}`);
+    } catch (error) {
+      toast.error('Failed to reassign action item');
       console.error(error);
     }
   };
@@ -495,61 +529,27 @@ const ActionLog = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={() => { resetForm(); setShowAddModal(true); }}>
+            <Button onClick={() => {
+              resetForm();
+              setFormData(prev => ({ ...prev, assignedTo: activeTab }));
+              setShowAddModal(true);
+            }}>
               <Plus className="w-4 h-4 mr-2" />
               Add Action Item
             </Button>
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-              <ClipboardList className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{summary.total}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {summary.completionRate.toFixed(0)}% completion
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{summary.overdue}</div>
-              <p className="text-xs text-muted-foreground mt-1">require attention</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{summary.inProgress}</div>
-              <p className="text-xs text-muted-foreground mt-1">{summary.open} open</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{summary.completed}</div>
-              <p className="text-xs text-muted-foreground mt-1">tasks finished</p>
-            </CardContent>
-          </Card>
-        </div>
+        {/* User Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full flex flex-wrap h-auto gap-1">
+            {ADMIN_USERS.map(user => (
+              <TabsTrigger key={user} value={user} className="flex-1 min-w-[100px]">
+                {user} {tabCounts[user] > 0 && `(${tabCounts[user]})`}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         {/* Filters */}
         <Card>
@@ -640,11 +640,10 @@ const ActionLog = () => {
                 {sortedItems.map((item) => (
                   <div
                     key={item.id}
-                    className={`p-4 rounded-lg border ${
-                      item.status === 'completed' ? 'bg-success/5 border-success/20' :
+                    className={`p-4 rounded-lg border ${item.status === 'completed' ? 'bg-success/5 border-success/20' :
                       item.isOverdue ? 'bg-destructive/5 border-l-4 border-l-destructive' :
-                      'bg-card border-border'
-                    }`}
+                        'bg-card border-border'
+                      }`}
                   >
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex-1 min-w-0">
@@ -661,13 +660,33 @@ const ActionLog = () => {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3 text-sm">
-                          {item.assigned_to && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-muted-foreground">Assigned:</span>
-                              <span className="font-medium truncate">{item.assigned_to}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">Assigned:</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="inline-flex items-center gap-1 font-medium truncate hover:underline cursor-pointer">
+                                  {item.assigned_to || 'Unassigned'}
+                                  <UserCog className="w-3 h-3 text-muted-foreground" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start">
+                                {ADMIN_USERS.map(user => (
+                                  <DropdownMenuItem
+                                    key={user}
+                                    disabled={item.assigned_to === user}
+                                    onClick={() => handleReassign(item, user)}
+                                  >
+                                    <User className="w-3 h-3 mr-2" />
+                                    {user}
+                                    {item.assigned_to === user && (
+                                      <CheckCircle className="w-3 h-3 ml-auto text-green-500" />
+                                    )}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                           {item.due_date && (
                             <div className="flex items-center gap-2">
                               <Calendar className="w-4 h-4 text-muted-foreground" />
@@ -695,6 +714,30 @@ const ActionLog = () => {
                           <Eye className="w-3 h-3 mr-1" />
                           View
                         </Button>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline">
+                              <UserCog className="w-3 h-3 mr-1" />
+                              Reassign
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {ADMIN_USERS.map(user => (
+                              <DropdownMenuItem
+                                key={user}
+                                disabled={item.assigned_to === user}
+                                onClick={() => handleReassign(item, user)}
+                              >
+                                <User className="w-3 h-3 mr-2" />
+                                {user}
+                                {item.assigned_to === user && (
+                                  <CheckCircle className="w-3 h-3 ml-auto text-green-500" />
+                                )}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
 
                         {item.status !== 'completed' && item.status !== 'cancelled' && (
                           <Button

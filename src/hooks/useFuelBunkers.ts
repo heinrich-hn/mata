@@ -43,8 +43,33 @@ export interface FuelTransaction {
   transaction_date: string;
   created_by: string | null;
   created_at: string;
+  // Audit trail
+  edit_history?: FuelTransactionEditEntry[];
+  last_edited_by?: string | null;
+  last_edited_at?: string | null;
   // Joined data
   bunker?: FuelBunker;
+}
+
+export interface FuelTransactionEditEntry {
+  timestamp: string;
+  edited_by: string;
+  reason: string;
+  changes: {
+    field: string;
+    old_value: string | number | null;
+    new_value: string | number | null;
+  }[];
+}
+
+export interface EditFuelTransactionData {
+  transaction_id: string;
+  quantity_liters?: number;
+  unit_cost?: number;
+  reference_number?: string;
+  notes?: string;
+  edited_by: string;
+  edit_reason: string;
 }
 
 export interface CreateBunkerData {
@@ -427,6 +452,47 @@ export const useAdjustBunkerLevel = () => {
     },
     onError: (error: Error) => {
       toast({ title: "Adjustment Failed", description: error.message, variant: "destructive" });
+    },
+  });
+};
+
+// Hook to edit a refill transaction with audit trail + blended price recalculation
+export const useEditFuelTransaction = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: EditFuelTransactionData) => {
+      const { data: result, error } = await rpcCall("edit_refill_transaction", {
+        p_transaction_id: data.transaction_id,
+        p_quantity_liters: data.quantity_liters ?? null,
+        p_unit_cost: data.unit_cost ?? null,
+        p_reference_number: data.reference_number ?? null,
+        p_notes: data.notes ?? null,
+        p_edited_by: data.edited_by,
+        p_edit_reason: data.edit_reason,
+      });
+
+      if (error) throw error;
+
+      const response = result as { success: boolean; error?: string; changes_count?: number; new_blended_price?: number };
+      if (!response.success) {
+        throw new Error(response.error || "Failed to edit transaction");
+      }
+
+      return response;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.transactions });
+      queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.dipRecords });
+      toast({
+        title: "Transaction Updated",
+        description: `${result.changes_count} field(s) updated. New blended price: $${result.new_blended_price?.toFixed(4)}/L`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Edit Failed", description: error.message, variant: "destructive" });
     },
   });
 };

@@ -487,9 +487,9 @@ const MobileJobCards = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="active" className="mt-3 space-y-2.5">
+        <TabsContent value="active" className="mt-3 space-y-2">
           {isLoading ? (
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <JobCardSkeleton />
               <JobCardSkeleton />
               <JobCardSkeleton />
@@ -516,7 +516,7 @@ const MobileJobCards = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="completed" className="mt-3 space-y-2.5">
+        <TabsContent value="completed" className="mt-3 space-y-2">
           {completedCards.length === 0 ? (
             <EmptyState
               title="No completed jobs"

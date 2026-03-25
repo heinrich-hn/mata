@@ -46,6 +46,8 @@ import {
   type DailyDipRecord,
   type DipRecordEditEntry,
   type FuelBunker,
+  type FuelTransaction,
+  type FuelTransactionEditEntry,
   useAdjustBunkerLevel,
   useCloseDipRecord,
   useCreateDipRecord,
@@ -55,6 +57,7 @@ import {
   useDeleteFuelBunker,
   useDispenseFuel,
   useEditDipRecord,
+  useEditFuelTransaction,
   useFuelBunkers,
   useFuelTransactions,
   useRefillBunker,
@@ -149,6 +152,7 @@ const FuelBunkerManagement = () => {
   const closeDipRecord = useCloseDipRecord();
   const editDipRecord = useEditDipRecord();
   const deleteDipRecord = useDeleteDipRecord();
+  const editFuelTransaction = useEditFuelTransaction();
   // Dialog states
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -161,8 +165,11 @@ const FuelBunkerManagement = () => {
   const [editDipDialogOpen, setEditDipDialogOpen] = useState(false);
   const [deleteDipDialogOpen, setDeleteDipDialogOpen] = useState(false);
   const [viewDipHistoryDialogOpen, setViewDipHistoryDialogOpen] = useState(false);
+  const [editTransactionDialogOpen, setEditTransactionDialogOpen] = useState(false);
+  const [viewTransactionHistoryDialogOpen, setViewTransactionHistoryDialogOpen] = useState(false);
   const [selectedBunker, setSelectedBunker] = useState<FuelBunker | null>(null);
   const [selectedDipRecord, setSelectedDipRecord] = useState<DailyDipRecord | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<FuelTransaction | null>(null);
   // Form states
   const [formData, setFormData] = useState<Partial<CreateBunkerData>>({
     fuel_type: "Diesel",
@@ -210,6 +217,16 @@ const FuelBunkerManagement = () => {
   });
   const [deleteDipReason, setDeleteDipReason] = useState("");
   const [deleteDipBy, setDeleteDipBy] = useState("");
+
+  // Edit transaction form state
+  const [editTxData, setEditTxData] = useState({
+    quantity_liters: "",
+    unit_cost: "",
+    reference_number: "",
+    notes: "",
+    edit_reason: "",
+    edited_by: "",
+  });
 
   // Adjust level form state
   const [adjustData, setAdjustData] = useState({
@@ -305,6 +322,37 @@ const FuelBunkerManagement = () => {
       unit_cost: bunker.unit_cost?.toString() || "",
     }));
     setRefillDialogOpen(true);
+  };
+  // Edit Transaction
+  const openEditTransactionDialog = (tx: FuelTransaction) => {
+    setSelectedTransaction(tx);
+    setEditTxData({
+      quantity_liters: tx.quantity_liters.toString(),
+      unit_cost: tx.unit_cost?.toString() || "",
+      reference_number: tx.reference_number || "",
+      notes: tx.notes || "",
+      edit_reason: "",
+      edited_by: "",
+    });
+    setEditTransactionDialogOpen(true);
+  };
+  const handleEditTransaction = async () => {
+    if (!selectedTransaction || !editTxData.edit_reason || !editTxData.edited_by) return;
+    await editFuelTransaction.mutateAsync({
+      transaction_id: selectedTransaction.id,
+      quantity_liters: editTxData.quantity_liters ? parseFloat(editTxData.quantity_liters) : undefined,
+      unit_cost: editTxData.unit_cost ? parseFloat(editTxData.unit_cost) : undefined,
+      reference_number: editTxData.reference_number || undefined,
+      notes: editTxData.notes || undefined,
+      edited_by: editTxData.edited_by,
+      edit_reason: editTxData.edit_reason,
+    });
+    setEditTransactionDialogOpen(false);
+    setSelectedTransaction(null);
+  };
+  const openViewTransactionHistory = (tx: FuelTransaction) => {
+    setSelectedTransaction(tx);
+    setViewTransactionHistoryDialogOpen(true);
   };
   // Adjust Level Dialog
   const openAdjustDialog = (bunker: FuelBunker) => {
@@ -550,80 +598,6 @@ const FuelBunkerManagement = () => {
     <Layout>
       <TooltipProvider>
         <div className="space-y-8">
-          {/* Header Section */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                Fuel Management
-              </h1>
-              <p className="text-muted-foreground mt-2 flex items-center gap-2">
-                <Fuel className="h-4 w-4" />
-                Monitor inventory, track transactions, and reconcile daily usage
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <RefreshCw className="h-4 w-4" />
-                    Sync
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Sync with fuel management system</TooltipContent>
-              </Tooltip>
-              <Button onClick={() => setCreateDialogOpen(true)} className="gap-2 shadow-lg hover:shadow-xl transition-all">
-                <Plus className="h-4 w-4" />
-                Add New Tank
-              </Button>
-            </div>
-          </div>
-          {/* Stats Grid */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title="Total Inventory"
-              value={`${totalFuel.toLocaleString()} L`}
-              description={`of ${totalCapacity.toLocaleString()} L capacity`}
-              icon={Droplets}
-            />
-            <StatCard
-              title="Active Tanks"
-              value={activeBunkers.length.toString()}
-              description={`${bunkers.length} total registered`}
-              icon={Fuel}
-            />
-            <StatCard
-              title="Today's Activity"
-              value={todayTransactions.toString()}
-              description={`${transactions.length} total transactions`}
-              icon={History}
-            />
-            <StatCard
-              title="Inventory Value"
-              value={`$${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-              description={`$${totalValue > 0 ? (totalValue / totalFuel).toFixed(2) : '0.00'}/L avg`}
-              icon={Gauge}
-            />
-          </div>
-          {/* Alert Banner */}
-          {lowLevelBunkers.length > 0 && (
-            <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/20 dark:to-orange-950/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-red-800 dark:text-red-300">Low Level Alert</h3>
-                  <p className="text-sm text-red-600 dark:text-red-400">
-                    {lowLevelBunkers.length} tank{lowLevelBunkers.length > 1 ? 's' : ''} {lowLevelBunkers.length > 1 ? 'require' : 'requires'} immediate attention
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" className="bg-white dark:bg-background">
-                  View Details
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
-            </div>
-          )}
           {/* Main Content Tabs */}
           <Tabs defaultValue="bunkers" className="space-y-6">
             <TabsList className="bg-muted/50 p-1 h-auto">
@@ -820,373 +794,250 @@ const FuelBunkerManagement = () => {
             </TabsContent>
             {/* Daily Dip Records Tab */}
             <TabsContent value="dip-records">
-              <Card className="border-0 shadow-lg">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-t-lg border-b">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                    <div className="space-y-1">
-                      <CardTitle className="flex items-center gap-3 text-2xl">
-                        <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                          <ClipboardList className="h-5 w-5 text-blue-600" />
-                        </div>
-                        Daily Dip Reconciliation
-                      </CardTitle>
-                      <CardDescription className="text-base">
-                        Monitor tank levels, pump meter readings, and identify discrepancies for accurate fuel inventory management
-                      </CardDescription>
-                    </div>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-xl">
+                      <ClipboardList className="h-5 w-5" />
+                      Daily Dip Records
+                    </CardTitle>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={handleExportPDF} className="bg-white dark:bg-background gap-2">
+                      <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-2">
                         <FileText className="h-4 w-4" />
                         PDF Report
                       </Button>
-                      <Button variant="outline" size="sm" onClick={handleExportExcel} className="bg-white dark:bg-background gap-2">
+                      <Button variant="outline" size="sm" onClick={handleExportExcel} className="gap-2">
                         <FileSpreadsheet className="h-4 w-4" />
                         Excel Export
                       </Button>
-                      <Button onClick={() => setOpenDipDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 gap-2">
+                      <Button size="sm" onClick={() => setOpenDipDialogOpen(true)} className="gap-2">
                         <Plus className="h-4 w-4" />
                         Start New Day
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-8">
-                  {/* Reconciliation Formula Cards */}
-                  <div className="grid md:grid-cols-3 gap-4 mb-8">
-                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-xl p-5 border border-amber-200/50 shadow-sm">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                          <Minus className="h-5 w-5 text-amber-600" />
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-amber-800 dark:text-amber-300">Tank Usage</h4>
-                          <p className="text-xs text-amber-600/70">Volume consumed</p>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <code className="block text-xs bg-white/50 dark:bg-black/20 p-2 rounded font-mono">
-                          C = Opening − Closing + Additions
-                        </code>
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl p-5 border border-blue-200/50 shadow-sm">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                          <ArrowUpCircle className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-blue-800 dark:text-blue-300">Pump Issued</h4>
-                          <p className="text-xs text-blue-600/70">Fuel dispensed</p>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <code className="block text-xs bg-white/50 dark:bg-black/20 p-2 rounded font-mono">
-                          F = Closing Pump − Opening Pump
-                        </code>
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 rounded-xl p-5 border border-purple-200/50 shadow-sm">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                          <Scale className="h-5 w-5 text-purple-600" />
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-purple-800 dark:text-purple-300">Variance</h4>
-                          <p className="text-xs text-purple-600/70">Discrepancy detection</p>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <code className="block text-xs bg-white/50 dark:bg-black/20 p-2 rounded font-mono">
-                          G = Tank Usage − Pump Issued
-                        </code>
-                        <div className="flex gap-1 mt-2">
-                          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 text-[10px]">0 = OK</Badge>
-                          <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300 text-[10px]">− = Expansion</Badge>
-                          <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300 text-[10px]">+ = Loss</Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Records Table */}
-                  <ScrollArea className="w-full rounded-xl border bg-card shadow-sm">
-                    <div className="min-w-[900px]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/60 hover:bg-muted/60 border-b-2 border-border">
-                            <TableHead className="w-[130px] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Date
-                            </TableHead>
-                            <TableHead className="w-[140px] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Tank
-                            </TableHead>
-                            <TableHead className="w-[120px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Opening
-                            </TableHead>
-                            <TableHead className="w-[120px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Closing
-                            </TableHead>
-                            <TableHead className="w-[100px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Additions
-                            </TableHead>
-                            <TableHead className="w-[110px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Tank Usage
-                            </TableHead>
-                            <TableHead className="w-[110px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Pump Issued
-                            </TableHead>
-                            <TableHead className="w-[110px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Variance
-                            </TableHead>
-                            <TableHead className="w-[110px] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Status
-                            </TableHead>
-                            <TableHead className="w-[120px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Actions
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody className="divide-y divide-border">
-                          {dipRecords.map((record, idx) => {
-                            const varianceStatus = getVarianceStatus(record.variance_liters);
-                            const dieselAdditions = record.diesel_additions_liters || 0;
-                            const tankUsage = record.opening_volume_liters - (record.closing_volume_liters || 0) + dieselAdditions;
-                            const pumpIssued = record.closing_pump_reading && record.opening_pump_reading
-                              ? record.closing_pump_reading - record.opening_pump_reading
-                              : null;
-                            const isEven = idx % 2 === 0;
+                <CardContent>
+                  <div className="rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Tank</TableHead>
+                          <TableHead className="text-right">Opening</TableHead>
+                          <TableHead className="text-right">Closing</TableHead>
+                          <TableHead className="text-right">Additions</TableHead>
+                          <TableHead className="text-right">Tank Usage</TableHead>
+                          <TableHead className="text-right">Pump Issued</TableHead>
+                          <TableHead className="text-right">Variance</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="w-[120px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dipRecords.map((record) => {
+                          const varianceStatus = getVarianceStatus(record.variance_liters);
+                          const dieselAdditions = record.diesel_additions_liters || 0;
+                          const tankUsage = record.opening_volume_liters - (record.closing_volume_liters || 0) + dieselAdditions;
+                          const pumpIssued = record.closing_pump_reading && record.opening_pump_reading
+                            ? record.closing_pump_reading - record.opening_pump_reading
+                            : null;
 
-                            return (
-                              <TableRow
-                                key={record.id}
-                                className={`group transition-colors hover:bg-primary/5 ${isEven ? "bg-background" : "bg-muted/20"}`}
-                              >
-                                {/* Date */}
-                                <TableCell className="px-4 py-3 align-middle whitespace-nowrap">
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-7 w-7 rounded-md bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                                      <Calendar className="h-3.5 w-3.5 text-blue-600" />
+                          return (
+                            <TableRow key={record.id}>
+                              {/* Date */}
+                              <TableCell>
+                                <div className="font-medium">{formatDate(record.record_date)}</div>
+                              </TableCell>
+                              {/* Tank */}
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Fuel className="h-4 w-4 text-muted-foreground" />
+                                  {(record.bunker as { name: string })?.name || "Unknown"}
+                                </div>
+                              </TableCell>
+                              {/* Opening */}
+                              <TableCell className="text-right">
+                                <div className="space-y-0.5">
+                                  <div className="font-mono text-sm font-semibold text-green-600 dark:text-green-400">
+                                    {record.opening_volume_liters.toLocaleString()} L
+                                  </div>
+                                  {record.opening_dip_cm && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {record.opening_dip_cm} cm
                                     </div>
-                                    <span className="text-sm font-medium">{formatDate(record.record_date)}</span>
-                                  </div>
-                                </TableCell>
-                                {/* Tank */}
-                                <TableCell className="px-4 py-3 align-middle whitespace-nowrap">
-                                  <div className="flex items-center gap-2">
-                                    <Fuel className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                                    <span className="text-sm font-medium truncate max-w-[100px]">
-                                      {(record.bunker as { name: string })?.name || "Unknown"}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                {/* Opening */}
-                                <TableCell className="px-4 py-3 align-middle text-right">
+                                  )}
+                                </div>
+                              </TableCell>
+                              {/* Closing */}
+                              <TableCell className="text-right">
+                                {record.closing_volume_liters !== null ? (
                                   <div className="space-y-0.5">
-                                    <div className="font-mono text-sm font-semibold text-green-600 dark:text-green-400">
-                                      {record.opening_volume_liters.toLocaleString()} L
+                                    <div className="font-mono text-sm font-semibold text-orange-600 dark:text-orange-400">
+                                      {record.closing_volume_liters.toLocaleString()} L
                                     </div>
-                                    {record.opening_dip_cm && (
-                                      <div className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                                        <Beaker className="h-3 w-3" />
-                                        {record.opening_dip_cm} cm
+                                    {record.closing_dip_cm && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {record.closing_dip_cm} cm
                                       </div>
                                     )}
                                   </div>
-                                </TableCell>
-                                {/* Closing */}
-                                <TableCell className="px-4 py-3 align-middle text-right">
-                                  {record.closing_volume_liters !== null ? (
-                                    <div className="space-y-0.5">
-                                      <div className="font-mono text-sm font-semibold text-orange-600 dark:text-orange-400">
-                                        {record.closing_volume_liters.toLocaleString()} L
-                                      </div>
-                                      {record.closing_dip_cm && (
-                                        <div className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                                          <Beaker className="h-3 w-3" />
-                                          {record.closing_dip_cm} cm
+                                ) : (
+                                  <span className="text-muted-foreground text-sm">—</span>
+                                )}
+                              </TableCell>
+                              {/* Diesel Additions */}
+                              <TableCell className="text-right">
+                                {dieselAdditions > 0 ? (
+                                  <span className="text-green-600 font-medium">+{dieselAdditions.toLocaleString()} L</span>
+                                ) : (
+                                  <span className="text-muted-foreground text-sm">—</span>
+                                )}
+                              </TableCell>
+                              {/* Tank Usage */}
+                              <TableCell className="text-right">
+                                {record.closing_volume_liters !== null ? (
+                                  <span className="font-medium">{Math.abs(tankUsage).toLocaleString()} L</span>
+                                ) : (
+                                  <span className="text-muted-foreground text-sm">—</span>
+                                )}
+                              </TableCell>
+                              {/* Pump Issued */}
+                              <TableCell className="text-right">
+                                {pumpIssued !== null ? (
+                                  <span className="font-medium">{pumpIssued.toLocaleString()} L</span>
+                                ) : (
+                                  <span className="text-muted-foreground text-sm">—</span>
+                                )}
+                              </TableCell>
+                              {/* Variance */}
+                              <TableCell className="text-right">
+                                {record.variance_liters !== null ? (
+                                  <span className={`font-mono font-bold ${record.variance_liters === 0
+                                    ? "text-green-600"
+                                    : record.variance_liters < 0
+                                      ? "text-orange-600"
+                                      : "text-red-600"
+                                    }`}>
+                                    {record.variance_liters > 0 ? "+" : ""}
+                                    {record.variance_liters.toLocaleString()} L
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-sm">—</span>
+                                )}
+                              </TableCell>
+                              {/* Status */}
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  <Badge
+                                    className={`${varianceStatus.color} text-white text-xs font-semibold gap-1 w-fit`}
+                                  >
+                                    {record.status === "open" ? (
+                                      <>
+                                        <XCircle className="h-3 w-3" />
+                                        Open
+                                      </>
+                                    ) : record.status === "closed" ? (
+                                      <>
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        {varianceStatus.label}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Reconciled
+                                      </>
+                                    )}
+                                  </Badge>
+                                  {record.last_edited_at && (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <div className="text-xs text-muted-foreground flex items-center gap-1 cursor-default">
+                                          <Edit className="h-3 w-3" />
+                                          Edited
                                         </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm italic">—</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Last edited {formatDate(record.last_edited_at)} by {record.last_edited_by}
+                                      </TooltipContent>
+                                    </Tooltip>
                                   )}
-                                </TableCell>
-                                {/* Diesel Additions */}
-                                <TableCell className="px-4 py-3 align-middle text-right">
-                                  {dieselAdditions > 0 ? (
-                                    <div className="inline-flex items-center justify-end gap-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30">
-                                      <Plus className="h-3 w-3 text-green-600 flex-shrink-0" />
-                                      <span className="font-mono text-sm font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">
-                                        {dieselAdditions.toLocaleString()} L
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm italic">—</span>
-                                  )}
-                                </TableCell>
-                                {/* Tank Usage */}
-                                <TableCell className="px-4 py-3 align-middle text-right">
-                                  {record.closing_volume_liters !== null ? (
-                                    <div className="inline-flex items-center justify-end gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30">
-                                      <Minus className="h-3 w-3 text-amber-600 flex-shrink-0" />
-                                      <span className="font-mono text-sm font-semibold text-amber-700 dark:text-amber-400 whitespace-nowrap">
-                                        {Math.abs(tankUsage).toLocaleString()} L
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm italic">—</span>
-                                  )}
-                                </TableCell>
-                                {/* Pump Issued */}
-                                <TableCell className="px-4 py-3 align-middle text-right">
-                                  {pumpIssued !== null ? (
-                                    <div className="inline-flex items-center justify-end gap-1 px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/30">
-                                      <ArrowUpCircle className="h-3 w-3 text-blue-600 flex-shrink-0" />
-                                      <span className="font-mono text-sm font-semibold text-blue-700 dark:text-blue-400 whitespace-nowrap">
-                                        {pumpIssued.toLocaleString()} L
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm italic">—</span>
-                                  )}
-                                </TableCell>
-                                {/* Variance */}
-                                <TableCell className="px-4 py-3 align-middle text-right">
-                                  {record.variance_liters !== null ? (
-                                    <div className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full font-mono text-sm font-bold whitespace-nowrap ${record.variance_liters === 0
-                                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                      : record.variance_liters < 0
-                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
-                                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                      }`}>
-                                      {record.variance_liters > 0 ? "+" : ""}
-                                      {record.variance_liters.toLocaleString()} L
-                                    </div>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm italic">—</span>
-                                  )}
-                                </TableCell>
-                                {/* Status */}
-                                <TableCell className="px-4 py-3 align-middle">
-                                  <div className="flex flex-col gap-1">
-                                    <Badge
-                                      className={`${varianceStatus.color} text-white text-xs font-semibold gap-1 w-fit`}
-                                    >
-                                      {record.status === "open" ? (
-                                        <>
-                                          <XCircle className="h-3 w-3" />
-                                          Open
-                                        </>
-                                      ) : record.status === "closed" ? (
-                                        <>
-                                          <CheckCircle2 className="h-3 w-3" />
-                                          {varianceStatus.label}
-                                        </>
-                                      ) : (
-                                        <>
-                                          <CheckCircle2 className="h-3 w-3" />
-                                          Reconciled
-                                        </>
-                                      )}
-                                    </Badge>
-                                    {record.last_edited_at && (
-                                      <Tooltip>
-                                        <TooltipTrigger>
-                                          <div className="text-xs text-muted-foreground flex items-center gap-1 cursor-default">
-                                            <Edit className="h-3 w-3" />
-                                            Edited
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          Last edited {formatDate(record.last_edited_at)} by {record.last_edited_by}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                {/* Actions */}
-                                <TableCell className="px-4 py-3 align-middle">
-                                  <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {record.status === "open" && (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            size="sm"
-                                            onClick={() => openCloseDipDialog(record)}
-                                            className="h-7 w-7 p-0 bg-green-600 hover:bg-green-700 rounded-md"
-                                          >
-                                            <CheckCircle2 className="h-3.5 w-3.5" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Close day</TooltipContent>
-                                      </Tooltip>
-                                    )}
+                                </div>
+                              </TableCell>
+                              {/* Actions */}
+                              <TableCell>
+                                <div className="flex items-center justify-end gap-1">
+                                  {record.status === "open" && (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => openEditDipDialog(record)}
-                                          className="h-7 w-7 p-0 rounded-md"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => openCloseDipDialog(record)}
                                         >
-                                          <Edit className="h-3.5 w-3.5" />
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
                                         </Button>
                                       </TooltipTrigger>
-                                      <TooltipContent>Edit record</TooltipContent>
+                                      <TooltipContent>Close day</TooltipContent>
                                     </Tooltip>
-                                    {record.edit_history && (record.edit_history as DipRecordEditEntry[]).length > 0 && (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => openViewHistoryDialog(record)}
-                                            className="h-7 w-7 p-0 rounded-md"
-                                          >
-                                            <History className="h-3.5 w-3.5" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>View history</TooltipContent>
-                                      </Tooltip>
-                                    )}
+                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => openEditDipDialog(record)}
+                                      >
+                                        <Edit className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Edit record</TooltipContent>
+                                  </Tooltip>
+                                  {record.edit_history && (record.edit_history as DipRecordEditEntry[]).length > 0 && (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-7 w-7 p-0 rounded-md text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-                                          onClick={() => openDeleteDipDialog(record)}
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => openViewHistoryDialog(record)}
                                         >
-                                          <Trash2 className="h-3.5 w-3.5" />
+                                          <History className="h-3.5 w-3.5 text-amber-500" />
                                         </Button>
                                       </TooltipTrigger>
-                                      <TooltipContent>Delete record</TooltipContent>
+                                      <TooltipContent>View history</TooltipContent>
                                     </Tooltip>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                          {dipRecords.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={9} className="px-4 py-16 text-center">
-                                <div className="flex flex-col items-center">
-                                  <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mb-4">
-                                    <ClipboardList className="h-10 w-10 text-muted-foreground" />
-                                  </div>
-                                  <h3 className="text-lg font-medium mb-1">No Records Found</h3>
-                                  <p className="text-sm text-muted-foreground mb-4">Start your day by recording opening tank levels</p>
-                                  <Button onClick={() => setOpenDipDialogOpen(true)} className="gap-2">
-                                    <Plus className="h-4 w-4" />
-                                    Start New Day
-                                  </Button>
+                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-red-500 hover:text-red-700"
+                                        onClick={() => openDeleteDipDialog(record)}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Delete record</TooltipContent>
+                                  </Tooltip>
                                 </div>
                               </TableCell>
                             </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </ScrollArea>
+                          );
+                        })}
+                        {dipRecords.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={10} className="text-center text-muted-foreground py-12">
+                              No dip records yet. Click "Start New Day" to begin.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1212,6 +1063,7 @@ const FuelBunkerManagement = () => {
                           <TableHead>Vehicle / Reference</TableHead>
                           <TableHead>Driver / Operator</TableHead>
                           <TableHead className="text-right">Cost</TableHead>
+                          <TableHead className="w-[80px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1267,11 +1119,45 @@ const FuelBunkerManagement = () => {
                             <TableCell className="text-right font-medium">
                               {tx.total_cost ? `$${tx.total_cost.toFixed(2)}` : "-"}
                             </TableCell>
+                            <TableCell>
+                              {tx.transaction_type === "refill" && (
+                                <div className="flex items-center gap-1">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => openEditTransactionDialog(tx)}
+                                      >
+                                        <Edit className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Edit refill</TooltipContent>
+                                  </Tooltip>
+                                  {tx.edit_history && (tx.edit_history as FuelTransactionEditEntry[]).length > 0 && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => openViewTransactionHistory(tx)}
+                                        >
+                                          <History className="h-3.5 w-3.5 text-amber-500" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>View edit history</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </div>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                         {transactions.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
+                            <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
                               No transactions yet
                             </TableCell>
                           </TableRow>
@@ -1759,7 +1645,42 @@ const FuelBunkerManagement = () => {
                     {selectedBunker?.current_level_liters.toLocaleString()} L / {selectedBunker?.capacity_liters.toLocaleString()} L
                   </span>
                 </div>
+                {selectedBunker?.unit_cost != null && selectedBunker.unit_cost > 0 && (
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-sm text-muted-foreground">Current Price:</span>
+                    <span className="font-mono text-sm">${selectedBunker.unit_cost.toFixed(2)}/L</span>
+                  </div>
+                )}
               </div>
+              {/* Blended Price Preview */}
+              {refillData.quantity_liters && refillData.unit_cost && selectedBunker && (() => {
+                const existingVol = selectedBunker.current_level_liters || 0;
+                const existingPrice = selectedBunker.unit_cost || 0;
+                const newVol = parseFloat(refillData.quantity_liters) || 0;
+                const newPrice = parseFloat(refillData.unit_cost) || 0;
+                const totalVol = existingVol + newVol;
+                if (totalVol <= 0 || newVol <= 0) return null;
+                const blended = ((existingVol * existingPrice) + (newVol * newPrice)) / totalVol;
+                return (
+                  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4 space-y-2">
+                    <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300">Blended Price Preview</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <span className="text-muted-foreground">Existing: {existingVol.toLocaleString()} L × ${existingPrice.toFixed(2)}</span>
+                      <span className="text-right font-mono">${(existingVol * existingPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span className="text-muted-foreground">New: {newVol.toLocaleString()} L × ${newPrice.toFixed(2)}</span>
+                      <span className="text-right font-mono">${(newVol * newPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="border-t border-blue-200 dark:border-blue-700 pt-2 flex justify-between items-center">
+                      <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                        New Blended Price ({totalVol.toLocaleString()} L total)
+                      </span>
+                      <span className="font-mono font-bold text-lg text-blue-700 dark:text-blue-200">
+                        ${blended.toFixed(4)}/L
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="grid gap-4 py-2">
                 <div className="grid gap-2">
                   <Label htmlFor="refill_qty">Quantity (L) *</Label>
@@ -2441,6 +2362,176 @@ const FuelBunkerManagement = () => {
                 <Button onClick={() => setViewDipHistoryDialogOpen(false)}>
                   Close
                 </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Refill Transaction Dialog */}
+          <Dialog open={editTransactionDialogOpen} onOpenChange={setEditTransactionDialogOpen}>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                    <Edit className="h-4 w-4 text-amber-500" />
+                  </div>
+                  Edit Refill Transaction
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedTransaction && (
+                    <>Editing refill from {formatDate(selectedTransaction.transaction_date)}</>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Quantity (L)</Label>
+                    <Input
+                      type="number"
+                      value={editTxData.quantity_liters}
+                      onChange={(e) => setEditTxData((d) => ({ ...d, quantity_liters: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Unit Cost ($/L)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editTxData.unit_cost}
+                      onChange={(e) => setEditTxData((d) => ({ ...d, unit_cost: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Reference / Invoice #</Label>
+                  <Input
+                    value={editTxData.reference_number}
+                    onChange={(e) => setEditTxData((d) => ({ ...d, reference_number: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Textarea
+                    value={editTxData.notes}
+                    onChange={(e) => setEditTxData((d) => ({ ...d, notes: e.target.value }))}
+                    rows={2}
+                  />
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <Label className="text-amber-600">Reason for Edit *</Label>
+                  <Input
+                    placeholder="e.g. Corrected invoice price"
+                    value={editTxData.edit_reason}
+                    onChange={(e) => setEditTxData((d) => ({ ...d, edit_reason: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-amber-600">Edited By *</Label>
+                  <Input
+                    placeholder="Your name"
+                    value={editTxData.edited_by}
+                    onChange={(e) => setEditTxData((d) => ({ ...d, edited_by: e.target.value }))}
+                  />
+                </div>
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-200">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>Editing this transaction will recalculate the bunker&apos;s blended price using all historical refills.</span>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditTransactionDialogOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={handleEditTransaction}
+                  disabled={!editTxData.edit_reason || !editTxData.edited_by || editFuelTransaction.isPending}
+                >
+                  {editFuelTransaction.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* View Transaction Edit History Dialog */}
+          <Dialog open={viewTransactionHistoryDialogOpen} onOpenChange={setViewTransactionHistoryDialogOpen}>
+            <DialogContent className="sm:max-w-[600px] max-h-[80vh]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                    <History className="h-4 w-4 text-amber-500" />
+                  </div>
+                  Transaction Edit History
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedTransaction && (
+                    <>Refill from {formatDate(selectedTransaction.transaction_date)} &mdash; {selectedTransaction.quantity_liters}L</>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              {selectedTransaction && (
+                <>
+                  <ScrollArea className="max-h-[50vh]">
+                    <div className="space-y-4">
+                      {(selectedTransaction.edit_history as FuelTransactionEditEntry[] || []).map((entry, idx) => (
+                        <div key={idx} className="rounded-lg border p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="gap-1 text-amber-600 border-amber-300">
+                                <Edit className="h-3 w-3" />
+                                Edit #{idx + 1}
+                              </Badge>
+                              <span className="text-sm font-medium">{entry.edited_by}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(entry.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+                          {entry.reason && (
+                            <p className="text-sm text-muted-foreground italic">&ldquo;{entry.reason}&rdquo;</p>
+                          )}
+                          <div className="rounded border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Field</TableHead>
+                                  <TableHead>Old Value</TableHead>
+                                  <TableHead>New Value</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {entry.changes.map((change, changeIdx) => (
+                                  <TableRow key={changeIdx}>
+                                    <TableCell className="font-medium">
+                                      {change.field.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-red-600 bg-red-50/50 dark:bg-red-950/20">
+                                      {change.old_value ?? "—"}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-green-600 bg-green-50/50 dark:bg-green-950/20">
+                                      {change.new_value ?? "—"}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      ))}
+                      {(!selectedTransaction.edit_history ||
+                        (selectedTransaction.edit_history as FuelTransactionEditEntry[]).length === 0) && (
+                          <div className="text-center text-muted-foreground py-12">
+                            <History className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                            <p>No edit history for this transaction</p>
+                          </div>
+                        )}
+                    </div>
+                  </ScrollArea>
+                </>
+              )}
+              <DialogFooter>
+                <Button onClick={() => setViewTransactionHistoryDialogOpen(false)}>Close</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

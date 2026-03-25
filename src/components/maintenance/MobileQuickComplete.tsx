@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Camera, Mic, StopCircle, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { rescheduleAfterCompletion } from "@/lib/maintenanceReschedule";
 
 interface MobileQuickCompleteProps {
   open: boolean;
@@ -122,6 +123,10 @@ export function MobileQuickComplete({
         });
 
       if (historyError) throw historyError;
+
+      // Reschedule: recalculate next_due_date and update readings
+      const odoValue = odometerReading ? parseInt(odometerReading) : null;
+      await rescheduleAfterCompletion(scheduleId, new Date(), odoValue);
 
       toast.success("Maintenance completed successfully");
       onOpenChange(false);

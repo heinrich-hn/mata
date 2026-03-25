@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MaintenanceSchedule } from "@/types/maintenance";
 import { updateVehicleOdometer, evaluateKmSchedules } from "@/lib/maintenanceKmTracking";
+import { rescheduleAfterCompletion } from "@/lib/maintenanceReschedule";
+import { isReeferFleet } from "@/utils/fleetCategories";
 
 interface CompleteMaintenanceDialogProps {
   open: boolean;
@@ -32,9 +35,40 @@ export function CompleteMaintenanceDialog({
   const [createJobCard, setCreateJobCard] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Fetch vehicle fleet number to detect reefer vs truck
+  const { data: vehicleInfo } = useQuery({
+    queryKey: ["vehicle-fleet-complete", schedule.vehicle_id],
+    queryFn: async () => {
+      if (!schedule.vehicle_id) return null;
+      const { data } = await supabase
+        .from("vehicles")
+        .select("fleet_number")
+        .eq("id", schedule.vehicle_id)
+        .single();
+      return data;
+    },
+    enabled: open && !!schedule.vehicle_id,
+  });
+
+  const isReefer = isReeferFleet(vehicleInfo?.fleet_number);
+
+  const isOdometerBased = !!schedule.odometer_based;
+  const lastReading = schedule.last_odometer_reading || 0;
+  const interval = schedule.odometer_interval_km || 0;
+  const nextServiceAt = lastReading + interval;
+
   const handleComplete = async () => {
     if (!completedBy) {
       toast.error("Please enter who completed the maintenance");
+      return;
+    }
+
+    if (isOdometerBased && !odometerReading) {
+      toast.error(
+        isReefer
+          ? "Please enter the current operating hours"
+          : "Please enter the current odometer reading"
+      );
       return;
     }
 
@@ -58,25 +92,15 @@ export function CompleteMaintenanceDialog({
 
       if (historyError) throw historyError;
 
-      // Update schedule's last_odometer_reading if odometer was recorded
-      if (odometerReading && schedule.odometer_based) {
-        const odoValue = parseInt(odometerReading);
-        
-        // Update the schedule's last_odometer_reading
-        await supabase
-          .from("maintenance_schedules")
-          .update({ last_odometer_reading: odoValue })
-          .eq("id", schedule.id);
+      // Reschedule: recalculate next_due_date, update last_completed_date & last_odometer_reading
+      const odoValue = odometerReading ? parseInt(odometerReading) : null;
+      await rescheduleAfterCompletion(schedule.id, new Date(), odoValue);
 
-        // Update vehicle's current_odometer if vehicle is linked
-        if (schedule.vehicle_id) {
-          await updateVehicleOdometer(schedule.vehicle_id, odoValue);
-          // Re-evaluate KM schedules for this vehicle
-          await evaluateKmSchedules(schedule.vehicle_id, odoValue);
-        }
+      // For non-reefer KM-based schedules, also update vehicle odometer & re-evaluate
+      if (odoValue && schedule.odometer_based && schedule.vehicle_id && !isReefer) {
+        await updateVehicleOdometer(schedule.vehicle_id, odoValue);
+        await evaluateKmSchedules(schedule.vehicle_id, odoValue);
       }
-
-      // The trigger will handle updating next_due_date
       toast.success("Maintenance completed successfully");
       onComplete();
       onOpenChange(false);
@@ -131,14 +155,25 @@ export function CompleteMaintenanceDialog({
             </div>
 
             <div>
-              <Label htmlFor="odometer">Odometer Reading</Label>
+              <Label htmlFor="odometer">
+                {isReefer ? "Operating Hours" : "Odometer Reading (km)"}
+                {isOdometerBased && " *"}
+              </Label>
               <Input
                 id="odometer"
                 type="number"
                 value={odometerReading}
                 onChange={(e) => setOdometerReading(e.target.value)}
-                placeholder="Current reading"
+                placeholder={isReefer ? "Current operating hours" : "Current km reading"}
+                required={isOdometerBased}
               />
+              {isOdometerBased && interval > 0 && (
+                <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                  <div>Last service: {lastReading.toLocaleString()} {isReefer ? "hrs" : "km"}</div>
+                  <div>Interval: {interval.toLocaleString()} {isReefer ? "hrs" : "km"}</div>
+                  <div>Next service at: {nextServiceAt.toLocaleString()} {isReefer ? "hrs" : "km"}</div>
+                </div>
+              )}
             </div>
           </div>
 

@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { UserSelect } from "@/components/ui/user-select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -299,7 +300,11 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
 
             <div className="space-y-2">
               <Label htmlFor="assigned_to">Assigned To</Label>
-              <Input id="assigned_to" {...register("assigned_to")} />
+              <UserSelect
+                value={watch("assigned_to")}
+                onValueChange={(value) => setValue("assigned_to", value)}
+                placeholder="Select assignee"
+              />
             </div>
 
             <div className="flex items-center space-x-2">

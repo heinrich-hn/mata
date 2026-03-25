@@ -190,7 +190,7 @@ const InspectionCard = ({
   return (
     <Card
       className={cn(
-        "active:scale-[0.98] transition-transform cursor-pointer rounded-2xl shadow-sm border border-border/40 border-l-4 touch-target",
+        "active:scale-[0.98] transition-all cursor-pointer rounded-2xl shadow-sm hover:shadow-md border border-border/40 border-l-4 touch-target",
         faultColor
       )}
       onClick={() => onClick(inspection.id)}

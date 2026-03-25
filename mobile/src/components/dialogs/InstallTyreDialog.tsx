@@ -1,3 +1,4 @@
+import InspectorProfileSelector from "@/components/inspections/InspectorProfileSelector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -733,11 +734,9 @@ const InstallTyreDialog = ({
 
               <div className="space-y-2">
                 <Label htmlFor="installerName">Installer Name *</Label>
-                <Input
-                  id="installerName"
-                  value={formData.installerName}
-                  onChange={(e) => handleInputChange("installerName", e.target.value)}
-                  placeholder="Enter name of person performing installation"
+                <InspectorProfileSelector
+                  value={undefined}
+                  onChange={(_id, name) => handleInputChange("installerName", name)}
                 />
               </div>
 

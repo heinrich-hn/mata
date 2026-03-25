@@ -7,6 +7,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fromTable = (tableName: string) => (supabase as any).from(tableName);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rpcCall = (fnName: string, params: Record<string, unknown>) => (supabase as any).rpc(fnName, params);
 
 // ── Types ──────────────────────────────────────────────
 
@@ -185,11 +187,47 @@ export function useCreateBulkDieselOrder() {
                 .select()
                 .single();
             if (error) throw error;
+
+            // If a bunker is specified, also refill it to update stock level + blended price
+            if (order.bunker_id) {
+                const { data: refillResult, error: refillError } = await rpcCall("refill_bunker", {
+                    p_bunker_id: order.bunker_id,
+                    p_quantity_liters: order.quantity_liters,
+                    p_unit_cost: order.price_per_liter,
+                    p_reference_number: order.reference_number || null,
+                    p_notes: `Bulk order from supplier${order.notes ? ': ' + order.notes : ''}`,
+                });
+
+                if (refillError) {
+                    console.error("Failed to refill bunker from order:", refillError);
+                    // Order was saved but bunker wasn't refilled
+                    toast({
+                        title: "Order Saved (Bunker Not Updated)",
+                        description: `Order recorded but bunker refill failed: ${refillError.message}`,
+                        variant: "destructive",
+                    });
+                    return data as BulkDieselOrder;
+                }
+
+                const refillResponse = refillResult as { success: boolean; error?: string };
+                if (!refillResponse.success) {
+                    toast({
+                        title: "Order Saved (Bunker Not Updated)",
+                        description: `Order recorded but bunker refill failed: ${refillResponse.error}`,
+                        variant: "destructive",
+                    });
+                    return data as BulkDieselOrder;
+                }
+            }
+
             return data as BulkDieselOrder;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["bulk_diesel_orders"] });
-            toast({ title: "Order Recorded", description: "Bulk diesel order has been recorded." });
+            queryClient.invalidateQueries({ queryKey: ["fuel-bunkers"] });
+            queryClient.invalidateQueries({ queryKey: ["fuel-transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["dip-records"] });
+            toast({ title: "Order Recorded", description: "Bulk diesel order recorded and bunker stock updated." });
         },
         onError: (error: Error) => {
             toast({ title: "Error", description: error.message, variant: "destructive" });

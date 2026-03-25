@@ -436,7 +436,7 @@ const MobileFollowUps = () => {
                         const hasInspection = !!fu.job_card?.inspection;
 
                         return (
-                            <Card key={fu.id} className="overflow-hidden rounded-2xl border border-border/40 shadow-sm">
+                            <Card key={fu.id} className="overflow-hidden rounded-2xl border border-border/40 shadow-sm active:scale-[0.98] transition-transform">
                                 {/* Card Header: Vehicle + Job Card */}
                                 {(hasVehicle || hasJobCard) && (
                                     <div className="px-4 pt-3 pb-2 bg-gradient-to-r from-muted/60 to-transparent border-b border-border/30">

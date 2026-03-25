@@ -17,7 +17,9 @@ import { useState } from "react";
 import { CreateJobCardFromScheduleDialog } from "../dialogs/CreateJobCardFromScheduleDialog";
 import { EditScheduleDialog } from "./EditScheduleDialog";
 import { MobileQuickComplete } from "./MobileQuickComplete";
+import { UpdateServiceReadingDialog } from "./UpdateServiceReadingDialog";
 import { Progress } from "@/components/ui/progress";
+import { rescheduleAfterCompletion } from "@/lib/maintenanceReschedule";
 import { calculateKmStatus, getVehicleLatestKm } from "@/lib/maintenanceKmTracking";
 
 interface ScheduleDetailsDialogProps {
@@ -40,6 +42,7 @@ export function ScheduleDetailsDialog({
   const [showMobileQuickComplete, setShowMobileQuickComplete] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUpdateReading, setShowUpdateReading] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // Always fetch vehicle info (fleet_number needed for subcategory detection)
@@ -122,6 +125,9 @@ export function ScheduleDetailsDialog({
       ]);
 
       if (error) throw error;
+
+      // Reschedule: recalculate next_due_date and update last_completed_date
+      await rescheduleAfterCompletion(schedule.id, new Date());
 
       toast({
         title: "Success",
@@ -407,6 +413,15 @@ export function ScheduleDetailsDialog({
                       <Edit className="mr-2 h-4 w-4" />
                       Edit Schedule
                     </Button>
+                    {schedule.odometer_based && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowUpdateReading(true)}
+                      >
+                        <Gauge className="mr-2 h-4 w-4" />
+                        Update Service {isReefer ? "Hours" : "Km"}
+                      </Button>
+                    )}
                     {isMobile ? (
                       <Button onClick={() => setShowMobileQuickComplete(true)} disabled={!schedule.next_due_date}>
                         <Smartphone className="mr-2 h-4 w-4" />
@@ -512,6 +527,19 @@ export function ScheduleDetailsDialog({
           });
         }}
       />
+
+      {schedule.odometer_based && (
+        <UpdateServiceReadingDialog
+          open={showUpdateReading}
+          onOpenChange={setShowUpdateReading}
+          schedule={schedule}
+          isReefer={isReefer}
+          onComplete={() => {
+            onUpdate();
+            onOpenChange(false);
+          }}
+        />
+      )}
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>

@@ -1,24 +1,23 @@
+import InspectorProfileSelector from "@/components/inspections/InspectorProfileSelector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-  } from "@/components/ui/dialog";
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogFooter,
+DialogHeader,
+DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "@/components/ui/select";
+import {
+Select,
+SelectContent,
+SelectItem,
+SelectTrigger,
+SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -251,13 +250,11 @@ const TyreInspectionDialog = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="inspectorName">Inspector Name *</Label>
-              <Input
-                id="inspectorName"
-                value={formData.inspectorName}
-                onChange={(e) =>
-                  setFormData({ ...formData, inspectorName: e.target.value })
+              <InspectorProfileSelector
+                value={undefined}
+                onChange={(_id, name) =>
+                  setFormData({ ...formData, inspectorName: name })
                 }
-                placeholder="Enter your name"
               />
             </div>
             <div className="space-y-2">

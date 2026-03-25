@@ -7,6 +7,7 @@ import { AlertTriangle, Calendar, Clock, FileSpreadsheet, FileText, Gauge, Timer
 import { format, differenceInDays } from "date-fns";
 import { toast } from "sonner";
 import { CompleteMaintenanceDialog } from "./CompleteMaintenanceDialog";
+import { UpdateServiceReadingDialog } from "./UpdateServiceReadingDialog";
 import { MaintenanceSchedule } from "@/types/maintenance";
 import { exportOverdueToPDF, exportOverdueToExcel } from "@/lib/maintenanceExport";
 import { getVehicleLatestKm } from "@/lib/maintenanceKmTracking";
@@ -20,6 +21,9 @@ export function OverdueAlerts() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSchedule, setSelectedSchedule] = useState<MaintenanceSchedule | null>(null);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showUpdateReadingDialog, setShowUpdateReadingDialog] = useState(false);
+  const [updateReadingSchedule, setUpdateReadingSchedule] = useState<MaintenanceSchedule | null>(null);
+  const [updateReadingIsReefer, setUpdateReadingIsReefer] = useState(false);
 
   const fetchReeferHours = async (vehicleIds: string[], fleetMap: Record<string, string>) => {
     const fleetNumbers = vehicleIds
@@ -197,6 +201,12 @@ export function OverdueAlerts() {
   const handleComplete = (schedule: MaintenanceSchedule) => {
     setSelectedSchedule(schedule);
     setShowCompleteDialog(true);
+  };
+
+  const handleUpdateReading = (schedule: MaintenanceSchedule, isReefer: boolean) => {
+    setUpdateReadingSchedule(schedule);
+    setUpdateReadingIsReefer(isReefer);
+    setShowUpdateReadingDialog(true);
   };
 
   const handleCompleted = () => {
@@ -421,12 +431,15 @@ export function OverdueAlerts() {
                           >
                             Complete
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                          >
-                            Reschedule
-                          </Button>
+                          {schedule.odometer_based && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleUpdateReading(schedule, isReefer)}
+                            >
+                              Update {isReefer ? "Hours" : "Km"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -443,6 +456,16 @@ export function OverdueAlerts() {
           open={showCompleteDialog}
           onOpenChange={setShowCompleteDialog}
           schedule={selectedSchedule}
+          onComplete={handleCompleted}
+        />
+      )}
+
+      {updateReadingSchedule && (
+        <UpdateServiceReadingDialog
+          open={showUpdateReadingDialog}
+          onOpenChange={setShowUpdateReadingDialog}
+          schedule={updateReadingSchedule}
+          isReefer={updateReadingIsReefer}
           onComplete={handleCompleted}
         />
       )}
