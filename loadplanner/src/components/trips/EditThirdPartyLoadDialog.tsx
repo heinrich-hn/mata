@@ -286,7 +286,7 @@ export function EditThirdPartyLoadDialog({
         status: newStatus,
         fleet_vehicle_id: newFleetId,
         driver_id: newDriverId,
-        time_window: timeData as unknown as Json,
+        time_window: JSON.stringify(timeData) as unknown as Json,
         notes: data.notes,
       },
       {

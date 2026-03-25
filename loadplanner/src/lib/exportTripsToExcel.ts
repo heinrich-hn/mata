@@ -1,7 +1,8 @@
 import type { Load } from "@/hooks/useTrips";
 import * as timeWindowLib from "@/lib/timeWindow";
 import { computeTimeVariance } from "@/lib/timeWindow";
-import { format, getWeek, parseISO } from "date-fns";
+import { getLocationDisplayName } from "@/lib/utils";
+import { addDays, differenceInDays, format, getWeek, isSameDay, parseISO, startOfWeek } from "date-fns";
 import XLSX from "xlsx-js-style";
 
 // Status labels
@@ -389,4 +390,290 @@ export function exportWeeklyLoadsToExcelSimplified(
     filename: `loads-simplified-week-${weekNumber}-${year}`,
     sheetName: `Week ${weekNumber}`,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Calendar-layout export — mirrors the weekly planner Gantt view
+// ---------------------------------------------------------------------------
+
+/** Shared cell styles */
+const calStyles = {
+  title: {
+    font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+    fill: { fgColor: { rgb: "1F4E79" } },
+    alignment: { horizontal: "center" as const, vertical: "center" as const },
+  },
+  subtitle: {
+    font: { sz: 11, color: { rgb: "FFFFFF" } },
+    fill: { fgColor: { rgb: "1F4E79" } },
+    alignment: { horizontal: "center" as const, vertical: "center" as const },
+  },
+  dayHeader: {
+    font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
+    fill: { fgColor: { rgb: "2E75B6" } },
+    alignment: { horizontal: "center" as const, vertical: "center" as const },
+    border: {
+      bottom: { style: "thin" as const, color: { rgb: "FFFFFF" } },
+      right: { style: "thin" as const, color: { rgb: "FFFFFF" } },
+    },
+  },
+  todayHeader: {
+    font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
+    fill: { fgColor: { rgb: "0070C0" } },
+    alignment: { horizontal: "center" as const, vertical: "center" as const },
+    border: {
+      bottom: { style: "thin" as const, color: { rgb: "FFFFFF" } },
+      right: { style: "thin" as const, color: { rgb: "FFFFFF" } },
+    },
+  },
+  truckHeader: {
+    font: { bold: true, sz: 11, color: { rgb: "1F4E79" } },
+    fill: { fgColor: { rgb: "D6E4F0" } },
+    alignment: { horizontal: "center" as const, vertical: "center" as const },
+    border: {
+      bottom: { style: "thin" as const, color: { rgb: "B4C6E7" } },
+      right: { style: "thin" as const, color: { rgb: "B4C6E7" } },
+    },
+  },
+  emptyCell: {
+    fill: { fgColor: { rgb: "F2F2F2" } },
+    border: {
+      bottom: { style: "thin" as const, color: { rgb: "D9D9D9" } },
+      right: { style: "thin" as const, color: { rgb: "D9D9D9" } },
+    },
+  },
+  weekendEmpty: {
+    fill: { fgColor: { rgb: "E8E8E8" } },
+    border: {
+      bottom: { style: "thin" as const, color: { rgb: "D9D9D9" } },
+      right: { style: "thin" as const, color: { rgb: "D9D9D9" } },
+    },
+  },
+};
+
+const loadStatusColors: Record<string, { bg: string; fg: string }> = {
+  delivered: { bg: "C6EFCE", fg: "006100" },
+  "in-transit": { bg: "BDD7EE", fg: "1F4E79" },
+  scheduled: { bg: "E2D0F8", fg: "5B2C8E" },
+  pending: { bg: "FFF2CC", fg: "7F6000" },
+};
+
+function loadCellStyle(status: string) {
+  const colors = loadStatusColors[status] ?? { bg: "FFF2CC", fg: "7F6000" };
+  return {
+    font: { sz: 9, color: { rgb: colors.fg }, wrapText: true },
+    fill: { fgColor: { rgb: colors.bg } },
+    alignment: { vertical: "top" as const, wrapText: true },
+    border: {
+      bottom: { style: "thin" as const, color: { rgb: "B4C6E7" } },
+      right: { style: "thin" as const, color: { rgb: "B4C6E7" } },
+      top: { style: "thin" as const, color: { rgb: "B4C6E7" } },
+      left: { style: "thin" as const, color: { rgb: "B4C6E7" } },
+    },
+  };
+}
+
+/**
+ * Export the weekly planner as a calendar-layout Excel file.
+ * Layout: rows = trucks, columns = days of the week (Mon–Sun).
+ * Each cell contains the load details for that truck on that day.
+ */
+export function exportCalendarToExcel(
+  loads: Load[],
+  options: {
+    weekStart: Date;
+    weekNumber: number;
+    year: number;
+    filename?: string;
+  },
+): void {
+  const { weekStart, weekNumber, year } = options;
+  const filename = options.filename ?? `weekly-planner-week-${weekNumber}-${year}`;
+  const today = new Date();
+
+  // Build 7-day array (Mon–Sun)
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekEnd = weekDays[6];
+
+  // Filter loads in this week
+  const weekLoads = loads.filter((load) => {
+    try {
+      const ld = parseISO(load.loading_date);
+      const od = parseISO(load.offloading_date);
+      return (
+        (ld >= weekStart && ld <= weekEnd) ||
+        (od >= weekStart && od <= weekEnd) ||
+        (ld <= weekStart && od >= weekEnd)
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  // Group by truck
+  const grouped: Record<string, Load[]> = {};
+  weekLoads.forEach((load) => {
+    const truckId = load.fleet_vehicle?.vehicle_id || "Unassigned";
+    if (!grouped[truckId]) grouped[truckId] = [];
+    grouped[truckId].push(load);
+  });
+
+  // Sort trucks alphabetically, Unassigned last
+  const truckIds = Object.keys(grouped).sort((a, b) => {
+    if (a === "Unassigned") return 1;
+    if (b === "Unassigned") return -1;
+    return a.localeCompare(b);
+  });
+
+  // Sort loads per truck by loading date
+  truckIds.forEach((t) =>
+    grouped[t].sort((a, b) => parseISO(a.loading_date).getTime() - parseISO(b.loading_date).getTime()),
+  );
+
+  // --- Build the sheet as an array-of-arrays ---
+  const ws_data: (string | null)[][] = [];
+  // Track cell styles: key = "R,C" → style object
+  const cellStyles: Record<string, object> = {};
+  const merges: XLSX.Range[] = [];
+
+  // Row 0 — Title (merged across all 8 columns)
+  const titleText = `Weekly Planner — Week ${weekNumber}, ${year}`;
+  ws_data.push([titleText, null, null, null, null, null, null, null]);
+  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } });
+  for (let c = 0; c <= 7; c++) cellStyles["0," + c] = calStyles.title;
+
+  // Row 1 — Date range subtitle
+  const subtitleText = `${format(weekStart, "d MMM yyyy")} — ${format(weekEnd, "d MMM yyyy")}  |  ${weekLoads.length} load${weekLoads.length !== 1 ? "s" : ""} across ${truckIds.length} truck${truckIds.length !== 1 ? "s" : ""}`;
+  ws_data.push([subtitleText, null, null, null, null, null, null, null]);
+  merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 7 } });
+  for (let c = 0; c <= 7; c++) cellStyles["1," + c] = calStyles.subtitle;
+
+  // Row 2 — Blank spacer
+  ws_data.push([null, null, null, null, null, null, null, null]);
+
+  // Row 3 — Day headers (col 0 = "Truck", cols 1-7 = days)
+  const headerRow: (string | null)[] = ["Truck"];
+  weekDays.forEach((day) => {
+    const dayLabel = format(day, "EEE d MMM");
+    headerRow.push(dayLabel);
+  });
+  ws_data.push(headerRow);
+  const headerRowIdx = 3;
+  cellStyles[headerRowIdx + ",0"] = calStyles.truckHeader;
+  weekDays.forEach((day, i) => {
+    const isToday = isSameDay(day, today);
+    cellStyles[headerRowIdx + "," + (i + 1)] = isToday ? calStyles.todayHeader : calStyles.dayHeader;
+  });
+
+  // --- Data rows: one row per truck ---
+  truckIds.forEach((truckId) => {
+    const truckLoads = grouped[truckId];
+    const rowIdx = ws_data.length;
+    const row: (string | null)[] = [truckId];
+
+    // For each day, collect loads that span this day
+    weekDays.forEach((day, dayIdx) => {
+      const dayLoads = truckLoads.filter((load) => {
+        try {
+          const ld = parseISO(load.loading_date);
+          const od = parseISO(load.offloading_date);
+          return day >= ld && day <= od;
+        } catch {
+          return false;
+        }
+      });
+
+      if (dayLoads.length === 0) {
+        row.push("");
+        const isWeekend = dayIdx >= 5;
+        cellStyles[rowIdx + "," + (dayIdx + 1)] = isWeekend ? calStyles.weekendEmpty : calStyles.emptyCell;
+      } else {
+        // Build cell text for all loads on this day
+        const parts = dayLoads.map((load) => {
+          const tw = timeWindowLib.parseTimeWindow(load.time_window);
+          const origin = getLocationDisplayName(load.origin);
+          const dest = getLocationDisplayName(load.destination);
+          const status = statusLabels[load.status] || load.status;
+          const driver = load.driver?.name || "No driver";
+          const cargo = cargoLabels[load.cargo_type] || load.cargo_type;
+
+          const ld = parseISO(load.loading_date);
+          const od = parseISO(load.offloading_date);
+          const isLoadingDay = isSameDay(day, ld);
+          const isOffloadingDay = isSameDay(day, od);
+
+          const lines: string[] = [];
+          lines.push(`${load.load_id} [${status}]`);
+          lines.push(`${origin} → ${dest}`);
+          lines.push(`${cargo} | ${driver}`);
+
+          if (isLoadingDay) {
+            const depTime = tw.origin.plannedDeparture || tw.origin.plannedArrival || "";
+            lines.push(depTime ? `Loading: ${depTime}` : "Loading");
+          }
+          if (isOffloadingDay) {
+            const arrTime = tw.destination.plannedArrival || tw.destination.plannedDeparture || "";
+            lines.push(arrTime ? `Offloading: ${arrTime}` : "Offloading");
+          }
+          if (!isLoadingDay && !isOffloadingDay) {
+            lines.push("In transit");
+          }
+
+          // Backload info
+          if (tw.backload?.enabled) {
+            lines.push(`↩ BL: ${getLocationDisplayName(tw.backload.destination)} (${tw.backload.cargoType || ""})`);
+          }
+
+          return lines.join("\n");
+        });
+
+        row.push(parts.join("\n\n"));
+        // Use the status colour of the first (primary) load
+        cellStyles[rowIdx + "," + (dayIdx + 1)] = loadCellStyle(dayLoads[0].status);
+      }
+    });
+
+    ws_data.push(row);
+    cellStyles[rowIdx + ",0"] = calStyles.truckHeader;
+  });
+
+  // --- Create workbook ---
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+  // Apply styles
+  for (const [key, style] of Object.entries(cellStyles)) {
+    const [r, c] = key.split(",").map(Number);
+    const addr = XLSX.utils.encode_cell({ r, c });
+    if (!ws[addr]) ws[addr] = { v: "", t: "s" };
+    ws[addr].s = style;
+  }
+
+  // Apply merges
+  ws["!merges"] = merges;
+
+  // Column widths: Truck col narrower, day cols wide
+  ws["!cols"] = [
+    { wch: 14 }, // Truck
+    { wch: 30 }, // Mon
+    { wch: 30 }, // Tue
+    { wch: 30 }, // Wed
+    { wch: 30 }, // Thu
+    { wch: 30 }, // Fri
+    { wch: 30 }, // Sat
+    { wch: 30 }, // Sun
+  ];
+
+  // Row heights: header row = 30, data rows taller for wrapped text
+  const rowHeights: XLSX.RowInfo[] = [];
+  rowHeights[0] = { hpt: 30 }; // Title
+  rowHeights[1] = { hpt: 20 }; // Subtitle
+  rowHeights[headerRowIdx] = { hpt: 35 }; // Day headers
+  truckIds.forEach((_, i) => {
+    rowHeights[headerRowIdx + 1 + i] = { hpt: 100 };
+  });
+  ws["!rows"] = rowHeights;
+
+  XLSX.utils.book_append_sheet(wb, ws, `Week ${weekNumber}`);
+  XLSX.writeFile(wb, `${filename}.xlsx`);
 }

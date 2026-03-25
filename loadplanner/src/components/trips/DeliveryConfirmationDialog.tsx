@@ -172,10 +172,12 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
       formInitRef.current = true;
       setShowMissingTimesWarning(false);
       const times = timeWindowLib.parseTimeWindow(load.time_window);
-      // Extract existing per-field notes from time_window
-      const tw = (load.time_window && typeof load.time_window === 'object' && !Array.isArray(load.time_window))
-        ? (load.time_window as Record<string, unknown>)
-        : {};
+      // Extract existing per-field notes from time_window (column is text, so parse the string)
+      let tw: Record<string, unknown> = {};
+      try {
+        const raw = load.time_window;
+        tw = (typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {})) as Record<string, unknown>;
+      } catch { /* ignore */ }
       const originTw = (tw.origin && typeof tw.origin === 'object') ? (tw.origin as Record<string, unknown>) : {};
       const destTw = (tw.destination && typeof tw.destination === 'object') ? (tw.destination as Record<string, unknown>) : {};
       form.reset({
@@ -273,7 +275,7 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
     // First, update the original load as delivered
     updateLoad.mutate({
       id: load.id,
-      time_window: timeData as Load['time_window'],
+      time_window: JSON.stringify(timeData) as Load['time_window'],
       status: 'delivered',
       notes: updatedNotes,
       ...mainFields,
@@ -321,7 +323,7 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
             priority: 'medium',
             loading_date: backloadLoadingDate,
             offloading_date: backloadOffloadingDate,
-            time_window: backloadTimeWindow,
+            time_window: JSON.stringify(backloadTimeWindow),
             origin: load.destination, // Backload starts from where original load was delivered
             destination: data.backloadDestination, // BV or CBC
             cargo_type: data.backloadCargoType as 'Packaging' | 'Fertilizer',
@@ -394,7 +396,7 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
 
     updateLoad.mutate({
       id: load.id,
-      time_window: timeData as Load['time_window'],
+      time_window: JSON.stringify(timeData) as Load['time_window'],
       ...mainFields,
     }, {
       onSuccess: () => {

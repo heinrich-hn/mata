@@ -93,6 +93,20 @@ function VarianceNote({ planned, actual }: { planned?: string; actual?: string }
   );
 }
 
+/** Convert an ISO / DB timestamp to the `YYYY-MM-DDTHH:mm` format required by datetime-local inputs */
+function toDatetimeLocal(value: string | null | undefined): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  // Pad to YYYY-MM-DDTHH:mm (local time)
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${y}-${mo}-${day}T${h}:${mi}`;
+}
+
 export function AlterLoadTimesDialog({ open, onOpenChange, load }: { open: boolean; onOpenChange: (open: boolean) => void; load: Load | null }) {
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -121,13 +135,13 @@ export function AlterLoadTimesDialog({ open, onOpenChange, load }: { open: boole
       } catch { /* ignore */ }
 
       form.reset({
-        actual_loading_arrival: load.actual_loading_arrival || "",
+        actual_loading_arrival: toDatetimeLocal(load.actual_loading_arrival),
         actual_loading_arrival_verified: !!load.actual_loading_arrival_verified,
-        actual_loading_departure: load.actual_loading_departure || "",
+        actual_loading_departure: toDatetimeLocal(load.actual_loading_departure),
         actual_loading_departure_verified: !!load.actual_loading_departure_verified,
-        actual_offloading_arrival: load.actual_offloading_arrival || "",
+        actual_offloading_arrival: toDatetimeLocal(load.actual_offloading_arrival),
         actual_offloading_arrival_verified: !!load.actual_offloading_arrival_verified,
-        actual_offloading_departure: load.actual_offloading_departure || "",
+        actual_offloading_departure: toDatetimeLocal(load.actual_offloading_departure),
         actual_offloading_departure_verified: !!load.actual_offloading_departure_verified,
         variance_reason: existingReason,
       });
@@ -171,15 +185,18 @@ export function AlterLoadTimesDialog({ open, onOpenChange, load }: { open: boole
       time_window.destination.actualDeparture = values.actual_offloading_departure;
     }
 
+    // Exclude variance_reason from the DB payload — it's stored inside time_window JSON, not as a column
+    const { variance_reason, ...dbFields } = values;
+
     updateTimes.mutate({
       id: load.id,
       times: {
-        ...values,
+        ...dbFields,
         actual_loading_arrival_source: values.actual_loading_arrival ? "manual" : undefined,
         actual_loading_departure_source: values.actual_loading_departure ? "manual" : undefined,
         actual_offloading_arrival_source: values.actual_offloading_arrival ? "manual" : undefined,
         actual_offloading_departure_source: values.actual_offloading_departure ? "manual" : undefined,
-        time_window: time_window as Json,
+        time_window: JSON.stringify(time_window) as unknown as Json,
       },
     }, {
       onSuccess: () => onOpenChange(false),

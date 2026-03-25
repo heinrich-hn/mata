@@ -25,6 +25,7 @@ import { useFleetVehicles } from "@/hooks/useFleetVehicles";
 import { useLoads } from "@/hooks/useTrips";
 import type { Load } from "@/hooks/useTrips";
 import {
+  exportCalendarToExcel,
   exportLoadsToExcel,
   exportLoadsToExcelSimplified,
 } from "@/lib/exportTripsToExcel";
@@ -320,6 +321,14 @@ export default function CalendarPage() {
     }
   };
 
+  const handleExportCalendar = () => {
+    exportCalendarToExcel(weekLoads, {
+      weekStart,
+      weekNumber: selectedWeek,
+      year: selectedYear,
+    });
+  };
+
   const isCurrentWeek =
     selectedYear === currentYear && selectedWeek === currentWeekNum;
 
@@ -451,6 +460,9 @@ export default function CalendarPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExportCalendar()}>
+                    Calendar Layout (Weekly Planner)
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleExportWeek(false)}>
                     Full Export (All Columns)
                   </DropdownMenuItem>

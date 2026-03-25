@@ -143,7 +143,7 @@ export function AddBackloadDialog({ open, onOpenChange, load }: AddBackloadDialo
 
     updateLoad.mutate({
       id: load.id,
-      time_window: timeData,
+      time_window: JSON.stringify(timeData),
     }, {
       onSuccess: () => {
         form.reset();

@@ -122,9 +122,9 @@ const DepotCombobox: React.FC<{
 
     // Add custom locations
     customLocations.forEach((loc) => {
-      const key = loc.country;
+      const key = loc.country ?? "Other";
       if (!map[key]) map[key] = [];
-      map[key].push({ id: loc.id, name: loc.name, type: loc.type, isCustom: true });
+      map[key].push({ id: loc.id, name: loc.name, type: loc.type ?? "", isCustom: true });
     });
 
     return map;
@@ -134,7 +134,7 @@ const DepotCombobox: React.FC<{
   const allLocations = useMemo(() => {
     const all: LocationItem[] = DEPOTS.map(d => ({ id: d.id, name: d.name, type: d.type }));
     customLocations.forEach(loc => {
-      all.push({ id: loc.id, name: loc.name, type: loc.type, isCustom: true });
+      all.push({ id: loc.id, name: loc.name, type: loc.type ?? "", isCustom: true });
     });
     return all;
   }, [customLocations]);
@@ -384,7 +384,7 @@ export default function ThirdPartyLoadsPage() {
         status: "scheduled",
         fleet_vehicle_id: data.fleetVehicleId,
         driver_id: data.driverId || null,
-        time_window: timeData,
+        time_window: JSON.stringify(timeData),
         notes: data.notes,
       },
       {

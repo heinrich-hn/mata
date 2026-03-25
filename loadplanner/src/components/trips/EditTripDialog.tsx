@@ -335,7 +335,7 @@ export function EditLoadDialog({
       client_id: data.clientId || null,
       loading_date: format(data.loadingDate, "yyyy-MM-dd"),
       offloading_date: format(data.offloadingDate, "yyyy-MM-dd"),
-      time_window: timeData as Load['time_window'],
+      time_window: JSON.stringify(timeData) as Load['time_window'],
       origin: data.origin,
       destination: data.destination,
       cargo_type: data.cargoType,

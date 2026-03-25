@@ -367,7 +367,7 @@ export default function SubcontractorTripsPage() {
                 status: "scheduled",
                 fleet_vehicle_id: data.fleetVehicleId,
                 driver_id: data.driverId || null,
-                time_window: timeData,
+                time_window: JSON.stringify(timeData),
                 notes: data.notes,
             },
             {

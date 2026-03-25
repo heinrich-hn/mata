@@ -258,7 +258,7 @@ export function AddThirdPartyBackloadDialog({ open, onOpenChange, load }: AddThi
         priority: 'medium',
         loading_date: format(data.loadingDate, 'yyyy-MM-dd'),
         offloading_date: format(data.offloadingDate, 'yyyy-MM-dd'),
-        time_window: newLoadTimeWindow,
+        time_window: JSON.stringify(newLoadTimeWindow),
         origin: data.loadingPlaceName,
         destination: data.offloadingPlaceName,
         cargo_type: 'Retail',
@@ -302,7 +302,7 @@ export function AddThirdPartyBackloadDialog({ open, onOpenChange, load }: AddThi
           updateLoad.mutate(
             {
               id: load.id,
-              time_window: updatedTimeData as unknown as Json,
+              time_window: JSON.stringify(updatedTimeData) as unknown as Json,
             },
             {
               onSuccess: () => {
