@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { useDeleteLoad, type Load } from "@/hooks/useTrips";
 import { exportLoadToPdf } from "@/lib/exportTripsToPdf";
+import { shareTripViaWhatsApp, shareWeeklyScheduleViaWhatsApp } from "@/lib/exportTripWhatsApp";
 import { parseTimeWindow as parseTimeWindowData } from "@/lib/timeWindow";
 import { cn, getLocationDisplayName } from "@/lib/utils";
 import {
@@ -46,6 +47,7 @@ import {
   FileDown,
   Fuel,
   MapPin,
+  MessageCircle,
   MoreHorizontal,
   Navigation,
   Pencil,
@@ -715,6 +717,37 @@ export function LoadsTable({
                               <FileDown className="h-4 w-4 mr-2" />
                               Export to PDF
                             </DropdownMenuItem>
+
+                            {load.driver && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  shareTripViaWhatsApp(load, load.driver?.contact);
+                                }}
+                              >
+                                <MessageCircle className="h-4 w-4 mr-2" />
+                                Send to Driver
+                              </DropdownMenuItem>
+                            )}
+
+                            {load.driver && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const driverLoads = loads.filter(
+                                    (l) => l.driver_id === load.driver_id
+                                  );
+                                  shareWeeklyScheduleViaWhatsApp(
+                                    driverLoads,
+                                    load.driver!.name,
+                                    load.driver?.contact,
+                                  );
+                                }}
+                              >
+                                <Calendar className="h-4 w-4 mr-2" />
+                                Send Weekly Schedule
+                              </DropdownMenuItem>
+                            )}
 
                             {/* Quick Add Times removed */}
 

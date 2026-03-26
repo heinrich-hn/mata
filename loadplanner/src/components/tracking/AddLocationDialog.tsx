@@ -42,7 +42,7 @@ const formSchema = z.object({
     .max(180, 'Longitude must be between -180 and 180'),
   type: z.enum(['depot', 'warehouse', 'market', 'border', 'farm', 'customer']),
   country: z.enum(['Zimbabwe', 'South Africa', 'Mozambique', 'Zambia', 'Botswana']),
-  radius: z.coerce.number().min(50, 'Minimum radius is 50m').max(5000, 'Maximum radius is 5000m'),
+  // Removed radius since it's not in CustomLocationInsert
   notes: z.string().optional(),
 });
 
@@ -64,7 +64,7 @@ export function AddLocationDialog({ open, onOpenChange }: AddLocationDialogProps
       longitude: 0,
       type: 'depot',
       country: 'Zimbabwe',
-      radius: 500,
+      // Removed radius default value
       notes: '',
     },
   });
@@ -77,7 +77,7 @@ export function AddLocationDialog({ open, onOpenChange }: AddLocationDialogProps
         longitude: data.longitude,
         type: data.type,
         country: data.country,
-        radius: data.radius,
+        // Removed radius from mutation
         notes: data.notes,
       },
       {
@@ -211,21 +211,6 @@ export function AddLocationDialog({ open, onOpenChange }: AddLocationDialogProps
                 )}
               />
             </div>
-
-            {/* Radius */}
-            <FormField
-              control={form.control}
-              name="radius"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Geofence Radius (meters)</FormLabel>
-                  <FormControl>
-                    <Input type="number" min={50} max={5000} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             {/* Notes */}
             <FormField

@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
         "stream": "stream-browserify",
         "buffer": "buffer",
         "process": "process/browser",
+        "util": "util",
       },
     },
     define: {

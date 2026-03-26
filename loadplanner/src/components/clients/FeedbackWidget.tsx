@@ -29,7 +29,6 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
     setSelectedRating(rating);
 
     if (rating === 'happy') {
-      // Submit immediately for happy
       submitFeedback.mutate(
         { load_id: loadId, client_id: clientId, rating: 'happy', comment: null },
         {
@@ -40,7 +39,6 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
         }
       );
     } else {
-      // Show comment box for unhappy
       setShowCommentBox(true);
     }
   };
@@ -60,97 +58,116 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
   // Already submitted - show current state
   if (submitted && !showCommentBox) {
     return (
-      <div className="flex items-center gap-2">
-        {selectedRating === 'happy' ? (
-          <Badge variant="outline" className="gap-1 text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-900/30 dark:border-green-800">
-            <Smile className="h-3.5 w-3.5" />
-            Happy
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="gap-1 text-red-700 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-900/30 dark:border-red-800">
-            <Frown className="h-3.5 w-3.5" />
-            Unhappy
-          </Badge>
-        )}
+      <div className="flex flex-wrap items-center gap-3 p-3 bg-secondary rounded-lg border">
+        <div className="flex items-center gap-2">
+          {selectedRating === 'happy' ? (
+            <Badge 
+              variant="default" 
+              className="gap-1.5 py-1 px-2.5 text-green-700 bg-green-100 border-green-200 dark:text-green-300 dark:bg-green-900/50 dark:border-green-800"
+            >
+              <Smile className="h-4 w-4" />
+              Satisfied
+            </Badge>
+          ) : (
+            <Badge 
+              variant="default" 
+              className="gap-1.5 py-1 px-2.5 text-red-700 bg-red-100 border-red-200 dark:text-red-300 dark:bg-red-900/50 dark:border-red-800"
+            >
+              <Frown className="h-4 w-4" />
+              Needs Improvement
+            </Badge>
+          )}
+        </div>
+        
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="h-6 px-2 text-xs text-muted-foreground"
+          className="h-8 px-3 text-xs font-medium"
           onClick={() => {
             setSubmitted(false);
             setSelectedRating(null);
             setShowCommentBox(false);
           }}
         >
-          Change
+          Change Feedback
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground mr-1">Rate service:</span>
+    <div className="space-y-3 p-4 bg-secondary/50 rounded-xl border">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">How was your experience?</h3>
+        <span className="text-xs text-muted-foreground">Your feedback helps us improve</span>
+      </div>
+      
+      <div className="flex items-center gap-3 pt-1">
         <Button
-          variant="ghost"
-          size="sm"
+          variant="outline"
+          size="lg"
           className={cn(
-            'h-8 w-8 p-0 rounded-full transition-all',
+            'h-12 w-12 p-0 rounded-full transition-all duration-300 shadow-sm',
             selectedRating === 'happy'
-              ? 'bg-green-100 text-green-600 ring-2 ring-green-300 dark:bg-green-900/50 dark:text-green-400 dark:ring-green-700'
-              : 'hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/30'
+              ? 'bg-green-100 text-green-700 border-green-300 ring-2 ring-green-200 dark:bg-green-900/50 dark:text-green-400 dark:border-green-700 dark:ring-green-900'
+              : 'hover:bg-green-50 hover:text-green-700 hover:border-green-200 dark:hover:bg-green-900/30 dark:hover:border-green-800'
           )}
           onClick={() => handleRatingClick('happy')}
           disabled={submitFeedback.isPending}
-          title="Happy with service"
+          title="Satisfied with service"
         >
           {submitFeedback.isPending && selectedRating === 'happy' ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
-            <Smile className="h-5 w-5" />
+            <Smile className="h-6 w-6" />
           )}
         </Button>
+        
         <Button
-          variant="ghost"
-          size="sm"
+          variant="outline"
+          size="lg"
           className={cn(
-            'h-8 w-8 p-0 rounded-full transition-all',
+            'h-12 w-12 p-0 rounded-full transition-all duration-300 shadow-sm',
             selectedRating === 'unhappy'
-              ? 'bg-red-100 text-red-600 ring-2 ring-red-300 dark:bg-red-900/50 dark:text-red-400 dark:ring-red-700'
-              : 'hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30'
+              ? 'bg-red-100 text-red-700 border-red-300 ring-2 ring-red-200 dark:bg-red-900/50 dark:text-red-400 dark:border-red-700 dark:ring-red-900'
+              : 'hover:bg-red-50 hover:text-red-700 hover:border-red-200 dark:hover:bg-red-900/30 dark:hover:border-red-800'
           )}
           onClick={() => handleRatingClick('unhappy')}
           disabled={submitFeedback.isPending}
-          title="Unhappy with service"
+          title="Needs improvement"
         >
-          <Frown className="h-5 w-5" />
+          <Frown className="h-6 w-6" />
         </Button>
       </div>
 
       {/* Comment box for unhappy rating */}
       {showCommentBox && selectedRating === 'unhappy' && (
-        <div className="space-y-2 pl-0.5">
+        <div className="pt-2 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
           <Textarea
-            placeholder="Tell us what went wrong (optional)..."
+            placeholder="What went wrong? Your detailed feedback helps us improve..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            className="min-h-[60px] text-sm resize-none"
-            rows={2}
+            className="min-h-[80px] text-sm resize-none border-input focus-visible:ring-ring"
+            rows={3}
           />
           <div className="flex items-center gap-2">
             <Button
               size="sm"
               onClick={handleSubmitUnhappy}
               disabled={submitFeedback.isPending}
-              className="gap-1.5"
+              className="gap-2 h-9 px-4"
             >
               {submitFeedback.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sending...
+                </>
               ) : (
-                <Send className="h-3.5 w-3.5" />
+                <>
+                  <Send className="h-4 w-4" />
+                  Submit Feedback
+                </>
               )}
-              Submit Feedback
             </Button>
             <Button
               variant="ghost"
@@ -160,6 +177,7 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
                 setSelectedRating(null);
               }}
               disabled={submitFeedback.isPending}
+              className="h-9 px-4"
             >
               Cancel
             </Button>
