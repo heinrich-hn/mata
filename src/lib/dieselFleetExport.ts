@@ -1334,19 +1334,19 @@ export interface ExportSheetSelection {
 // ExcelJS colour palette (ARGB strings)
 // ─────────────────────────────────────────────────────────────────────────────
 const XC = {
-  navy:       'FF1E3A5F',
-  colHead:    'FF1F2937',
-  weekHead:   'FF2563EB',
-  totalBg:    'FFD1FAE5',
-  sectionBg:  'FFEFF6FF',
-  altRow:     'FFF3F4F6',
+  navy: 'FF1E3A5F',
+  colHead: 'FF1F2937',
+  weekHead: 'FF2563EB',
+  totalBg: 'FFD1FAE5',
+  sectionBg: 'FFEFF6FF',
+  altRow: 'FFF3F4F6',
   subtitleBg: 'FFE8EEF6',
-  cyan:       'FF0891B2',
-  cyanLight:  'FFE0F7FA',
-  white:      'FFFFFFFF',
-  darkText:   'FF111827',
-  grayText:   'FF6B7280',
-  totalText:  'FF065F46',
+  cyan: 'FF0891B2',
+  cyanLight: 'FFE0F7FA',
+  white: 'FFFFFFFF',
+  darkText: 'FF111827',
+  grayText: 'FF6B7280',
+  totalText: 'FF065F46',
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1391,7 +1391,7 @@ const _xlRowStyle = (
     if (opts.fill) _xlFill(cell, opts.fill);
     _xlFont(cell, opts.bold ?? false, opts.size ?? 10, opts.color ?? XC.darkText);
     cell.alignment = { horizontal: c === 1 ? 'left' : 'right', vertical: 'middle', indent: c === 1 ? 1 : 0 };
-    if (opts.borderTop)    _xlBorder(cell, 'top',    opts.borderTop,    'medium');
+    if (opts.borderTop) _xlBorder(cell, 'top', opts.borderTop, 'medium');
     if (opts.borderBottom) _xlBorder(cell, 'bottom', opts.borderBottom, 'medium');
   }
 };
@@ -1482,24 +1482,24 @@ export const generateStyledDieselExcel = async (
   } = input;
 
   const sel = {
-    overview:           sheets.overview            !== false,
-    truckByDriver:      sheets.truckByDriver        !== false,
-    truckByFleet:       sheets.truckByFleet         !== false,
-    truckByStation:     sheets.truckByStation       !== false,
-    weekly:             sheets.weekly               !== false,
-    reeferByFleet:      sheets.reeferByFleet        !== false,
-    reeferByDriver:     sheets.reeferByDriver       !== false,
-    reeferByStation:    sheets.reeferByStation      !== false,
-    truckTransactions:  sheets.truckTransactions    === true,
-    reeferTransactions: sheets.reeferTransactions   === true,
+    overview: sheets.overview !== false,
+    truckByDriver: sheets.truckByDriver !== false,
+    truckByFleet: sheets.truckByFleet !== false,
+    truckByStation: sheets.truckByStation !== false,
+    weekly: sheets.weekly !== false,
+    reeferByFleet: sheets.reeferByFleet !== false,
+    reeferByDriver: sheets.reeferByDriver !== false,
+    reeferByStation: sheets.reeferByStation !== false,
+    truckTransactions: sheets.truckTransactions === true,
+    reeferTransactions: sheets.reeferTransactions === true,
   };
 
-  const wb          = new ExcelJS.Workbook();
-  wb.creator        = 'Car Craft Co — Fleet Management';
-  wb.created        = new Date();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Car Craft Co — Fleet Management';
+  wb.created = new Date();
   const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
-  const dateStamp   = format(new Date(), 'yyyy-MM-dd');
-  const sub         = `Generated: ${generatedOn}`;
+  const dateStamp = format(new Date(), 'yyyy-MM-dd');
+  const sub = `Generated: ${generatedOn}`;
 
   const xlSum = <T>(arr: T[], key: keyof T) => arr.reduce((s, r) => s + (Number(r[key]) || 0), 0);
 
@@ -1509,37 +1509,37 @@ export const generateStyledDieselExcel = async (
     ws.columns = [{ key: 'a', width: 38 }, { key: 'b', width: 24 }];
     _xlSheetTitle(ws, 'CAR CRAFT CO — DIESEL CONSUMPTION REPORT', sub, 2);
 
-    const tL   = truckRecords.reduce((s, r) => s + (r.litres_filled  || 0), 0);
+    const tL = truckRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
     const tZAR = truckRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
     const tUSD = truckRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
-    const tD   = truckRecords.reduce((s, r) => s + (r.distance_travelled || 0), 0);
+    const tD = truckRecords.reduce((s, r) => s + (r.distance_travelled || 0), 0);
 
     _xlSection(ws, '▸  TRUCK FLEET SUMMARY', 2);
     _xlHeaders(ws, ['Metric', 'Value']);
     ([
-      ['Total Truck Records',  truckRecords.length],
-      ['Total Litres',         n2(tL)],
-      ['Total Cost — ZAR',     n2(tZAR)],
-      ['Total Cost — USD',     n2(tUSD)],
-      ['Total Distance (km)',  n2(tD)],
-      ['Overall km/L',         tL > 0 ? n3(tD / tL) : '—'],
-      ['Unique Fleets',        fleetReports.length],
-      ['Unique Drivers',       driverReports.length],
+      ['Total Truck Records', truckRecords.length],
+      ['Total Litres', n2(tL)],
+      ['Total Cost — ZAR', n2(tZAR)],
+      ['Total Cost — USD', n2(tUSD)],
+      ['Total Distance (km)', n2(tD)],
+      ['Overall km/L', tL > 0 ? n3(tD / tL) : '—'],
+      ['Unique Fleets', fleetReports.length],
+      ['Unique Drivers', driverReports.length],
     ] as [string, string | number][]).forEach((vals, i) => _xlDataRow(ws, vals, i % 2 === 1));
 
     ws.addRow([]);
-    const rL   = reeferRecords.reduce((s, r) => s + (r.litres_filled  || 0), 0);
+    const rL = reeferRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
     const rZAR = reeferRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
     const rUSD = reeferRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
 
     _xlSection(ws, '▸  REEFER FLEET SUMMARY', 2, XC.cyan);
     _xlHeaders(ws, ['Metric', 'Value'], XC.cyan);
     ([
-      ['Total Reefer Records',  reeferRecords.length],
-      ['Total Litres',          n2(rL)],
-      ['Total Cost — ZAR',      n2(rZAR)],
-      ['Total Cost — USD',      n2(rUSD)],
-      ['Unique Reefer Units',   reeferFleetReports.length],
+      ['Total Reefer Records', reeferRecords.length],
+      ['Total Litres', n2(rL)],
+      ['Total Cost — ZAR', n2(rZAR)],
+      ['Total Cost — USD', n2(rUSD)],
+      ['Unique Reefer Units', reeferFleetReports.length],
       ['Unique Reefer Drivers', reeferDriverReports.length],
     ] as [string, string | number][]).forEach((vals, i) => _xlDataRow(ws, vals, i % 2 === 1));
 
@@ -1603,7 +1603,7 @@ export const generateStyledDieselExcel = async (
         _xlHeaders(ws,
           isR
             ? ['Reefer Unit', 'Litres', 'Hrs Operated', 'L / H', 'Cost (ZAR)', 'Cost (USD)']
-            : ['Fleet',       'Litres', 'KM',           'km / L', 'Cost (ZAR)', 'Cost (USD)'],
+            : ['Fleet', 'Litres', 'KM', 'km / L', 'Cost (ZAR)', 'Cost (USD)'],
           isR ? XC.cyan : XC.navy);
 
         let ai = 0;
@@ -1705,12 +1705,12 @@ export const generateStyledDieselExcel = async (
 
   // ── Write buffer → browser download ─────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();
-  const blob   = new Blob([buffer as ArrayBuffer], {
+  const blob = new Blob([buffer as ArrayBuffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
   const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href     = url;
+  const a = document.createElement('a');
+  a.href = url;
   a.download = `diesel-report-${dateStamp}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
@@ -1734,31 +1734,31 @@ export const generateComprehensiveDieselPDF = (
   } = input;
 
   const sel = {
-    overview:           sheets.overview            !== false,
-    truckByDriver:      sheets.truckByDriver        !== false,
-    truckByFleet:       sheets.truckByFleet         !== false,
-    truckByStation:     sheets.truckByStation       !== false,
-    weekly:             sheets.weekly               !== false,
-    reeferByFleet:      sheets.reeferByFleet        !== false,
-    reeferByDriver:     sheets.reeferByDriver       !== false,
-    reeferByStation:    sheets.reeferByStation      !== false,
-    truckTransactions:  sheets.truckTransactions    === true,
-    reeferTransactions: sheets.reeferTransactions   === true,
+    overview: sheets.overview !== false,
+    truckByDriver: sheets.truckByDriver !== false,
+    truckByFleet: sheets.truckByFleet !== false,
+    truckByStation: sheets.truckByStation !== false,
+    weekly: sheets.weekly !== false,
+    reeferByFleet: sheets.reeferByFleet !== false,
+    reeferByDriver: sheets.reeferByDriver !== false,
+    reeferByStation: sheets.reeferByStation !== false,
+    truckTransactions: sheets.truckTransactions === true,
+    reeferTransactions: sheets.reeferTransactions === true,
   };
 
-  const doc         = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const PW          = doc.internal.pageSize.getWidth();
-  const PH          = doc.internal.pageSize.getHeight();
-  const ML          = 14;
-  const MR          = 14;
-  const dateStamp   = format(new Date(), 'yyyy-MM-dd');
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const PW = doc.internal.pageSize.getWidth();
+  const PH = doc.internal.pageSize.getHeight();
+  const ML = 14;
+  const MR = 14;
+  const dateStamp = format(new Date(), 'yyyy-MM-dd');
   const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
 
-  const HEAD  = [30, 58, 95]    as [number, number, number];
-  const CYAN  = [8, 145, 178]   as [number, number, number];
-  const TOT   = [209, 250, 229] as [number, number, number];
-  const TTEXT = [6, 95, 70]     as [number, number, number];
-  const ALT   = [249, 250, 251] as [number, number, number];
+  const HEAD = [30, 58, 95] as [number, number, number];
+  const CYAN = [8, 145, 178] as [number, number, number];
+  const TOT = [209, 250, 229] as [number, number, number];
+  const TTEXT = [6, 95, 70] as [number, number, number];
+  const ALT = [249, 250, 251] as [number, number, number];
 
   const drawPageHeader = (): void => {
     doc.setFillColor(...HEAD);
@@ -1792,7 +1792,7 @@ export const generateComprehensiveDieselPDF = (
   const lastY = (): number => (doc as any).lastAutoTable?.finalY ?? 22;
 
   const addSectionHeading = (title: string, rgb: [number, number, number] = HEAD): number => {
-    const y    = lastY() + 8;
+    const y = lastY() + 8;
     const safe = y > PH - 35 ? (() => { doc.addPage(); drawPageHeader(); return 26; })() : y;
     doc.setFillColor(...rgb);
     doc.rect(ML, safe - 7, PW - ML - MR, 8, 'F');
@@ -1814,7 +1814,7 @@ export const generateComprehensiveDieselPDF = (
       fontStyle: 'bold' as const,
     },
     alternateRowStyles: { fillColor: ALT },
-    footStyles:  { fillColor: TOT, textColor: TTEXT, fontStyle: 'bold' as const },
+    footStyles: { fillColor: TOT, textColor: TTEXT, fontStyle: 'bold' as const },
     showFoot: 'lastPage' as const,
     didDrawPage: () => { drawPageHeader(); },
   });
@@ -1826,25 +1826,25 @@ export const generateComprehensiveDieselPDF = (
   // ── Overview ────────────────────────────────────────────────────────────
   if (sel.overview) {
     const startY = addSectionHeading('OVERVIEW — FLEET SUMMARY');
-    const tL   = truckRecords.reduce((s, r) => s + (r.litres_filled  || 0), 0);
+    const tL = truckRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
     const tZAR = truckRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
     const tUSD = truckRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
-    const tD   = truckRecords.reduce((s, r) => s + (r.distance_travelled || 0), 0);
-    const rL   = reeferRecords.reduce((s, r) => s + (r.litres_filled  || 0), 0);
+    const tD = truckRecords.reduce((s, r) => s + (r.distance_travelled || 0), 0);
+    const rL = reeferRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
     const rZAR = reeferRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
     const rUSD = reeferRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
     autoTable(doc, {
       ...baseOpts(startY),
       head: [['Category', 'Truck Fleet', 'Reefer Fleet']],
       body: [
-        ['Total Records',        truckRecords.length,            reeferRecords.length],
-        ['Total Litres',         n2(tL),                         n2(rL)],
-        ['Total Cost (ZAR)',     n2(tZAR),                       n2(rZAR)],
-        ['Total Cost (USD)',     n2(tUSD),                       n2(rUSD)],
-        ['Total Distance (km)',  n2(tD),                         'N/A'],
-        ['Overall km/L',         tL > 0 ? n3(tD / tL) : '—',   'N/A (L/hr)'],
-        ['Unique Fleets/Units',  fleetReports.length,            reeferFleetReports.length],
-        ['Unique Drivers',       driverReports.length,           reeferDriverReports.length],
+        ['Total Records', truckRecords.length, reeferRecords.length],
+        ['Total Litres', n2(tL), n2(rL)],
+        ['Total Cost (ZAR)', n2(tZAR), n2(rZAR)],
+        ['Total Cost (USD)', n2(tUSD), n2(rUSD)],
+        ['Total Distance (km)', n2(tD), 'N/A'],
+        ['Overall km/L', tL > 0 ? n3(tD / tL) : '—', 'N/A (L/hr)'],
+        ['Unique Fleets/Units', fleetReports.length, reeferFleetReports.length],
+        ['Unique Drivers', driverReports.length, reeferDriverReports.length],
       ],
       columnStyles: { 0: { fontStyle: 'bold' } },
     });
@@ -1993,4 +1993,211 @@ export const generateComprehensiveDieselPDF = (
   addFooters();
 
   doc.save(`diesel-report-${dateStamp}.pdf`);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Yearly Weekly-Filtered Excel Export (separate Reefer & Truck sheets)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface YearlyWeeklyExportInput {
+  year: number;
+  truckRecords: DieselExportRecord[];
+  reeferRecords: DieselExportRecord[];
+}
+
+/**
+ * Generate a yearly Excel workbook with transactions grouped by ISO week.
+ * Creates two sheets:
+ *   1. "Trucks" — All non-reefer diesel transactions, grouped by week
+ *   2. "Reefers" — All reefer diesel transactions, grouped by week
+ * Each week has a header row followed by the individual transactions.
+ */
+export const generateYearlyWeeklyDieselExcel = async (
+  input: YearlyWeeklyExportInput,
+): Promise<void> => {
+  const { year, truckRecords, reeferRecords } = input;
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Car Craft Co — Fleet Management';
+  wb.created = new Date();
+  const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
+
+  /** Get ISO week start (Monday) from a date */
+  const getWeekStart = (date: Date): Date => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  /** Get ISO week number */
+  const getWeekNumber = (date: Date): number => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  };
+
+  /** Format week label */
+  const fmtWeek = (start: Date): string => {
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return `${format(start, 'dd MMM')} – ${format(end, 'dd MMM yyyy')}`;
+  };
+
+  /** Group records by ISO week key */
+  const groupByWeek = <T extends { date: string }>(records: T[]): Map<string, { weekStart: Date; weekNum: number; records: T[] }> => {
+    const weekMap = new Map<string, { weekStart: Date; weekNum: number; records: T[] }>();
+    for (const rec of records) {
+      const d = new Date(rec.date);
+      if (d.getFullYear() !== year) continue;
+      const ws = getWeekStart(d);
+      const key = ws.toISOString().split('T')[0];
+      if (!weekMap.has(key)) {
+        weekMap.set(key, { weekStart: ws, weekNum: getWeekNumber(ws), records: [] });
+      }
+      weekMap.get(key)!.records.push(rec);
+    }
+    return weekMap;
+  };
+
+  // ── Trucks Sheet ──────────────────────────────────────────────────────
+  const truckHeaders = ['Date', 'Fleet', 'Driver', 'Fuel Station', 'Litres', 'Cost/L', 'Total Cost', 'Currency', 'KM Reading', 'Distance', 'km/L', 'Notes'];
+  const truckCols = truckHeaders.length;
+
+  const wsTruck = wb.addWorksheet('Trucks');
+  wsTruck.columns = [14, 10, 24, 28, 12, 12, 14, 8, 12, 12, 8, 32].map(w => ({ width: w }));
+  _xlSheetTitle(wsTruck, `TRUCK DIESEL TRANSACTIONS — ${year}`, `Generated: ${generatedOn}`, truckCols);
+
+  const truckWeeks = groupByWeek(truckRecords);
+  const sortedTruckWeeks = Array.from(truckWeeks.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+  let truckGrandLitres = 0, truckGrandCostZAR = 0, truckGrandCostUSD = 0, truckGrandDistance = 0;
+
+  for (const [, { weekStart, weekNum, records }] of sortedTruckWeeks) {
+    // Week header
+    _xlSection(wsTruck, `WEEK ${weekNum} — ${fmtWeek(weekStart)}`, truckCols, XC.weekHead);
+    _xlHeaders(wsTruck, truckHeaders);
+
+    // Sort by date within the week
+    const sorted = records.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let weekLitres = 0, weekCostZAR = 0, weekCostUSD = 0, weekDist = 0;
+    sorted.forEach((r, i) => {
+      const litres = r.litres_filled || 0;
+      const cost = r.total_cost || 0;
+      const dist = r.distance_travelled || 0;
+      const kml = dist && litres ? n3(dist / litres) : '—';
+      const isUSD = r.currency === 'USD';
+
+      weekLitres += litres;
+      if (isUSD) weekCostUSD += cost; else weekCostZAR += cost;
+      weekDist += dist;
+
+      _xlDataRow(wsTruck, [
+        r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '',
+        litres ? n2(litres) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '',
+        cost ? n2(cost) : '', r.currency || 'ZAR',
+        r.km_reading || '', dist || '', kml,
+        (r.notes || '').replace(/[\t\n\r]/g, ' '),
+      ], i % 2 === 1);
+    });
+
+    // Week subtotal
+    const weekTotalLabel = `Week ${weekNum} Total — ${records.length} transactions`;
+    const weekCostStr = weekCostUSD > 0
+      ? `${n2(weekCostZAR)} ZAR + ${n2(weekCostUSD)} USD`
+      : `${n2(weekCostZAR)}`;
+    _xlTotalRow(wsTruck, [weekTotalLabel, '', '', '', n2(weekLitres), '', weekCostStr, '', '', weekDist || '', weekDist && weekLitres ? n3(weekDist / weekLitres) : '', '']);
+    wsTruck.addRow([]);
+
+    truckGrandLitres += weekLitres;
+    truckGrandCostZAR += weekCostZAR;
+    truckGrandCostUSD += weekCostUSD;
+    truckGrandDistance += weekDist;
+  }
+
+  // Grand total for trucks
+  if (sortedTruckWeeks.length > 0) {
+    const grandCostStr = truckGrandCostUSD > 0
+      ? `${n2(truckGrandCostZAR)} ZAR + ${n2(truckGrandCostUSD)} USD`
+      : `${n2(truckGrandCostZAR)}`;
+    _xlTotalRow(wsTruck, [`YEAR ${year} GRAND TOTAL — ${truckRecords.filter(r => new Date(r.date).getFullYear() === year).length} transactions`, '', '', '', n2(truckGrandLitres), '', grandCostStr, '', '', truckGrandDistance || '', truckGrandLitres ? n3(truckGrandDistance / truckGrandLitres) : '', '']);
+  }
+  wsTruck.views = [{ state: 'frozen', ySplit: 4 }];
+
+  // ── Reefers Sheet ─────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const reeferAny = reeferRecords as any[];
+  const reeferHeaders = ['Date', 'Reefer Unit', 'Driver', 'Fuel Station', 'Litres', 'Cost/L', 'Total Cost', 'Currency', 'Op. Hours', 'Hrs Operated', 'L/H', 'Notes'];
+  const reeferCols = reeferHeaders.length;
+
+  const wsReefer = wb.addWorksheet('Reefers');
+  wsReefer.columns = [14, 14, 24, 28, 12, 12, 14, 8, 14, 14, 8, 32].map(w => ({ width: w }));
+  _xlSheetTitle(wsReefer, `REEFER DIESEL TRANSACTIONS — ${year}`, `Generated: ${generatedOn}`, reeferCols);
+
+  const reeferWeeks = groupByWeek(reeferAny);
+  const sortedReeferWeeks = Array.from(reeferWeeks.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+  let reeferGrandLitres = 0, reeferGrandCostZAR = 0, reeferGrandCostUSD = 0;
+
+  for (const [, { weekStart, weekNum, records }] of sortedReeferWeeks) {
+    _xlSection(wsReefer, `WEEK ${weekNum} — ${fmtWeek(weekStart)}`, reeferCols, XC.cyan);
+    _xlHeaders(wsReefer, reeferHeaders, XC.cyan);
+
+    const sorted = records.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let weekLitres = 0, weekCostZAR = 0, weekCostUSD = 0;
+    sorted.forEach((r: any, i: number) => {
+      const litres = r.litres_filled || 0;
+      const cost = r.total_cost || 0;
+      const lph = r.hours_operated && litres ? n2(litres / r.hours_operated) : '—';
+      const isUSD = r.currency === 'USD';
+
+      weekLitres += litres;
+      if (isUSD) weekCostUSD += cost; else weekCostZAR += cost;
+
+      _xlDataRow(wsReefer, [
+        r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '',
+        litres ? n2(litres) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '',
+        cost ? n2(cost) : '', r.currency || 'ZAR',
+        r.operating_hours ?? '', r.hours_operated ?? '', lph,
+        (r.notes || '').replace(/[\t\n\r]/g, ' '),
+      ], i % 2 === 1);
+    });
+
+    const weekCostStr = weekCostUSD > 0
+      ? `${n2(weekCostZAR)} ZAR + ${n2(weekCostUSD)} USD`
+      : `${n2(weekCostZAR)}`;
+    _xlTotalRow(wsReefer, [`Week ${weekNum} Total — ${records.length} transactions`, '', '', '', n2(weekLitres), '', weekCostStr, '', '', '', '', '']);
+    wsReefer.addRow([]);
+
+    reeferGrandLitres += weekLitres;
+    reeferGrandCostZAR += weekCostZAR;
+    reeferGrandCostUSD += weekCostUSD;
+  }
+
+  // Grand total for reefers
+  if (sortedReeferWeeks.length > 0) {
+    const grandCostStr = reeferGrandCostUSD > 0
+      ? `${n2(reeferGrandCostZAR)} ZAR + ${n2(reeferGrandCostUSD)} USD`
+      : `${n2(reeferGrandCostZAR)}`;
+    _xlTotalRow(wsReefer, [`YEAR ${year} GRAND TOTAL — ${reeferAny.filter((r: any) => new Date(r.date).getFullYear() === year).length} transactions`, '', '', '', n2(reeferGrandLitres), '', grandCostStr, '', '', '', '', '']);
+  }
+  wsReefer.views = [{ state: 'frozen', ySplit: 4 }];
+
+  // ── Write buffer → browser download ─────────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer as ArrayBuffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `diesel-yearly-weekly-${year}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 };

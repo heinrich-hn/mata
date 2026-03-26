@@ -33,6 +33,7 @@ import {
   generateFleetDieselPDF,
   generateStyledDieselExcel,
   generateComprehensiveDieselPDF,
+  generateYearlyWeeklyDieselExcel,
   type DieselExportRecord,
   type ExportSheetSelection,
 } from '@/lib/dieselFleetExport';
@@ -1335,6 +1336,22 @@ const DieselManagement = () => {
     setExportOpen(true);
   };
 
+  // Export yearly weekly-filtered Excel with separate Trucks & Reefers sheets
+  const handleExportYearlyWeekly = async (year: number) => {
+    setIsExporting(true);
+    try {
+      await generateYearlyWeeklyDieselExcel({
+        year,
+        truckRecords: truckRecords as unknown as DieselExportRecord[],
+        reeferRecords: reeferRecords as unknown as DieselExportRecord[],
+      });
+    } catch (e) {
+      console.error('Yearly export failed:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Export all diesel transactions to Excel (XLSX format using CSV with Excel compatibility)
   const exportAllTransactionsToExcel = () => {
     // Create Excel-compatible CSV with all transaction details
@@ -1610,8 +1627,8 @@ const DieselManagement = () => {
     await linkDieselToTrip(record as unknown as DieselConsumptionRecord, tripId);
   };
 
-  const handleUnlinkFromTrip = async (recordId: string) => {
-    await unlinkDieselFromTrip(recordId);
+  const handleUnlinkFromTrip = async (recordId: string, tripId?: string) => {
+    await unlinkDieselFromTrip(recordId, tripId);
   };
 
   // Reefer vehicle linkage handlers
@@ -4584,6 +4601,29 @@ const DieselManagement = () => {
                   <Label htmlFor={`exp-${key}`} className="text-muted-foreground">{label}</Label>
                 </div>
               ))}
+            </div>
+
+            {/* Yearly Weekly Export */}
+            <div className="border-t pt-3 space-y-2">
+              <p className="text-sm font-semibold">Yearly Weekly Export</p>
+              <p className="text-xs text-muted-foreground">
+                Export all transactions for a full year, grouped by week, with separate sheets for Trucks and Reefers.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                  <Button
+                    key={y}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleExportYearlyWeekly(y)}
+                    disabled={isExporting}
+                    className="gap-1"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                    {y}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
 

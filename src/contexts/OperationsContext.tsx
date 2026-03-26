@@ -45,7 +45,7 @@ interface OperationsContextType {
   updateDieselRecord: (record: DieselConsumptionRecord) => Promise<void>;
   deleteDieselRecord: (id: string) => Promise<void>;
   linkDieselToTrip: (dieselRecord: DieselConsumptionRecord, tripId: string) => Promise<void>;
-  unlinkDieselFromTrip: (dieselRecordId: string) => Promise<void>;
+  unlinkDieselFromTrip: (dieselRecordId: string, tripIdToRemove?: string) => Promise<void>;
 
   // Diesel Norms
   dieselNorms: DieselNorms[];
@@ -528,7 +528,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
     toast.success('Diesel norms updated successfully');
   };
 
-  // Link diesel record to trip with automatic cost entry creation
+  // Link diesel record to trip with automatic cost entry creation (supports multi-trip)
   const linkDieselToTrip = async (dieselRecord: DieselConsumptionRecord, tripId: string) => {
     try {
       // 1. Create cost entry for the horse/primary vehicle using vehicle fuel cost
@@ -604,11 +604,15 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // 4. Update diesel record with trip_id and cost_entry_ids
+      // 4. Update diesel record — append to linked_trip_ids and cost_entry_ids
+      const existingTripIds = dieselRecord.linked_trip_ids || (dieselRecord.trip_id ? [dieselRecord.trip_id] : []);
+      const updatedTripIds = [...new Set([...existingTripIds, tripId])];
+      const existingCostEntryIds = dieselRecord.cost_entry_ids || [];
       await updateDieselRecord({
         ...dieselRecord,
         trip_id: tripId,
-        cost_entry_ids: costEntryIds
+        linked_trip_ids: updatedTripIds,
+        cost_entry_ids: [...existingCostEntryIds, ...costEntryIds]
       });
 
       toast.success('Diesel record linked to trip with cost entries created');
@@ -618,43 +622,90 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Unlink diesel record from trip and remove associated cost entries
-  const unlinkDieselFromTrip = async (dieselRecordId: string) => {
+  // Unlink diesel record from a specific trip (or all trips) and remove associated cost entries
+  const unlinkDieselFromTrip = async (dieselRecordId: string, tripIdToRemove?: string) => {
     try {
       const record = dieselRecords.find(r => r.id === dieselRecordId);
       if (!record) throw new Error('Diesel record not found');
 
-      // 1. Delete associated cost entries
-      if (record.cost_entry_ids && record.cost_entry_ids.length > 0) {
-        for (const costId of record.cost_entry_ids) {
+      if (tripIdToRemove) {
+        // Remove a specific trip — only delete cost entries for that trip
+        const { data: tripCostEntries } = await supabase
+          .from('cost_entries')
+          .select('id')
+          .eq('trip_id', tripIdToRemove)
+          .in('id', record.cost_entry_ids || []);
+
+        const costIdsToRemove = (tripCostEntries || []).map(c => c.id);
+        for (const costId of costIdsToRemove) {
           await deleteCostEntry(costId);
         }
-      }
 
-      // 2. Clean up linked reefer records' trip linkage and cost entries
-      const { data: linkedReefers } = await (supabase as any).from('reefer_diesel_records')
-        .select('*')
-        .eq('linked_diesel_record_id', dieselRecordId);
+        // Clean up linked reefer records for this specific trip
+        const { data: linkedReefers } = await (supabase as any).from('reefer_diesel_records')
+          .select('*')
+          .eq('linked_diesel_record_id', dieselRecordId)
+          .eq('trip_id', tripIdToRemove);
 
-      if (linkedReefers && linkedReefers.length > 0) {
-        for (const reefer of linkedReefers) {
-          if (reefer.cost_entry_ids && reefer.cost_entry_ids.length > 0) {
-            for (const costId of reefer.cost_entry_ids) {
-              await deleteCostEntry(costId);
+        if (linkedReefers && linkedReefers.length > 0) {
+          for (const reefer of linkedReefers) {
+            if (reefer.cost_entry_ids && reefer.cost_entry_ids.length > 0) {
+              for (const costId of reefer.cost_entry_ids) {
+                await deleteCostEntry(costId);
+              }
             }
+            await (supabase as any).from('reefer_diesel_records')
+              .update({ trip_id: null, cost_entry_ids: null })
+              .eq('id', reefer.id);
           }
-          await (supabase as any).from('reefer_diesel_records')
-            .update({ trip_id: null, cost_entry_ids: null })
-            .eq('id', reefer.id);
         }
-      }
 
-      // 3. Update diesel record to remove trip linkage
-      await updateDieselRecord({
-        ...record,
-        trip_id: undefined,
-        cost_entry_ids: []
-      });
+        // Update diesel record: remove this trip from linked_trip_ids
+        const existingTripIds = record.linked_trip_ids || (record.trip_id ? [record.trip_id] : []);
+        const remainingTripIds = existingTripIds.filter(id => id !== tripIdToRemove);
+        const remainingCostEntryIds = (record.cost_entry_ids || []).filter(id => !costIdsToRemove.includes(id));
+
+        await updateDieselRecord({
+          ...record,
+          trip_id: remainingTripIds.length > 0 ? remainingTripIds[remainingTripIds.length - 1] : undefined,
+          linked_trip_ids: remainingTripIds.length > 0 ? remainingTripIds : undefined,
+          cost_entry_ids: remainingCostEntryIds.length > 0 ? remainingCostEntryIds : []
+        });
+      } else {
+        // Remove ALL trip linkages (backward compatible)
+        // 1. Delete all associated cost entries
+        if (record.cost_entry_ids && record.cost_entry_ids.length > 0) {
+          for (const costId of record.cost_entry_ids) {
+            await deleteCostEntry(costId);
+          }
+        }
+
+        // 2. Clean up linked reefer records' trip linkage and cost entries
+        const { data: linkedReefers } = await (supabase as any).from('reefer_diesel_records')
+          .select('*')
+          .eq('linked_diesel_record_id', dieselRecordId);
+
+        if (linkedReefers && linkedReefers.length > 0) {
+          for (const reefer of linkedReefers) {
+            if (reefer.cost_entry_ids && reefer.cost_entry_ids.length > 0) {
+              for (const costId of reefer.cost_entry_ids) {
+                await deleteCostEntry(costId);
+              }
+            }
+            await (supabase as any).from('reefer_diesel_records')
+              .update({ trip_id: null, cost_entry_ids: null })
+              .eq('id', reefer.id);
+          }
+        }
+
+        // 3. Update diesel record to remove all trip linkages
+        await updateDieselRecord({
+          ...record,
+          trip_id: undefined,
+          linked_trip_ids: undefined,
+          cost_entry_ids: []
+        });
+      }
 
       toast.success('Diesel record unlinked from trip');
     } catch (error) {

@@ -141,6 +141,7 @@ export interface TrailerFuelData {
 export interface DieselConsumptionRecord {
   id: string;
   trip_id?: string;
+  linked_trip_ids?: string[];
   fleet_number: string;
   driver_name?: string;
   fuel_station: string;
