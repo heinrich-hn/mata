@@ -440,12 +440,11 @@ const TyreInventory = () => {
                   <TableCell className="py-3.5">{getTyreBadge(tyre.type)}</TableCell>
                   <TableCell className="py-3.5">
                     {tyre.condition ? (
-                      <Badge className={`capitalize transition-all duration-200 ${
-                        tyre.condition === 'excellent' ? 'bg-gradient-to-r from-emerald-500 to-green-400 text-white shadow-sm' :
-                        tyre.condition === 'good' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-sm' :
-                        tyre.condition === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-sm' :
-                        'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-sm'
-                      }`}>
+                      <Badge className={`capitalize transition-all duration-200 ${tyre.condition === 'excellent' ? 'bg-gradient-to-r from-emerald-500 to-green-400 text-white shadow-sm' :
+                          tyre.condition === 'good' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-sm' :
+                            tyre.condition === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-sm' :
+                              'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-sm'
+                        }`}>
                         {tyre.condition.replace('_', ' ')}
                       </Badge>
                     ) : <span className="text-muted-foreground">-</span>}
@@ -589,12 +588,11 @@ const TyreInventory = () => {
                   <TableCell className="py-3.5">{getTyreBadge(tyre.type)}</TableCell>
                   <TableCell className="py-3.5">
                     {tyre.condition ? (
-                      <Badge className={`capitalize transition-all duration-200 ${
-                        tyre.condition === 'excellent' ? 'bg-gradient-to-r from-emerald-500 to-green-400 text-white shadow-sm' :
-                        tyre.condition === 'good' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-sm' :
-                        tyre.condition === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-sm' :
-                        'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-sm'
-                      }`}>
+                      <Badge className={`capitalize transition-all duration-200 ${tyre.condition === 'excellent' ? 'bg-gradient-to-r from-emerald-500 to-green-400 text-white shadow-sm' :
+                          tyre.condition === 'good' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-sm' :
+                            tyre.condition === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-sm' :
+                              'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-sm'
+                        }`}>
                         {tyre.condition.replace('_', ' ')}
                       </Badge>
                     ) : <span className="text-muted-foreground">-</span>}
@@ -675,9 +673,9 @@ const TyreInventory = () => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onClick={() => {
+              onClick={async () => {
                 const allTyres = [...holdingBayTyres, ...retreadBayTyres, ...scrapAndSoldTyres];
-                exportAllTyresToExcel(allTyres);
+                await exportAllTyresToExcel(allTyres);
                 toast({ title: "Exported", description: `${allTyres.length} tyres exported to Excel` });
               }}
             >
@@ -762,11 +760,11 @@ const TyreInventory = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {installedTyres.map(( tyre, index) => {
+                        {installedTyres.map((tyre, index) => {
                           const tyreWithVehicle = tyre as InstalledTyreWithVehicle;
                           return (
                             <TableRow
-                              key={ tyre.id}
+                              key={tyre.id}
                               className={`
                                 ${index % 2 === 0 ? "bg-background" : "bg-muted/10"}
                                 transition-all duration-200 ease-in-out
@@ -775,17 +773,17 @@ const TyreInventory = () => {
                               `}
                             >
                               <TableCell className="font-mono text-sm py-3.5 text-muted-foreground">
-                                { tyre.serial_number || tyre.id.substring(0, 8)}
+                                {tyre.serial_number || tyre.id.substring(0, 8)}
                               </TableCell>
                               <TableCell className="py-3.5">
                                 <div className="flex flex-col">
-                                  <span className="font-semibold group-hover:text-primary transition-colors">{ tyre.brand}</span>
-                                  <span className="text-xs text-muted-foreground">{ tyre.model}</span>
+                                  <span className="font-semibold group-hover:text-primary transition-colors">{tyre.brand}</span>
+                                  <span className="text-xs text-muted-foreground">{tyre.model}</span>
                                 </div>
                               </TableCell>
                               <TableCell className="py-3.5">
                                 <span className="inline-flex items-center px-2 py-1 bg-muted/50 rounded font-mono text-sm">
-                                  { tyre.size}
+                                  {tyre.size}
                                 </span>
                               </TableCell>
                               <TableCell className="py-3.5">
@@ -793,12 +791,12 @@ const TyreInventory = () => {
                               </TableCell>
                               <TableCell className="py-3.5">
                                 <div className="flex flex-col">
-                                  <span className="font-semibold">{ tyreWithVehicle.vehicles?.registration_number || '-'}</span>
-                                  <span className="text-xs text-muted-foreground">Fleet: { tyreWithVehicle.vehicles?.fleet_number || '-'}</span>
+                                  <span className="font-semibold">{tyreWithVehicle.vehicles?.registration_number || '-'}</span>
+                                  <span className="text-xs text-muted-foreground">Fleet: {tyreWithVehicle.vehicles?.fleet_number || '-'}</span>
                                 </div>
                               </TableCell>
                               <TableCell className="py-3.5">
-                                <span className="font-mono text-sm">{ tyre.current_fleet_position || '-'}</span>
+                                <span className="font-mono text-sm">{tyre.current_fleet_position || '-'}</span>
                               </TableCell>
                               <TableCell className="py-3.5 text-center sticky right-0 bg-inherit">
                                 <div className="flex items-center justify-center gap-1">
@@ -808,7 +806,7 @@ const TyreInventory = () => {
                                     className="h-8 w-8 p-0"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setSelectedTyre( tyreWithVehicle);
+                                      setSelectedTyre(tyreWithVehicle);
                                       setViewDialogOpen(true);
                                     }}
                                     title="View tyre details"
@@ -821,7 +819,7 @@ const TyreInventory = () => {
                                     className="h-8 w-8 p-0"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setSelectedTyre( tyreWithVehicle);
+                                      setSelectedTyre(tyreWithVehicle);
                                       setEditInstalledDialogOpen(true);
                                     }}
                                     title="Edit tyre"
@@ -861,8 +859,8 @@ const TyreInventory = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
-                        onClick={() => {
-                          exportBayTyresToExcel(holdingBayTyres, "holding-bay");
+                        onClick={async () => {
+                          await exportBayTyresToExcel(holdingBayTyres, "holding-bay");
                           toast({ title: "Exported", description: `${holdingBayTyres.length} tyres exported to Excel` });
                         }}
                       >
@@ -921,8 +919,8 @@ const TyreInventory = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
-                        onClick={() => {
-                          exportBayTyresToExcel(retreadBayTyres, "retread-bay");
+                        onClick={async () => {
+                          await exportBayTyresToExcel(retreadBayTyres, "retread-bay");
                           toast({ title: "Exported", description: `${retreadBayTyres.length} tyres exported to Excel` });
                         }}
                       >
@@ -981,8 +979,8 @@ const TyreInventory = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
-                        onClick={() => {
-                          exportBayTyresToExcel(scrapAndSoldTyres, "scrap");
+                        onClick={async () => {
+                          await exportBayTyresToExcel(scrapAndSoldTyres, "scrap");
                           toast({ title: "Exported", description: `${scrapAndSoldTyres.length} tyres exported to Excel` });
                         }}
                       >
@@ -1063,8 +1061,8 @@ const TyreInventory = () => {
                           <TableCell>
                             <Badge variant={
                               record.action === 'install' ? 'default' :
-                              record.action === 'remove' ? 'destructive' :
-                              record.action === 'rotate' ? 'secondary' : 'outline'
+                                record.action === 'remove' ? 'destructive' :
+                                  record.action === 'rotate' ? 'secondary' : 'outline'
                             }>
                               {record.action}
                             </Badge>

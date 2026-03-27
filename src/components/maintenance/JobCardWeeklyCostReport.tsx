@@ -9,14 +9,20 @@ import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, endOfWeek, format, isWithinInterval, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import
-  {
-    Calendar,
-    Download,
-    FileSpreadsheet,
-    FileText,
-    Truck
-  } from "lucide-react";
+import {
+  addStyledSheet,
+  addSummarySheet,
+  createWorkbook,
+  saveWorkbook,
+  statusColours,
+} from "@/utils/excelStyles";
+import {
+  Calendar,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Truck
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -285,25 +291,14 @@ export default function JobCardWeeklyCostReport() {
   };
 
   // Export to Excel
-  const exportToExcel = () => {
-    let headers: string;
-    let rows: string[];
-    let filename: string;
+  const exportToExcel = async () => {
+    const wb = createWorkbook();
 
-    if (viewMode === "period") {
-      headers = [
-        "Period",
-        "Labor Cost",
-        "Parts Cost",
-        "Inventory Parts",
-        "External Parts",
-        "Services Cost",
-        "Total Cost",
-        "Job Cards",
-        "Completed",
-      ].join("\t");
-
-      rows = periodData.map(w => [
+    // Period sheet
+    addStyledSheet(wb, "Period Costs", {
+      title: `JOB CARD ${periodType.toUpperCase()} COST REPORT`,
+      headers: ["Period", "Labor Cost", "Parts Cost", "Inventory Parts", "External Parts", "Services Cost", "Total Cost", "Job Cards", "Completed"],
+      rows: periodData.map(w => [
         w.periodLabel,
         w.laborCost.toFixed(2),
         w.partsCost.toFixed(2),
@@ -311,47 +306,32 @@ export default function JobCardWeeklyCostReport() {
         w.externalPartsCost.toFixed(2),
         w.servicesCost.toFixed(2),
         w.totalCost.toFixed(2),
-        w.jobCardsCount.toString(),
-        w.completedJobCards.toString(),
-      ].join("\t"));
+        w.jobCardsCount,
+        w.completedJobCards,
+      ]),
+    });
 
-      filename = `job_card_${periodType}_costs_${format(new Date(), "yyyy-MM-dd")}.xls`;
-    } else if (viewMode === "fleet") {
-      headers = [
-        "Fleet Number",
-        "Labor Cost",
-        "Parts Cost",
-        "Services Cost",
-        "Total Cost",
-        "Job Cards",
-      ].join("\t");
-
-      rows = fleetData.map(f => [
+    // Fleet sheet
+    addStyledSheet(wb, "Fleet Costs", {
+      title: "JOB CARD COSTS BY FLEET",
+      headers: ["Fleet Number", "Labor Cost", "Parts Cost", "Services Cost", "Total Cost", "Job Cards"],
+      rows: fleetData.map(f => [
         f.fleetNumber,
         f.laborCost.toFixed(2),
         f.partsCost.toFixed(2),
         f.servicesCost.toFixed(2),
         f.totalCost.toFixed(2),
-        f.jobCardsCount.toString(),
-      ].join("\t"));
+        f.jobCardsCount,
+      ]),
+    });
 
-      filename = `job_card_fleet_costs_${format(new Date(), "yyyy-MM-dd")}.xls`;
-    } else {
-      headers = [
-        "Job Number",
-        "Title",
-        "Fleet",
-        "Status",
-        "Created",
-        "Labor Cost",
-        "Parts Cost",
-        "Services Cost",
-        "Total Cost",
-      ].join("\t");
-
-      rows = jobCardsWithCosts.map(jc => [
+    // Details sheet
+    addStyledSheet(wb, "Job Details", {
+      title: "JOB CARD COST DETAILS",
+      headers: ["Job Number", "Title", "Fleet", "Status", "Created", "Labor Cost", "Parts Cost", "Services Cost", "Total Cost"],
+      rows: jobCardsWithCosts.map(jc => [
         jc.job_number,
-        jc.title.replace(/[\t\n\r]/g, " "),
+        jc.title,
         jc.fleet_number || "",
         jc.status,
         jc.created_at ? format(parseISO(jc.created_at), "yyyy-MM-dd") : "",
@@ -359,18 +339,29 @@ export default function JobCardWeeklyCostReport() {
         jc.partsCost.toFixed(2),
         jc.servicesCost.toFixed(2),
         jc.totalCost.toFixed(2),
-      ].join("\t"));
+      ]),
+      cellStyler: (row, col) => {
+        if (col === 4) return statusColours[String(row[3]).toLowerCase()];
+        return undefined;
+      },
+    });
 
-      filename = `job_card_details_costs_${format(new Date(), "yyyy-MM-dd")}.xls`;
-    }
+    // Summary sheet
+    addSummarySheet(wb, "Summary", {
+      title: "COST REPORT SUMMARY",
+      rows: [
+        ["Total Cost", formatCurrency(summary.totalCost)],
+        ["Labor Cost", formatCurrency(summary.totalLaborCost)],
+        ["Parts Cost", formatCurrency(summary.totalPartsCost)],
+        ["Services Cost", formatCurrency(summary.totalServicesCost)],
+        ["Total Job Cards", summary.totalJobCards],
+        [`Avg ${periodType === "weekly" ? "Weekly" : "Monthly"} Cost`, formatCurrency(summary.avgPeriodCost)],
+        ["Trend (vs Previous Period)", `${summary.trend >= 0 ? "+" : ""}${summary.trend.toFixed(1)}%`],
+      ],
+    });
 
-    const tsvContent = "\uFEFF" + headers + "\n" + rows.join("\n");
-    const blob = new Blob([tsvContent], { type: "application/vnd.ms-excel;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    link.click();
-
+    const filename = `job_card_costs_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
+    await saveWorkbook(wb, filename);
     toast.success("Exported to Excel");
   };
 
@@ -575,21 +566,19 @@ export default function JobCardWeeklyCostReport() {
             <div className="flex rounded-lg border bg-muted p-0.5">
               <button
                 onClick={() => setPeriodType("weekly")}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  periodType === "weekly"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${periodType === "weekly"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 Weekly
               </button>
               <button
                 onClick={() => setPeriodType("monthly")}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  periodType === "monthly"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${periodType === "monthly"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 Monthly
               </button>

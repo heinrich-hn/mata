@@ -158,8 +158,8 @@ export function MaintenanceHistory() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  exportHistoryToExcel(filteredHistory, 'maintenance-history');
+                onClick={async () => {
+                  await exportHistoryToExcel(filteredHistory, 'maintenance-history');
                   toast.success('Excel file exported successfully');
                 }}
                 disabled={filteredHistory.length === 0}

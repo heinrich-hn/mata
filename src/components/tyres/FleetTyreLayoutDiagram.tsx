@@ -134,7 +134,7 @@ const TyreWheel = ({ status, size = "md", isDual = false }: TyreWheelProps) => {
                   ))}
                 </div>
               )}
-              
+
               {/* Position label */}
               <span className={cn(
                 "text-[8px] font-bold z-10 px-1 rounded",
@@ -237,19 +237,19 @@ const TruckDiagram = ({ positions }: TruckDiagramProps) => {
           <rect x="50" y="20" width="100" height="40" rx="5" fill="currentColor" className="text-slate-500" />
           {/* Windshield */}
           <rect x="55" y="25" width="90" height="30" rx="3" fill="currentColor" className="text-sky-200/50" />
-          
+
           {/* Chassis/Frame */}
           <rect x="50" y="90" width="100" height="260" rx="5" fill="currentColor" className="text-slate-600" />
-          
+
           {/* Frame rails */}
           <rect x="55" y="95" width="8" height="250" fill="currentColor" className="text-slate-800" />
           <rect x="137" y="95" width="8" height="250" fill="currentColor" className="text-slate-800" />
-          
+
           {/* Cross members */}
           <rect x="55" y="120" width="90" height="4" fill="currentColor" className="text-slate-800" />
           <rect x="55" y="200" width="90" height="4" fill="currentColor" className="text-slate-800" />
           <rect x="55" y="280" width="90" height="4" fill="currentColor" className="text-slate-800" />
-          
+
           {/* Fifth wheel */}
           <ellipse cx="100" cy="320" rx="35" ry="15" fill="currentColor" className="text-slate-400" />
         </svg>
@@ -351,21 +351,21 @@ const SingleAxleTruckDiagram = ({ positions }: TruckDiagramProps) => {
           {/* Mirrors */}
           <rect x="25" y="35" width="12" height="6" rx="2" fill="currentColor" className="text-slate-600" />
           <rect x="163" y="35" width="12" height="6" rx="2" fill="currentColor" className="text-slate-600" />
-          
+
           {/* Chassis/Frame - shorter */}
           <rect x="50" y="90" width="100" height="180" rx="5" fill="currentColor" className="text-slate-600" />
-          
+
           {/* Frame rails */}
           <rect x="55" y="95" width="8" height="170" fill="currentColor" className="text-slate-800" />
           <rect x="137" y="95" width="8" height="170" fill="currentColor" className="text-slate-800" />
-          
+
           {/* Cross members */}
           <rect x="55" y="120" width="90" height="4" fill="currentColor" className="text-slate-800" />
           <rect x="55" y="180" width="90" height="4" fill="currentColor" className="text-slate-800" />
-          
+
           {/* Fifth wheel */}
           <ellipse cx="100" cy="240" rx="35" ry="15" fill="currentColor" className="text-slate-400" />
-          
+
           {/* Axle indicators */}
           <text x="100" y="65" textAnchor="middle" className="text-[8px] fill-white font-bold">STEER</text>
           <text x="100" y="205" textAnchor="middle" className="text-[8px] fill-white font-bold">DRIVE</text>
@@ -459,7 +459,7 @@ const LMVDiagram = ({ positions }: TruckDiagramProps) => {
             {getPosition("V1") && <TyreWheel status={getPosition("V1")!} size="md" />}
             {getPosition("V2") && <TyreWheel status={getPosition("V2")!} size="md" />}
           </div>
-          
+
           {/* Rear wheels */}
           <div className="flex justify-between w-44">
             {getPosition("V3") && <TyreWheel status={getPosition("V3")!} size="md" />}
@@ -499,18 +499,18 @@ const ReeferDiagram = ({ positions }: TruckDiagramProps) => {
           {/* Kingpin */}
           <circle cx="90" cy="15" r="8" fill="currentColor" className="text-slate-400" />
           <rect x="85" y="15" width="10" height="15" fill="currentColor" className="text-slate-500" />
-          
+
           {/* Trailer body */}
           <rect x="20" y="30" width="140" height="220" rx="5" fill="currentColor" className="text-slate-500" />
-          
+
           {/* Reefer unit (at front) */}
           <rect x="25" y="35" width="130" height="30" rx="3" fill="currentColor" className="text-slate-700" />
           <rect x="30" y="40" width="40" height="20" rx="2" fill="currentColor" className="text-slate-600" />
           <circle cx="110" cy="50" r="8" fill="currentColor" className="text-slate-800" />
-          
+
           {/* Insulated walls pattern */}
           <rect x="30" y="70" width="120" height="170" rx="3" fill="currentColor" className="text-slate-400" />
-          
+
           {/* Door lines */}
           <line x1="90" y1="180" x2="90" y2="245" stroke="currentColor" className="text-slate-600" strokeWidth="2" />
           <circle cx="85" cy="210" r="3" fill="currentColor" className="text-slate-600" />
@@ -606,23 +606,23 @@ const InterlinkDiagram = ({ positions }: TruckDiagramProps) => {
           {/* Kingpin */}
           <circle cx="100" cy="15" r="10" fill="currentColor" className="text-slate-400" />
           <rect x="95" y="15" width="10" height="20" fill="currentColor" className="text-slate-500" />
-          
+
           {/* Long trailer body */}
           <rect x="15" y="35" width="170" height="340" rx="5" fill="currentColor" className="text-slate-500" />
-          
+
           {/* Side ribs/panels */}
           {[0, 1, 2, 3, 4, 5].map(i => (
-            <rect 
+            <rect
               key={i}
-              x="20" 
-              y={50 + i * 50} 
-              width="160" 
-              height="3" 
-              fill="currentColor" 
-              className="text-slate-600" 
+              x="20"
+              y={50 + i * 50}
+              width="160"
+              height="3"
+              fill="currentColor"
+              className="text-slate-600"
             />
           ))}
-          
+
           {/* Rear doors */}
           <line x1="100" y1="340" x2="100" y2="370" stroke="currentColor" className="text-slate-600" strokeWidth="2" />
           <circle cx="95" cy="355" r="3" fill="currentColor" className="text-slate-600" />
@@ -786,31 +786,31 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
   // Determine which diagram to render based on fleet type and position count
   const renderDiagram = () => {
     const posCount = positionStatuses.length;
-    
+
     // LMV (5 positions)
     if (posCount <= 5 && positionStatuses.some(p => p.position === "V1")) {
       return <LMVDiagram positions={positionStatuses} />;
     }
-    
+
     // Single Axle Truck (7 positions: V1-V6 + SP) - 4H, 6H, 30H, UD
     // Has V6 but NOT V7 - single rear axle with dual wheels
     if (
-      positionStatuses.some(p => p.position === "V6") && 
+      positionStatuses.some(p => p.position === "V6") &&
       !positionStatuses.some(p => p.position === "V7")
     ) {
       return <SingleAxleTruckDiagram positions={positionStatuses} />;
     }
-    
+
     // Truck/Horse (11 positions with V1-V10 + SP) - dual rear axles
     if (positionStatuses.some(p => p.position === "V1") && positionStatuses.some(p => p.position === "V10")) {
       return <TruckDiagram positions={positionStatuses} />;
     }
-    
+
     // Interlink trailer (17 positions with T1-T16 + SP)
     if (posCount >= 17 && positionStatuses.some(p => p.position === "T16")) {
       return <InterlinkDiagram positions={positionStatuses} />;
     }
-    
+
     // Reefer trailer (7-9 positions)
     if (positionStatuses.some(p => p.position === "T1")) {
       return <ReeferDiagram positions={positionStatuses} />;
@@ -850,8 +850,8 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => {
-                  exportVehicleTyresToExcel(getExportData(), { fleetNumber, registration: registrationNumber });
+                onClick={async () => {
+                  await exportVehicleTyresToExcel(getExportData(), { fleetNumber, registration: registrationNumber });
                   toast({ title: "Exported", description: `Tyres for ${fleetNumber} exported to Excel` });
                 }}
               >

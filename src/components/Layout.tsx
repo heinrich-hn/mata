@@ -8,14 +8,15 @@ import { useGeofenceNotifications } from "@/hooks/useGeofenceNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import {
-Calendar, ChevronDown,
-ClipboardCheck, ClipboardList,
-Fuel,
-Gauge, LayoutDashboard, LogOut, MapPin, Menu,
-Search,
-ShieldAlert, ShoppingCart,
-Store,
-Truck, Users
+  Calendar, ChevronDown,
+  ClipboardCheck, ClipboardList,
+  FileText,
+  Fuel,
+  Gauge, LayoutDashboard, LogOut, MapPin, Menu,
+  Search,
+  ShieldAlert, ShoppingCart,
+  Store,
+  Truck, Users
 } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -41,7 +42,7 @@ const Layout = ({ children }: LayoutProps) => {
     "/admin", "/cost-management", "/performance",
     "/trip-management", "/driver-management",
     "/diesel-management", "/fuel-bunkers", "/invoicing", "/action-log",
-    "/unified-map", "/analytics"
+    "/unified-map", "/analytics", "/reports"
   ];
 
   const isWorkshopRoute = workshopPaths.includes(location.pathname);
@@ -70,12 +71,10 @@ const Layout = ({ children }: LayoutProps) => {
     { path: "/job-cards", label: "Job Cards", icon: ClipboardList },
     { path: "/inspections", label: "Inspections & Faults", icon: Search },
     { path: "/tyre-management", label: "Tyre Management", icon: Gauge },
-    { path: "/incidents", label: "Incidents", icon: ShieldAlert },
-    { path: "/vendors", label: "Vendors", icon: Store },
     { path: "/vehicles", label: "Fleet Management", icon: Truck },
     { path: "/procurement", label: "Procurement & Inventory", icon: ShoppingCart },
     { path: "/maintenance-scheduling", label: "Maintenance Scheduling", icon: Calendar },
-    { path: "/inspector-profiles", label: "Inspector Profiles", icon: Users },
+    { path: "/inspector-profiles", label: "Profile Management", icon: Users },
   ];
 
   const operationsItems = [
@@ -89,6 +88,7 @@ const Layout = ({ children }: LayoutProps) => {
     // { path: "/invoicing", label: "Invoicing", icon: FileText }, // Temporarily disabled - moved to Trip Management
     { path: "/action-log", label: "Action Log", icon: ClipboardCheck },
     { path: "/unified-map", label: "Fleet Map & Reports", icon: MapPin },
+    { path: "/reports", label: "Reports", icon: FileText },
   ];
 
   const NavLinks = () => (

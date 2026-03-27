@@ -109,6 +109,14 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useToast } from "@/hooks/use-toast";
+import {
+  addStyledSheet,
+  addSummarySheet,
+  createWorkbook,
+  saveWorkbook,
+  statusColours,
+  priorityColours,
+} from "@/utils/excelStyles";
 
 const Procurement = () => {
   const { toast } = useToast();
@@ -716,81 +724,106 @@ const Procurement = () => {
   };
 
   // Export selected restock items to Excel
-  const exportRestockToExcel = () => {
+  const exportRestockToExcel = async () => {
     const selectedItems = lowStockItems.filter((item) =>
       selectedRestockItems.has(item.id)
     );
 
     if (selectedItems.length === 0) return;
 
-    const worksheetData = selectedItems.map((item) => ({
-      "Item Name": item.name,
-      "Part Number": item.part_number,
-      "Category": item.category || "-",
-      "Current Stock": item.quantity,
-      "Minimum Required": item.min_quantity,
-      "Shortage": item.shortage,
-      "Priority": PRIORITY_OPTIONS.find((p) => p.value === restockPriorities[item.id])?.label || "Not Set",
-      "Unit Price": item.unit_price ? `$${item.unit_price.toFixed(2)}` : "-",
-      "Supplier": item.supplier || "-",
-      "Location": item.location || "-",
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-
-    // Set column widths
-    worksheet["!cols"] = [
-      { wch: 30 }, // Item Name
-      { wch: 15 }, // Part Number
-      { wch: 15 }, // Category
-      { wch: 14 }, // Current Stock
-      { wch: 16 }, // Minimum Required
-      { wch: 10 }, // Shortage
-      { wch: 16 }, // Priority
-      { wch: 12 }, // Unit Price
-      { wch: 20 }, // Supplier
-      { wch: 15 }, // Location
+    const headers = [
+      "Item Name", "Part Number", "Category", "Current Stock",
+      "Minimum Required", "Shortage", "Priority", "Unit Price",
+      "Supplier", "Location",
     ];
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Restock Requests");
-    XLSX.writeFile(
-      workbook,
-      `Procurement_Restock_Requests_${new Date().toISOString().split("T")[0]}.xlsx`
-    );
+    const rows = selectedItems.map((item) => [
+      item.name,
+      item.part_number,
+      item.category || "-",
+      item.quantity,
+      item.min_quantity,
+      item.shortage,
+      PRIORITY_OPTIONS.find((p) => p.value === restockPriorities[item.id])?.label || "Not Set",
+      item.unit_price ? `$${item.unit_price.toFixed(2)}` : "-",
+      item.supplier || "-",
+      item.location || "-",
+    ]);
+
+    const wb = createWorkbook();
+
+    addStyledSheet(wb, "Restock Requests", {
+      title: "PROCUREMENT RESTOCK REQUESTS",
+      headers,
+      rows,
+      cellStyler: (row, col) => {
+        if (col === 7) {
+          const p = String(row[6]).toLowerCase();
+          return priorityColours[p];
+        }
+        return undefined;
+      },
+      dropdowns: { 7: PRIORITY_OPTIONS.map((p) => p.label) },
+    });
+
+    await saveWorkbook(wb, `Procurement_Restock_Requests_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
   // Export All Requests to Excel
-  const exportAllRequestsToExcel = () => {
+  const exportAllRequestsToExcel = async () => {
     if (filteredRequests.length === 0) return;
 
-    const worksheetData = filteredRequests.map((request) => ({
-      "Part Name": request.part_name,
-      "Part Number": request.part_number || "-",
-      "Quantity": request.quantity,
-      "Unit Price": request.unit_price ? `$${request.unit_price.toFixed(2)}` : "-",
-      "Total Price": request.total_price ? `$${request.total_price.toFixed(2)}` : "-",
-      "Vendor": request.vendor?.vendor_name || "-",
-      "Status": request.status,
-      "Sage Req #": request.sage_requisition_number || "-",
-      "Cash Manager Ref": request.cash_manager_reference || "-",
-      "Ordered Date": request.ordered_at ? formatDate(request.ordered_at) : "-",
-      "Received Date": request.received_date ? formatDate(request.received_date) : "-",
-      "Requested By": request.requested_by || "-",
-      "Job Card": request.job_card?.job_number || "-",
-      "Notes": request.notes || "-",
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    worksheet["!cols"] = [
-      { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-      { wch: 20 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 14 },
-      { wch: 14 }, { wch: 15 }, { wch: 12 }, { wch: 30 },
+    const headers = [
+      "Part Name", "Part Number", "Quantity", "Unit Price", "Total Price",
+      "Vendor", "Status", "Sage Req #", "Cash Manager Ref",
+      "Ordered Date", "Received Date", "Requested By", "Job Card", "Notes",
     ];
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "All Requests");
-    XLSX.writeFile(workbook, `Procurement_All_Requests_${new Date().toISOString().split("T")[0]}.xlsx`);
+    const rows = filteredRequests.map((request) => [
+      request.part_name,
+      request.part_number || "-",
+      request.quantity,
+      request.unit_price ? `$${request.unit_price.toFixed(2)}` : "-",
+      request.total_price ? `$${request.total_price.toFixed(2)}` : "-",
+      request.vendor?.vendor_name || "-",
+      request.status,
+      request.sage_requisition_number || "-",
+      request.cash_manager_reference || "-",
+      request.ordered_at ? formatDate(request.ordered_at) : "-",
+      request.received_date ? formatDate(request.received_date) : "-",
+      request.requested_by || "-",
+      request.job_card?.job_number || "-",
+      request.notes || "-",
+    ]);
+
+    const wb = createWorkbook();
+
+    addStyledSheet(wb, "All Requests", {
+      title: "PROCUREMENT REQUESTS",
+      headers,
+      rows,
+      cellStyler: (row, col) => {
+        if (col === 7) return statusColours[String(row[6]).toLowerCase()];
+        return undefined;
+      },
+      dropdowns: { 7: ["pending", "ordered", "received", "cancelled"] },
+    });
+
+    // Summary
+    const totalValue = filteredRequests.reduce((s, r) => s + (r.total_price || 0), 0);
+    addSummarySheet(wb, "Summary", {
+      title: "PROCUREMENT SUMMARY",
+      rows: [
+        ["Total Requests", filteredRequests.length],
+        ["Total Value", `$${totalValue.toFixed(2)}`],
+        ["Pending", filteredRequests.filter((r) => r.status === "pending").length],
+        ["Ordered", filteredRequests.filter((r) => r.status === "ordered").length],
+        ["Received", filteredRequests.filter((r) => r.status === "received").length],
+        ["Cancelled", filteredRequests.filter((r) => r.status === "cancelled").length],
+      ],
+    });
+
+    await saveWorkbook(wb, `Procurement_All_Requests_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
   // Export All Requests to PDF
@@ -825,34 +858,43 @@ const Procurement = () => {
   };
 
   // Export Pending Requests to Excel
-  const _exportPendingRequestsToExcel = () => {
+  const _exportPendingRequestsToExcel = async () => {
     if (openRequests.length === 0) return;
 
-    const worksheetData = openRequests.map((request) => ({
-      "Part Name": request.part_name,
-      "Part Number": request.part_number || "-",
-      "Quantity": request.quantity,
-      "Unit Price": request.unit_price ? `$${request.unit_price.toFixed(2)}` : "-",
-      "Total Price": request.total_price ? `$${request.total_price.toFixed(2)}` : "-",
-      "Vendor": request.vendor?.vendor_name || "-",
-      "Status": request.status,
-      "Source": request.job_card_id ? "Job Card" : "Manual",
-      "Job Card": request.job_card?.job_number || "-",
-      "Requested By": request.requested_by || "-",
-      "Date Requested": request.created_at ? formatDate(request.created_at) : "-",
-      "Notes": request.notes || "-",
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    worksheet["!cols"] = [
-      { wch: 30 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-      { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
-      { wch: 14 }, { wch: 30 },
+    const headers = [
+      "Part Name", "Part Number", "Quantity", "Unit Price", "Total Price",
+      "Vendor", "Status", "Source", "Job Card", "Requested By",
+      "Date Requested", "Notes",
     ];
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Pending Requests");
-    XLSX.writeFile(workbook, `Procurement_Pending_Requests_${new Date().toISOString().split("T")[0]}.xlsx`);
+    const rows = openRequests.map((request) => [
+      request.part_name,
+      request.part_number || "-",
+      request.quantity,
+      request.unit_price ? `$${request.unit_price.toFixed(2)}` : "-",
+      request.total_price ? `$${request.total_price.toFixed(2)}` : "-",
+      request.vendor?.vendor_name || "-",
+      request.status,
+      request.job_card_id ? "Job Card" : "Manual",
+      request.job_card?.job_number || "-",
+      request.requested_by || "-",
+      request.created_at ? formatDate(request.created_at) : "-",
+      request.notes || "-",
+    ]);
+
+    const wb = createWorkbook();
+
+    addStyledSheet(wb, "Pending Requests", {
+      title: "PENDING PROCUREMENT REQUESTS",
+      headers,
+      rows,
+      cellStyler: (row, col) => {
+        if (col === 7) return statusColours[String(row[6]).toLowerCase()];
+        return undefined;
+      },
+    });
+
+    await saveWorkbook(wb, `Procurement_Pending_Requests_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
   // Export Pending Requests to PDF
@@ -887,30 +929,43 @@ const Procurement = () => {
   };
 
   // Export Low Stock Items to Excel
-  const exportLowStockToExcel = () => {
+  const exportLowStockToExcel = async () => {
     if (lowStockItems.length === 0) return;
 
-    const worksheetData = lowStockItems.map((item) => ({
-      "Item Name": item.name,
-      "Part Number": item.part_number,
-      "Category": item.category || "-",
-      "Current Stock": item.quantity,
-      "Minimum Required": item.min_quantity,
-      "Shortage": item.shortage,
-      "Unit Price": item.unit_price ? `$${item.unit_price.toFixed(2)}` : "-",
-      "Supplier": item.supplier || "-",
-      "Location": item.location || "-",
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    worksheet["!cols"] = [
-      { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 14 },
-      { wch: 16 }, { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 15 },
+    const headers = [
+      "Item Name", "Part Number", "Category", "Current Stock",
+      "Minimum Required", "Shortage", "Unit Price", "Supplier", "Location",
     ];
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Low Stock Items");
-    XLSX.writeFile(workbook, `Procurement_Low_Stock_${new Date().toISOString().split("T")[0]}.xlsx`);
+    const rows = lowStockItems.map((item) => [
+      item.name,
+      item.part_number,
+      item.category || "-",
+      item.quantity,
+      item.min_quantity,
+      item.shortage,
+      item.unit_price ? `$${item.unit_price.toFixed(2)}` : "-",
+      item.supplier || "-",
+      item.location || "-",
+    ]);
+
+    const wb = createWorkbook();
+
+    addStyledSheet(wb, "Low Stock Items", {
+      title: "LOW STOCK ITEMS REPORT",
+      subtitle: `Generated: ${new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" })} • Total Items Below Minimum: ${lowStockItems.length} • Car Craft Co Fleet Management`,
+      headers,
+      rows,
+      cellStyler: (row, col) => {
+        // Highlight shortage column in red
+        if (col === 6 && typeof row[5] === "number" && row[5] > 0) {
+          return { size: 9, name: "Calibri", color: { argb: "DC2626" }, bold: true };
+        }
+        return undefined;
+      },
+    });
+
+    await saveWorkbook(wb, `Procurement_Low_Stock_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
   // Export Low Stock Items to PDF

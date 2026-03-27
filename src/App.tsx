@@ -47,6 +47,7 @@ const MaintenanceScheduling = lazyWithRetry(() => import("./pages/MaintenanceSch
 const MobileInspections = lazyWithRetry(() => import("./pages/MobileInspections"));
 const PerformanceAnalytics = lazyWithRetry(() => import("./pages/PerformanceAnalytics"));
 const Procurement = lazyWithRetry(() => import("./pages/Procurement"));
+const Reports = lazyWithRetry(() => import("./pages/Reports"));
 const TripManagement = lazyWithRetry(() => import("./pages/TripManagement"));
 const TyreInspections = lazyWithRetry(() => import("./pages/TyreInspections"));
 const TyreManagement = lazyWithRetry(() => import("./pages/TyreManagement"));
@@ -88,9 +89,9 @@ const App = () => (
                   <Route path="/inspections/type-selector" element={<ProtectedRoute><InspectionTypeSelector /></ProtectedRoute>} />
                   <Route path="/inspections/tyre" element={<ProtectedRoute><TyreInspections /></ProtectedRoute>} />
                   <Route path="/faults" element={<Navigate to="/inspections" replace />} /> {/* Faults merged into Inspections */}
-                  <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
+                  <Route path="/incidents" element={<Navigate to="/inspections?tab=incidents" replace />} /> {/* Incidents merged into Inspections */}
                   <Route path="/inventory" element={<Navigate to="/procurement" replace />} /> {/* Inventory merged into Procurement */}
-                  <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
+                  <Route path="/vendors" element={<Navigate to="/inspector-profiles?tab=vendors" replace />} /> {/* Vendors merged into Profile Management */}
                   <Route path="/vehicles" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
                   <Route path="/procurement" element={<ProtectedRoute><Procurement /></ProtectedRoute>} />
                   <Route path="/tyre-management" element={<ProtectedRoute><TyreManagement /></ProtectedRoute>} />
@@ -107,7 +108,7 @@ const App = () => (
                   <Route path="/diesel-management" element={<ProtectedRoute><DieselManagement /></ProtectedRoute>} />
                   <Route path="/fuel-bunkers" element={<ProtectedRoute><FuelBunkers /></ProtectedRoute>} />
                   <Route path="/invoicing" element={<ProtectedRoute><Invoicing /></ProtectedRoute>} />
-                  <Route path="/reports" element={<Navigate to="/trip-management" replace />} /> {/* Reports moved to Trip Management */}
+                  <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                   <Route path="/action-log" element={<ProtectedRoute><ActionLog /></ProtectedRoute>} />
                   <Route path="/gps-tracking" element={<Navigate to="/unified-map" replace />} /> {/* Redirect to Unified Map */}
                   <Route path="/unified-map" element={<ProtectedRoute><UnifiedMapPage /></ProtectedRoute>} />

@@ -1149,11 +1149,11 @@ const JobCards = () => {
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={exportJobCardsToExcel} className="h-9 gap-1.5 text-xs">
                 <Download className="w-3.5 h-3.5" />
-                Excel
+                Job Cards Excel
               </Button>
               <Button variant="outline" size="sm" onClick={exportJobCardsToPDF} className="h-9 gap-1.5 text-xs">
                 <FileText className="w-3.5 h-3.5" />
-                PDF
+                Job Cards PDF
               </Button>
               <Button onClick={() => setShowAddDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />

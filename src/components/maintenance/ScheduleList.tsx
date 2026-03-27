@@ -244,8 +244,8 @@ export function ScheduleList({ schedules, onUpdate, showOverdueOnly }: ScheduleL
             variant="outline"
             size="sm"
             disabled={!enriched.length}
-            onClick={() => {
-              exportSchedulesToExcel(enriched, "maintenance-schedules");
+            onClick={async () => {
+              await exportSchedulesToExcel(enriched, "maintenance-schedules");
               toast({ title: "Excel exported" });
             }}
           >

@@ -311,8 +311,8 @@ export function OverdueAlerts() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    exportOverdueToExcel(overdueSchedules);
+                  onClick={async () => {
+                    await exportOverdueToExcel(overdueSchedules);
                     toast.success("Excel exported successfully");
                   }}
                   disabled={overdueSchedules.length === 0}

@@ -12,7 +12,14 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, DollarSign, FileDown, Package, Star, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import * as XLSX from "xlsx";
+import RubberAuditReport from "@/components/tyres/RubberAuditReport";
+import {
+  addStyledSheet,
+  addSummarySheet,
+  createWorkbook,
+  saveWorkbook,
+  healthColours,
+} from "@/utils/excelStyles";
 
 // Local type definitions
 type Tyre = {
@@ -85,53 +92,53 @@ const FleetTyreReports = () => {
   const { data: dynamicFleetNumbers = [] } = useFleetNumbers();
   const fleetNumbers = ["all", ...dynamicFleetNumbers];
 
-  // Fetch installed tyres from fleet_tyre_positions joined with tyre details
+  // Fetch all vehicle fleet numbers for "fleet on stands" detection
+  const { data: allVehicleFleetNumbers = [] } = useQuery({
+    queryKey: ["all_vehicle_fleet_numbers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("fleet_number")
+        .not("fleet_number", "is", null);
+      if (error) throw error;
+      return (data || []).map((v) => v.fleet_number).filter(Boolean) as string[];
+    },
+  });
+
+  // Fetch installed tyres directly from tyres table (where current_fleet_position is set)
   const { data: installedTyres = [] } = useQuery({
     queryKey: ["installed_tyres_reports", selectedFleet],
     queryFn: async () => {
-      // First get fleet_tyre_positions with their tyre IDs
-      let query = supabase
-        .from("fleet_tyre_positions")
-        .select("*");
+      const { data: tyresData, error } = await supabase
+        .from("tyres")
+        .select("*")
+        .not("current_fleet_position", "is", null)
+        .order("installation_date", { ascending: false });
+
+      if (error) throw error;
+
+      // Parse current_fleet_position (e.g. "33H JFK963FS-V3") to extract fleet info
+      const enriched = ((tyresData || []) as unknown as Tyre[]).map((tyre) => {
+        const posMatch = tyre.current_fleet_position?.match(
+          /^(\d+[A-Z]+)\s+([A-Z0-9/\s]+)-([A-Z0-9]+)$/
+        );
+        const fleetNumber = posMatch ? posMatch[1] : null;
+        const registration = posMatch ? posMatch[2].trim() : null;
+        const position = posMatch ? posMatch[3] : null;
+
+        return {
+          ...tyre,
+          fleet_number: fleetNumber || "Unknown",
+          fleet_position: position || tyre.current_fleet_position || "Unknown",
+          registration_no: registration,
+        } as EnrichedTyre;
+      });
 
       // Filter by fleet if selected
       if (selectedFleet !== "all") {
-        query = query.eq("fleet_number", selectedFleet);
+        return enriched.filter((t) => t.fleet_number === selectedFleet);
       }
-
-      const { data: positions, error: posError } = await query;
-      if (posError) throw posError;
-
-      // Get unique tyre codes that are valid UUIDs
-      const tyreCodes = (positions || [])
-        .map(p => p.tyre_code)
-        .filter((code): code is string => 
-          code !== null && 
-          code.trim() !== '' && 
-          !code.startsWith('NEW_CODE_')
-        );
-
-      if (tyreCodes.length === 0) return [];
-
-      // Fetch tyre details for all installed tyres
-      const { data: tyresData, error: tyresError } = await supabase
-        .from("tyres")
-        .select("*")
-        .in("id", tyreCodes);
-
-      if (tyresError) throw tyresError;
-
-      // Merge position data with tyre details
-      const tyreMap = new Map((tyresData || []).map(t => [t.id, t as unknown as Tyre]));
-      
-      return (positions || [])
-        .filter(p => p.tyre_code && tyreMap.has(p.tyre_code))
-        .map(p => ({
-          ...tyreMap.get(p.tyre_code)!,
-          fleet_number: p.fleet_number,
-          fleet_position: p.position,
-          registration_no: p.registration_no,
-        })) as EnrichedTyre[];
+      return enriched;
     },
   });
 
@@ -181,18 +188,18 @@ const FleetTyreReports = () => {
 
     tyres.forEach(t => {
       const brand = t.brand || 'Unknown';
-      const existing = brandMap.get(brand) || { 
-        count: 0, totalCost: 0, totalKm: 0, totalMmWorn: 0, tyresWithKm: 0, tyresWithTread: 0 
+      const existing = brandMap.get(brand) || {
+        count: 0, totalCost: 0, totalKm: 0, totalMmWorn: 0, tyresWithKm: 0, tyresWithTread: 0
       };
-      
+
       existing.count += 1;
       existing.totalCost += (t.purchase_cost_zar || 0);
-      
+
       if (t.km_travelled && t.km_travelled > 0) {
         existing.totalKm += t.km_travelled;
         existing.tyresWithKm += 1;
       }
-      
+
       if (t.initial_tread_depth && t.current_tread_depth) {
         const worn = t.initial_tread_depth - t.current_tread_depth;
         if (worn > 0) {
@@ -200,7 +207,7 @@ const FleetTyreReports = () => {
           existing.tyresWithTread += 1;
         }
       }
-      
+
       brandMap.set(brand, existing);
     });
 
@@ -332,7 +339,7 @@ const FleetTyreReports = () => {
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 30);
 
     let yPos = 45;
-    
+
     // Fleet Statistics
     doc.setFontSize(12);
     doc.text("Fleet Tyre Statistics", 20, yPos);
@@ -341,7 +348,7 @@ const FleetTyreReports = () => {
     doc.text(`Total Tyres Installed: ${grandTotals.totalTyres}`, 20, yPos);
     yPos += 6;
     doc.text(`Total Brands: ${grandTotals.brandCount}`, 20, yPos);
-    
+
     yPos += 12;
     doc.setFontSize(12);
     doc.text("Condition Summary", 20, yPos);
@@ -361,7 +368,7 @@ const FleetTyreReports = () => {
     doc.text(`Total Investment: $${grandTotals.totalCost.toFixed(2)}`, 20, yPos);
     yPos += 6;
     doc.text(`Avg Cost/Tyre: $${avgCostPerTyre.toFixed(2)}`, 20, yPos);
-    
+
     yPos += 12;
     doc.setFontSize(12);
     doc.text("Cost Efficiency Metrics", 20, yPos);
@@ -376,14 +383,14 @@ const FleetTyreReports = () => {
     yPos += 6;
     const kmPerMmTotal = grandTotals.totalMmWorn > 0 ? grandTotals.totalKm / grandTotals.totalMmWorn : 0;
     doc.text(`KM per MM Worn: ${kmPerMmTotal.toFixed(0)} (higher = better efficiency)`, 20, yPos);
-    
+
     // Brand Summary Table
     yPos += 15;
     doc.setFontSize(12);
     doc.text("Brand Performance Summary", 20, yPos);
     yPos += 10;
     doc.setFontSize(9);
-    
+
     // Table header
     doc.text("Brand", 20, yPos);
     doc.text("Count", 60, yPos);
@@ -392,7 +399,7 @@ const FleetTyreReports = () => {
     doc.text("Cost/KM", 145, yPos);
     doc.text("KM/MM", 175, yPos);
     yPos += 6;
-    
+
     // Table data (top 10 brands)
     brandSummary.slice(0, 10).forEach((b) => {
       doc.text(b.brand.substring(0, 15), 20, yPos);
@@ -408,70 +415,96 @@ const FleetTyreReports = () => {
   };
 
   // Export to Excel
-  const exportToExcel = () => {
-    // Sheet 1: Individual Tyres
-    const tyresData = tyres.map((t) => {
-      const mmWorn = (t.initial_tread_depth && t.current_tread_depth) 
+  const exportToExcel = async () => {
+    const tyreHeaders = [
+      "Tyre Code", "Fleet", "Position", "Registration", "Brand", "Model",
+      "Size", "Type", "Initial Tread (mm)", "Current Tread (mm)", "MM Worn",
+      "Condition", "KM Travelled", "Cost (USD)", "Cost/KM",
+    ];
+
+    const tyreRows = tyres.map((t) => {
+      const mmWorn = (t.initial_tread_depth && t.current_tread_depth)
         ? Math.max(0, t.initial_tread_depth - t.current_tread_depth)
         : 0;
       const costPerKm = (t.purchase_cost_zar && t.km_travelled && t.km_travelled > 0)
         ? t.purchase_cost_zar / t.km_travelled
         : null;
-      
-      return {
-        'Tyre Code': t.serial_number || t.id,
-        'Fleet': t.fleet_number,
-        'Position': t.fleet_position,
-        'Registration': t.registration_no,
-        'Brand': t.brand,
-        'Model': t.model,
-        'Size': t.size,
-        'Type': t.type || '-',
-        'Initial Tread (mm)': t.initial_tread_depth,
-        'Current Tread (mm)': t.current_tread_depth,
-        'MM Worn': mmWorn.toFixed(1),
-        'Condition': t.condition || 'unknown',
-        'KM Travelled': t.km_travelled || 0,
-        'Cost (USD)': t.purchase_cost_zar || 0,
-        'Cost/KM': costPerKm !== null ? costPerKm.toFixed(4) : 'N/A',
-      };
+      return [
+        t.serial_number || t.id, t.fleet_number, t.fleet_position,
+        t.registration_no, t.brand, t.model, t.size, t.type || "-",
+        t.initial_tread_depth ?? "", t.current_tread_depth ?? "",
+        mmWorn.toFixed(1), t.condition || "unknown",
+        t.km_travelled || 0, t.purchase_cost_zar || 0,
+        costPerKm !== null ? costPerKm.toFixed(4) : "N/A",
+      ];
+    });
+
+    const wb = createWorkbook();
+
+    // Sheet 1: Installed Tyres with condition colour-coding
+    addStyledSheet(wb, "Installed Tyres", {
+      title: `FLEET TYRE ANALYTICS — ${selectedFleet === "all" ? "ALL FLEETS" : `FLEET ${selectedFleet}`}`,
+      headers: tyreHeaders,
+      rows: tyreRows,
+      cellStyler: (row, col) => {
+        if (col === 12) return healthColours[String(row[11]).toLowerCase()];
+        return undefined;
+      },
     });
 
     // Sheet 2: Brand Summary
-    const brandData = brandSummary.map((d) => ({
-      'Brand': d.brand,
-      'Count': d.count,
-      'Total Value (USD)': d.totalCost.toFixed(2),
-      'Cost/Tyre': d.avgCostPerTyre.toFixed(2),
-      'Total KM': d.totalKm,
-      'Cost/KM': d.avgCostPerKm !== null ? d.avgCostPerKm.toFixed(4) : 'N/A',
-      'Total MM Worn': d.totalMmWorn.toFixed(1),
-      'KM/MM (Efficiency)': d.kmPerMm !== null ? d.kmPerMm.toFixed(0) : 'N/A',
-    }));
+    const brandHeaders = [
+      "Brand", "Count", "Total Value (USD)", "Cost/Tyre", "Total KM",
+      "Cost/KM", "Total MM Worn", "KM/MM (Efficiency)",
+    ];
 
-    // Add grand total row
-    brandData.push({
-      'Brand': 'GRAND TOTAL',
-      'Count': grandTotals.totalTyres,
-      'Total Value (USD)': grandTotals.totalCost.toFixed(2),
-      'Cost/Tyre': grandTotals.totalTyres > 0 ? (grandTotals.totalCost / grandTotals.totalTyres).toFixed(2) : '0.00',
-      'Total KM': grandTotals.totalKm,
-      'Cost/KM': grandTotals.totalKm > 0 ? (grandTotals.totalCost / grandTotals.totalKm).toFixed(4) : 'N/A',
-      'Total MM Worn': grandTotals.totalMmWorn.toFixed(1),
-      'KM/MM (Efficiency)': grandTotals.totalMmWorn > 0 ? (grandTotals.totalKm / grandTotals.totalMmWorn).toFixed(0) : 'N/A',
+    const brandRows: (string | number)[][] = brandSummary.map((d) => [
+      d.brand, d.count, d.totalCost.toFixed(2), d.avgCostPerTyre.toFixed(2),
+      d.totalKm, d.avgCostPerKm !== null ? d.avgCostPerKm.toFixed(4) : "N/A",
+      d.totalMmWorn.toFixed(1), d.kmPerMm !== null ? d.kmPerMm.toFixed(0) : "N/A",
+    ]);
+
+    brandRows.push([
+      "GRAND TOTAL", grandTotals.totalTyres, grandTotals.totalCost.toFixed(2),
+      grandTotals.totalTyres > 0 ? (grandTotals.totalCost / grandTotals.totalTyres).toFixed(2) : "0.00",
+      grandTotals.totalKm,
+      grandTotals.totalKm > 0 ? (grandTotals.totalCost / grandTotals.totalKm).toFixed(4) : "N/A",
+      grandTotals.totalMmWorn.toFixed(1),
+      grandTotals.totalMmWorn > 0 ? (grandTotals.totalKm / grandTotals.totalMmWorn).toFixed(0) : "N/A",
+    ]);
+
+    const brandWs = addStyledSheet(wb, "Brand Summary", {
+      title: "TYRE BRAND PERFORMANCE SUMMARY",
+      headers: brandHeaders,
+      rows: brandRows,
     });
 
-    const workbook = XLSX.utils.book_new();
-    
-    // Add tyres worksheet
-    const tyresSheet = XLSX.utils.json_to_sheet(tyresData);
-    XLSX.utils.book_append_sheet(workbook, tyresSheet, "Installed Tyres");
-    
-    // Add brand summary worksheet
-    const brandSheet = XLSX.utils.json_to_sheet(brandData);
-    XLSX.utils.book_append_sheet(workbook, brandSheet, "Brand Summary");
-    
-    XLSX.writeFile(workbook, `fleet-tyres-${selectedFleet}-${Date.now()}.xlsx`);
+    // Bold the grand-total row
+    const totalRowNum = 4 + brandRows.length;
+    const totalRow = brandWs.getRow(totalRowNum);
+    totalRow.eachCell((cell) => {
+      cell.font = { bold: true, size: 10, name: "Calibri" };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "E2E8F0" } };
+    });
+
+    // Sheet 3: Summary KPIs
+    const criticalCount = tyres.filter((t) => t.condition === "needs_replacement").length;
+    const warningCount = tyres.filter((t) => t.condition === "poor").length;
+    addSummarySheet(wb, "Summary", {
+      title: "FLEET TYRE SUMMARY",
+      rows: [
+        ["Fleet", selectedFleet === "all" ? "All Fleets" : `Fleet ${selectedFleet}`],
+        ["Total Tyres", tyres.length],
+        ["Brands Tracked", brandSummary.length],
+        ["Total Investment (USD)", `$${grandTotals.totalCost.toLocaleString()}`],
+        ["Total KM Travelled", grandTotals.totalKm.toLocaleString()],
+        ["Total MM Worn", grandTotals.totalMmWorn.toFixed(1)],
+        ["Critical / Needs Replacement", criticalCount],
+        ["Poor Condition", warningCount],
+      ],
+    });
+
+    await saveWorkbook(wb, `fleet-tyres-${selectedFleet}-${Date.now()}.xlsx`);
   };
 
   // Get badge for tyre condition
@@ -515,28 +548,31 @@ const FleetTyreReports = () => {
               </Button>
               <Button onClick={exportToExcel} variant="outline" size="sm">
                 <FileDown className="w-4 h-4 mr-2" />
-                Excel
+                Analytics Excel
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <Tabs value={reportType} onValueChange={setReportType}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="overview" className="px-5 py-2.5 text-base">
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="overview" className="px-4 py-2.5 text-sm">
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="brands" className="px-5 py-2.5 text-base">
+              <TabsTrigger value="brands" className="px-4 py-2.5 text-sm">
                 Brand Analysis
               </TabsTrigger>
-              <TabsTrigger value="health" className="px-5 py-2.5 text-base">
+              <TabsTrigger value="health" className="px-4 py-2.5 text-sm">
                 Health
               </TabsTrigger>
-              <TabsTrigger value="recommendations" className="px-5 py-2.5 text-base">
+              <TabsTrigger value="recommendations" className="px-4 py-2.5 text-sm">
                 Recommendations
               </TabsTrigger>
-              <TabsTrigger value="cost" className="px-5 py-2.5 text-base">
+              <TabsTrigger value="cost" className="px-4 py-2.5 text-sm">
                 Cost
+              </TabsTrigger>
+              <TabsTrigger value="rubber-audit" className="px-4 py-2.5 text-sm">
+                Rubber Audit
               </TabsTrigger>
             </TabsList>
 
@@ -576,7 +612,7 @@ const FleetTyreReports = () => {
                     <div className="flex flex-col">
                       <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">KM per MM Worn</span>
                       <span className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">
-                        {grandTotals.totalMmWorn > 0 ? `${(grandTotals.totalKm / grandTotals.totalMmWorn).toLocaleString(undefined, {maximumFractionDigits: 0})} km` : 'N/A'}
+                        {grandTotals.totalMmWorn > 0 ? `${(grandTotals.totalKm / grandTotals.totalMmWorn).toLocaleString(undefined, { maximumFractionDigits: 0 })} km` : 'N/A'}
                       </span>
                     </div>
                   </CardContent>
@@ -727,7 +763,7 @@ const FleetTyreReports = () => {
                             <TableCell className="text-right">
                               {data.kmPerMm !== null ? (
                                 <span className={data.kmPerMm > 5000 ? 'text-green-600 font-medium' : data.kmPerMm < 2000 ? 'text-red-500' : ''}>
-                                  {data.kmPerMm.toLocaleString(undefined, {maximumFractionDigits: 0})} km
+                                  {data.kmPerMm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km
                                 </span>
                               ) : <span className="text-muted-foreground">N/A</span>}
                             </TableCell>
@@ -954,6 +990,14 @@ const FleetTyreReports = () => {
                   </CardContent>
                 </Card>
               </div>
+            </TabsContent>
+
+            {/* Rubber Audit Tab */}
+            <TabsContent value="rubber-audit" className="mt-4">
+              <RubberAuditReport
+                tyres={tyres as any}
+                allVehicleFleetNumbers={allVehicleFleetNumbers}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>
