@@ -6,13 +6,15 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/Layout";
 import {
+    AlertTriangle,
     Calendar,
+    Car,
     ClipboardList,
-    Download,
     FileSpreadsheet,
     FileText,
     Fuel,
     Gauge,
+    Receipt,
     Search,
     ShoppingCart,
     Truck,
@@ -47,6 +49,122 @@ import {
 } from "@/utils/excelStyles";
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+type Vehicle = {
+    id: string;
+    fleet_number?: string;
+    registration_number?: string;
+    make?: string;
+    model?: string;
+};
+
+type Inspection = {
+    id: string;
+    inspection_date: string;
+    report_number?: string;
+    vehicle_name?: string;
+    vehicle_id?: string;
+    inspector_name?: string;
+    location?: string;
+    meter_reading?: number;
+    vehicle_safe_to_use?: boolean;
+    maintenance_priority?: string;
+    vehicle_category?: string;
+    vehicle_status?: string;
+};
+
+type JobCard = {
+    id: string;
+    job_number?: string;
+    vehicle_id?: string;
+    status?: string;
+    priority?: string;
+    assignee?: string;
+    created_at?: string;
+    description?: string;
+    vehicles?: Vehicle | null;
+};
+
+type Trip = {
+    id: string;
+    trip_number?: string;
+    fleet_vehicle_id?: string;
+    driver_name?: string;
+    origin?: string;
+    destination?: string;
+    status?: string;
+    departure_date?: string;
+    planned_departure_date?: string;
+    arrival_date?: string;
+    planned_arrival_date?: string;
+    base_revenue?: number;
+    distance_km?: number;
+    rate_per_km?: number;
+    final_invoice_amount?: number;
+};
+
+type Driver = {
+    id: string;
+    first_name?: string;
+    last_name?: string;
+    driver_number?: string;
+    license_number?: string;
+    license_expiry?: string;
+    phone?: string;
+    status?: string;
+    email?: string;
+};
+
+type DieselRecord = {
+    id: string;
+    date?: string;
+    fleet_number?: string;
+    driver_name?: string;
+    fuel_station?: string;
+    litres_filled?: number;
+    cost_per_litre?: number;
+    total_cost?: number;
+    km_reading?: number;
+    km_per_litre?: number;
+};
+
+type PartsRequest = {
+    id: string;
+    ir_number?: string;
+    part_name?: string;
+    status?: string;
+    urgency_level?: string;
+    quantity?: number;
+    unit_price?: number;
+    total_price?: number;
+    make_brand?: string;
+    requested_by?: string;
+    created_at?: string;
+};
+
+type ActionItem = {
+    id: string;
+    title?: string;
+    status?: string;
+    priority?: string;
+    assigned_to?: string;
+    due_date?: string;
+    created_at?: string;
+    description?: string;
+};
+
+type BrandSummary = {
+    brand: string;
+    bayCount: number;
+    installedCount: number;
+    totalQty: number;
+    totalCost: number;
+    totalKm: number;
+    totalMmWorn: number;
+    avgCostPerTyre: number;
+    avgCostPerKm: number | null;
+    avgCostPerMm: number | null;
+};
 
 type ReportItem = {
     id: string;
@@ -97,7 +215,7 @@ const Reports = () => {
         const { data, error } = await supabase
             .from("maintenance_schedules")
             .select("*, vehicles(fleet_number, registration_number, make, model)")
-            .order("next_due_date") as { data: any[] | null; error: any };
+            .order("next_due_date") as { data: Record<string, unknown>[] | null; error: unknown };
         if (error) throw error;
         return data || [];
     };
@@ -106,101 +224,148 @@ const Reports = () => {
         const { data, error } = await supabase
             .from("maintenance_schedule_history")
             .select("*, maintenance_schedules(service_type, vehicle_id)")
-            .order("completed_date", { ascending: false }) as { data: any[] | null; error: any };
+            .order("completed_date", { ascending: false }) as { data: Record<string, unknown>[] | null; error: unknown };
         if (error) throw error;
         return data || [];
     };
 
     const fetchOverdueSchedules = async () => {
         const today = new Date().toISOString().split("T")[0];
-        const { data, error } = await (supabase
+        const query = supabase
             .from("maintenance_schedules")
-            .select("*, vehicles(fleet_number, registration_number, make, model)") as any)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .select("*, vehicles(fleet_number, registration_number, make, model)") as any;
+        const { data, error } = await query
             .lt("next_due_date", today)
             .neq("status", "completed")
             .order("next_due_date");
         if (error) throw error;
-        return (data || []) as any[];
+        return (data || []) as Record<string, unknown>[];
     };
 
     const fetchFaults = async () => {
         const { data, error } = await supabase
             .from("vehicle_faults")
             .select("*, vehicles(fleet_number, registration_number, make, model)")
-            .order("reported_date", { ascending: false }) as { data: any[] | null; error: any };
+            .order("reported_date", { ascending: false });
         if (error) throw error;
         return data || [];
     };
 
-    const fetchInspections = async () => {
+    const fetchInspections = async (): Promise<Inspection[]> => {
         const { data, error } = await supabase
             .from("inspections")
             .select("*")
             .order("inspection_date", { ascending: false });
         if (error) throw error;
-        return data || [];
+        return (data || []) as Inspection[];
     };
 
-    const fetchJobCards = async () => {
+    const fetchJobCards = async (): Promise<JobCard[]> => {
         const { data, error } = await supabase
             .from("job_cards")
             .select("*")
             .order("created_at", { ascending: false });
         if (error) throw error;
-        const cards = data || [];
-        const vehicleIds = [...new Set(cards.map((c: any) => c.vehicle_id).filter(Boolean))];
+        const cards = (data || []) as JobCard[];
+        const vehicleIds = [...new Set(cards.map((c: JobCard) => c.vehicle_id).filter(Boolean))];
         if (vehicleIds.length === 0) return cards;
         const { data: vehicles } = await supabase
             .from("vehicles")
             .select("id, fleet_number, registration_number, make, model")
             .in("id", vehicleIds);
-        const vehicleMap = new Map((vehicles || []).map((v: any) => [v.id, v]));
-        return cards.map((c: any) => ({ ...c, vehicles: vehicleMap.get(c.vehicle_id) || null }));
+        const vehicleMap = new Map((vehicles || []).map((v: Vehicle) => [v.id, v]));
+        return cards.map((c: JobCard) => ({ ...c, vehicles: c.vehicle_id ? vehicleMap.get(c.vehicle_id) || null : null }));
     };
 
-    const fetchTrips = async () => {
+    const fetchTrips = async (): Promise<Trip[]> => {
         const { data, error } = await supabase
             .from("trips")
             .select("*")
             .order("created_at", { ascending: false });
         if (error) throw error;
-        return data || [];
+        return (data || []) as Trip[];
     };
 
-    const fetchDrivers = async () => {
+    const fetchDrivers = async (): Promise<Driver[]> => {
         const { data, error } = await supabase
             .from("drivers")
             .select("*")
             .order("first_name");
         if (error) throw error;
-        return data || [];
+        return (data || []) as Driver[];
     };
 
-    const fetchDieselRecords = async () => {
+    const fetchDieselRecords = async (): Promise<DieselRecord[]> => {
         const { data, error } = await supabase
             .from("diesel_records")
             .select("*")
             .order("date", { ascending: false });
         if (error) throw error;
-        return data || [];
+        return (data || []) as DieselRecord[];
     };
 
-    const fetchProcurementRequests = async () => {
+    const fetchProcurementRequests = async (): Promise<PartsRequest[]> => {
         const { data, error } = await supabase
             .from("parts_requests")
             .select("*")
             .order("created_at", { ascending: false });
         if (error) throw error;
-        return data || [];
+        return (data || []) as PartsRequest[];
     };
 
-    const fetchActionLog = async () => {
+    const fetchActionLog = async (): Promise<ActionItem[]> => {
         const { data, error } = await supabase
             .from("action_items")
             .select("*")
-            .order("created_at", { ascending: false }) as { data: any[] | null; error: any };
+            .order("created_at", { ascending: false });
         if (error) throw error;
-        return data || [];
+        return (data || []) as ActionItem[];
+    };
+
+    const fetchVehicles = async () => {
+        const { data, error } = await supabase
+            .from("vehicles")
+            .select("*")
+            .order("fleet_number");
+        if (error) throw error;
+        return (data || []) as Record<string, unknown>[];
+    };
+
+    const fetchWorkOrders = async () => {
+        const { data, error } = await supabase
+            .from("work_orders")
+            .select("*, vehicles(fleet_number, registration_number, make, model)")
+            .order("created_at", { ascending: false });
+        if (error) throw error;
+        return (data || []) as Record<string, unknown>[];
+    };
+
+    const fetchIncidents = async () => {
+        const { data, error } = await supabase
+            .from("incidents")
+            .select("*")
+            .order("incident_date", { ascending: false });
+        if (error) throw error;
+        return (data || []) as Record<string, unknown>[];
+    };
+
+    const fetchInvoices = async () => {
+        const { data, error } = await supabase
+            .from("invoices")
+            .select("*, trips(trip_number, driver_name, origin, destination)")
+            .order("invoice_date", { ascending: false });
+        if (error) throw error;
+        return (data || []) as Record<string, unknown>[];
+    };
+
+    const fetchFuelBunkers = async () => {
+        const { data, error } = await supabase
+            .from("fuel_bunkers")
+            .select("*")
+            .order("name");
+        if (error) throw error;
+        return (data || []) as Record<string, unknown>[];
     };
 
     // ── Generic ExcelJS export builder ─────────────────────────────────────────
@@ -259,7 +424,7 @@ const Reports = () => {
                     onExport: async (fmt) => {
                         const cards = await fetchJobCards();
                         const headers = ["Job Card #", "Fleet", "Registration", "Status", "Priority", "Assigned To", "Created", "Description"];
-                        const rows = cards.map((c: any) => [
+                        const rows = cards.map((c: JobCard) => [
                             c.job_number || c.id?.slice(0, 8),
                             c.vehicles?.fleet_number || "-",
                             c.vehicles?.registration_number || "-",
@@ -296,20 +461,20 @@ const Reports = () => {
                     formats: ["pdf"],
                     onExport: async () => {
                         const inspections = await fetchInspections();
-                        const mapped = inspections.map((ins: any) => ({
-                            inspection_number: ins.inspection_number || ins.id?.slice(0, 8),
+                        const mapped = inspections.map((ins: Inspection) => ({
+                            inspection_number: ins.report_number || ins.id?.slice(0, 8),
                             inspection_date: ins.inspection_date,
-                            vehicle_registration: ins.vehicle_registration,
-                            vehicle_make: ins.vehicle_make || "",
-                            vehicle_model: ins.vehicle_model || "",
+                            vehicle_registration: ins.vehicle_name || "-",
+                            vehicle_make: "",
+                            vehicle_model: "",
                             inspector_name: ins.inspector_name || "-",
-                            fault_count: ins.fault_count || 0,
-                            corrective_action_status: ins.corrective_action_status || "-",
-                            linked_work_order: ins.linked_work_order || "-",
-                            inspection_type: ins.inspection_type || "-",
-                            notes: ins.notes || "",
-                            status: ins.status || "-",
-                            template_name: ins.template_name || "-",
+                            fault_count: 0,
+                            corrective_action_status: ins.maintenance_priority || "-",
+                            linked_work_order: "-",
+                            inspection_type: ins.vehicle_category || "-",
+                            notes: "",
+                            status: ins.vehicle_status || (ins.vehicle_safe_to_use ? "safe" : "unsafe"),
+                            template_name: "-",
                         }));
                         await generateBatchInspectionPDF(mapped);
                     },
@@ -321,7 +486,7 @@ const Reports = () => {
                     formats: ["pdf"],
                     onExport: async () => {
                         const faults = await fetchFaults();
-                        await generateAllFaultsPDF(faults as any);
+                        await generateAllFaultsPDF(faults as unknown as Parameters<typeof generateAllFaultsPDF>[0]);
                     },
                 },
             ],
@@ -339,8 +504,8 @@ const Reports = () => {
                     formats: ["excel", "pdf"],
                     onExport: async (fmt) => {
                         const tyres = await fetchTyres();
-                        if (fmt === "excel") await exportAllTyresToExcel(tyres as any);
-                        else await exportAllTyresToPDF(tyres as any);
+                        if (fmt === "excel") await exportAllTyresToExcel(tyres as unknown as Parameters<typeof exportAllTyresToExcel>[0]);
+                        else await exportAllTyresToPDF(tyres as unknown as Parameters<typeof exportAllTyresToPDF>[0]);
                     },
                 },
                 {
@@ -350,10 +515,22 @@ const Reports = () => {
                     formats: ["excel", "pdf"],
                     onExport: async (fmt) => {
                         const tyres = await fetchTyres();
-                        const brandMap = new Map<string, any>();
-                        (tyres as any[]).forEach((t) => {
+                        const brandMap = new Map<string, BrandSummary>();
+                        tyres.forEach((t) => {
                             const brand = t.brand || "Unknown";
-                            const e = brandMap.get(brand) || { brand, bayCount: 0, installedCount: 0, totalQty: 0, totalCost: 0, totalKm: 0, totalMmWorn: 0, avgCostPerTyre: 0, avgCostPerKm: null, avgCostPerMm: null };
+                            const existing = brandMap.get(brand);
+                            const e = existing || {
+                                brand,
+                                bayCount: 0,
+                                installedCount: 0,
+                                totalQty: 0,
+                                totalCost: 0,
+                                totalKm: 0,
+                                totalMmWorn: 0,
+                                avgCostPerTyre: 0,
+                                avgCostPerKm: null,
+                                avgCostPerMm: null
+                            };
                             e.totalQty += 1;
                             if (t.current_fleet_position) e.installedCount += 1; else e.bayCount += 1;
                             e.totalCost += t.purchase_cost_zar || 0;
@@ -361,20 +538,24 @@ const Reports = () => {
                             if (t.initial_tread_depth && t.current_tread_depth) e.totalMmWorn += Math.max(0, t.initial_tread_depth - t.current_tread_depth);
                             brandMap.set(brand, e);
                         });
-                        const brandData = Array.from(brandMap.values()).map((d: any) => ({
+                        const brandData = Array.from(brandMap.values()).map((d: BrandSummary) => ({
                             ...d,
                             avgCostPerTyre: d.totalQty > 0 ? d.totalCost / d.totalQty : 0,
                             avgCostPerKm: d.totalKm > 0 ? d.totalCost / d.totalKm : null,
                             avgCostPerMm: d.totalMmWorn > 0 ? d.totalCost / d.totalMmWorn : null,
                         }));
-                        const gt = brandData.reduce((a: any, b: any) => ({
-                            bayCount: a.bayCount + b.bayCount,
-                            installedCount: a.installedCount + b.installedCount,
-                            totalQty: a.totalQty + b.totalQty,
-                            totalCost: a.totalCost + b.totalCost,
-                            totalKm: a.totalKm + b.totalKm,
-                            totalMmWorn: a.totalMmWorn + b.totalMmWorn,
-                        }), { bayCount: 0, installedCount: 0, totalQty: 0, totalCost: 0, totalKm: 0, totalMmWorn: 0 });
+                        const gt = brandData.reduce((acc: BrandSummary, b: BrandSummary) => ({
+                            brand: "TOTAL",
+                            bayCount: acc.bayCount + b.bayCount,
+                            installedCount: acc.installedCount + b.installedCount,
+                            totalQty: acc.totalQty + b.totalQty,
+                            totalCost: acc.totalCost + b.totalCost,
+                            totalKm: acc.totalKm + b.totalKm,
+                            totalMmWorn: acc.totalMmWorn + b.totalMmWorn,
+                            avgCostPerTyre: 0,
+                            avgCostPerKm: null,
+                            avgCostPerMm: null,
+                        }), { brand: "", bayCount: 0, installedCount: 0, totalQty: 0, totalCost: 0, totalKm: 0, totalMmWorn: 0, avgCostPerTyre: 0, avgCostPerKm: null, avgCostPerMm: null });
                         if (fmt === "excel") await exportBrandSummaryToExcel(brandData, gt);
                         else await exportBrandSummaryToPDF(brandData, gt);
                     },
@@ -394,8 +575,8 @@ const Reports = () => {
                     formats: ["excel", "pdf"],
                     onExport: async (fmt) => {
                         const schedules = await fetchMaintenanceSchedules();
-                        if (fmt === "excel") await exportSchedulesToExcel(schedules as any);
-                        else exportSchedulesToPDF(schedules as any);
+                        if (fmt === "excel") await exportSchedulesToExcel(schedules as unknown as Parameters<typeof exportSchedulesToExcel>[0]);
+                        else await exportSchedulesToPDF(schedules as unknown as Parameters<typeof exportSchedulesToPDF>[0]);
                     },
                 },
                 {
@@ -405,8 +586,8 @@ const Reports = () => {
                     formats: ["excel", "pdf"],
                     onExport: async (fmt) => {
                         const history = await fetchMaintenanceHistory();
-                        if (fmt === "excel") await exportHistoryToExcel(history as any);
-                        else exportHistoryToPDF(history as any);
+                        if (fmt === "excel") await exportHistoryToExcel(history as unknown as Parameters<typeof exportHistoryToExcel>[0]);
+                        else await exportHistoryToPDF(history as unknown as Parameters<typeof exportHistoryToPDF>[0]);
                     },
                 },
                 {
@@ -416,8 +597,8 @@ const Reports = () => {
                     formats: ["excel", "pdf"],
                     onExport: async (fmt) => {
                         const overdue = await fetchOverdueSchedules();
-                        if (fmt === "excel") await exportOverdueToExcel(overdue as any);
-                        else exportOverdueToPDF(overdue as any);
+                        if (fmt === "excel") await exportOverdueToExcel(overdue as unknown as Parameters<typeof exportOverdueToExcel>[0]);
+                        else await exportOverdueToPDF(overdue as unknown as Parameters<typeof exportOverdueToPDF>[0]);
                     },
                 },
             ],
@@ -436,15 +617,15 @@ const Reports = () => {
                     onExport: async (fmt) => {
                         const requests = await fetchProcurementRequests();
                         const headers = ["Request #", "Part Name", "Fleet", "Status", "Priority", "Qty", "Unit Cost", "Total Cost", "Requested By", "Date"];
-                        const rows = (requests as any[]).map((r) => [
-                            r.request_number || r.id?.slice(0, 8),
+                        const rows = requests.map((r: PartsRequest) => [
+                            r.ir_number || r.id.slice(0, 8),
                             r.part_name || "-",
-                            "-",
+                            r.make_brand || "-",
                             r.status || "-",
-                            r.priority || "-",
+                            r.urgency_level || "-",
                             r.quantity ?? 0,
-                            r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : "0.00",
-                            r.total_cost != null ? Number(r.total_cost).toFixed(2) : "0.00",
+                            r.unit_price != null ? Number(r.unit_price).toFixed(2) : "0.00",
+                            r.total_price != null ? Number(r.total_price).toFixed(2) : "0.00",
                             r.requested_by || "-",
                             r.created_at ? new Date(r.created_at).toLocaleDateString() : "-",
                         ]);
@@ -457,6 +638,131 @@ const Reports = () => {
                         } else {
                             await exportGenericPdf("ALL PARTS REQUESTS", headers, rows.map(r => r.map(String)),
                                 `Parts_Requests_${new Date().toISOString().split("T")[0]}.pdf`);
+                        }
+                    },
+                },
+            ],
+        },
+
+        // ── WORKSHOP: Fleet Vehicles ─────────────────────────────────────────
+        {
+            title: "Fleet Vehicles",
+            icon: Car,
+            description: "Vehicle fleet register and status",
+            badge: "Workshop",
+            reports: [
+                {
+                    id: "vehicles-all",
+                    label: "Vehicle Fleet Register",
+                    description: "Complete vehicle register with type, make, model, and odometer",
+                    formats: ["excel", "pdf"],
+                    onExport: async (fmt) => {
+                        const vehicles = await fetchVehicles();
+                        const headers = ["Fleet #", "Registration", "Make", "Model", "Type", "Tonnage", "Active", "Odometer"];
+                        const rows = vehicles.map((v: Record<string, unknown>) => [
+                            (v.fleet_number as string) || "-",
+                            (v.registration_number as string) || "-",
+                            (v.make as string) || "-",
+                            (v.model as string) || "-",
+                            (v.vehicle_type as string) || "-",
+                            v.tonnage != null ? String(v.tonnage) : "-",
+                            v.active ? "Yes" : "No",
+                            v.current_odometer != null ? Number(v.current_odometer).toLocaleString() : "-",
+                        ]);
+                        if (fmt === "excel") {
+                            await exportGenericExcel(
+                                `Fleet_Register_${new Date().toISOString().split("T")[0]}.xlsx`,
+                                "Fleet Register", "FLEET VEHICLE REGISTER", headers, rows,
+                            );
+                        } else {
+                            await exportGenericPdf("FLEET VEHICLE REGISTER", headers, rows.map(r => r.map(String)),
+                                `Fleet_Register_${new Date().toISOString().split("T")[0]}.pdf`);
+                        }
+                    },
+                },
+            ],
+        },
+
+        // ── WORKSHOP: Work Orders ────────────────────────────────────────────
+        {
+            title: "Work Orders",
+            icon: Wrench,
+            description: "Work order tracking, costs, and completion",
+            badge: "Workshop",
+            reports: [
+                {
+                    id: "work-orders-all",
+                    label: "All Work Orders",
+                    description: "Complete work order register with status, priority, and costs",
+                    formats: ["excel", "pdf"],
+                    onExport: async (fmt) => {
+                        const orders = await fetchWorkOrders();
+                        const headers = ["WO #", "Title", "Fleet", "Registration", "Status", "Priority", "Technician", "Est. Cost", "Actual Cost", "Created"];
+                        const rows = orders.map((o: Record<string, unknown>) => {
+                            const v = o.vehicles as Record<string, unknown> | null;
+                            return [
+                                (o.work_order_number as string) || (o.id as string)?.slice(0, 8),
+                                (o.title as string) || "-",
+                                (v?.fleet_number as string) || "-",
+                                (v?.registration_number as string) || "-",
+                                (o.status as string) || "-",
+                                (o.priority as string) || "-",
+                                (o.assigned_technician as string) || "-",
+                                o.estimated_total_cost != null ? Number(o.estimated_total_cost).toFixed(2) : "-",
+                                o.actual_total_cost != null ? Number(o.actual_total_cost).toFixed(2) : "-",
+                                o.created_at ? new Date(o.created_at as string).toLocaleDateString() : "-",
+                            ];
+                        });
+                        if (fmt === "excel") {
+                            await exportGenericExcel(
+                                `Work_Orders_${new Date().toISOString().split("T")[0]}.xlsx`,
+                                "Work Orders", "ALL WORK ORDERS REPORT", headers, rows,
+                                (row, col) => col === 5 ? statusColours[String(row[4]).toLowerCase()] : undefined,
+                            );
+                        } else {
+                            await exportGenericPdf("ALL WORK ORDERS REPORT", headers, rows.map(r => r.map(String)),
+                                `Work_Orders_${new Date().toISOString().split("T")[0]}.pdf`);
+                        }
+                    },
+                },
+            ],
+        },
+
+        // ── WORKSHOP: Incidents ──────────────────────────────────────────────
+        {
+            title: "Incidents & Accidents",
+            icon: AlertTriangle,
+            description: "Incident reports, severity, and resolution tracking",
+            badge: "Workshop",
+            reports: [
+                {
+                    id: "incidents-all",
+                    label: "All Incidents",
+                    description: "Complete incident register with type, severity, and status",
+                    formats: ["excel", "pdf"],
+                    onExport: async (fmt) => {
+                        const incidents = await fetchIncidents();
+                        const headers = ["Incident #", "Date", "Type", "Location", "Severity", "Status", "Driver", "Vehicle", "Reported By"];
+                        const rows = incidents.map((i: Record<string, unknown>) => [
+                            (i.incident_number as string) || (i.id as string)?.slice(0, 8),
+                            i.incident_date ? new Date(i.incident_date as string).toLocaleDateString() : "-",
+                            (i.incident_type as string) || "-",
+                            (i.location as string) || "-",
+                            i.severity_rating != null ? String(i.severity_rating) : "-",
+                            (i.status as string) || "-",
+                            (i.driver_name as string) || "-",
+                            (i.vehicle_number as string) || "-",
+                            (i.reported_by as string) || "-",
+                        ]);
+                        if (fmt === "excel") {
+                            await exportGenericExcel(
+                                `Incidents_${new Date().toISOString().split("T")[0]}.xlsx`,
+                                "Incidents", "ALL INCIDENTS REPORT", headers, rows,
+                                (row, col) => col === 6 ? statusColours[String(row[5]).toLowerCase()] : undefined,
+                            );
+                        } else {
+                            await exportGenericPdf("ALL INCIDENTS REPORT", headers, rows.map(r => r.map(String)),
+                                `Incidents_${new Date().toISOString().split("T")[0]}.pdf`);
                         }
                     },
                 },
@@ -478,17 +784,17 @@ const Reports = () => {
                     onExport: async (fmt) => {
                         const trips = await fetchTrips();
                         const headers = ["Trip #", "Fleet", "Driver", "Origin", "Destination", "Status", "Start Date", "End Date", "Base Revenue", "Actual Cost"];
-                        const rows = (trips as any[]).map((t) => [
+                        const rows = trips.map((t: Trip) => [
                             t.trip_number || t.id?.slice(0, 8),
-                            t.fleet_number || "-",
+                            t.fleet_vehicle_id?.slice(0, 8) || "-",
                             t.driver_name || "-",
                             t.origin || "-",
                             t.destination || "-",
                             t.status || "-",
-                            t.start_date ? new Date(t.start_date).toLocaleDateString() : "-",
-                            t.end_date ? new Date(t.end_date).toLocaleDateString() : "-",
+                            (t.departure_date || t.planned_departure_date) ? new Date((t.departure_date || t.planned_departure_date)!).toLocaleDateString() : "-",
+                            (t.arrival_date || t.planned_arrival_date) ? new Date((t.arrival_date || t.planned_arrival_date)!).toLocaleDateString() : "-",
                             t.base_revenue != null ? Number(t.base_revenue).toFixed(2) : "0.00",
-                            t.actual_cost != null ? Number(t.actual_cost).toFixed(2) : "0.00",
+                            t.distance_km != null && t.rate_per_km != null ? Number(Number(t.distance_km) * Number(t.rate_per_km)).toFixed(2) : "-",
                         ]);
                         if (fmt === "excel") {
                             const wb = createWorkbook();
@@ -497,8 +803,8 @@ const Reports = () => {
                                 headers, rows,
                                 cellStyler: (row, col) => col === 6 ? statusColours[String(row[5]).toLowerCase()] : undefined,
                             });
-                            const totalRevenue = (trips as any[]).reduce((s, t) => s + (Number(t.base_revenue) || 0), 0);
-                            const totalCost = (trips as any[]).reduce((s, t) => s + (Number(t.actual_cost) || 0), 0);
+                            const totalRevenue = trips.reduce((s, t) => s + (Number(t.base_revenue) || 0), 0);
+                            const totalCost = trips.reduce((s, t) => s + (Number(t.final_invoice_amount) || 0), 0);
                             addSummarySheet(wb, "Summary", {
                                 title: "TRIPS SUMMARY",
                                 rows: [
@@ -531,7 +837,7 @@ const Reports = () => {
                     onExport: async (fmt) => {
                         const drivers = await fetchDrivers();
                         const headers = ["Name", "Driver #", "Licence", "Licence Expiry", "Phone", "Status", "Email"];
-                        const rows = (drivers as any[]).map((d) => [
+                        const rows = drivers.map((d: Driver) => [
                             [d.first_name, d.last_name].filter(Boolean).join(" ") || "-",
                             d.driver_number || "-",
                             d.license_number || "-",
@@ -568,7 +874,7 @@ const Reports = () => {
                     onExport: async (fmt) => {
                         const records = await fetchDieselRecords();
                         const headers = ["Date", "Fleet", "Driver", "Station", "Litres", "Cost/L", "Total Cost", "KM Reading", "KM/L"];
-                        const rows = (records as any[]).map((r) => [
+                        const rows = records.map((r: DieselRecord) => [
                             r.date ? new Date(r.date).toLocaleDateString() : "-",
                             r.fleet_number || "-",
                             r.driver_name || "-",
@@ -582,8 +888,8 @@ const Reports = () => {
                         if (fmt === "excel") {
                             const wb = createWorkbook();
                             addStyledSheet(wb, "Diesel Records", { title: "DIESEL CONSUMPTION REPORT", headers, rows });
-                            const totalLitres = (records as any[]).reduce((s, r) => s + (Number(r.litres_filled) || 0), 0);
-                            const totalCost = (records as any[]).reduce((s, r) => s + (Number(r.total_cost) || 0), 0);
+                            const totalLitres = records.reduce((s, r) => s + (Number(r.litres_filled) || 0), 0);
+                            const totalCost = records.reduce((s, r) => s + (Number(r.total_cost) || 0), 0);
                             addSummarySheet(wb, "Summary", {
                                 title: "DIESEL SUMMARY",
                                 rows: [
@@ -616,7 +922,7 @@ const Reports = () => {
                     onExport: async (fmt) => {
                         const entries = await fetchActionLog();
                         const headers = ["Title", "Status", "Priority", "Assigned To", "Due Date", "Created", "Description"];
-                        const rows = (entries as any[]).map((e) => [
+                        const rows = entries.map((e: ActionItem) => [
                             e.title || "-",
                             e.status || "-",
                             e.priority || "-",
@@ -634,6 +940,102 @@ const Reports = () => {
                         } else {
                             await exportGenericPdf("ACTION LOG REPORT", headers, rows.map(r => r.map(String)),
                                 `Action_Log_${new Date().toISOString().split("T")[0]}.pdf`);
+                        }
+                    },
+                },
+            ],
+        },
+
+        // ── OPERATIONS: Invoicing ────────────────────────────────────────────
+        {
+            title: "Invoicing",
+            icon: Receipt,
+            description: "Invoice records, payment tracking, and revenue",
+            badge: "Operations",
+            reports: [
+                {
+                    id: "invoices-all",
+                    label: "All Invoices",
+                    description: "Complete invoice register with amounts, status, and trip details",
+                    formats: ["excel", "pdf"],
+                    onExport: async (fmt) => {
+                        const invoices = await fetchInvoices();
+                        const headers = ["Invoice #", "Trip #", "Driver", "Route", "Date", "Amount", "Status", "Paid At", "Reference"];
+                        const rows = invoices.map((inv: Record<string, unknown>) => {
+                            const trip = inv.trips as Record<string, unknown> | null;
+                            return [
+                                (inv.invoice_number as string) || (inv.id as string)?.slice(0, 8),
+                                (trip?.trip_number as string) || "-",
+                                (trip?.driver_name as string) || "-",
+                                trip ? `${(trip.origin as string) || "?"} → ${(trip.destination as string) || "?"}` : "-",
+                                inv.invoice_date ? new Date(inv.invoice_date as string).toLocaleDateString() : "-",
+                                inv.amount != null ? Number(inv.amount).toFixed(2) : "0.00",
+                                (inv.status as string) || "-",
+                                inv.paid_at ? new Date(inv.paid_at as string).toLocaleDateString() : "-",
+                                (inv.payment_reference as string) || "-",
+                            ];
+                        });
+                        if (fmt === "excel") {
+                            const wb = createWorkbook();
+                            addStyledSheet(wb, "Invoices", {
+                                title: "ALL INVOICES REPORT",
+                                headers, rows,
+                                cellStyler: (row, col) => col === 7 ? statusColours[String(row[6]).toLowerCase()] : undefined,
+                            });
+                            const totalAmount = invoices.reduce((s: number, i: Record<string, unknown>) => s + (Number(i.amount) || 0), 0);
+                            const paidCount = invoices.filter((i: Record<string, unknown>) => i.paid_at).length;
+                            addSummarySheet(wb, "Summary", {
+                                title: "INVOICING SUMMARY",
+                                rows: [
+                                    ["Total Invoices", invoices.length],
+                                    ["Total Amount", `R${totalAmount.toLocaleString()}`],
+                                    ["Paid", paidCount],
+                                    ["Outstanding", invoices.length - paidCount],
+                                ],
+                            });
+                            await saveWorkbook(wb, `Invoices_${new Date().toISOString().split("T")[0]}.xlsx`);
+                        } else {
+                            await exportGenericPdf("ALL INVOICES REPORT", headers, rows.map(r => r.map(String)),
+                                `Invoices_${new Date().toISOString().split("T")[0]}.pdf`);
+                        }
+                    },
+                },
+            ],
+        },
+
+        // ── OPERATIONS: Fuel Bunkers ─────────────────────────────────────────
+        {
+            title: "Fuel Bunkers",
+            icon: Fuel,
+            description: "Fuel bunker levels, capacity, and stock status",
+            badge: "Operations",
+            reports: [
+                {
+                    id: "fuel-bunkers-all",
+                    label: "Fuel Bunker Status",
+                    description: "All fuel bunkers with capacity, current level, and cost",
+                    formats: ["excel", "pdf"],
+                    onExport: async (fmt) => {
+                        const bunkers = await fetchFuelBunkers();
+                        const headers = ["Name", "Fuel Type", "Capacity (L)", "Current Level (L)", "% Full", "Min Alert (L)", "Unit Cost", "Active"];
+                        const rows = bunkers.map((b: Record<string, unknown>) => [
+                            (b.name as string) || "-",
+                            (b.fuel_type as string) || "-",
+                            b.capacity_liters != null ? Number(b.capacity_liters).toLocaleString() : "-",
+                            b.current_level_liters != null ? Number(b.current_level_liters).toLocaleString() : "-",
+                            b.capacity_liters && b.current_level_liters != null ? `${((Number(b.current_level_liters) / Number(b.capacity_liters)) * 100).toFixed(1)}%` : "-",
+                            b.min_level_alert != null ? Number(b.min_level_alert).toLocaleString() : "-",
+                            b.unit_cost != null ? Number(b.unit_cost).toFixed(2) : "-",
+                            b.is_active ? "Yes" : "No",
+                        ]);
+                        if (fmt === "excel") {
+                            await exportGenericExcel(
+                                `Fuel_Bunkers_${new Date().toISOString().split("T")[0]}.xlsx`,
+                                "Fuel Bunkers", "FUEL BUNKER STATUS REPORT", headers, rows,
+                            );
+                        } else {
+                            await exportGenericPdf("FUEL BUNKER STATUS REPORT", headers, rows.map(r => r.map(String)),
+                                `Fuel_Bunkers_${new Date().toISOString().split("T")[0]}.pdf`);
                         }
                     },
                 },
