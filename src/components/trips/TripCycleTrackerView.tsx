@@ -1,9 +1,12 @@
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
+import { generateCycleTrackerPDF } from '@/lib/cycleTrackerPdfExport';
 import {
   CheckCircle,
   Clock,
+  Download,
   MapPin,
   Package,
   Thermometer,
@@ -22,7 +25,7 @@ interface CycleTracker {
   is_completed: boolean;
   created_at: string | null;
   updated_at: string | null;
-  
+
   // Phase 1: Preparation
   p1_inspection_start: string | null;
   p1_inspection_end: string | null;
@@ -78,6 +81,8 @@ interface TransitStop {
 
 interface TripCycleTrackerViewProps {
   tripId: string;
+  tripNumber?: string;
+  route?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -121,7 +126,7 @@ const DELAY_LABELS: Record<string, string> = {
 
 // ─── Component ───────────────────────────────────────────────────────
 
-export default function TripCycleTrackerView({ tripId }: TripCycleTrackerViewProps) {
+export default function TripCycleTrackerView({ tripId, tripNumber, route }: TripCycleTrackerViewProps) {
   const [tracker, setTracker] = useState<CycleTracker | null>(null);
   const [stops, setStops] = useState<TransitStop[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,8 +148,8 @@ export default function TripCycleTrackerView({ tripId }: TripCycleTrackerViewPro
         const transformedData: CycleTracker = {
           ...trackerData,
           // Cast truck_type to the expected union type, defaulting to null if invalid
-          truck_type: (trackerData.truck_type === 'reefer' || trackerData.truck_type === 'flatbed') 
-            ? trackerData.truck_type 
+          truck_type: (trackerData.truck_type === 'reefer' || trackerData.truck_type === 'flatbed')
+            ? trackerData.truck_type
             : null,
         };
         setTracker(transformedData);
@@ -221,13 +226,23 @@ export default function TripCycleTrackerView({ tripId }: TripCycleTrackerViewPro
               <Clock className="w-5 h-5" />
               360° Transport Time Tracker
             </span>
-            <Badge variant={tracker.is_completed ? 'default' : 'secondary'}>
-              {tracker.is_completed ? (
-                <><CheckCircle className="w-3 h-3 mr-1" /> Completed</>
-              ) : (
-                `Phase ${tracker.current_phase}/6`
-              )}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => generateCycleTrackerPDF(tracker, stops, tripNumber || 'Unknown', route)}
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Export PDF
+              </Button>
+              <Badge variant={tracker.is_completed ? 'default' : 'secondary'}>
+                {tracker.is_completed ? (
+                  <><CheckCircle className="w-3 h-3 mr-1" /> Completed</>
+                ) : (
+                  `Phase ${tracker.current_phase}/6`
+                )}
+              </Badge>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -257,13 +272,12 @@ export default function TripCycleTrackerView({ tripId }: TripCycleTrackerViewPro
               return (
                 <div
                   key={phase}
-                  className={`flex-1 h-2 rounded-full ${
-                    status === 'completed'
-                      ? 'bg-emerald-500'
-                      : status === 'in-progress'
+                  className={`flex-1 h-2 rounded-full ${status === 'completed'
+                    ? 'bg-emerald-500'
+                    : status === 'in-progress'
                       ? 'bg-blue-500'
                       : 'bg-muted'
-                  }`}
+                    }`}
                 />
               );
             })}
@@ -366,7 +380,7 @@ export default function TripCycleTrackerView({ tripId }: TripCycleTrackerViewPro
                   <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Time In</th>
                   <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Time Out</th>
                   <th className="text-right py-2 font-medium text-muted-foreground">Duration</th>
-                 </tr>
+                </tr>
               </thead>
               <tbody>
                 {stops.map((stop) => (
@@ -519,13 +533,12 @@ function PhaseCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
           <span
-            className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${
-              status === 'completed'
-                ? 'bg-emerald-100 text-emerald-700'
-                : status === 'in-progress'
+            className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${status === 'completed'
+              ? 'bg-emerald-100 text-emerald-700'
+              : status === 'in-progress'
                 ? 'bg-blue-100 text-blue-700'
                 : 'bg-muted text-muted-foreground'
-            }`}
+              }`}
           >
             {status === 'completed' ? <CheckCircle className="w-3.5 h-3.5" /> : phase}
           </span>

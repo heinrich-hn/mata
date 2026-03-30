@@ -430,67 +430,77 @@ export function LoadsTable({
                           const destPlannedDep = times.destination?.plannedDeparture;
 
                           return (
-                            <div className="flex items-center gap-2">
-                              <div className="flex flex-col items-center">
-                                <div className="flex items-center gap-1 px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800">
-                                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                                  <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                                    {loadingDate ? format(loadingDate, "dd MMM") : "Invalid"}
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <div className="flex flex-col items-center">
+                                  <div className="flex items-center gap-1 px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800">
+                                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                                    <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                                      {loadingDate ? format(loadingDate, "dd MMM") : "Invalid"}
+                                    </span>
+                                  </div>
+                                  {originPlannedArr || originPlannedDep ? (
+                                    <div className="flex flex-col items-center mt-0.5">
+                                      {originPlannedArr && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          Arr {originPlannedArr}
+                                        </span>
+                                      )}
+                                      {originPlannedDep && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          Dep {originPlannedDep}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-muted-foreground mt-0.5">
+                                      No time set
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-col items-center px-1">
+                                  <div className="w-6 h-0.5 bg-gradient-to-r from-green-400 to-blue-400 rounded" />
+                                  <span className="text-[9px] text-muted-foreground">
+                                    →
                                   </span>
                                 </div>
-                                {originPlannedArr || originPlannedDep ? (
-                                  <div className="flex flex-col items-center mt-0.5">
-                                    {originPlannedArr && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        Arr {originPlannedArr}
-                                      </span>
-                                    )}
-                                    {originPlannedDep && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        Dep {originPlannedDep}
-                                      </span>
-                                    )}
+
+                                <div className="flex flex-col items-center">
+                                  <div className="flex items-center gap-1 px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
+                                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                                    <span className="text-xs font-medium text-blue-700 dark:text-blue-400">
+                                      {offloadingDate ? format(offloadingDate, "dd MMM") : "Invalid"}
+                                    </span>
                                   </div>
-                                ) : (
-                                  <span className="text-[10px] text-muted-foreground mt-0.5">
-                                    No time set
-                                  </span>
-                                )}
+                                  {destPlannedArr || destPlannedDep ? (
+                                    <div className="flex flex-col items-center mt-0.5">
+                                      {destPlannedArr && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          Arr {destPlannedArr}
+                                        </span>
+                                      )}
+                                      {destPlannedDep && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          Dep {destPlannedDep}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-muted-foreground mt-0.5">
+                                      No time set
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-
-                              <div className="flex flex-col items-center px-1">
-                                <div className="w-6 h-0.5 bg-gradient-to-r from-green-400 to-blue-400 rounded" />
-                                <span className="text-[9px] text-muted-foreground">
-                                  →
-                                </span>
-                              </div>
-
-                              <div className="flex flex-col items-center">
-                                <div className="flex items-center gap-1 px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
-                                  <div className="w-2 h-2 rounded-full bg-blue-500" />
-                                  <span className="text-xs font-medium text-blue-700 dark:text-blue-400">
-                                    {offloadingDate ? format(offloadingDate, "dd MMM") : "Invalid"}
+                              {times.varianceReason && (
+                                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50">
+                                  <AlertTriangle className="h-3 w-3 text-red-500 flex-shrink-0" />
+                                  <span className="text-[10px] text-red-700 dark:text-red-300 truncate max-w-[200px]" title={times.varianceReason}>
+                                    {times.varianceReason}
                                   </span>
                                 </div>
-                                {destPlannedArr || destPlannedDep ? (
-                                  <div className="flex flex-col items-center mt-0.5">
-                                    {destPlannedArr && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        Arr {destPlannedArr}
-                                      </span>
-                                    )}
-                                    {destPlannedDep && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        Dep {destPlannedDep}
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-muted-foreground mt-0.5">
-                                    No time set
-                                  </span>
-                                )}
-                              </div>
+                              )}
                             </div>
                           );
                         })()}

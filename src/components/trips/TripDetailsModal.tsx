@@ -7,18 +7,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { CostEntry } from '@/types/operations';
-import
-  {
-    AlertTriangle,
-    Calendar,
-    CheckCircle,
-    DollarSign,
-    Edit,
-    Gauge,
-    MapPin,
-    Truck,
-    User
-  } from 'lucide-react';
+import {
+AlertTriangle,
+Calendar,
+CheckCircle,
+DollarSign,
+Edit,
+Gauge,
+MapPin,
+Truck,
+User
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import EditTripDialog from './EditTripDialog';
 import FlagResolutionModal from './FlagResolutionModal';
@@ -169,7 +168,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
     if (trip && isOpen) {
       fetchCosts();
     }
-  }, [trip, isOpen, fetchCosts]);  const handleCompleteTrip = async () => {
+  }, [trip, isOpen, fetchCosts]); const handleCompleteTrip = async () => {
     if (!trip) return;
 
     // Check for unresolved flags
@@ -466,7 +465,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
             </TabsContent>
 
             <TabsContent value="cycle-tracker" className="space-y-4">
-              <TripCycleTrackerView tripId={trip.id} />
+              <TripCycleTrackerView tripId={trip.id} tripNumber={trip.trip_number} route={trip.route} />
             </TabsContent>
           </Tabs>
         </DialogContent>

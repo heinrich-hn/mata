@@ -28,6 +28,7 @@ export interface ThirdPartyInfo {
 export interface TimeWindowDataFull extends TimeWindowData {
   backload: BackloadInfo | null;  // Make it explicitly non-optional
   thirdParty?: ThirdPartyInfo | null;
+  varianceReason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +80,7 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
         ? (data.backload as BackloadInfo)
         : null,
       thirdParty: data.thirdParty || null,
+      varianceReason: typeof data.varianceReason === 'string' ? data.varianceReason : undefined,
     };
   } catch {
     return {
@@ -86,6 +88,7 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
       destination: { ...emptySection },
       backload: null,
       thirdParty: null,
+      varianceReason: undefined,
     };
   }
 }

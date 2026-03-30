@@ -23,7 +23,6 @@ import {
     SelectContent,
     SelectItem,
     SelectTrigger,
-    SelectValue,
 } from "@/components/ui/select";
 import {
     Table,
@@ -232,7 +231,7 @@ export function BreakdownsTable() {
                                                     <SelectTrigger className="h-8 w-[160px]">
                                                         <div className="flex items-center gap-1.5">
                                                             {getStatusIcon(bd.status)}
-                                                            <SelectValue />
+                                                            <span>{getStatusLabel(bd.status)}</span>
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>

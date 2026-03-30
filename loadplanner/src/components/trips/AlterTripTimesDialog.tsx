@@ -186,7 +186,7 @@ export function AlterLoadTimesDialog({ open, onOpenChange, load }: { open: boole
     }
 
     // Exclude variance_reason from the DB payload — it's stored inside time_window JSON, not as a column
-    const { variance_reason, ...dbFields } = values;
+    const { variance_reason: _variance_reason, ...dbFields } = values;
 
     updateTimes.mutate({
       id: load.id,

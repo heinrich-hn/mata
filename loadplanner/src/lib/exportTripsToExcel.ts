@@ -130,6 +130,7 @@ export function exportLoadsToExcel(
         "Backload Offloading Date": timeWindow.backload?.offloadingDate || "",
         "Backload Quantities": backloadQuantities,
         "Backload Notes": timeWindow.backload?.notes || "",
+        "Variance Reason": timeWindow.varianceReason || "",
       },
       variances: { oArrVar, oDepVar, dArrVar, dDepVar },
     };
@@ -206,6 +207,7 @@ export function exportLoadsToExcel(
     { wch: 18 }, // Backload Offloading Date
     { wch: 25 }, // Backload Quantities
     { wch: 40 }, // Backload Notes
+    { wch: 40 }, // Variance Reason
   ];
   worksheet["!cols"] = columnWidths;
 
@@ -224,6 +226,10 @@ export function exportLoadsToExcel(
 
   const summaryData = [
     { Metric: "Total Loads", Value: loads.length },
+    {
+      Metric: "Week Start",
+      Value: format(startOfWeek(new Date(), { weekStartsOn: 1 }), "dd/MM/yyyy"),
+    },
     {
       Metric: "Scheduled",
       Value: loads.filter((l) => l.status === "scheduled").length,
@@ -263,6 +269,15 @@ export function exportLoadsToExcel(
       Value: loadsWithPlannedBackloads,
     },
     { Metric: "", Value: "" },
+    {
+      Metric: "Date Span (Days)",
+      Value: loads.length > 0
+        ? differenceInDays(
+          parseISO(loads[loads.length - 1].offloading_date),
+          parseISO(loads[0].loading_date),
+        ) + 1
+        : 0,
+    },
     {
       Metric: "Report Generated",
       Value: format(new Date(), "dd/MM/yyyy HH:mm"),

@@ -151,7 +151,8 @@ export function useCreateLoad() {
     mutationFn: async (load: LoadInsert) => {
       const { data, error } = await supabase
         .from('loads')
-        .insert(load)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert(load as any)
         .select()
         .single();
 
@@ -184,7 +185,8 @@ export function useUpdateLoad() {
 
       const { data, error } = await supabase
         .from('loads')
-        .update(updates)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .update(updates as any)
         .eq('id', id)
         .select()
         .single();
@@ -278,7 +280,8 @@ export function useUpdateLoadTimes() {
     }) => {
       const { data, error } = await supabase
         .from('loads')
-        .update(times)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .update(times as any)
         .eq('id', id)
         .select()
         .single();

@@ -803,26 +803,11 @@ export function EditLoadDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {(selectedCargoType === "Export"
-                            ? loadFormConfig.exportDestinations
-                            : loadFormConfig.destinations
-                          ).map((dest) => (
+                          {availableDestinations.map((dest) => (
                             <SelectItem key={dest} value={dest}>
                               {dest}
                             </SelectItem>
                           ))}
-                          {customDestinations.length > 0 && (
-                            <>
-                              <SelectItem disabled value="__custom_dest_divider__">
-                                <span className="text-xs text-muted-foreground">── Custom Locations ──</span>
-                              </SelectItem>
-                              {customDestinations.map((name) => (
-                                <SelectItem key={name} value={name}>
-                                  ★ {name}
-                                </SelectItem>
-                              ))}
-                            </>
-                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />

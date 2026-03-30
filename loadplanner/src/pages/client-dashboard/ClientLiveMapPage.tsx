@@ -275,11 +275,10 @@ export default function ClientLiveMapPage() {
     });
   }, [loads, telematicsAssets]);
 
-  const trackableStatuses = new Set(['scheduled', 'in-transit']);
-  const inTransitMatchedLoads = useMemo(
-    () => matchedLoads.filter(({ load }) => trackableStatuses.has(load.status)),
-    [matchedLoads]
-  );
+  const inTransitMatchedLoads = useMemo(() => {
+    const trackableStatuses = new Set(['scheduled', 'in-transit']);
+    return matchedLoads.filter(({ load }) => trackableStatuses.has(load.status));
+  }, [matchedLoads]);
 
   const relevantDepots = useMemo(() => {
     const depotNames = new Set<string>();
