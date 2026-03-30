@@ -378,18 +378,19 @@ export function InspectionHistory() {
               <TableHead className="text-center">Fault</TableHead>
               <TableHead className="text-center">Corrective Action</TableHead>
               <TableHead>Linked WO</TableHead>
+              <TableHead className="text-center">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   Loading inspections...
                 </TableCell>
               </TableRow>
             ) : filteredInspections.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   No inspections found
                 </TableCell>
               </TableRow>
@@ -475,12 +476,23 @@ export function InspectionHistory() {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
+                    <TableCell className="text-center">
+                      {inspection.status === "completed" ? (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          Completed
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                          Incomplete
+                        </Badge>
+                      )}
+                    </TableCell>
                   </TableRow>
 
                   {/* Expandable details row */}
                   {inspection.inspection_type && (
                     <TableRow className="bg-muted/30">
-                      <TableCell colSpan={9} className="py-2">
+                      <TableCell colSpan={10} className="py-2">
                         <div className="flex items-center gap-4 text-sm">
                           <div className="flex items-center gap-2">
                             <span className="font-medium">Inspection Checklist:</span>

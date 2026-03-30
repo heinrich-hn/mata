@@ -63,20 +63,20 @@ export async function generateInspectionPDF(
   doc.setFont(undefined, 'bold');
   doc.text('Inspection Number:', leftColX, detailsStartY);
   doc.setFont(undefined, 'normal');
-  doc.text(inspection.inspection_number, leftColX + 45, detailsStartY);
+  doc.text(inspection.inspection_number || '-', leftColX + 45, detailsStartY);
 
   doc.setFont(undefined, 'bold');
   doc.text('Vehicle:', leftColX, detailsStartY + 8);
   doc.setFont(undefined, 'normal');
   const vehicleInfo = inspection.vehicle_make && inspection.vehicle_model
-    ? `${inspection.vehicle_registration} (${inspection.vehicle_make} ${inspection.vehicle_model})`
-    : inspection.vehicle_registration;
+    ? `${inspection.vehicle_registration || '-'} (${inspection.vehicle_make} ${inspection.vehicle_model})`
+    : (inspection.vehicle_registration || '-');
   doc.text(vehicleInfo, leftColX + 45, detailsStartY + 8);
 
   doc.setFont(undefined, 'bold');
   doc.text('Inspector:', leftColX, detailsStartY + 16);
   doc.setFont(undefined, 'normal');
-  doc.text(inspection.inspector_name, leftColX + 45, detailsStartY + 16);
+  doc.text(inspection.inspector_name || '-', leftColX + 45, detailsStartY + 16);
 
   // Right column
   doc.setFont(undefined, 'bold');
@@ -92,7 +92,7 @@ export async function generateInspectionPDF(
   doc.setFont(undefined, 'bold');
   doc.text('Status:', rightColX, detailsStartY + 16);
   doc.setFont(undefined, 'normal');
-  doc.text(inspection.status.toUpperCase(), rightColX + 30, detailsStartY + 16);
+  doc.text((inspection.status || 'unknown').toUpperCase(), rightColX + 30, detailsStartY + 16);
 
   // Fault summary
   doc.setFont(undefined, 'bold');
@@ -126,8 +126,8 @@ export async function generateInspectionPDF(
 
     // Prepare table data
     const tableData = items.map(item => [
-      item.item_name,
-      item.status.toUpperCase(),
+      item.item_name || '-',
+      (item.status || 'unknown').toUpperCase(),
       item.severity || '-',
       item.notes || '-'
     ]);
@@ -209,12 +209,12 @@ export async function generateBatchInspectionPDF(
 
   // Summary table
   const tableData = inspections.map(insp => [
-    insp.inspection_number,
-    new Date(insp.inspection_date).toLocaleDateString(),
-    insp.vehicle_registration,
-    insp.inspector_name,
-    insp.fault_count.toString(),
-    insp.status.toUpperCase(),
+    insp.inspection_number || '-',
+    insp.inspection_date ? new Date(insp.inspection_date).toLocaleDateString() : '-',
+    insp.vehicle_registration || '-',
+    insp.inspector_name || '-',
+    (insp.fault_count ?? 0).toString(),
+    (insp.status || 'unknown').toUpperCase(),
   ]);
 
   autoTable(doc, {

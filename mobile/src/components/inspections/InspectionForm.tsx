@@ -1,6 +1,18 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,9 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { usePromoteToVehicleFault } from "@/hooks/usePromoteToVehicleFault";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, AlertTriangle, CheckCircle2, CheckSquare, CircleDashed, XCircle } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { InspectionFaultDialog } from "../dialogs/InspectionFaultDialog";
+import { AlertCircle, Camera, CheckCircle2, CheckSquare, CircleDashed, Loader2, ShieldAlert, XCircle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface InspectionFormProps {
   inspectionId: string;
@@ -42,8 +53,11 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { promoteToVehicleFault } = usePromoteToVehicleFault();
-  const [selectedItemForFault, setSelectedItemForFault] = useState<InspectionItem | null>(null);
-  const [showFaultDialog, setShowFaultDialog] = useState(false);
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [showCompletionConfirm, setShowCompletionConfirm] = useState(false);
+  const [safeToOperate, setSafeToOperate] = useState<string | null>(null);
+  const [completionNotes, setCompletionNotes] = useState("");
 
   // Fetch the inspection record for vehicle_id and inspector_name (needed for auto-fault logging)
   const { data: inspectionRecord } = useQuery({
@@ -65,13 +79,17 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
   const autoLogFault = useCallback(
     async (item: InspectionItem) => {
       try {
+        const description = item.notes
+          ? `${item.item_name} — failed inspection: ${item.notes}`
+          : `${item.item_name} — failed inspection`;
+
         // Create inspection_faults record
         const { data: inspectionFault, error: faultError } = await supabase
           .from("inspection_faults")
           .insert({
             inspection_id: inspectionId,
             inspection_item_id: item.id,
-            fault_description: `${item.item_name} — failed inspection`,
+            fault_description: description,
             severity: "medium" as const,
             corrective_action_status: "pending",
             requires_immediate_attention: false,
@@ -93,7 +111,7 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
             inspectionFaultId: inspectionFault.id,
             inspectionId,
             vehicleId: inspectionRecord.vehicle_id,
-            faultDescription: `${item.item_name} — failed inspection`,
+            faultDescription: description,
             severity: "medium",
             reportedBy: inspectionRecord.inspector_name || "Inspector",
             faultCategory: "inspection",
@@ -114,6 +132,55 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
       }
     },
     [inspectionId, inspectionRecord, promoteToVehicleFault, queryClient, toast]
+  );
+
+  // Upload photo for an inspection item
+  const handlePhotoUpload = useCallback(
+    async (itemId: string, itemName: string, file: File) => {
+      if (!file.type.startsWith("image/")) {
+        toast({ title: "Invalid File", description: "Please select an image file", variant: "destructive" });
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "File Too Large", description: "Image must be less than 5MB", variant: "destructive" });
+        return;
+      }
+
+      setUploadingItemId(itemId);
+      try {
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${inspectionId}/${itemId}/${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("inspection-photos")
+          .upload(fileName, file);
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from("inspection-photos")
+          .getPublicUrl(fileName);
+
+        const { error: dbError } = await supabase
+          .from("inspection_photos")
+          .insert({
+            inspection_id: inspectionId,
+            inspection_item_id: itemId,
+            photo_url: publicUrl,
+            photo_type: "inspection",
+            caption: `Photo for ${itemName}`,
+            file_size: file.size,
+          });
+        if (dbError) throw dbError;
+
+        toast({ title: "Photo Uploaded", description: "Photo has been attached to this item" });
+      } catch (error) {
+        console.error("Photo upload error:", error);
+        toast({ title: "Upload Failed", description: "Failed to upload photo", variant: "destructive" });
+      } finally {
+        setUploadingItemId(null);
+      }
+    },
+    [inspectionId, toast]
   );
 
   // First, fetch the template to get the template_code
@@ -251,10 +318,22 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
 
   // Complete inspection mutation
   const completeInspection = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (params?: { safeToOperate?: boolean; notes?: string }) => {
+      const updateData: Record<string, unknown> = {
+        status: "completed",
+        updated_at: new Date().toISOString(),
+      };
+
+      if (params?.safeToOperate !== undefined) {
+        updateData.safe_to_operate = params.safeToOperate;
+      }
+      if (params?.notes) {
+        updateData.notes = params.notes;
+      }
+
       const { error } = await supabase
         .from("vehicle_inspections")
-        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq("id", inspectionId);
 
       if (error) throw error;
@@ -296,6 +375,16 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
 
   const incompletedItems = inspectionItems.filter((item) => !item.status);
   const failedItems = inspectionItems.filter((item) => item.status === "fail");
+  const attentionItems = inspectionItems.filter((item) => item.status === "attention");
+  const hasFaults = failedItems.length > 0 || attentionItems.length > 0;
+
+  const handleCompleteClick = () => {
+    if (hasFaults) {
+      setShowCompletionConfirm(true);
+    } else {
+      completeInspection.mutate({});
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -332,7 +421,7 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
 
           {incompletedItems.length === 0 && inspectionItems.length > 0 && (
             <div className="mt-4 flex justify-end md:relative fixed bottom-0 left-0 right-0 md:p-0 p-4 bg-background md:bg-transparent border-t md:border-0 z-10">
-              <Button onClick={() => completeInspection.mutate()} size="lg" className="gap-2 w-full md:w-auto min-h-[48px]">
+              <Button onClick={handleCompleteClick} size="lg" className="gap-2 w-full md:w-auto min-h-[48px]">
                 <CheckSquare className="h-5 w-5" />
                 Mark Inspection Complete
               </Button>
@@ -378,73 +467,88 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
                     .filter((item) => item.category === cat.id)
                     .map((item) => (
                       <div key={item.id} className="border rounded-lg p-3 space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <h4 className="font-medium leading-snug min-w-0 flex-1">{item.item_name}</h4>
-                            <div className="shrink-0">{getStatusIcon(item.status)}</div>
-                          </div>
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-medium leading-snug min-w-0 flex-1">{item.item_name}</h4>
+                          <div className="shrink-0">{getStatusIcon(item.status)}</div>
+                        </div>
 
-                            <div className="grid grid-cols-4 gap-1.5">
+                        <div className="grid grid-cols-4 gap-1.5">
+                          <Button
+                            variant={item.status === "pass" ? "default" : "outline"}
+                            className={`h-14 flex flex-col items-center justify-center gap-0.5 p-1 text-xs ${item.status === "pass" ? "bg-green-600 hover:bg-green-700" : ""}`}
+                            onClick={() => updateStatus.mutate({ itemId: item.id, status: "pass" })}
+                          >
+                            <CheckCircle2 className="h-5 w-5" />
+                            <span>Pass</span>
+                          </Button>
+                          <Button
+                            variant={item.status === "fail" ? "destructive" : "outline"}
+                            className="h-14 flex flex-col items-center justify-center gap-0.5 p-1 text-xs"
+                            onClick={() => updateStatus.mutate({ itemId: item.id, status: "fail" })}
+                          >
+                            <XCircle className="h-5 w-5" />
+                            <span>Fail</span>
+                          </Button>
+                          <Button
+                            variant={item.status === "attention" ? "default" : "outline"}
+                            className={`h-14 flex flex-col items-center justify-center gap-0.5 p-1 text-xs ${item.status === "attention" ? "bg-yellow-600 hover:bg-yellow-700" : ""}`}
+                            onClick={() => updateStatus.mutate({ itemId: item.id, status: "attention" })}
+                          >
+                            <AlertCircle className="h-5 w-5" />
+                            <span>Attn</span>
+                          </Button>
+                          <Button
+                            variant={item.status === "not_applicable" ? "secondary" : "outline"}
+                            className="h-14 flex flex-col items-center justify-center gap-0.5 p-1 text-xs"
+                            onClick={() => updateStatus.mutate({ itemId: item.id, status: "not_applicable" })}
+                          >
+                            <CircleDashed className="h-5 w-5" />
+                            <span>N/A</span>
+                          </Button>
+                        </div>
+
+                        {(item.status === "fail" || item.status === "attention") && (
+                          <div className="space-y-2 pt-1">
+                            <Textarea
+                              placeholder="Add notes or describe the issue..."
+                              value={item.notes || ""}
+                              onChange={(e) => {
+                                const updatedItems = inspectionItems.map((i) =>
+                                  i.id === item.id ? { ...i, notes: e.target.value } : i
+                                );
+                                queryClient.setQueryData(["inspection_items", inspectionId], updatedItems);
+                              }}
+                              onBlur={(e) => updateNotes.mutate({ itemId: item.id, notes: e.target.value })}
+                              rows={2}
+                            />
+                            <div>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                ref={(el) => { fileInputRefs.current[item.id] = el; }}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handlePhotoUpload(item.id, item.item_name, file);
+                                  e.target.value = "";
+                                }}
+                              />
                               <Button
-                                variant={item.status === "pass" ? "default" : "outline"}
-                                className={`h-14 flex flex-col items-center justify-center gap-0.5 p-1 text-xs ${item.status === "pass" ? "bg-green-600 hover:bg-green-700" : ""}`}
-                                onClick={() => updateStatus.mutate({ itemId: item.id, status: "pass" })}
+                                variant="outline"
+                                className="gap-2 min-h-[44px] w-full"
+                                disabled={uploadingItemId === item.id}
+                                onClick={() => fileInputRefs.current[item.id]?.click()}
                               >
-                                <CheckCircle2 className="h-5 w-5" />
-                                <span>Pass</span>
-                              </Button>
-                              <Button
-                                variant={item.status === "fail" ? "destructive" : "outline"}
-                                className="h-14 flex flex-col items-center justify-center gap-0.5 p-1 text-xs"
-                                onClick={() => updateStatus.mutate({ itemId: item.id, status: "fail" })}
-                              >
-                                <XCircle className="h-5 w-5" />
-                                <span>Fail</span>
-                              </Button>
-                              <Button
-                                variant={item.status === "attention" ? "default" : "outline"}
-                                className={`h-14 flex flex-col items-center justify-center gap-0.5 p-1 text-xs ${item.status === "attention" ? "bg-yellow-600 hover:bg-yellow-700" : ""}`}
-                                onClick={() => updateStatus.mutate({ itemId: item.id, status: "attention" })}
-                              >
-                                <AlertCircle className="h-5 w-5" />
-                                <span>Attn</span>
-                              </Button>
-                              <Button
-                                variant={item.status === "not_applicable" ? "secondary" : "outline"}
-                                className="h-14 flex flex-col items-center justify-center gap-0.5 p-1 text-xs"
-                                onClick={() => updateStatus.mutate({ itemId: item.id, status: "not_applicable" })}
-                              >
-                                <CircleDashed className="h-5 w-5" />
-                                <span>N/A</span>
+                                {uploadingItemId === item.id ? (
+                                  <><Loader2 className="h-4 w-4 animate-spin" /> Uploading...</>
+                                ) : (
+                                  <><Camera className="h-4 w-4" /> Add Photo</>
+                                )}
                               </Button>
                             </div>
-
-                            {(item.status === "fail" || item.status === "attention") && (
-                              <div className="space-y-2 pt-1">
-                                <Textarea
-                                  placeholder="Add notes or describe the issue..."
-                                  value={item.notes || ""}
-                                  onChange={(e) => {
-                                    const updatedItems = inspectionItems.map((i) =>
-                                      i.id === item.id ? { ...i, notes: e.target.value } : i
-                                    );
-                                    queryClient.setQueryData(["inspection_items", inspectionId], updatedItems);
-                                  }}
-                                  onBlur={(e) => updateNotes.mutate({ itemId: item.id, notes: e.target.value })}
-                                  rows={2}
-                                />
-                                <Button
-                                  variant="outline"
-                                  className="gap-2 min-h-[44px] w-full"
-                                  onClick={() => {
-                                    setSelectedItemForFault(item);
-                                    setShowFaultDialog(true);
-                                  }}
-                                >
-                                  <AlertTriangle className="h-4 w-4" />
-                                  Log Detailed Fault
-                                </Button>
-                              </div>
-                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                 </TabsContent>
@@ -454,20 +558,80 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
         </CardContent>
       </Card>
 
-      {/* Fault Dialog */}
-      {selectedItemForFault && (
-        <InspectionFaultDialog
-          open={showFaultDialog}
-          onOpenChange={setShowFaultDialog}
-          inspectionId={inspectionId}
-          inspectionItemId={selectedItemForFault.id}
-          itemName={selectedItemForFault.item_name}
-          onFaultAdded={() => {
-            refetch();
-            setShowFaultDialog(false);
-          }}
-        />
-      )}
+      {/* Completion Confirmation Dialog (shown when faults exist) */}
+      <AlertDialog open={showCompletionConfirm} onOpenChange={setShowCompletionConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+              Review Before Completing
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>This inspection has items that need attention:</p>
+                <div className="space-y-1">
+                  {failedItems.length > 0 && (
+                    <p className="text-destructive font-medium">
+                      • {failedItems.length} failed item(s)
+                    </p>
+                  )}
+                  {attentionItems.length > 0 && (
+                    <p className="text-yellow-600 font-medium">
+                      • {attentionItems.length} item(s) needing attention
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <Label className="font-medium text-foreground">Is the vehicle safe to operate?</Label>
+                  <RadioGroup value={safeToOperate || ""} onValueChange={setSafeToOperate}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="yes" id="mobile-safe-yes" />
+                      <Label htmlFor="mobile-safe-yes">Yes — safe to operate with noted issues</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="no" id="mobile-safe-no" />
+                      <Label htmlFor="mobile-safe-no">No — vehicle should not operate</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <Label className="font-medium text-foreground">Additional Notes (optional)</Label>
+                  <Textarea
+                    placeholder="Add any notes about the inspection findings..."
+                    value={completionNotes}
+                    onChange={(e) => setCompletionNotes(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setSafeToOperate(null);
+              setCompletionNotes("");
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!safeToOperate}
+              onClick={() => {
+                completeInspection.mutate({
+                  safeToOperate: safeToOperate === "yes",
+                  notes: completionNotes || undefined,
+                });
+                setShowCompletionConfirm(false);
+                setSafeToOperate(null);
+                setCompletionNotes("");
+              }}
+            >
+              Complete Inspection
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,24 +1,24 @@
 import {
-AlertDialog,
-AlertDialogAction,
-AlertDialogCancel,
-AlertDialogContent,
-AlertDialogDescription,
-AlertDialogFooter,
-AlertDialogHeader,
-AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-Table,
-TableBody,
-TableCell,
-TableHead,
-TableHeader,
-TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +60,14 @@ interface FaultDetail {
   corrective_action_notes: string | null;
 }
 
+interface FailedInspectionItem {
+  id: string;
+  item_name: string;
+  category: string;
+  status: string;
+  notes: string | null;
+}
+
 export function InspectionHistory() {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -75,6 +83,7 @@ export function InspectionHistory() {
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showFaultDetails, setShowFaultDetails] = useState(false);
   const [selectedFaults, setSelectedFaults] = useState<FaultDetail[]>([]);
+  const [selectedFailedItems, setSelectedFailedItems] = useState<FailedInspectionItem[]>([]);
   const [faultsForCorrectiveAction, setFaultsForCorrectiveAction] = useState<Array<{
     id: string;
     fault_description: string;
@@ -214,10 +223,17 @@ export function InspectionHistory() {
       .select("fault_description, severity, corrective_action_status, corrective_action_notes")
       .eq("inspection_id", inspection.id);
 
-    if (error) {
+    // Fetch inspection items that failed or need attention
+    const { data: items, error: itemsError } = await supabase
+      .from("inspection_items")
+      .select("id, item_name, category, status, notes")
+      .eq("inspection_id", inspection.id)
+      .in("status", ["fail", "attention"]);
+
+    if (error || itemsError) {
       toast({
         title: "Error",
-        description: "Failed to load faults",
+        description: "Failed to load fault details",
         variant: "destructive",
       });
       return;
@@ -231,7 +247,9 @@ export function InspectionHistory() {
       f.fault_description.trim() !== ""
     );
 
-    if (realFaults.length === 0) {
+    const failedItems = (items || []).filter(i => i.status === "fail" || i.status === "attention");
+
+    if (realFaults.length === 0 && failedItems.length === 0) {
       toast({
         title: "No Faults",
         description: "This inspection has no recorded faults",
@@ -240,6 +258,7 @@ export function InspectionHistory() {
     }
 
     setSelectedFaults(realFaults);
+    setSelectedFailedItems(failedItems);
     setShowFaultDetails(true);
   };
 
@@ -299,10 +318,12 @@ export function InspectionHistory() {
         .select("item_name, status, notes")
         .eq("inspection_id", inspection.id);
 
-      // Map items to include optional severity field
+      // Map items with null-safe fields
       const mappedItems = (items || []).map(item => ({
-        ...item,
-        severity: undefined, // Severity not in current schema
+        item_name: item.item_name || '-',
+        status: item.status || 'not_applicable',
+        notes: item.notes || undefined,
+        severity: undefined,
       }));
 
       // Generate the PDF
@@ -664,18 +685,19 @@ export function InspectionHistory() {
                 <TableHead className="text-center">Fault</TableHead>
                 <TableHead className="text-center">Corrective Action</TableHead>
                 <TableHead>Linked WO</TableHead>
+                <TableHead className="text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     Loading inspections...
                   </TableCell>
                 </TableRow>
               ) : filteredInspections.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     No inspections found
                   </TableCell>
                 </TableRow>
@@ -781,12 +803,23 @@ export function InspectionHistory() {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
+                      <TableCell className="text-center">
+                        {inspection.status === "completed" ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            Completed
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                            Incomplete
+                          </Badge>
+                        )}
+                      </TableCell>
                     </TableRow>
 
                     {/* Expandable details row */}
                     {inspection.inspection_type && (
                       <TableRow className="bg-muted/30">
-                        <TableCell colSpan={9} className="py-2">
+                        <TableCell colSpan={10} className="py-2">
                           <div className="flex items-center gap-4 text-sm">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">Inspection Checklist:</span>
@@ -874,30 +907,66 @@ export function InspectionHistory() {
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4 mt-4">
-                {selectedFaults.map((fault, index) => (
-                  <div key={index} className="border rounded-lg p-4 space-y-2">
-                    <div className="flex items-start justify-between">
-                      <p className="font-medium">{fault.fault_description}</p>
-                      <Badge variant={getSeverityVariant(fault.severity)}>
-                        {fault.severity}
-                      </Badge>
-                    </div>
-                    {fault.corrective_action_status && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">Status:</span>
-                        <Badge variant={fault.corrective_action_status === "fixed" ? "default" : "secondary"}>
-                          {fault.corrective_action_status}
+                {/* Failed/Attention Inspection Items */}
+                {selectedFailedItems.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold">Items with Issues ({selectedFailedItems.length})</p>
+                    {selectedFailedItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`flex items-start justify-between p-3 rounded-lg border-l-4 ${item.status === "fail"
+                          ? "border-l-red-500 bg-red-50/50 dark:bg-red-950/20"
+                          : "border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-950/20"
+                          }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{item.item_name}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{item.category.replace(/_/g, " ")}</p>
+                          {item.notes && <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>}
+                        </div>
+                        <Badge
+                          variant={item.status === "fail" ? "destructive" : "default"}
+                          className={`ml-2 shrink-0 ${item.status === "attention" ? "bg-yellow-600" : ""}`}
+                        >
+                          {item.status.toUpperCase()}
                         </Badge>
                       </div>
-                    )}
-                    {fault.corrective_action_notes && (
-                      <div className="text-sm">
-                        <span className="font-medium">Notes:</span>
-                        <p className="text-muted-foreground mt-1">{fault.corrective_action_notes}</p>
-                      </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+                )}
+
+                {/* Logged Faults */}
+                {selectedFaults.length > 0 && (
+                  <div className="space-y-2">
+                    {selectedFailedItems.length > 0 && (
+                      <p className="text-sm font-semibold pt-2">Logged Faults ({selectedFaults.length})</p>
+                    )}
+                    {selectedFaults.map((fault, index) => (
+                      <div key={index} className="border rounded-lg p-4 space-y-2">
+                        <div className="flex items-start justify-between">
+                          <p className="font-medium">{fault.fault_description}</p>
+                          <Badge variant={getSeverityVariant(fault.severity)}>
+                            {fault.severity}
+                          </Badge>
+                        </div>
+                        {fault.corrective_action_status && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">Status:</span>
+                            <Badge variant={fault.corrective_action_status === "fixed" ? "default" : "secondary"}>
+                              {fault.corrective_action_status}
+                            </Badge>
+                          </div>
+                        )}
+                        {fault.corrective_action_notes && (
+                          <div className="text-sm">
+                            <span className="font-medium">Notes:</span>
+                            <p className="text-muted-foreground mt-1">{fault.corrective_action_notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -4,17 +4,16 @@ import { RootCauseAnalysisDialog } from "@/components/dialogs/RootCauseAnalysisD
 import { InspectionActionsMenu } from "@/components/inspections/InspectionActionsMenu";
 import { InspectionForm } from "@/components/inspections/InspectionForm";
 import Layout from "@/components/Layout";
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,6 +115,25 @@ const InspectionDetails = () => {
     enabled: !!inspection?.template_id,
   });
 
+  // Fetch inspection items
+  const { data: inspectionItems = [] } = useQuery({
+    queryKey: ["inspection_items_detail", id],
+    queryFn: async () => {
+      if (!id) return [];
+
+      const { data, error } = await supabase
+        .from("inspection_items")
+        .select("id, item_name, category, status, notes")
+        .eq("inspection_id", id)
+        .order("category")
+        .order("item_name");
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   // Fetch faults
   const { data: faults = [] } = useQuery<Fault[]>({
     queryKey: ["inspection_faults", id],
@@ -166,17 +184,17 @@ const InspectionDetails = () => {
     const faultsNeedingAction = faults.filter(
       fault => !fault.corrective_action_status || fault.corrective_action_status === 'pending'
     );
-    
+
     if (faultsNeedingAction.length === 0) {
       toast({
         title: "No Faults Requiring Action",
-        description: faults.length > 0 
-          ? "All faults have already been addressed" 
+        description: faults.length > 0
+          ? "All faults have already been addressed"
           : "This inspection has no recorded faults",
       });
       return;
     }
-    
+
     setShowCorrectiveAction(true);
   };
 
@@ -282,7 +300,7 @@ const InspectionDetails = () => {
   // Helper function to format corrective action status for display
   const getCorrectiveActionDisplay = (status: string | null) => {
     if (!status) return "None taken";
-    
+
     switch (status) {
       case "fixed":
         return "Fixed";
@@ -493,6 +511,73 @@ const InspectionDetails = () => {
               </Card>
             )}
 
+            {/* Inspection Items */}
+            {inspectionItems.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ClipboardList className="h-5 w-5" />
+                    Inspection Items ({inspectionItems.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {Object.entries(
+                      inspectionItems.reduce<Record<string, typeof inspectionItems>>((acc, item) => {
+                        const cat = item.category || "General";
+                        if (!acc[cat]) acc[cat] = [];
+                        acc[cat].push(item);
+                        return acc;
+                      }, {})
+                    ).map(([category, items]) => (
+                      <div key={category}>
+                        <h4 className="text-sm font-semibold mb-2 capitalize">{category.replace(/_/g, " ")}</h4>
+                        <div className="space-y-1">
+                          {items.map((item) => (
+                            <div
+                              key={item.id}
+                              className={`flex items-start justify-between p-3 rounded-lg border-l-4 ${item.status === "fail"
+                                  ? "border-l-red-500 bg-red-50/50 dark:bg-red-950/20"
+                                  : item.status === "attention"
+                                    ? "border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-950/20"
+                                    : item.status === "pass"
+                                      ? "border-l-green-500 bg-green-50/30 dark:bg-green-950/20"
+                                      : "border-l-gray-300 bg-muted/30"
+                                }`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium">{item.item_name}</p>
+                                {item.notes && (
+                                  <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>
+                                )}
+                              </div>
+                              <Badge
+                                variant={
+                                  item.status === "fail"
+                                    ? "destructive"
+                                    : item.status === "attention"
+                                      ? "default"
+                                      : "secondary"
+                                }
+                                className={`ml-2 shrink-0 ${item.status === "pass"
+                                    ? "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/40 dark:text-green-300"
+                                    : item.status === "attention"
+                                      ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 dark:bg-yellow-900/40 dark:text-yellow-300"
+                                      : ""
+                                  }`}
+                              >
+                                {item.status?.toUpperCase() || "PENDING"}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Faults */}
             <Card>
               <CardHeader>
@@ -520,10 +605,10 @@ const InspectionDetails = () => {
                           <Separator />
                           <div className="space-y-1">
                             <p className="text-sm font-medium">Corrective Action Status:</p>
-                            <Badge 
+                            <Badge
                               variant={
-                                fault.corrective_action_status === "fixed" 
-                                  ? "default" 
+                                fault.corrective_action_status === "fixed"
+                                  ? "default"
                                   : "secondary"
                               }
                             >

@@ -7,16 +7,16 @@ const corsHeaders = {
 };
 
 // Email configuration
-const NOTIFICATION_EMAIL = "heinrich@matanuska.co.zw"; // Updated to .co.zw
+const FALLBACK_EMAIL = "heinrich@matanuska.co.zw";
 // Update this to your verified domain once you set it up in Resend
 const SENDER_EMAIL = "onboarding@resend.dev"; // Change to maintenance@matanuska.co.zw after domain verification
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || "re_aeoBztX2_GmhCWoumN6xnCdkde8zR1WF3";
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 
 // Function to send email using Resend
 async function sendEmail(to: string, subject: string, html: string) {
   try {
     console.log(`Attempting to send email to ${to} from ${SENDER_EMAIL}`);
-    
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -30,13 +30,13 @@ async function sendEmail(to: string, subject: string, html: string) {
         html: html,
       }),
     });
-    
+
     if (!response.ok) {
       const error = await response.text();
       console.error('Resend API error response:', error);
       throw new Error(`Resend API error: ${error}`);
     }
-    
+
     const result = await response.json();
     console.log(`✅ Email sent successfully to ${to}, ID: ${result.id}`);
     return true;
@@ -48,18 +48,18 @@ async function sendEmail(to: string, subject: string, html: string) {
 
 // Function to format email HTML
 function formatMaintenanceEmail(alert: any, schedule: any): string {
-  const priorityColor = schedule?.priority === 'high' ? '#dc2626' : 
-                        schedule?.priority === 'medium' ? '#f59e0b' : '#10b981';
-  
+  const priorityColor = schedule?.priority === 'high' ? '#dc2626' :
+    schedule?.priority === 'medium' ? '#f59e0b' : '#10b981';
+
   const priorityText = schedule?.priority ? schedule.priority.toUpperCase() : 'NORMAL';
-  
-  const eventType = alert?.alert_type === 'overdue' ? 'OVERDUE' : 
-                    alert?.alert_type === 'upcoming' ? 'UPCOMING' : 'MAINTENANCE';
-  
-  const urgencyMessage = alert?.alert_type === 'overdue' 
+
+  const eventType = alert?.alert_type === 'overdue' ? 'OVERDUE' :
+    alert?.alert_type === 'upcoming' ? 'UPCOMING' : 'MAINTENANCE';
+
+  const urgencyMessage = alert?.alert_type === 'overdue'
     ? 'This maintenance is OVERDUE and requires immediate attention!'
     : 'This maintenance is due soon and requires attention.';
-  
+
   return `
     <!DOCTYPE html>
     <html>
@@ -164,8 +164,11 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     console.log('🚀 Starting maintenance scheduler run...');
-    console.log(`📧 Emails will be sent to: ${NOTIFICATION_EMAIL}`);
-    console.log(`📤 From: ${SENDER_EMAIL}`);
+    console.log(`� From: ${SENDER_EMAIL}`);
+
+    if (!RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY environment variable is not set');
+    }
 
     // Check for overdue maintenance
     const { data: overdueSchedules, error: overdueError } = await supabase
@@ -217,39 +220,43 @@ serve(async (req) => {
       for (const alert of pendingAlerts) {
         try {
           const schedule = alert.maintenance_schedules;
-          
+
           // Format email content
           const emailSubject = `⚠️ ${alert.alert_type === 'overdue' ? 'OVERDUE' : 'Upcoming'} Maintenance: ${schedule?.title || 'Maintenance'} - Vehicle ${schedule?.vehicle_id || 'N/A'}`;
           const emailHtml = formatMaintenanceEmail(alert, schedule);
-          
+
+          // Determine recipient: use alert's recipient_email, fall back to default
+          const recipientEmail = alert.recipient_email || FALLBACK_EMAIL;
+
           // Send email directly using Resend
-          const emailSent = await sendEmail(NOTIFICATION_EMAIL, emailSubject, emailHtml);
-          
+          const emailSent = await sendEmail(recipientEmail, emailSubject, emailHtml);
+          console.log(`📧 Sending to: ${recipientEmail}`);
+
           if (emailSent) {
             // Mark as sent in database
             await supabase
               .from('maintenance_alerts')
-              .update({ 
+              .update({
                 delivery_status: 'sent',
                 sent_at: new Date().toISOString()
               })
               .eq('id', alert.id);
-            
+
             sentCount++;
             console.log(`✅ Alert ${alert.id} sent successfully`);
           } else {
             throw new Error('Failed to send email via Resend');
           }
-          
+
         } catch (error) {
           failedCount++;
           console.error(`❌ Error sending alert ${alert.id}:`, error);
-          
+
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          
+
           await supabase
             .from('maintenance_alerts')
-            .update({ 
+            .update({
               delivery_status: 'failed',
               error_message: errorMessage
             })
@@ -307,7 +314,7 @@ serve(async (req) => {
     const response = {
       success: true,
       timestamp: new Date().toISOString(),
-      emailRecipient: NOTIFICATION_EMAIL,
+      emailRecipient: 'per-alert recipient_email',
       emailSender: SENDER_EMAIL,
       overdueCount: overdueSchedules?.length || 0,
       alertsGenerated: alertCount || 0,
@@ -331,9 +338,9 @@ serve(async (req) => {
     console.error('💥 Error in maintenance scheduler:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: errorMessage,
-        timestamp: new Date().toISOString() 
+        timestamp: new Date().toISOString()
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
