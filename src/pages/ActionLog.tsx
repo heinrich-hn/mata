@@ -1,7 +1,7 @@
 import Layout from '@/components/Layout';
 import ActionItemDetails from '@/components/operations/ActionItemDetails';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -10,15 +10,13 @@ import Modal from '@/components/ui/modal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ACTION_ITEM_PRIORITIES, ACTION_ITEM_STATUSES, ADMIN_USERS, RESPONSIBLE_PERSONS } from '@/constants/actionItems';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOperations } from '@/contexts/OperationsContext';
 import { ActionItem, ActionItemComment } from '@/types/operations';
 import { formatDate } from 'date-fns';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import {
-  AlertTriangle,
   Calendar,
   CheckCircle,
   ClipboardList,
@@ -124,7 +122,7 @@ const ActionLog = () => {
   }, [filteredItems]);
 
   // Calculate summary statistics (scoped to active tab)
-  const summary = useMemo(() => {
+  const _summary = useMemo(() => {
     const items = enhancedActionItems.filter(i => i.assigned_to === activeTab);
     const total = items.length;
     const completed = items.filter(item => item.status === 'completed').length;
@@ -225,11 +223,11 @@ const ActionLog = () => {
       }
 
       // Strip computed fields before sending to DB
-      const { isOverdue, overdueBy, ...cleanItem } = item as any;
+      const { isOverdue: _isOverdue, overdueBy: _overdueBy, ...cleanItem } = item as unknown as Record<string, unknown>;
       await updateActionItem({
         ...cleanItem,
         ...updates
-      });
+      } as ActionItem);
 
       toast.success(`Action item marked as ${newStatus.replace('_', ' ')}`);
     } catch (error) {
@@ -250,11 +248,11 @@ const ActionLog = () => {
       };
 
       // Strip computed fields before sending to DB
-      const { isOverdue, overdueBy, ...cleanItem } = item as any;
+      const { isOverdue: _isOverdue, overdueBy: _overdueBy, ...cleanItem } = item as unknown as Record<string, unknown>;
       await updateActionItem({
         ...cleanItem,
         comments: [...(item.comments || []), newComment]
-      });
+      } as ActionItem);
 
       toast.success('Comment added successfully');
 
@@ -275,11 +273,11 @@ const ActionLog = () => {
   const handleReassign = async (item: ActionItem & { isOverdue?: boolean; overdueBy?: number }, newUser: string) => {
     try {
       // Strip computed fields before sending to DB
-      const { isOverdue, overdueBy, ...cleanItem } = item as any;
+      const { isOverdue: _isOverdue, overdueBy: _overdueBy, ...cleanItem } = item as unknown as Record<string, unknown>;
       await updateActionItem({
         ...cleanItem,
         assigned_to: newUser,
-      });
+      } as ActionItem);
       toast.success(`Reassigned to ${newUser}`);
     } catch (error) {
       toast.error('Failed to reassign action item');
@@ -384,125 +382,263 @@ const ActionLog = () => {
     toast.success(`Exported ${sortedItems.length} action items to Excel`);
   };
 
-  // Export to PDF
+  // Export comprehensive per-person PDF with all details
   const exportToPdf = () => {
-    const doc = new jsPDF('landscape', 'mm', 'a4');
+    const doc = new jsPDF('portrait', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const contentWidth = pageWidth - 2 * margin;
 
-    // Header
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Action Log Report', pageWidth / 2, 15, { align: 'center' });
+    const generatedOn = formatDate(new Date(), 'PPpp');
 
-    // Subtitle with date
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${formatDate(new Date(), 'PPpp')}`, pageWidth / 2, 22, { align: 'center' });
+    const addFooter = (pageNum: number, totalPages: number) => {
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        `Car Craft Co • Action Log Report • Generated: ${generatedOn}`,
+        margin, pageHeight - 8
+      );
+      doc.text(`Page ${pageNum} of ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+    };
 
-    // Summary stats
-    doc.setFontSize(9);
-    const summaryText = `Total: ${summary.total} | Open: ${summary.open} | In Progress: ${summary.inProgress} | Completed: ${summary.completed} | Overdue: ${summary.overdue}`;
-    doc.text(summaryText, pageWidth / 2, 28, { align: 'center' });
+    // Group items by person
+    const itemsByPerson: Record<string, typeof enhancedActionItems> = {};
+    for (const item of enhancedActionItems) {
+      const person = item.assigned_to || 'Unassigned';
+      if (!itemsByPerson[person]) itemsByPerson[person] = [];
+      itemsByPerson[person].push(item);
+    }
+    const persons = Object.keys(itemsByPerson).sort();
 
-    // Table data
-    const tableHeaders = [
-      'Title',
-      'Status',
-      'Priority',
-      'Assigned To',
-      'Due Date',
-      'Overdue',
-      'Category'
-    ];
+    let isFirstPerson = true;
 
-    const tableData = sortedItems.map(item => {
-      const enhancedItem = enhancedActionItems.find(e => e.id === item.id);
-      return [
-        item.title.length > 40 ? item.title.substring(0, 37) + '...' : item.title,
-        getStatusLabel(item.status),
-        getPriorityLabel(item.priority),
-        item.assigned_to || '-',
-        item.due_date ? formatDate(new Date(item.due_date), 'dd MMM yyyy') : '-',
-        enhancedItem?.isOverdue ? `Yes (${enhancedItem.overdueBy}d)` : 'No',
-        item.category || '-'
-      ];
+    persons.forEach(person => {
+      if (!isFirstPerson) doc.addPage();
+      isFirstPerson = false;
+
+      let yPos = 15;
+
+      // Title bar
+      doc.setFillColor(30, 58, 95);
+      doc.rect(margin, yPos, contentWidth, 14, 'F');
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+      doc.text(`ACTION LOG — ${person.toUpperCase()}`, pageWidth / 2, yPos + 10, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+      yPos += 18;
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Generated: ${generatedOn}`, pageWidth / 2, yPos, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+      yPos += 8;
+
+      // Person summary box
+      const personItems = itemsByPerson[person];
+      const pOpen = personItems.filter(i => i.status === 'open').length;
+      const pInProgress = personItems.filter(i => i.status === 'in_progress').length;
+      const pCompleted = personItems.filter(i => i.status === 'completed').length;
+      const pOverdue = personItems.filter(i => i.isOverdue).length;
+
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(margin, yPos, contentWidth, 14, 2, 2, 'F');
+      doc.setFontSize(9);
+      const boxY = yPos + 9;
+      const cw = contentWidth / 5;
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total:', margin + 5, boxY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(personItems.length), margin + 22, boxY);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Open:', margin + cw, boxY);
+      doc.setTextColor(234, 179, 8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(pOpen), margin + cw + 18, boxY);
+      doc.setTextColor(0, 0, 0);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('In Progress:', margin + 2 * cw, boxY);
+      doc.setTextColor(59, 130, 246);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(pInProgress), margin + 2 * cw + 35, boxY);
+      doc.setTextColor(0, 0, 0);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Completed:', margin + 3 * cw, boxY);
+      doc.setTextColor(34, 197, 94);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(pCompleted), margin + 3 * cw + 33, boxY);
+      doc.setTextColor(0, 0, 0);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Overdue:', margin + 4 * cw, boxY);
+      if (pOverdue > 0) doc.setTextColor(239, 68, 68);
+      doc.setFont('helvetica', 'normal');
+      doc.text(String(pOverdue), margin + 4 * cw + 27, boxY);
+      doc.setTextColor(0, 0, 0);
+
+      yPos += 20;
+
+      // Sort: overdue first, then open, in_progress, completed, cancelled
+      const statusOrder: Record<string, number> = { open: 0, in_progress: 1, completed: 2, cancelled: 3 };
+      const sorted = [...personItems].sort((a, b) => {
+        if (a.isOverdue && !b.isOverdue) return -1;
+        if (!a.isOverdue && b.isOverdue) return 1;
+        return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+      });
+
+      sorted.forEach((item, itemIdx) => {
+        // Check if we need a new page (need ~40mm minimum for one item)
+        if (yPos > pageHeight - 50) {
+          doc.addPage();
+          yPos = 15;
+        }
+
+        // Item card background
+        const isCompleted = item.status === 'completed' || item.status === 'cancelled';
+        const isOverdue = item.isOverdue;
+
+        // Item number + title
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+
+        // Status colour bar
+        if (isOverdue) {
+          doc.setFillColor(254, 242, 242);
+          doc.setDrawColor(239, 68, 68);
+        } else if (isCompleted) {
+          doc.setFillColor(240, 253, 244);
+          doc.setDrawColor(34, 197, 94);
+        } else {
+          doc.setFillColor(249, 250, 251);
+          doc.setDrawColor(209, 213, 219);
+        }
+
+        // Draw item header bar
+        doc.rect(margin, yPos, contentWidth, 8, 'FD');
+        doc.setDrawColor(0, 0, 0);
+
+        doc.setTextColor(0, 0, 0);
+        const titleText = `${itemIdx + 1}. ${item.title}`;
+        const truncatedTitle = titleText.length > 70 ? titleText.substring(0, 67) + '...' : titleText;
+        doc.text(truncatedTitle, margin + 3, yPos + 6);
+
+        // Status + Priority badges on right
+        doc.setFontSize(7);
+        const statusLabel = getStatusLabel(item.status);
+        const priorityLabel = getPriorityLabel(item.priority);
+        const rightText = `${priorityLabel} | ${statusLabel}${isOverdue ? ` | OVERDUE (${item.overdueBy}d)` : ''}`;
+
+        if (isOverdue) doc.setTextColor(239, 68, 68);
+        else if (item.status === 'completed') doc.setTextColor(34, 197, 94);
+        else if (item.status === 'in_progress') doc.setTextColor(59, 130, 246);
+        else doc.setTextColor(100, 100, 100);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text(rightText, pageWidth - margin - 3, yPos + 6, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+
+        yPos += 10;
+
+        // Meta line
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        const metaParts = [];
+        if (item.due_date) metaParts.push(`Due: ${formatDate(new Date(item.due_date), 'dd MMM yyyy')}`);
+        if (item.completed_date) metaParts.push(`Completed: ${formatDate(new Date(item.completed_date), 'dd MMM yyyy')}`);
+        if (item.category) metaParts.push(`Category: ${item.category}`);
+        if (item.created_by) metaParts.push(`Created by: ${item.created_by}`);
+        if (metaParts.length > 0) {
+          doc.text(metaParts.join('  •  '), margin + 3, yPos);
+          yPos += 5;
+        }
+        doc.setTextColor(0, 0, 0);
+
+        // Description
+        if (item.description) {
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          const descLines = doc.splitTextToSize(item.description, contentWidth - 6);
+          const maxDescLines = 6;
+          const linesToRender = descLines.slice(0, maxDescLines);
+
+          if (yPos + linesToRender.length * 4 > pageHeight - 30) {
+            doc.addPage();
+            yPos = 15;
+          }
+
+          doc.text(linesToRender, margin + 3, yPos);
+          yPos += linesToRender.length * 4;
+          if (descLines.length > maxDescLines) {
+            doc.setTextColor(100, 100, 100);
+            doc.text('...continued', margin + 3, yPos);
+            doc.setTextColor(0, 0, 0);
+            yPos += 4;
+          }
+          yPos += 2;
+        }
+
+        // Comments
+        const comments = item.comments || [];
+        if (comments.length > 0) {
+          if (yPos + 10 > pageHeight - 30) {
+            doc.addPage();
+            yPos = 15;
+          }
+
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(59, 130, 246);
+          doc.text(`Comments (${comments.length})`, margin + 3, yPos);
+          doc.setTextColor(0, 0, 0);
+          yPos += 4;
+
+          comments.forEach(comment => {
+            if (yPos > pageHeight - 25) {
+              doc.addPage();
+              yPos = 15;
+            }
+
+            doc.setFontSize(7);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(100, 100, 100);
+            const commentDate = comment.created_at ? formatDate(new Date(comment.created_at), 'dd MMM yyyy') : '';
+            doc.text(`${comment.created_by} (${commentDate}):`, margin + 6, yPos);
+            yPos += 3.5;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(0, 0, 0);
+            const commentLines = doc.splitTextToSize(comment.comment, contentWidth - 12);
+            const maxCommentLines = 3;
+            doc.text(commentLines.slice(0, maxCommentLines), margin + 6, yPos);
+            yPos += Math.min(commentLines.length, maxCommentLines) * 3.5 + 2;
+          });
+        }
+
+        // Separator
+        yPos += 2;
+        doc.setDrawColor(230, 230, 230);
+        doc.line(margin, yPos, margin + contentWidth, yPos);
+        yPos += 4;
+      });
     });
 
-    autoTable(doc, {
-      head: [tableHeaders],
-      body: tableData,
-      startY: 33,
-      styles: {
-        fontSize: 8,
-        cellPadding: 2,
-      },
-      headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 9,
-      },
-      alternateRowStyles: {
-        fillColor: [245, 247, 250],
-      },
-      columnStyles: {
-        0: { cellWidth: 60 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 20 },
-        3: { cellWidth: 35 },
-        4: { cellWidth: 28 },
-        5: { cellWidth: 25 },
-        6: { cellWidth: 35 },
-      },
-      didParseCell: (data) => {
-        // Color-code status column
-        if (data.section === 'body' && data.column.index === 1) {
-          const status = data.cell.raw as string;
-          if (status === 'Completed') {
-            data.cell.styles.textColor = [34, 197, 94];
-          } else if (status === 'In Progress') {
-            data.cell.styles.textColor = [59, 130, 246];
-          } else if (status === 'Open') {
-            data.cell.styles.textColor = [234, 179, 8];
-          }
-        }
-        // Color-code priority column
-        if (data.section === 'body' && data.column.index === 2) {
-          const priority = data.cell.raw as string;
-          if (priority === 'Urgent') {
-            data.cell.styles.textColor = [239, 68, 68];
-            data.cell.styles.fontStyle = 'bold';
-          } else if (priority === 'High') {
-            data.cell.styles.textColor = [249, 115, 22];
-          }
-        }
-        // Color-code overdue column
-        if (data.section === 'body' && data.column.index === 5) {
-          const overdue = data.cell.raw as string;
-          if (overdue.startsWith('Yes')) {
-            data.cell.styles.textColor = [239, 68, 68];
-            data.cell.styles.fontStyle = 'bold';
-          }
-        }
-      },
-    });
-
-    // Footer
+    // Add footers to all pages
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text(
-        `Page ${i} of ${pageCount}`,
-        pageWidth / 2,
-        doc.internal.pageSize.getHeight() - 10,
-        { align: 'center' }
-      );
+      addFooter(i, pageCount);
     }
 
-    doc.save(`action_log_${new Date().toISOString().split('T')[0]}.pdf`);
-    toast.success(`Exported ${sortedItems.length} action items to PDF`);
+    doc.save(`action_log_by_person_${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success(`Exported action items for ${persons.length} people to PDF`);
   };
 
   return (

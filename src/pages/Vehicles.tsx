@@ -18,12 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { ensureAlert } from '@/lib/alertUtils';
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from 'date-fns';
 import { Eye, Loader2, Pencil, Plus, Search, Trash2, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 
+// Update the Vehicle interface to match the actual Supabase table structure
 interface Vehicle {
   id: string;
   fleet_number: string | null;
@@ -36,6 +38,17 @@ interface Vehicle {
   active: boolean | null;
   license_disk_expiry: string | null;
   created_at: string | null;
+  // Add other fields that might be in the response
+  qr_code_value?: string | null;
+  reefer_unit?: string | null;
+  wialon_id?: number | null;
+  current_odometer?: number | null;
+  last_service_date?: string | null;
+  next_service_due?: string | null;
+  insurance_expiry?: string | null;
+  mot_expiry?: string | null;
+  year?: number | null;
+  vin?: string | null;
 }
 
 const Vehicles = () => {
@@ -50,7 +63,7 @@ const Vehicles = () => {
 
   const { data: vehicles = [], isLoading } = useQuery<Vehicle[]>({
     queryKey: ["vehicles", searchTerm, statusFilter, typeFilter],
-    queryFn: async () => {
+    queryFn: async (): Promise<Vehicle[]> => {
       let query = supabase
         .from("vehicles")
         .select("*")
@@ -69,12 +82,13 @@ const Vehicles = () => {
       }
 
       if (typeFilter !== "all") {
-        query = query.eq("vehicle_type", typeFilter as "truck" | "trailer" | "van" | "bus" | "rigid_truck" | "horse_truck" | "refrigerated_truck" | "reefer" | "interlink");
+        query = query.eq("vehicle_type", typeFilter as Database["public"]["Enums"]["vehicle_type"]);
       }
 
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+
+      return (data || []) as unknown as Vehicle[];
     },
   });
 
@@ -148,15 +162,15 @@ const Vehicles = () => {
       registration: selectedVehicle.registration_number,
       make: selectedVehicle.make,
       model: selectedVehicle.model,
-      year: 2020, // Default value as we don't have year in our schema
-      vin: "N/A", // Default value as we don't have VIN in our schema
+      year: selectedVehicle.year || 2020,
+      vin: selectedVehicle.vin || "N/A",
       status: selectedVehicle.active ? "active" : "inactive",
-      mileage: 0, // Default value
-      fuel_type: "Diesel", // Default value
-      last_service_date: "",
-      next_service_due: "",
-      insurance_expiry: "",
-      mot_expiry: "",
+      mileage: selectedVehicle.current_odometer || 0,
+      fuel_type: "Diesel",
+      last_service_date: selectedVehicle.last_service_date || "",
+      next_service_due: selectedVehicle.next_service_due || "",
+      insurance_expiry: selectedVehicle.insurance_expiry || "",
+      mot_expiry: selectedVehicle.mot_expiry || "",
       created_at: selectedVehicle.created_at || "",
       updated_at: selectedVehicle.created_at || "",
       fleetNumber: selectedVehicle.fleet_number,
@@ -214,8 +228,8 @@ const Vehicles = () => {
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
                     {vehicleTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+                      <SelectItem key={type as string} value={type as string}>
+                        {String(type).replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -22,9 +22,10 @@ import { useBulkDeleteDriverBehaviorEvents, useDeleteDriverBehaviorEvent, useDri
 import { useDriverCoaching } from "@/hooks/useDriverCoaching";
 import { useRealtimeDriverBehaviorEvents } from "@/hooks/useRealtimeDriverBehaviorEvents";
 import type { Database } from "@/integrations/supabase/types";
-import { generateDriverCoachingPDF } from "@/lib/driverBehaviorExport";
+import { generateDriverCoachingPDF, generateDriverBehaviorExcel, generateDriverBehaviorPDF } from "@/lib/driverBehaviorExport";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Car, CheckCircle, Clock, Edit2, Eye, FileText, List, MapPin, MessageSquare, Search, Share2, Trash2, User } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Car, CheckCircle, Clock, Download, Edit2, Eye, FileSpreadsheet, FileText, List, MapPin, MessageSquare, Search, Share2, Trash2, User } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useCallback, useMemo, useState } from "react";
 import { useDebounce } from "use-debounce";
@@ -323,6 +324,25 @@ export default function DriverBehaviorGrid() {
                 />
               </div>
 
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 gap-2">
+                    <Download className="w-4 h-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => generateDriverBehaviorExcel(pendingEvents, 'pending')}>
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Excel (.xlsx)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => generateDriverBehaviorPDF(pendingEvents, 'pending')}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <Select value={sort} onValueChange={(v) => setSort(v as SortOption)}>
                 <SelectTrigger className="w-full sm:w-40 h-10">
                   <SelectValue>
@@ -478,6 +498,25 @@ export default function DriverBehaviorGrid() {
                   className="pl-10 h-10 w-full sm:w-64"
                 />
               </div>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 gap-2">
+                    <Download className="w-4 h-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => generateDriverBehaviorExcel(debriefedEvents, 'debriefed')}>
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Excel (.xlsx)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => generateDriverBehaviorPDF(debriefedEvents, 'debriefed')}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <Select value={sort} onValueChange={(v) => setSort(v as SortOption)}>
                 <SelectTrigger className="w-full sm:w-40 h-10">

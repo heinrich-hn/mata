@@ -36,7 +36,6 @@ const CostManagement = lazyWithRetry(() => import("./pages/CostManagement"));
 const DieselManagement = lazyWithRetry(() => import("./pages/DieselManagement"));
 const DriverManagement = lazyWithRetry(() => import("./pages/DriverManagement"));
 const FuelBunkers = lazyWithRetry(() => import("./pages/FuelBunkers"));
-const Incidents = lazyWithRetry(() => import("./pages/Incidents"));
 const InspectionDetails = lazyWithRetry(() => import("./pages/InspectionDetails"));
 const Inspections = lazyWithRetry(() => import("./pages/Inspections"));
 const InspectorProfiles = lazyWithRetry(() => import("./pages/InspectorProfiles"));
@@ -53,7 +52,6 @@ const TyreInspections = lazyWithRetry(() => import("./pages/TyreInspections"));
 const TyreManagement = lazyWithRetry(() => import("./pages/TyreManagement"));
 const UnifiedMapPage = lazyWithRetry(() => import("./pages/UnifiedMapPage"));
 const Vehicles = lazyWithRetry(() => import("./pages/Vehicles"));
-const Vendors = lazyWithRetry(() => import("./pages/Vendors"));
 
 // Lazy-loaded sub-route component
 const InspectionTypeSelector = lazyWithRetry(() => import("./components/inspections/InspectionTypeSelector"));
