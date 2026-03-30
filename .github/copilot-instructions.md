@@ -4,7 +4,7 @@
 5 integrated apps with shared Supabase backend:
 - **Dashboard** (`src/`) - Main fleet management interface 
 - **Workshop Mobile** (`mobile/`) - Workshop operations
-- **Driver App** (`mobile-app-nextjs/`) - Field operations
+- **Driver App** (`drivermobileapp/`) - Field operations (Vite + React)
 - **Load Planner** (`loadplanner/`) - Operations planning
 - **Monitor** (`monitor/`) - Alerting & analytics
 
@@ -29,7 +29,6 @@ npx supabase gen types typescript --project-id wxvhkljrbcpcgpgdqhsp > src/integr
 - Missing query key params
 - Uncleaned realtime subscriptions
 - Mixed toast libraries (use `useToast`)
-- Missing `"use client"` in Driver App
 - Incorrect auth implementation in Load Planner
 
 For detailed documentation, check each app's README or contact the team lead.
