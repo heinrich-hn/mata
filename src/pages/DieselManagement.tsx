@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOperations } from '@/contexts/OperationsContext';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useReeferConsumptionSummary, useReeferDieselRecords, type ReeferDieselRecordRow } from '@/hooks/useReeferDiesel';
-import { generateFleetDebriefSummaryPDF, generateSelectedTransactionsPDF } from '@/lib/dieselDebriefExport';
+import { generateFleetDebriefSummaryPDF, generateSelectedTransactionsPDF, generateDebriefExcel, generateDebriefPDF, type DebriefExcelRecord } from '@/lib/dieselDebriefExport';
 import {
   generateAllFleetsDieselExcel,
   generateAllFleetsDieselPDF,
@@ -1418,78 +1418,64 @@ const DieselManagement = () => {
     link.click();
   };
 
-  // Export debrief transactions to Excel
-  const exportDebriefTransactions = (type: 'pending' | 'completed' | 'all') => {
+  // Export debrief transactions to professional Excel or PDF
+  const buildDebriefRecords = (type: 'pending' | 'completed' | 'all'): DebriefExcelRecord[] => {
     let recordsToExport: DieselConsumptionRecord[] = [];
-    let filename = '';
 
     if (type === 'pending') {
       recordsToExport = recordsRequiringDebrief;
-      filename = `diesel_pending_debriefs_${new Date().toISOString().split('T')[0]}.xls`;
     } else if (type === 'completed') {
       recordsToExport = truckRecords.filter(r => r.debrief_signed);
-      filename = `diesel_completed_debriefs_${new Date().toISOString().split('T')[0]}.xls`;
     } else {
       recordsToExport = [...recordsRequiringDebrief, ...truckRecords.filter(r => r.debrief_signed)];
-      filename = `diesel_all_debriefs_${new Date().toISOString().split('T')[0]}.xls`;
     }
 
-    const headers = [
-      'Date',
-      'Fleet Number',
-      'Driver',
-      'Fuel Station',
-      'Litres Filled',
-      'Total Cost',
-      'Currency',
-      'Distance (km)',
-      'Actual km/L',
-      'Expected km/L',
-      'Min Acceptable',
-      'Variance %',
-      'Debrief Status',
-      'Debriefed By',
-      'Debrief Date',
-      'Debrief Reason',
-      'Notes',
-    ].join('\t');
-
-    const rows = recordsToExport.map(record => {
+    return recordsToExport.map(record => {
       const kmPerLitre = record.distance_travelled && record.litres_filled
         ? record.distance_travelled / record.litres_filled
-        : null;
+        : undefined;
       const norm = getNormForFleet(record.fleet_number);
       const variance = kmPerLitre && norm
         ? ((kmPerLitre - norm.expected_km_per_litre) / norm.expected_km_per_litre * 100)
-        : null;
+        : undefined;
 
-      return [
-        record.date,
-        record.fleet_number,
-        record.driver_name || '',
-        record.fuel_station || '',
-        record.litres_filled?.toFixed(2) || '',
-        record.total_cost?.toFixed(2) || '',
-        record.currency || 'ZAR',
-        record.distance_travelled || '',
-        kmPerLitre?.toFixed(2) || '',
-        norm?.expected_km_per_litre?.toFixed(2) || '',
-        norm?.min_acceptable?.toFixed(2) || '',
-        variance?.toFixed(1) || '',
-        record.debrief_signed ? 'Completed' : 'Pending',
-        record.debrief_signed_by || '',
-        record.debrief_date || '',
-        record.debrief_trigger_reason || '',
-        (record.notes || '').replace(/[\t\n\r]/g, ' '),
-      ].join('\t');
+      let debriefStatus: 'Pending' | 'Completed' | 'Within Norm' = 'Pending';
+      if (record.debrief_signed) {
+        debriefStatus = 'Completed';
+      } else if (!norm || (kmPerLitre != null && kmPerLitre >= (norm?.min_acceptable ?? 0))) {
+        debriefStatus = 'Within Norm';
+      }
+
+      return {
+        date: record.date,
+        fleet_number: record.fleet_number,
+        driver_name: record.driver_name,
+        fuel_station: record.fuel_station,
+        litres_filled: record.litres_filled,
+        total_cost: record.total_cost,
+        currency: record.currency,
+        distance_travelled: record.distance_travelled,
+        km_per_litre: kmPerLitre,
+        expected_km_per_litre: norm?.expected_km_per_litre,
+        min_acceptable: norm?.min_acceptable,
+        variance_pct: variance,
+        debrief_status: debriefStatus,
+        debrief_signed_by: record.debrief_signed_by,
+        debrief_date: record.debrief_date,
+        debrief_trigger_reason: record.debrief_trigger_reason,
+        notes: record.notes,
+      } satisfies DebriefExcelRecord;
     });
+  };
 
-    const tsvContent = '\uFEFF' + headers + '\n' + rows.join('\n');
-    const blob = new Blob([tsvContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    link.click();
+  const exportDebriefTransactions = async (type: 'pending' | 'completed' | 'all') => {
+    const records = buildDebriefRecords(type);
+    await generateDebriefExcel(records, type);
+  };
+
+  const exportDebriefTransactionsPDF = (type: 'pending' | 'completed' | 'all') => {
+    const records = buildDebriefRecords(type);
+    generateDebriefPDF(records, type);
   };
 
   // Batch debrief handler
@@ -2575,24 +2561,42 @@ const DieselManagement = () => {
                     <div className="flex gap-2">
                       {recordsRequiringDebrief.length > 0 && (
                         <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => exportDebriefTransactions('pending')}
-                            className="gap-2"
-                          >
-                            <FileSpreadsheet className="h-4 w-4" />
-                            Export Pending
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => exportDebriefTransactions('all')}
-                            className="gap-2"
-                          >
-                            <Download className="h-4 w-4" />
-                            Export All (with Debrief Status)
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="gap-2">
+                                <Download className="h-4 w-4" />
+                                Export Pending
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem onClick={() => exportDebriefTransactions('pending')}>
+                                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                                Excel (.xlsx)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => exportDebriefTransactionsPDF('pending')}>
+                                <FileText className="h-4 w-4 mr-2" />
+                                PDF
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="gap-2">
+                                <Download className="h-4 w-4" />
+                                Export All
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem onClick={() => exportDebriefTransactions('all')}>
+                                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                                Excel (.xlsx)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => exportDebriefTransactionsPDF('all')}>
+                                <FileText className="h-4 w-4 mr-2" />
+                                PDF
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Button
                             variant="default"
                             size="sm"
@@ -2617,15 +2621,24 @@ const DieselManagement = () => {
                       )}
                       {/* Show Export All button when there are no pending but there are completed */}
                       {recordsRequiringDebrief.length === 0 && truckRecords.filter(r => r.debrief_signed).length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => exportDebriefTransactions('all')}
-                          className="gap-2"
-                        >
-                          <Download className="h-4 w-4" />
-                          Export All (with Debrief Status)
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-2">
+                              <Download className="h-4 w-4" />
+                              Export All
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => exportDebriefTransactions('all')}>
+                              <FileSpreadsheet className="h-4 w-4 mr-2" />
+                              Excel (.xlsx)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => exportDebriefTransactionsPDF('all')}>
+                              <FileText className="h-4 w-4 mr-2" />
+                              PDF
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </div>

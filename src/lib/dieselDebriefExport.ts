@@ -1,4 +1,6 @@
 import { format } from "date-fns";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import { formatCurrency, formatNumber } from "./formatters";
 
@@ -778,5 +780,637 @@ export const generateSelectedTransactionsPDF = (
 
   // Save
   const fileName = `diesel-transactions-report-${format(new Date(), "yyyy-MM-dd")}.pdf`;
+  doc.save(fileName);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ExcelJS colour palette for debrief exports
+// ─────────────────────────────────────────────────────────────────────────────
+const XC = {
+  navy: 'FF1E3A5F',
+  red: 'FFDC2626',
+  redLight: 'FFFEF2F2',
+  green: 'FF16A34A',
+  greenLight: 'FFF0FDF4',
+  amber: 'FFD97706',
+  amberLight: 'FFFFFBEB',
+  altRow: 'FFF3F4F6',
+  white: 'FFFFFFFF',
+  darkText: 'FF111827',
+  grayText: 'FF6B7280',
+  totalBg: 'FFD1FAE5',
+  totalText: 'FF065F46',
+  subtitleBg: 'FFE8EEF6',
+  sectionBg: 'FF2563EB',
+} as const;
+
+type XCell = ExcelJS.Cell;
+
+const xlFill = (cell: XCell, argb: string): void => {
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+};
+
+const xlFont = (cell: XCell, bold: boolean, size: number, argb: string): void => {
+  cell.font = { name: 'Calibri', bold, size, color: { argb } };
+};
+
+const xlBorder = (cell: XCell, argb: string = 'FFD9D9D9'): void => {
+  const border = { style: 'thin' as const, color: { argb } };
+  cell.border = { top: border, bottom: border, left: border, right: border };
+};
+
+export interface DebriefExcelRecord {
+  date: string;
+  fleet_number: string;
+  driver_name?: string;
+  fuel_station?: string;
+  litres_filled?: number;
+  total_cost?: number;
+  currency?: string;
+  distance_travelled?: number;
+  km_per_litre?: number;
+  expected_km_per_litre?: number;
+  min_acceptable?: number;
+  variance_pct?: number;
+  debrief_status: 'Pending' | 'Completed' | 'Within Norm';
+  debrief_signed_by?: string;
+  debrief_date?: string;
+  debrief_trigger_reason?: string;
+  notes?: string;
+}
+
+/**
+ * Generate a professionally styled Excel workbook for diesel debrief data.
+ * Uses ExcelJS for proper .xlsx formatting with headers, zebra rows, status colours, etc.
+ */
+export const generateDebriefExcel = async (
+  records: DebriefExcelRecord[],
+  type: 'pending' | 'completed' | 'all',
+): Promise<void> => {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Car Craft Co — Fleet Management';
+  wb.created = new Date();
+  const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
+  const dateStamp = format(new Date(), 'yyyy-MM-dd');
+
+  const pendingRecords = records.filter(r => r.debrief_status === 'Pending');
+  const completedRecords = records.filter(r => r.debrief_status === 'Completed');
+  const withinNormRecords = records.filter(r => r.debrief_status === 'Within Norm');
+
+  // ── Summary Sheet ─────────────────────────────────────────────────────────
+  const summaryWs = wb.addWorksheet('Summary');
+  summaryWs.columns = [
+    { key: 'a', width: 30 },
+    { key: 'b', width: 20 },
+  ];
+
+  // Title
+  summaryWs.addRow([]);
+  const titleRow = summaryWs.addRow(['DIESEL DEBRIEF REPORT']);
+  summaryWs.mergeCells(titleRow.number, 1, titleRow.number, 2);
+  const tCell = titleRow.getCell(1);
+  xlFill(tCell, XC.navy);
+  xlFont(tCell, true, 14, XC.white);
+  tCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  titleRow.height = 30;
+
+  const subRow = summaryWs.addRow([`Generated: ${generatedOn}`]);
+  summaryWs.mergeCells(subRow.number, 1, subRow.number, 2);
+  const sCell = subRow.getCell(1);
+  xlFill(sCell, XC.subtitleBg);
+  xlFont(sCell, false, 9, XC.grayText);
+  sCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  subRow.height = 18;
+
+  summaryWs.addRow([]);
+
+  // Stats
+  const stats = [
+    ['Total Records', records.length],
+    ['Pending Debrief', pendingRecords.length],
+    ['Completed Debrief', completedRecords.length],
+    ['Within Norm', withinNormRecords.length],
+  ];
+
+  stats.forEach(([label, value], idx) => {
+    const r = summaryWs.addRow([label, value]);
+    r.height = 22;
+    const labelCell = r.getCell(1);
+    const valCell = r.getCell(2);
+    xlBorder(labelCell);
+    xlBorder(valCell);
+    xlFont(labelCell, true, 11, XC.darkText);
+    valCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    if (idx === 1) {
+      xlFont(valCell, true, 12, XC.red);
+    } else if (idx === 2) {
+      xlFont(valCell, true, 12, XC.green);
+    } else {
+      xlFont(valCell, true, 12, XC.darkText);
+    }
+
+    if (idx % 2 === 1) {
+      xlFill(labelCell, XC.altRow);
+      xlFill(valCell, XC.altRow);
+    }
+  });
+
+  // Fleet breakdown
+  const fleetGroups = new Map<string, { pending: number; completed: number; withinNorm: number }>();
+  records.forEach(r => {
+    const fleet = r.fleet_number;
+    const existing = fleetGroups.get(fleet) || { pending: 0, completed: 0, withinNorm: 0 };
+    if (r.debrief_status === 'Pending') existing.pending++;
+    else if (r.debrief_status === 'Completed') existing.completed++;
+    else existing.withinNorm++;
+    fleetGroups.set(fleet, existing);
+  });
+
+  summaryWs.addRow([]);
+  summaryWs.addRow([]);
+
+  // Fleet breakdown header
+  const fbHeaderRow = summaryWs.addRow(['Fleet Breakdown']);
+  summaryWs.mergeCells(fbHeaderRow.number, 1, fbHeaderRow.number, 2);
+  xlFill(fbHeaderRow.getCell(1), XC.sectionBg);
+  xlFont(fbHeaderRow.getCell(1), true, 11, XC.white);
+  fbHeaderRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+  fbHeaderRow.height = 22;
+
+  // We need more columns for the fleet breakdown
+  const fbCols = ['Fleet', 'Pending', 'Completed', 'Within Norm', 'Total'];
+  const fbHRow = summaryWs.addRow(fbCols);
+  fbHRow.height = 20;
+  fbCols.forEach((_, i) => {
+    const cell = fbHRow.getCell(i + 1);
+    xlFill(cell, XC.navy);
+    xlFont(cell, true, 10, XC.white);
+    cell.alignment = { horizontal: i === 0 ? 'left' : 'center', vertical: 'middle' };
+    xlBorder(cell);
+  });
+
+  let fbIdx = 0;
+  [...fleetGroups.entries()].sort((a, b) => a[0].localeCompare(b[0])).forEach(([fleet, counts]) => {
+    const total = counts.pending + counts.completed + counts.withinNorm;
+    const r = summaryWs.addRow([fleet, counts.pending, counts.completed, counts.withinNorm, total]);
+    r.height = 18;
+    for (let c = 1; c <= 5; c++) {
+      const cell = r.getCell(c);
+      xlBorder(cell);
+      xlFont(cell, false, 10, XC.darkText);
+      cell.alignment = { horizontal: c === 1 ? 'left' : 'center', vertical: 'middle' };
+      if (fbIdx % 2 === 1) xlFill(cell, XC.altRow);
+
+      // Colour-code pending/completed values
+      if (c === 2 && counts.pending > 0) xlFont(cell, true, 10, XC.red);
+      if (c === 3 && counts.completed > 0) xlFont(cell, true, 10, XC.green);
+    }
+    fbIdx++;
+  });
+
+  // ── Data Sheets ───────────────────────────────────────────────────────────
+  const headers = [
+    'Date', 'Fleet Number', 'Driver', 'Fuel Station', 'Litres Filled',
+    'Total Cost', 'Currency', 'Distance (km)', 'Actual km/L', 'Expected km/L',
+    'Min Acceptable', 'Variance %', 'Debrief Status', 'Debriefed By',
+    'Debrief Date', 'Trigger Reason', 'Notes',
+  ];
+
+  const colWidths = [13, 14, 20, 22, 14, 14, 10, 14, 12, 13, 14, 12, 15, 18, 13, 22, 30];
+
+  const addDataSheet = (
+    name: string,
+    sheetRecords: DebriefExcelRecord[],
+    statusColor: string,
+  ) => {
+    if (sheetRecords.length === 0) return;
+
+    const ws = wb.addWorksheet(name);
+    ws.columns = colWidths.map((w, i) => ({ key: `col${i}`, width: w }));
+
+    // Title
+    ws.addRow([]);
+    const tRow = ws.addRow([name.toUpperCase()]);
+    ws.mergeCells(tRow.number, 1, tRow.number, headers.length);
+    xlFill(tRow.getCell(1), statusColor);
+    xlFont(tRow.getCell(1), true, 13, XC.white);
+    tRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    tRow.height = 28;
+
+    const sRow = ws.addRow([`${sheetRecords.length} records • Generated: ${generatedOn}`]);
+    ws.mergeCells(sRow.number, 1, sRow.number, headers.length);
+    xlFill(sRow.getCell(1), XC.subtitleBg);
+    xlFont(sRow.getCell(1), false, 9, XC.grayText);
+    sRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    sRow.height = 16;
+
+    ws.addRow([]);
+
+    // Headers
+    const hRow = ws.addRow(headers);
+    hRow.height = 22;
+    headers.forEach((_, i) => {
+      const cell = hRow.getCell(i + 1);
+      xlFill(cell, XC.navy);
+      xlFont(cell, true, 9, XC.white);
+      cell.alignment = { horizontal: i === 0 || i === 1 || i === 2 || i === 3 ? 'left' : 'center', vertical: 'middle', wrapText: true };
+      xlBorder(cell, XC.navy);
+    });
+
+    // Freeze panes
+    ws.views = [{ state: 'frozen', ySplit: hRow.number, xSplit: 2 }];
+
+    // Data rows
+    sheetRecords.forEach((rec, idx) => {
+      const row = ws.addRow([
+        rec.date ? format(new Date(rec.date), 'MMM dd, yyyy') : '',
+        rec.fleet_number,
+        rec.driver_name || '',
+        rec.fuel_station || '',
+        rec.litres_filled?.toFixed(2) || '',
+        rec.total_cost?.toFixed(2) || '',
+        rec.currency || 'ZAR',
+        rec.distance_travelled || '',
+        rec.km_per_litre?.toFixed(2) || '',
+        rec.expected_km_per_litre?.toFixed(2) || '',
+        rec.min_acceptable?.toFixed(2) || '',
+        rec.variance_pct != null ? `${rec.variance_pct.toFixed(1)}%` : '',
+        rec.debrief_status,
+        rec.debrief_signed_by || '',
+        rec.debrief_date ? format(new Date(rec.debrief_date), 'MMM dd, yyyy') : '',
+        rec.debrief_trigger_reason || '',
+        rec.notes || '',
+      ]);
+      row.height = 18;
+
+      for (let c = 1; c <= headers.length; c++) {
+        const cell = row.getCell(c);
+        xlBorder(cell);
+        xlFont(cell, false, 9, XC.darkText);
+        cell.alignment = {
+          horizontal: c <= 4 ? 'left' : (c === 13 ? 'center' : 'right'),
+          vertical: 'middle',
+        };
+
+        // Zebra stripes
+        if (idx % 2 === 1) xlFill(cell, XC.altRow);
+
+        // Status column colouring
+        if (c === 13) {
+          if (rec.debrief_status === 'Pending') {
+            xlFont(cell, true, 9, XC.red);
+            xlFill(cell, XC.redLight);
+          } else if (rec.debrief_status === 'Completed') {
+            xlFont(cell, true, 9, XC.green);
+            xlFill(cell, XC.greenLight);
+          } else {
+            xlFont(cell, false, 9, XC.grayText);
+          }
+        }
+
+        // Variance colouring
+        if (c === 12 && rec.variance_pct != null) {
+          if (rec.variance_pct < -10) {
+            xlFont(cell, true, 9, XC.red);
+          } else if (rec.variance_pct < 0) {
+            xlFont(cell, true, 9, XC.amber);
+          } else {
+            xlFont(cell, false, 9, XC.green);
+          }
+        }
+
+        // km/L colouring
+        if (c === 9 && rec.km_per_litre != null && rec.min_acceptable != null) {
+          if (rec.km_per_litre < rec.min_acceptable) {
+            xlFont(cell, true, 9, XC.red);
+          }
+        }
+      }
+    });
+
+    // Totals row
+    const totalLitres = sheetRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
+    const totalCost = sheetRecords.reduce((s, r) => s + (r.total_cost || 0), 0);
+    const totalDist = sheetRecords.reduce((s, r) => s + (r.distance_travelled || 0), 0);
+    const avgKmL = totalLitres > 0 ? totalDist / totalLitres : 0;
+
+    const totRow = ws.addRow([
+      'TOTAL', '', '', '',
+      totalLitres.toFixed(2),
+      totalCost.toFixed(2),
+      '', totalDist || '',
+      avgKmL > 0 ? avgKmL.toFixed(2) : '',
+      '', '', '',
+      `${sheetRecords.length} records`, '', '', '', '',
+    ]);
+    totRow.height = 22;
+    for (let c = 1; c <= headers.length; c++) {
+      const cell = totRow.getCell(c);
+      xlFill(cell, XC.totalBg);
+      xlFont(cell, true, 10, XC.totalText);
+      cell.alignment = { horizontal: c <= 4 ? 'left' : (c === 13 ? 'center' : 'right'), vertical: 'middle' };
+      xlBorder(cell, XC.totalText);
+    }
+  };
+
+  // Build sheets based on export type
+  if (type === 'pending' || type === 'all') {
+    addDataSheet('Pending Debriefs', pendingRecords, XC.red);
+  }
+  if (type === 'completed' || type === 'all') {
+    addDataSheet('Completed Debriefs', completedRecords, XC.green);
+  }
+  if (type === 'all' && withinNormRecords.length > 0) {
+    addDataSheet('Within Norm', withinNormRecords, XC.grayText);
+  }
+
+  // Save
+  const typeLabel = type === 'pending' ? 'pending' : type === 'completed' ? 'completed' : 'all';
+  const filename = `diesel_debriefs_${typeLabel}_${dateStamp}.xlsx`;
+  const buffer = await wb.xlsx.writeBuffer();
+  saveAs(
+    new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    filename,
+  );
+};
+
+/**
+ * Generate a comprehensive debrief PDF report with professional table formatting.
+ * Groups records by fleet with summary statistics and colour-coded status.
+ */
+export const generateDebriefPDF = (
+  records: DebriefExcelRecord[],
+  type: 'pending' | 'completed' | 'all',
+): void => {
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const contentWidth = pageWidth - 2 * margin;
+  let yPos = 15;
+
+  const pendingRecords = records.filter(r => r.debrief_status === 'Pending');
+  const completedRecords = records.filter(r => r.debrief_status === 'Completed');
+
+  const typeLabel = type === 'pending' ? 'PENDING DEBRIEFS'
+    : type === 'completed' ? 'COMPLETED DEBRIEFS'
+      : 'DIESEL DEBRIEF REPORT';
+
+  // ── Helper: Check page break ───────────────────────────────────────────
+  const checkPageBreak = (needed: number) => {
+    if (yPos + needed > pageHeight - 20) {
+      // Footer on current page
+      addFooter();
+      doc.addPage();
+      yPos = 15;
+      return true;
+    }
+    return false;
+  };
+
+  // ── Footer helper ──────────────────────────────────────────────────────
+  const addFooter = () => {
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `Car Craft Co • Diesel Debrief Report • Generated: ${format(new Date(), 'MMM dd, yyyy HH:mm')}`,
+      pageWidth / 2,
+      pageHeight - 8,
+      { align: 'center' }
+    );
+    doc.setTextColor(0, 0, 0);
+  };
+
+  // ── Title Section ──────────────────────────────────────────────────────
+  doc.setFillColor(30, 58, 95); // Navy
+  doc.rect(margin, yPos, contentWidth, 14, 'F');
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text(typeLabel, pageWidth / 2, yPos + 10, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  yPos += 18;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Generated: ${format(new Date(), 'MMM dd, yyyy HH:mm')}  •  ${records.length} records`, pageWidth / 2, yPos, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  yPos += 8;
+
+  // ── Summary Box ────────────────────────────────────────────────────────
+  doc.setFillColor(245, 245, 245);
+  doc.roundedRect(margin, yPos, contentWidth, 18, 2, 2, 'F');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  const boxY = yPos + 7;
+  const colSpacing = contentWidth / 4;
+
+  doc.text('Total Records:', margin + 10, boxY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(String(records.length), margin + 45, boxY);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Pending:', margin + colSpacing + 10, boxY);
+  doc.setTextColor(220, 38, 38);
+  doc.setFont('helvetica', 'normal');
+  doc.text(String(pendingRecords.length), margin + colSpacing + 35, boxY);
+  doc.setTextColor(0, 0, 0);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Completed:', margin + 2 * colSpacing + 10, boxY);
+  doc.setTextColor(22, 163, 74);
+  doc.setFont('helvetica', 'normal');
+  doc.text(String(completedRecords.length), margin + 2 * colSpacing + 45, boxY);
+  doc.setTextColor(0, 0, 0);
+
+  const totalLitres = records.reduce((s, r) => s + (r.litres_filled || 0), 0);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Total Litres:', margin + 3 * colSpacing + 10, boxY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(formatNumber(totalLitres) + ' L', margin + 3 * colSpacing + 45, boxY);
+
+  yPos += 24;
+
+  // ── Group records by fleet ─────────────────────────────────────────────
+  const byFleet = records.reduce((acc, r) => {
+    if (!acc[r.fleet_number]) acc[r.fleet_number] = [];
+    acc[r.fleet_number].push(r);
+    return acc;
+  }, {} as Record<string, DebriefExcelRecord[]>);
+
+  const fleetNumbers = Object.keys(byFleet).sort();
+
+  // ── Table column config ────────────────────────────────────────────────
+  const colDefs = [
+    { header: 'Date', width: 28 },
+    { header: 'Driver', width: 38 },
+    { header: 'Station', width: 38 },
+    { header: 'Litres', width: 22 },
+    { header: 'Cost', width: 28 },
+    { header: 'Distance', width: 22 },
+    { header: 'km/L', width: 18 },
+    { header: 'Expected', width: 20 },
+    { header: 'Variance', width: 22 },
+    { header: 'Status', width: 24 },
+    { header: 'Debriefed By', width: 30 },
+  ];
+
+  const drawTableHeader = () => {
+    doc.setFillColor(30, 58, 95);
+    doc.rect(margin, yPos, contentWidth, 8, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+
+    let xPos = margin + 2;
+    colDefs.forEach(col => {
+      doc.text(col.header, xPos, yPos + 6);
+      xPos += col.width;
+    });
+
+    doc.setTextColor(0, 0, 0);
+    yPos += 10;
+  };
+
+  const drawDataRow = (rec: DebriefExcelRecord, isAlt: boolean) => {
+    if (isAlt) {
+      doc.setFillColor(243, 244, 246);
+      doc.rect(margin, yPos - 3, contentWidth, 7, 'F');
+    }
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    let xPos = margin + 2;
+
+    // Date
+    doc.text(rec.date ? format(new Date(rec.date), 'MMM dd') : '', xPos, yPos);
+    xPos += colDefs[0].width;
+
+    // Driver
+    doc.text((rec.driver_name || 'N/A').substring(0, 20), xPos, yPos);
+    xPos += colDefs[1].width;
+
+    // Station
+    doc.text((rec.fuel_station || 'N/A').substring(0, 20), xPos, yPos);
+    xPos += colDefs[2].width;
+
+    // Litres
+    doc.text(rec.litres_filled ? formatNumber(rec.litres_filled) + ' L' : '', xPos, yPos);
+    xPos += colDefs[3].width;
+
+    // Cost
+    const curr = rec.currency === 'USD' ? '$' : 'R';
+    doc.text(rec.total_cost ? `${curr}${formatNumber(rec.total_cost)}` : '', xPos, yPos);
+    xPos += colDefs[4].width;
+
+    // Distance
+    doc.text(rec.distance_travelled ? formatNumber(rec.distance_travelled) + ' km' : '', xPos, yPos);
+    xPos += colDefs[5].width;
+
+    // km/L (colour-coded)
+    if (rec.km_per_litre != null) {
+      if (rec.min_acceptable != null && rec.km_per_litre < rec.min_acceptable) {
+        doc.setTextColor(220, 38, 38);
+      }
+      doc.text(formatNumber(rec.km_per_litre, 2), xPos, yPos);
+      doc.setTextColor(0, 0, 0);
+    }
+    xPos += colDefs[6].width;
+
+    // Expected
+    doc.text(rec.expected_km_per_litre ? formatNumber(rec.expected_km_per_litre, 2) : '', xPos, yPos);
+    xPos += colDefs[7].width;
+
+    // Variance
+    if (rec.variance_pct != null) {
+      if (rec.variance_pct < -10) doc.setTextColor(220, 38, 38);
+      else if (rec.variance_pct < 0) doc.setTextColor(217, 119, 6);
+      else doc.setTextColor(22, 163, 74);
+      doc.text(`${rec.variance_pct.toFixed(1)}%`, xPos, yPos);
+      doc.setTextColor(0, 0, 0);
+    }
+    xPos += colDefs[8].width;
+
+    // Status
+    if (rec.debrief_status === 'Pending') {
+      doc.setTextColor(220, 38, 38);
+      doc.setFont('helvetica', 'bold');
+      doc.text('PENDING', xPos, yPos);
+    } else if (rec.debrief_status === 'Completed') {
+      doc.setTextColor(22, 163, 74);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Completed', xPos, yPos);
+    } else {
+      doc.setTextColor(128, 128, 128);
+      doc.text('OK', xPos, yPos);
+    }
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    xPos += colDefs[9].width;
+
+    // Debriefed by
+    doc.text((rec.debrief_signed_by || '').substring(0, 16), xPos, yPos);
+
+    yPos += 7;
+
+    // Separator
+    doc.setDrawColor(230, 230, 230);
+    doc.line(margin, yPos - 3, margin + contentWidth, yPos - 3);
+  };
+
+  // ── Render each fleet section ──────────────────────────────────────────
+  fleetNumbers.forEach((fleet, fleetIdx) => {
+    const fleetRecords = byFleet[fleet];
+    const fleetPending = fleetRecords.filter(r => r.debrief_status === 'Pending').length;
+    const fleetCompleted = fleetRecords.filter(r => r.debrief_status === 'Completed').length;
+    const fleetLitres = fleetRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
+
+    checkPageBreak(30);
+
+    // Fleet header
+    doc.setFillColor(37, 99, 235);
+    doc.roundedRect(margin, yPos, contentWidth, 10, 1, 1, 'F');
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Fleet: ${fleet}`, margin + 5, yPos + 7);
+    doc.setFontSize(8);
+    doc.text(
+      `${fleetRecords.length} records  •  ${fleetPending} pending  •  ${fleetCompleted} completed  •  ${formatNumber(fleetLitres)} L`,
+      pageWidth - margin - 5,
+      yPos + 7,
+      { align: 'right' }
+    );
+    doc.setTextColor(0, 0, 0);
+    yPos += 14;
+
+    // Table header
+    drawTableHeader();
+
+    // Data rows
+    fleetRecords
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .forEach((rec, idx) => {
+        checkPageBreak(10);
+        drawDataRow(rec, idx % 2 === 1);
+      });
+
+    yPos += 6;
+
+    // Page break between fleets if space is tight
+    if (fleetIdx < fleetNumbers.length - 1) {
+      checkPageBreak(35);
+    }
+  });
+
+  // Footer on last page
+  addFooter();
+
+  // Save
+  const typeFile = type === 'pending' ? 'pending' : type === 'completed' ? 'completed' : 'all';
+  const fileName = `diesel_debriefs_${typeFile}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
   doc.save(fileName);
 };
