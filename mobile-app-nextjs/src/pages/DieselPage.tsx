@@ -1,5 +1,3 @@
-"use client";
-
 import { MobileShell } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
-import { BottomSheetSelect, SearchableSelect } from "@/components/ui/select";
+import { BottomSheetSelect } from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth-context";
 import { useDieselRealtimeSync, useVehicleAssignmentSubscription } from "@/hooks/use-realtime";
 import { useToast } from "@/hooks/use-toast";
@@ -116,13 +114,6 @@ interface MonthOption {
   year: number;
 }
 
-// Type for driver_vehicle_assignments join result
-interface DriverVehicleAssignment {
-  id: string;
-  vehicle_id: string;
-  vehicles: Vehicle | Vehicle[] | null;
-}
-
 const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
 const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
 
@@ -146,8 +137,8 @@ const MONTH_OPTIONS: MonthOption[] = (() => {
 const SuccessView = () => (
   <MobileShell>
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-5">
-      <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
-        <CheckCircle2 className="w-10 h-10 text-emerald-600" strokeWidth={1.5} />
+      <div className="w-20 h-20 rounded-full bg-success/10 dark:bg-success/20 flex items-center justify-center mb-4">
+        <CheckCircle2 className="w-10 h-10 text-success" strokeWidth={1.5} />
       </div>
       <h2 className="text-xl font-semibold">Entry Saved!</h2>
       <p className="text-sm text-muted-foreground mt-2">
@@ -176,17 +167,17 @@ const EmptyState = () => (
 );
 
 const FlaggedEntriesAlert = ({ count }: { count: number }) => (
-  <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+  <Card className="border-warning bg-warning/5 dark:bg-warning/10">
     <CardContent className="p-4">
       <div className="flex items-start gap-3">
-        <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-full">
-          <AlertTriangle className="w-5 h-5 text-amber-600" />
+        <div className="p-2 bg-warning/10 dark:bg-warning/20 rounded-full">
+          <AlertTriangle className="w-5 h-5 text-warning" />
         </div>
         <div className="flex-1">
-          <p className="font-semibold text-amber-800 dark:text-amber-200">
+          <p className="font-semibold text-warning">
             Debriefing Required
           </p>
-          <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+          <p className="text-sm text-warning/80 mt-1">
             {count} transaction{count > 1 ? 's' : ''} with abnormal consumption detected.
             Please visit the office for debriefing.
           </p>
@@ -297,7 +288,7 @@ const DieselEntryCard = ({ entry }: { entry: DieselEntry }) => {
   );
 
   return (
-    <Card className={requiresDebriefing ? "border-amber-500 bg-amber-50/50 dark:bg-amber-950/20" : ""}>
+    <Card className={requiresDebriefing ? "border-warning bg-warning/5 dark:bg-warning/10" : ""}>
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <div className="space-y-1.5 flex-1">
@@ -305,7 +296,7 @@ const DieselEntryCard = ({ entry }: { entry: DieselEntry }) => {
               <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
               {formatDate(entry.date)}
               {entry.source === "dashboard" && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-info/10 dark:bg-info/20 text-info">
                   Dashboard
                 </span>
               )}
@@ -316,7 +307,7 @@ const DieselEntryCard = ({ entry }: { entry: DieselEntry }) => {
                 </Badge>
               )}
               {entry.debriefed && (
-                <Badge variant="secondary" className="text-[10px] h-5 gap-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                <Badge variant="secondary" className="text-[10px] h-5 gap-1 bg-success/10 text-success dark:bg-success/20">
                   <CheckCircle className="w-3 h-3" />
                   Debriefed
                 </Badge>
@@ -326,7 +317,7 @@ const DieselEntryCard = ({ entry }: { entry: DieselEntry }) => {
               <Gauge className="w-3.5 h-3.5" />
               {formatNumber(entry.km_reading)} km
               {entry.km_per_litre && (
-                <span className={requiresDebriefing ? "text-amber-600 font-medium" : ""}>
+                <span className={requiresDebriefing ? "text-warning font-medium" : ""}>
                   • {entry.km_per_litre.toFixed(2)} km/L
                 </span>
               )}
@@ -344,7 +335,7 @@ const DieselEntryCard = ({ entry }: { entry: DieselEntry }) => {
               </div>
             )}
             {requiresDebriefing && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 font-medium">
+              <p className="text-xs text-warning mt-2 font-medium">
                 ⚠ Please visit the office for debriefing
               </p>
             )}
@@ -420,9 +411,8 @@ export default function DieselPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Month selector state - user selects explicitly, no auto-load
+  // Month selector state - auto-load current month
   const [selectedMonth, setSelectedMonth] = useState<string>(() => MONTH_OPTIONS[0].value);
-  const [hasUserSelectedMonth, setHasUserSelectedMonth] = useState(false);
 
   // Parse selected month to get date range
   const selectedMonthData = useMemo(() =>
@@ -441,7 +431,7 @@ export default function DieselPage() {
   );
 
   // Real-time subscriptions - only if user exists
-  useDieselRealtimeSync(user?.id);
+  // Diesel sync moved below vehicle query to pass fleet_number filter
   useVehicleAssignmentSubscription(user?.id);
 
   const [formData, setFormData] = useState({
@@ -522,6 +512,7 @@ export default function DieselPage() {
     if (allUploads.length === 0) return;
 
     setIsUploadingPhotos(true);
+    let failedCount = 0;
     try {
       for (const item of allUploads) {
         const fileExt = item.file.name.split(".").pop();
@@ -534,6 +525,7 @@ export default function DieselPage() {
 
         if (uploadError) {
           console.error(`Failed to upload ${item.type} photo:`, uploadError.message);
+          failedCount++;
           continue;
         }
 
@@ -556,11 +548,18 @@ export default function DieselPage() {
       }
     } finally {
       setIsUploadingPhotos(false);
+      if (failedCount > 0) {
+        toast({
+          title: "Photo Upload Issue",
+          description: `${failedCount} of ${allUploads.length} photo${allUploads.length > 1 ? "s" : ""} failed to upload. The diesel entry was saved.`,
+          variant: "destructive",
+        });
+      }
     }
-  }, [slipFiles, pumpFiles, supabase, user?.email]);
+  }, [slipFiles, pumpFiles, supabase, user?.email, toast]);
 
   // Query 1: All active vehicle assignments — split into truck + reefer client-side
-  const { data: vehicleAssignments, isLoading: isLoadingVehicle } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
+  const { data: vehicleAssignments, isLoading: _isLoadingVehicle } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
     queryKey: ["assigned-vehicles", user?.id],
     queryFn: async () => {
       if (!user?.id) return { truck: null, reefer: null };
@@ -610,6 +609,9 @@ export default function DieselPage() {
   const assignedVehicle = vehicleAssignments?.truck ?? null;
   const assignedReefer = vehicleAssignments?.reefer ?? null;
 
+  // Diesel realtime sync — needs fleet_number so placed after vehicle query
+  useDieselRealtimeSync(user?.id, assignedVehicle?.fleet_number);
+
   // Query 2: Diesel records - ONLY when user selects a month
   const {
     data: allDieselRecords = [],
@@ -632,7 +634,7 @@ export default function DieselPage() {
       if (error) throw error;
       return (data || []) as DieselEntry[];
     },
-    enabled: !!assignedVehicle?.fleet_number && hasUserSelectedMonth, // Only fetch when user selects
+    enabled: !!assignedVehicle?.fleet_number,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false,
@@ -641,7 +643,7 @@ export default function DieselPage() {
   // Query 2b: Reefer diesel records
   const {
     data: allReeferRecords = [],
-    isLoading: isLoadingReeferRecords,
+    isLoading: _isLoadingReeferRecords,
     refetch: refetchReeferRecords
   } = useQuery<ReeferDieselEntry[]>({
     queryKey: ["reefer-diesel-records", assignedReefer?.fleet_number, selectedMonth],
@@ -660,7 +662,7 @@ export default function DieselPage() {
       if (error) throw error;
       return (data || []) as ReeferDieselEntry[];
     },
-    enabled: !!assignedReefer?.fleet_number && hasUserSelectedMonth,
+    enabled: !!assignedReefer?.fleet_number,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -941,17 +943,14 @@ export default function DieselPage() {
 
   const handleMonthChange = useCallback((value: string) => {
     setSelectedMonth(value);
-    setHasUserSelectedMonth(true);
   }, []);
 
   const handleRefresh = useCallback(async (): Promise<void> => {
-    if (hasUserSelectedMonth) {
-      const promises: Promise<unknown>[] = [];
-      if (assignedVehicle?.fleet_number) promises.push(refetchRecords());
-      if (assignedReefer?.fleet_number) promises.push(refetchReeferRecords());
-      await Promise.all(promises);
-    }
-  }, [assignedVehicle?.fleet_number, assignedReefer?.fleet_number, hasUserSelectedMonth, refetchRecords, refetchReeferRecords]);
+    const promises: Promise<unknown>[] = [];
+    if (assignedVehicle?.fleet_number) promises.push(refetchRecords());
+    if (assignedReefer?.fleet_number) promises.push(refetchReeferRecords());
+    await Promise.all(promises);
+  }, [assignedVehicle?.fleet_number, assignedReefer?.fleet_number, refetchRecords, refetchReeferRecords]);
 
   // Success view
   if (showSuccess) {
@@ -967,7 +966,7 @@ export default function DieselPage() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9"
+              className="h-10 w-10"
               onClick={() => setViewMode("list")}
               aria-label="Go back"
             >
@@ -1032,7 +1031,7 @@ export default function DieselPage() {
                     </div>
                   ) : (
                     <div>
-                      <p className="text-sm font-medium text-amber-600 dark:text-amber-400">No reefer assigned</p>
+                      <p className="text-sm font-medium text-warning">No reefer assigned</p>
                       <p className="text-xs text-muted-foreground">Contact your admin to assign a reefer/trailer</p>
                     </div>
                   )
@@ -1046,7 +1045,7 @@ export default function DieselPage() {
                     </div>
                   ) : (
                     <div>
-                      <p className="text-sm font-medium text-amber-600 dark:text-amber-400">No vehicle assigned</p>
+                      <p className="text-sm font-medium text-warning">No vehicle assigned</p>
                       <p className="text-xs text-muted-foreground">Contact your admin to assign a vehicle</p>
                     </div>
                   )
@@ -1142,9 +1141,9 @@ export default function DieselPage() {
                 />
               </Suspense>
               {formData.station && selectedStationPrice != null ? (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-success/5 dark:bg-success/10 border border-success/20 dark:border-success/30">
+                  <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                  <p className="text-xs text-success">
                     Price: <span className="font-semibold">${formatNumber(selectedStationPrice)}/L</span>
                     {formData.litres && (
                       <> — Total: <span className="font-semibold">${formatNumber(parseFloat(formData.litres) * selectedStationPrice)}</span></>
@@ -1152,9 +1151,9 @@ export default function DieselPage() {
                   </p>
                 </div>
               ) : formData.station ? (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                  <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-warning/5 dark:bg-warning/10 border border-warning/20 dark:border-warning/30">
+                  <Info className="w-4 h-4 text-warning shrink-0" />
+                  <p className="text-xs text-warning">
                     Cost per litre not configured for this station — will be added on the dashboard
                   </p>
                 </div>
@@ -1235,7 +1234,6 @@ export default function DieselPage() {
             <Button
               onClick={() => setViewMode("add")}
               size="sm"
-              className="h-9"
               aria-label="Add new entry"
               disabled={!assignedVehicle && !assignedReefer}
             >
@@ -1249,8 +1247,8 @@ export default function DieselPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-50 dark:bg-orange-950/50 rounded-lg">
-                  <Gauge className="w-4 h-4 text-orange-600" />
+                <div className="p-2 bg-warning/5 dark:bg-warning/10 rounded-lg">
+                  <Gauge className="w-4 h-4 text-warning" />
                 </div>
                 <div className="flex-1">
                   <p className="text-lg font-bold">
@@ -1268,14 +1266,7 @@ export default function DieselPage() {
 
           <div>
             <p className="text-sm font-medium mb-3">{monthName} Entries</p>
-            {!hasUserSelectedMonth ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <Calendar className="w-5 h-5 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">Select a month to view entries</p>
-                </CardContent>
-              </Card>
-            ) : isLoadingRecords ? (
+            {isLoadingRecords ? (
               <LoadingSpinner />
             ) : entries.length === 0 && allReeferRecords.length === 0 ? (
               <EmptyState />

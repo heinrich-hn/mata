@@ -1,5 +1,3 @@
-"use client";
-
 import { MobileShell } from "@/components/layout";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +26,7 @@ import {
   User
 } from "lucide-react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 
 
 interface Vehicle {
@@ -71,30 +69,45 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const supabase = createClient();
   const queryClient = useQueryClient();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  // Find driver by matching email
+  // Find driver by auth_user_id (primary) or email (fallback)
   const { data: driver, isLoading: _driverLoading } = useQuery<Driver | null>({
-    queryKey: ["driver-by-email", user?.email],
+    queryKey: ["driver-by-email-docs", user?.id, user?.email],
     queryFn: async () => {
-      if (!user?.email) return null;
+      if (!user) return null;
       try {
-        const { data, error } = await supabase
-          .from("drivers")
-          .select("*")
-          .eq("email", user.email)
-          .eq("status", "active")
-          .order("created_at", { ascending: false });
-
-        if (error) return null;
-        const drivers = data ?? [];
-        return drivers.length > 0 ? drivers[0] : null;
+        // Try auth_user_id first (set by Dashboard when creating driver auth profile)
+        if (user.id) {
+          const { data } = await supabase
+            .from("drivers")
+            .select("*")
+            .eq("auth_user_id", user.id)
+            .eq("status", "active")
+            .limit(1)
+            .maybeSingle();
+          if (data) return data as Driver;
+        }
+        // Fallback: match by email
+        if (user.email) {
+          const { data } = await supabase
+            .from("drivers")
+            .select("*")
+            .eq("email", user.email)
+            .eq("status", "active")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (data) return data as Driver;
+        }
+        return null;
       } catch {
         return null;
       }
     },
-    enabled: !!user?.email,
+    enabled: !!user,
+    staleTime: 10 * 60 * 1000,
   });
 
   // Fetch current driver assignment (assigned by admin from dashboard)
@@ -141,53 +154,24 @@ export default function ProfilePage() {
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
+
+    // Save email before clearing anything
+    const lastEmail = user?.email;
+
     try {
       queryClient.clear();
-      localStorage.clear();
-      sessionStorage.clear();
-
-      document.cookie.split(";").forEach((cookie) => {
-        const eqPos = cookie.indexOf("=");
-        const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
-      });
-
-      try {
-        await supabase.auth.signOut({ scope: "local" });
-      } catch {
-        // signOut error - continue with cleanup
-      }
-
-      if ("caches" in window) {
-        try {
-          const cacheNames = await caches.keys();
-          await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
-        } catch {
-          // cache clear error - non-critical
-        }
-      }
-
-      if ("serviceWorker" in navigator) {
-        try {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          for (const registration of registrations) {
-            await registration.unregister();
-          }
-        } catch {
-          // service worker unregister error - non-critical
-        }
-      }
-
-      toast({
-        title: "Signed out",
-        description: "You have been signed out successfully",
-      });
-
-      window.location.replace("/login");
-    } catch {
-      window.location.replace("/login");
+      await _signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
     }
+
+    // Restore saved email so login page pre-fills
+    if (lastEmail) {
+      try { localStorage.setItem("mata_last_email", lastEmail); } catch { /* ignore */ }
+    }
+
+    // Force navigation — use window.location as fallback to guarantee redirect
+    window.location.href = "/login";
   };
 
   const getInitials = (name: string | null | undefined) => {
@@ -226,7 +210,7 @@ export default function ProfilePage() {
         : "No alerts",
       badge: hasAlerts ? (expiredCount > 0 ? "destructive" : "warning") : undefined,
       badgeCount: expiredCount + expiringCount,
-      onClick: () => router.push("/profile/documents"),
+      onClick: () => navigate("/profile/documents"),
     },
     {
       icon: FileText,
@@ -234,7 +218,7 @@ export default function ProfilePage() {
       description: "License, PDP & more",
       badge: hasAlerts ? (expiredCount > 0 ? "destructive" : "warning") : undefined,
       badgeCount: expiredCount + expiringCount,
-      onClick: () => router.push("/profile/documents"),
+      onClick: () => navigate("/profile/documents"),
     },
     {
       icon: HelpCircle,
@@ -435,18 +419,16 @@ export default function ProfilePage() {
                   type="button"
                   key={item.label}
                   onClick={item.onClick}
-                  className={`w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors ${
-                    index !== menuItems.length - 1 ? "border-b border-border/50" : ""
-                  }`}
+                  className={`w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors ${index !== menuItems.length - 1 ? "border-b border-border/50" : ""
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative p-2 bg-muted rounded-lg">
                       <Icon className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
                       {item.badge && item.badgeCount > 0 && (
                         <span
-                          className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white ${
-                            item.badge === "destructive" ? "bg-destructive" : "bg-amber-500"
-                          }`}
+                          className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white ${item.badge === "destructive" ? "bg-destructive" : "bg-warning"
+                            }`}
                         >
                           {item.badgeCount}
                         </span>

@@ -1,4 +1,3 @@
-"use client";
 
 import { MobileShell } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +24,7 @@ import {
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { ReactNode } from "react";
 
 // Define the document type based on DOCUMENT_TYPES
@@ -52,27 +51,38 @@ export default function DocumentsPage() {
   const { user } = useAuth();
   const supabase = createClient();
 
-  // Fetch driver record by email
+  // Fetch driver record by auth_user_id (primary) or email (fallback)
   const { data: driver, isLoading: driverLoading } = useQuery<Driver | null>({
-    queryKey: ["driver-by-email-docs", user?.email],
+    queryKey: ["driver-by-email-docs", user?.id, user?.email],
     queryFn: async () => {
-      if (!user?.email) return null;
-      const { data, error } = await supabase
-        .from("drivers")
-        .select("id, first_name, last_name, email")
-        .eq("email", user.email)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Error fetching driver:", error);
-        return null;
+      if (!user) return null;
+      // Try auth_user_id first
+      if (user.id) {
+        const { data } = await supabase
+          .from("drivers")
+          .select("id, first_name, last_name, email")
+          .eq("auth_user_id", user.id)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle();
+        if (data) return data as Driver | null;
       }
-      return data as Driver | null;
+      // Fallback: match by email
+      if (user.email) {
+        const { data } = await supabase
+          .from("drivers")
+          .select("id, first_name, last_name, email")
+          .eq("email", user.email)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data) return data as Driver | null;
+      }
+      return null;
     },
-    enabled: !!user?.email,
+    enabled: !!user,
+    staleTime: 10 * 60 * 1000,
   });
 
   const { documents, isLoading: docsLoading, alerts, expiredCount, expiringCount } =
@@ -88,7 +98,7 @@ export default function DocumentsPage() {
         </Badge>
       );
     }
-    
+
     const { status, daysUntil } = getExpiryStatus(expiryDate);
     switch (status) {
       case "expired":
@@ -101,7 +111,7 @@ export default function DocumentsPage() {
         return (
           <Badge
             variant="secondary"
-            className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+            className="text-[10px] bg-warning/10 text-warning border-warning/20"
           >
             {daysUntil}d left
           </Badge>
@@ -110,7 +120,7 @@ export default function DocumentsPage() {
         return (
           <Badge
             variant="secondary"
-            className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+            className="text-[10px] bg-success/10 text-success border-success/20"
           >
             Valid
           </Badge>
@@ -133,7 +143,7 @@ export default function DocumentsPage() {
         month: "short",
         day: "numeric",
       });
-    } catch (error) {
+    } catch {
       return null;
     }
   };
@@ -144,7 +154,7 @@ export default function DocumentsPage() {
         {/* Header */}
         <div className="flex items-center gap-3">
           <Link
-            href="/profile"
+            to="/profile"
             className="p-2 rounded-xl bg-muted hover:bg-muted/70 transition-colors"
             aria-label="Go back to profile"
           >
@@ -166,7 +176,7 @@ export default function DocumentsPage() {
               {expiringCount > 0 && (
                 <Badge
                   variant="secondary"
-                  className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                  className="text-[10px] bg-warning/10 text-warning"
                 >
                   {expiringCount}
                 </Badge>
@@ -178,24 +188,22 @@ export default function DocumentsPage() {
         {/* Alert summary */}
         {alerts.length > 0 && (
           <div
-            className={`rounded-2xl border p-4 ${
-              expiredCount > 0
-                ? "border-destructive/30 bg-destructive/5"
-                : "border-amber-500/30 bg-amber-500/5"
-            }`}
+            className={`rounded-2xl border p-4 ${expiredCount > 0
+              ? "border-destructive/30 bg-destructive/5"
+              : "border-warning/30 bg-warning/5"
+              }`}
           >
             <div className="flex items-center gap-2 mb-2">
               {expiredCount > 0 ? (
                 <ShieldAlert className="w-4 h-4 text-destructive" strokeWidth={2} />
               ) : (
-                <AlertTriangle className="w-4 h-4 text-amber-500" strokeWidth={2} />
+                <AlertTriangle className="w-4 h-4 text-warning" strokeWidth={2} />
               )}
               <p
-                className={`text-sm font-semibold ${
-                  expiredCount > 0
-                    ? "text-destructive"
-                    : "text-amber-700 dark:text-amber-400"
-                }`}
+                className={`text-sm font-semibold ${expiredCount > 0
+                  ? "text-destructive"
+                  : "text-warning"
+                  }`}
               >
                 {expiredCount > 0
                   ? `${expiredCount} document${expiredCount > 1 ? "s" : ""} expired`
@@ -241,38 +249,35 @@ export default function DocumentsPage() {
               return (
                 <Card
                   key={docType.value}
-                  className={`overflow-hidden ${
-                    status === "expired"
-                      ? "border-destructive/30"
-                      : status === "expiring"
-                      ? "border-amber-500/30"
+                  className={`overflow-hidden ${status === "expired"
+                    ? "border-destructive/30"
+                    : status === "expiring"
+                      ? "border-warning/30"
                       : ""
-                  }`}
+                    }`}
                 >
                   <CardContent className="p-0">
                     <div className="p-4">
                       <div className="flex items-start gap-3">
                         <div
-                          className={`p-2.5 rounded-xl shrink-0 ${
-                            status === "expired"
-                              ? "bg-destructive/10"
-                              : status === "expiring"
-                              ? "bg-amber-500/10"
+                          className={`p-2.5 rounded-xl shrink-0 ${status === "expired"
+                            ? "bg-destructive/10"
+                            : status === "expiring"
+                              ? "bg-warning/10"
                               : status === "valid"
-                              ? "bg-emerald-500/10"
-                              : "bg-muted"
-                          }`}
+                                ? "bg-success/10"
+                                : "bg-muted"
+                            }`}
                         >
                           <Icon
-                            className={`w-5 h-5 ${
-                              status === "expired"
-                                ? "text-destructive"
-                                : status === "expiring"
-                                ? "text-amber-500"
+                            className={`w-5 h-5 ${status === "expired"
+                              ? "text-destructive"
+                              : status === "expiring"
+                                ? "text-warning"
                                 : status === "valid"
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-muted-foreground"
-                            }`}
+                                  ? "text-success"
+                                  : "text-muted-foreground"
+                              }`}
                             strokeWidth={1.5}
                           />
                         </div>

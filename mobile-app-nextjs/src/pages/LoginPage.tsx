@@ -1,5 +1,3 @@
-"use client";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,17 +6,36 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+
+const LAST_EMAIL_KEY = "mata_last_email";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useAuth();
-  const router = useRouter();
+  const { user, isLoading: authLoading, signIn } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Redirect to home if already authenticated
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate("/", { replace: true });
+    }
+  }, [user, authLoading, navigate]);
+
+  // Pre-fill email from previous session (saved on inactivity sign-out)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LAST_EMAIL_KEY);
+      if (saved) setEmail(saved);
+    } catch {
+      // storage blocked — ignore
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,10 +56,7 @@ export default function LoginPage() {
           title: "Welcome!",
           description: "Signing you in...",
         });
-        router.refresh();
-        setTimeout(() => {
-          router.push("/");
-        }, 500);
+        navigate("/", { replace: true });
       }
     } catch (err) {
       console.error("Login error:", err);

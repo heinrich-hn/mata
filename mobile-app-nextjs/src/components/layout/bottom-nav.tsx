@@ -1,16 +1,11 @@
-"use client";
-
 import { cn } from "@/lib/utils";
-import { Droplets, LayoutGrid, Route, User, type LucideIcon } from "lucide-react"; // Import LucideIcon type
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { Route as NextRoute } from "next";
+import { Droplets, LayoutGrid, Route, User, type LucideIcon } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 
-// Define a proper type for nav items
 interface NavItem {
-  href: NextRoute<string>;
+  href: string;
   label: string;
-  icon: LucideIcon; // Use LucideIcon type instead of any
+  icon: LucideIcon;
 }
 
 const navItems: NavItem[] = [
@@ -37,7 +32,7 @@ const navItems: NavItem[] = [
 ];
 
 export function BottomNav() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   return (
     <nav className="fixed bottom-4 left-4 right-4 z-50 safe-area-bottom">
@@ -51,7 +46,7 @@ export function BottomNav() {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                to={item.href}
                 aria-label={item.label}
                 className={cn(
                   "relative flex flex-col items-center justify-center flex-1 h-full gap-1 transition-all duration-200 no-select",
@@ -73,7 +68,7 @@ export function BottomNav() {
 
                 {/* Label */}
                 <span className={cn(
-                  "text-[10px] font-semibold uppercase tracking-[0.2em]",
+                  "text-[11px] font-semibold uppercase tracking-[0.2em]",
                   isActive ? "text-primary" : "text-muted-foreground"
                 )}>
                   {item.label}

@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -474,492 +472,492 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[92vh] overflow-y-auto p-0 gap-0" aria-describedby={undefined}>
-        <DialogTitle className="sr-only">Trip Details</DialogTitle>
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-background border-b px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full shrink-0" onClick={() => onOpenChange(false)}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base font-bold truncate">Trip Details</h2>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <MapPin className="w-3 h-3 shrink-0" />
-                <span className="truncate">{trip.origin || "N/A"}</span>
-                <ArrowRight className="w-3 h-3 shrink-0" />
-                <span className="truncate">{trip.destination || "N/A"}</span>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="left-0 top-0 translate-x-0 translate-y-0 w-full max-w-none h-[100dvh] max-h-none rounded-none border-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-[calc(100%-2rem)] sm:max-w-[500px] sm:h-auto sm:max-h-[92vh] sm:rounded-lg sm:border overflow-y-auto overflow-x-hidden p-0 gap-0" aria-describedby={undefined}>
+          <DialogTitle className="sr-only">Trip Details</DialogTitle>
+          {/* Header */}
+          <div className="sticky top-0 z-10 bg-background border-b px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full shrink-0" onClick={() => onOpenChange(false)}>
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-bold truncate">Trip Details</h2>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{trip.origin || "N/A"}</span>
+                  <ArrowRight className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{trip.destination || "N/A"}</span>
+                </div>
               </div>
-            </div>
-            <Badge variant="outline" className="text-[10px] shrink-0">
-              {trip.status || "pending"}
-            </Badge>
-          </div>
-        </div>
-
-        <div className="p-4 space-y-4">
-          {/* Trip Info Row */}
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {trip.departure_date ? formatDate(trip.departure_date) : "No date"}
-            </span>
-            {trip.client_name && (
-              <Badge variant="secondary" className="text-[10px]">
-                {trip.client_name}
+              <Badge variant="outline" className="text-[10px] shrink-0">
+                {trip.status || "pending"}
               </Badge>
-            )}
+            </div>
           </div>
 
-          {/* ─── 360° Time Tracker Button ─────────────────── */}
-          <Button
-            variant="outline"
-            className="w-full h-12 text-sm font-semibold gap-2 border-primary/30 hover:bg-primary/5"
-            onClick={handleStart360CycleTracker}
-            disabled={isStartingCycleTracker}
-          >
-            {isStartingCycleTracker ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Clock className="w-4 h-4" />
-            )}
-            {isStartingCycleTracker ? "Saving Trip..." : "360° Time Tracker"}
-            <ArrowRight className="w-3.5 h-3.5 ml-auto" />
-          </Button>
-
-          {/* ─── POD & KM Section ─────────────────────────── */}
-          <div className="card-glass p-4 space-y-3">
-            <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
-              Trip Information
-            </p>
-
-            <div>
-              <Label className="text-xs font-medium mb-1.5 block">POD Number</Label>
-              <Input
-                value={podNumber}
-                onChange={(e) => setPodNumber(e.target.value)}
-                placeholder="Enter POD number"
-                className="h-11"
-              />
+          <div className="p-4 space-y-4">
+            {/* Trip Info Row */}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                {trip.departure_date ? formatDate(trip.departure_date) : "No date"}
+              </span>
+              {trip.client_name && (
+                <Badge variant="secondary" className="text-[10px]">
+                  {trip.client_name}
+                </Badge>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-medium mb-1.5 block">Starting KM</Label>
-                <div className="relative">
-                  <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    value={startingKm}
-                    onChange={(e) => setStartingKm(e.target.value)}
-                    placeholder="0"
-                    className="h-11 pl-9 tabular-nums"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs font-medium mb-1.5 block">Ending KM</Label>
-                <div className="relative">
-                  <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    value={endingKm}
-                    onChange={(e) => setEndingKm(e.target.value)}
-                    placeholder="0"
-                    className="h-11 pl-9 tabular-nums"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Show calculated distance */}
-            {startingKm && endingKm && parseFloat(endingKm) > parseFloat(startingKm) && (
-              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-xs text-muted-foreground">Calculated distance</span>
-                <span className="text-sm font-bold text-emerald-400 tabular-nums">
-                  {(parseFloat(endingKm) - parseFloat(startingKm)).toLocaleString()} km
-                </span>
-              </div>
-            )}
-
+            {/* ─── 360° Time Tracker Button ─────────────────── */}
             <Button
-              onClick={handleSaveTripInfo}
-              disabled={isSavingTrip}
-              className="w-full h-10 text-sm"
-              variant={tripSaved ? "outline" : "default"}
+              variant="outline"
+              className="w-full h-12 text-sm font-semibold gap-2 border-primary/30 hover:bg-primary/5"
+              onClick={handleStart360CycleTracker}
+              disabled={isStartingCycleTracker}
             >
-              {isSavingTrip ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : tripSaved ? (
-                <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-500" />
-              ) : null}
-              {tripSaved ? "Saved!" : "Save Trip Info"}
+              {isStartingCycleTracker ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Clock className="w-4 h-4" />
+              )}
+              {isStartingCycleTracker ? "Saving Trip..." : "360° Time Tracker"}
+              <ArrowRight className="w-3.5 h-3.5 ml-auto" />
             </Button>
-          </div>
 
-          {/* ─── Expenses Section ─────────────────────────── */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            {/* ─── POD & KM Section ─────────────────────────── */}
+            <div className="card-glass p-4 space-y-3">
               <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
-                Trip Expenses
+                Trip Information
               </p>
-              <div className="flex items-center gap-2">
-                {(tripExpenses.length > 0 || systemExpenses.length > 0) && (
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    ${(totalExpensesUsd + totalSystemExpensesUsd).toFixed(2)}
+
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">POD Number</Label>
+                <Input
+                  value={podNumber}
+                  onChange={(e) => setPodNumber(e.target.value)}
+                  placeholder="Enter POD number"
+                  className="h-11"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-medium mb-1.5 block">Starting KM</Label>
+                  <div className="relative">
+                    <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={startingKm}
+                      onChange={(e) => setStartingKm(e.target.value)}
+                      placeholder="0"
+                      className="h-11 pl-9 tabular-nums"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1.5 block">Ending KM</Label>
+                  <div className="relative">
+                    <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={endingKm}
+                      onChange={(e) => setEndingKm(e.target.value)}
+                      placeholder="0"
+                      className="h-11 pl-9 tabular-nums"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Show calculated distance */}
+              {startingKm && endingKm && parseFloat(endingKm) > parseFloat(startingKm) && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-success/10 border border-success/20">
+                  <span className="text-xs text-muted-foreground">Calculated distance</span>
+                  <span className="text-sm font-bold text-success tabular-nums">
+                    {(parseFloat(endingKm) - parseFloat(startingKm)).toLocaleString()} km
                   </span>
-                )}
-                {!showExpenseForm && (
+                </div>
+              )}
+
+              <Button
+                onClick={handleSaveTripInfo}
+                disabled={isSavingTrip}
+                className="w-full h-10 text-sm"
+                variant={tripSaved ? "outline" : "default"}
+              >
+                {isSavingTrip ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : tripSaved ? (
+                  <CheckCircle2 className="w-4 h-4 mr-2 text-success" />
+                ) : null}
+                {tripSaved ? "Saved!" : "Save Trip Info"}
+              </Button>
+            </div>
+
+            {/* ─── Expenses Section ─────────────────────────── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
+                  Trip Expenses
+                </p>
+                <div className="flex items-center gap-2">
+                  {(tripExpenses.length > 0 || systemExpenses.length > 0) && (
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      ${(totalExpensesUsd + totalSystemExpensesUsd).toFixed(2)}
+                    </span>
+                  )}
+                  {!showExpenseForm && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs gap-1"
+                      onClick={() => setShowExpenseForm(true)}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Pre-configured (system-generated) expenses */}
+              {systemExpenses.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                    Pre-configured Route Costs
+                  </p>
+                  <div className="space-y-1.5 opacity-70">
+                    {systemExpenses.map((entry: CostEntry) => (
+                      <ExpenseRow key={entry.id} entry={entry} isSystem />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Driver-added expenses */}
+              {loadingExpenses ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : tripExpenses.length === 0 && !showExpenseForm ? (
+                <div className="card-glass p-6 text-center">
+                  <Receipt className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    {systemExpenses.length > 0
+                      ? "No additional expenses added. Pre-configured costs are shown above."
+                      : "No expenses for this trip"}
+                  </p>
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="h-9 text-xs gap-1"
+                    className="mt-3 h-9 text-xs gap-1"
                     onClick={() => setShowExpenseForm(true)}
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    Add
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Pre-configured (system-generated) expenses */}
-            {systemExpenses.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
-                  Pre-configured Route Costs
-                </p>
-                <div className="space-y-1.5 opacity-70">
-                  {systemExpenses.map((entry: CostEntry) => (
-                    <ExpenseRow key={entry.id} entry={entry} isSystem />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Driver-added expenses */}
-            {loadingExpenses ? (
-              <div className="flex justify-center py-6">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : tripExpenses.length === 0 && !showExpenseForm ? (
-              <div className="card-glass p-6 text-center">
-                <Receipt className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  {systemExpenses.length > 0
-                    ? "No additional expenses added. Pre-configured costs are shown above."
-                    : "No expenses for this trip"}
-                </p>
-                <Button
-                  size="sm"
-                  className="mt-3 h-9 text-xs gap-1"
-                  onClick={() => setShowExpenseForm(true)}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add {systemExpenses.length > 0 ? "Expense" : "First Expense"}
-                </Button>
-              </div>
-            ) : tripExpenses.length > 0 ? (
-              <div className="space-y-1.5">
-                {systemExpenses.length > 0 && (
-                  <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
-                    Your Expenses
-                  </p>
-                )}
-                <div className="space-y-2">
-                  {tripExpenses.map((entry: CostEntry) => (
-                    <ExpenseRow key={entry.id} entry={entry} attachmentCount={attachmentCounts[entry.id] || 0} />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {/* ─── Add Expense Form ──────────────────────── */}
-            {showExpenseForm && (
-              <div className="card-glass p-4 space-y-3 border border-primary/20">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm font-semibold">New Expense</p>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 rounded-full"
-                    onClick={() => {
-                      setShowExpenseForm(false);
-                      setFormData(INITIAL_EXPENSE_FORM);
-                      setErrors({});
-                    }}
-                  >
-                    <X className="w-4 h-4" />
+                    Add {systemExpenses.length > 0 ? "Expense" : "First Expense"}
                   </Button>
                 </div>
-
-                {/* Category */}
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">Category *</Label>
-                  <BottomSheetSelect
-                    value={formData.category}
-                    onValueChange={handleCategoryChange}
-                    options={categoryOptions}
-                    placeholder="Select category..."
-                  />
-                  {errors.category && <p className="text-xs text-destructive mt-1">{errors.category}</p>}
-                </div>
-
-                {/* Sub-category */}
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">Sub-category *</Label>
-                  <SearchableSelect
-                    value={formData.sub_category}
-                    onValueChange={(v) => handleInputChange("sub_category", v)}
-                    options={subCategoryOptions}
-                    placeholder={formData.category ? "Search..." : "Select category first"}
-                    searchPlaceholder="Type to search..."
-                    disabled={!formData.category}
-                  />
-                  {errors.sub_category && <p className="text-xs text-destructive mt-1">{errors.sub_category}</p>}
-                </div>
-
-                {/* High-risk alert */}
-                {isHighRiskCategory && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    Auto-flagged for review (high-risk category)
+              ) : tripExpenses.length > 0 ? (
+                <div className="space-y-1.5">
+                  {systemExpenses.length > 0 && (
+                    <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                      Your Expenses
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    {tripExpenses.map((entry: CostEntry) => (
+                      <ExpenseRow key={entry.id} entry={entry} attachmentCount={attachmentCounts[entry.id] || 0} />
+                    ))}
                   </div>
-                )}
+                </div>
+              ) : null}
 
-                {/* Currency toggle */}
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">Currency</Label>
-                  <div className="flex rounded-lg border overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange("currency", "ZAR")}
-                      className={cn(
-                        "flex-1 py-2.5 text-xs font-semibold transition-colors",
-                        formData.currency === "ZAR" ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground"
-                      )}
+              {/* ─── Add Expense Form ──────────────────────── */}
+              {showExpenseForm && (
+                <div className="card-glass p-4 space-y-3 border border-primary/20">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-semibold">New Expense</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      onClick={() => {
+                        setShowExpenseForm(false);
+                        setFormData(INITIAL_EXPENSE_FORM);
+                        setErrors({});
+                      }}
                     >
-                      ZAR (R)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange("currency", "USD")}
-                      className={cn(
-                        "flex-1 py-2.5 text-xs font-semibold transition-colors",
-                        formData.currency === "USD" ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground"
-                      )}
-                    >
-                      USD ($)
-                    </button>
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
-                </div>
 
-                {/* Amount */}
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">
-                    Amount ({formData.currency === "ZAR" ? "R" : "$"}) *
-                  </Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) => handleInputChange("amount", e.target.value)}
-                    placeholder="0.00"
-                    className="h-12 text-xl font-bold tabular-nums"
-                  />
-                  {errors.amount && <p className="text-xs text-destructive mt-1">{errors.amount}</p>}
-                </div>
-
-                {/* ZAR preview */}
-                {formData.currency === "ZAR" && usdEquivalent && (
-                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                    <span className="text-[10px] text-blue-400">USD equivalent (÷ {ZAR_TO_USD_RATE})</span>
-                    <span className="text-sm font-bold text-blue-300 tabular-nums">$ {usdEquivalent}</span>
-                  </div>
-                )}
-
-                {/* Date + Ref */}
-                <div className="grid grid-cols-2 gap-3">
+                  {/* Category */}
                   <div>
-                    <Label className="text-xs font-medium mb-1.5 block">Date *</Label>
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => handleInputChange("date", e.target.value)}
-                      className="h-10 text-xs"
+                    <Label className="text-xs font-medium mb-1.5 block">Category *</Label>
+                    <BottomSheetSelect
+                      value={formData.category}
+                      onValueChange={handleCategoryChange}
+                      options={categoryOptions}
+                      placeholder="Select category..."
                     />
-                    {errors.date && <p className="text-xs text-destructive mt-1">{errors.date}</p>}
+                    {errors.category && <p className="text-xs text-destructive mt-1">{errors.category}</p>}
                   </div>
+
+                  {/* Sub-category */}
                   <div>
-                    <Label className="text-xs font-medium mb-1.5 block">Ref # *</Label>
-                    <Input
-                      value={formData.reference_number}
-                      onChange={(e) => handleInputChange("reference_number", e.target.value)}
-                      placeholder="INV-123"
-                      className="h-10 text-xs"
+                    <Label className="text-xs font-medium mb-1.5 block">Sub-category *</Label>
+                    <SearchableSelect
+                      value={formData.sub_category}
+                      onValueChange={(v) => handleInputChange("sub_category", v)}
+                      options={subCategoryOptions}
+                      placeholder={formData.category ? "Search..." : "Select category first"}
+                      searchPlaceholder="Type to search..."
+                      disabled={!formData.category}
                     />
-                    {errors.reference_number && <p className="text-xs text-destructive mt-1">{errors.reference_number}</p>}
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">Notes</Label>
-                  <Textarea
-                    value={formData.notes}
-                    onChange={(e) => handleInputChange("notes", e.target.value)}
-                    placeholder="Optional details..."
-                    rows={2}
-                    className="text-xs"
-                  />
-                </div>
-
-                {/* Receipt Upload */}
-                <div>
-                  <Label className="text-xs font-medium mb-1.5 block">
-                    <Paperclip className="w-3 h-3 inline mr-1" />
-                    Receipt / Proof ({receiptFiles.length}/5)
-                  </Label>
-                  <div className="flex gap-2">
-                    {/* Camera capture */}
-                    <label className="flex-1 cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                        disabled={receiptFiles.length >= 5}
-                      />
-                      <div className={cn(
-                        "flex items-center justify-center gap-2 h-11 rounded-lg border border-dashed transition-colors",
-                        receiptFiles.length >= 5
-                          ? "border-muted-foreground/20 text-muted-foreground/30 cursor-not-allowed"
-                          : "border-primary/40 text-primary hover:bg-primary/5 active:scale-[0.98]"
-                      )}>
-                        <Camera className="w-4 h-4" />
-                        <span className="text-xs font-medium">Camera</span>
-                      </div>
-                    </label>
-                    {/* File/gallery picker */}
-                    <label className="flex-1 cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/*,.pdf,.doc,.docx"
-                        multiple
-                        onChange={handleFileSelect}
-                        className="hidden"
-                        disabled={receiptFiles.length >= 5}
-                      />
-                      <div className={cn(
-                        "flex items-center justify-center gap-2 h-11 rounded-lg border border-dashed transition-colors",
-                        receiptFiles.length >= 5
-                          ? "border-muted-foreground/20 text-muted-foreground/30 cursor-not-allowed"
-                          : "border-primary/40 text-primary hover:bg-primary/5 active:scale-[0.98]"
-                      )}>
-                        <ImageIcon className="w-4 h-4" />
-                        <span className="text-xs font-medium">Gallery</span>
-                      </div>
-                    </label>
+                    {errors.sub_category && <p className="text-xs text-destructive mt-1">{errors.sub_category}</p>}
                   </div>
 
-                  {/* File previews */}
-                  {receiptFiles.length > 0 && (
-                    <div className="flex gap-2 mt-2 flex-wrap">
-                      {receiptFiles.map((file, idx) => (
-                        <div key={idx} className="relative group">
-                          {receiptPreviews[idx] ? (
-                            <img
-                              src={receiptPreviews[idx]}
-                              alt={file.name}
-                              className="w-16 h-16 rounded-lg object-cover border border-border/50"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-lg bg-muted/30 border border-border/50 flex flex-col items-center justify-center">
-                              <FileText className="w-5 h-5 text-muted-foreground" />
-                              <span className="text-[8px] text-muted-foreground mt-0.5 truncate max-w-[56px]">
-                                {file.name.split(".").pop()?.toUpperCase()}
-                              </span>
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            title="Remove file"
-                            onClick={() => removeFile(idx)}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
+                  {/* High-risk alert */}
+                  {isHighRiskCategory && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-warning/10 border border-warning/20 text-xs text-warning">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      Auto-flagged for review (high-risk category)
                     </div>
                   )}
-                </div>
 
-                {/* Flag */}
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleInputChange("is_flagged", !formData.is_flagged)}
-                    className={cn(
-                      "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0",
-                      formData.is_flagged ? "bg-amber-500 border-amber-500" : "border-muted-foreground/40"
-                    )}
-                  >
-                    {formData.is_flagged && <Check className="w-3 h-3 text-white" />}
-                  </button>
-                  <span className="text-xs text-muted-foreground">Flag for investigation</span>
-                  {formData.is_flagged && (
-                    <Flag className="w-4 h-4 text-amber-500 ml-auto" />
-                  )}
-                </div>
-
-                {formData.is_flagged && (
+                  {/* Currency toggle */}
                   <div>
-                    <Label className="text-xs font-medium mb-1.5 block">Flag reason *</Label>
+                    <Label className="text-xs font-medium mb-1.5 block">Currency</Label>
+                    <div className="flex rounded-lg border overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => handleInputChange("currency", "ZAR")}
+                        className={cn(
+                          "flex-1 py-2.5 text-xs font-semibold transition-colors",
+                          formData.currency === "ZAR" ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground"
+                        )}
+                      >
+                        ZAR (R)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleInputChange("currency", "USD")}
+                        className={cn(
+                          "flex-1 py-2.5 text-xs font-semibold transition-colors",
+                          formData.currency === "USD" ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground"
+                        )}
+                      >
+                        USD ($)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <Label className="text-xs font-medium mb-1.5 block">
+                      Amount ({formData.currency === "ZAR" ? "R" : "$"}) *
+                    </Label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      value={formData.amount}
+                      onChange={(e) => handleInputChange("amount", e.target.value)}
+                      placeholder="0.00"
+                      className="h-12 text-xl font-bold tabular-nums"
+                    />
+                    {errors.amount && <p className="text-xs text-destructive mt-1">{errors.amount}</p>}
+                  </div>
+
+                  {/* ZAR preview */}
+                  {formData.currency === "ZAR" && usdEquivalent && (
+                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-info/10 border border-info/20">
+                      <span className="text-[10px] text-info">USD equivalent (÷ {ZAR_TO_USD_RATE})</span>
+                      <span className="text-sm font-bold text-info tabular-nums">$ {usdEquivalent}</span>
+                    </div>
+                  )}
+
+                  {/* Date + Ref */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs font-medium mb-1.5 block">Date *</Label>
+                      <Input
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => handleInputChange("date", e.target.value)}
+                        className="h-10 text-xs"
+                      />
+                      {errors.date && <p className="text-xs text-destructive mt-1">{errors.date}</p>}
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium mb-1.5 block">Ref # *</Label>
+                      <Input
+                        value={formData.reference_number}
+                        onChange={(e) => handleInputChange("reference_number", e.target.value)}
+                        placeholder="INV-123"
+                        className="h-10 text-xs"
+                      />
+                      {errors.reference_number && <p className="text-xs text-destructive mt-1">{errors.reference_number}</p>}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <Label className="text-xs font-medium mb-1.5 block">Notes</Label>
                     <Textarea
-                      value={formData.flag_reason}
-                      onChange={(e) => handleInputChange("flag_reason", e.target.value)}
-                      placeholder="Why flag this expense?"
+                      value={formData.notes}
+                      onChange={(e) => handleInputChange("notes", e.target.value)}
+                      placeholder="Optional details..."
                       rows={2}
                       className="text-xs"
                     />
-                    {errors.flag_reason && <p className="text-xs text-destructive mt-1">{errors.flag_reason}</p>}
                   </div>
-                )}
 
-                {/* Submit */}
-                <Button
-                  onClick={validateAndSubmit}
-                  disabled={addExpenseMutation.isPending || isUploading}
-                  className="w-full h-10 text-sm font-semibold"
-                >
-                  {addExpenseMutation.isPending || isUploading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                  {/* Receipt Upload */}
+                  <div>
+                    <Label className="text-xs font-medium mb-1.5 block">
+                      <Paperclip className="w-3 h-3 inline mr-1" />
+                      Receipt / Proof ({receiptFiles.length}/5)
+                    </Label>
+                    <div className="flex gap-2">
+                      {/* Camera capture */}
+                      <label className="flex-1 cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                          disabled={receiptFiles.length >= 5}
+                        />
+                        <div className={cn(
+                          "flex items-center justify-center gap-2 h-11 rounded-lg border border-dashed transition-colors",
+                          receiptFiles.length >= 5
+                            ? "border-muted-foreground/20 text-muted-foreground/30 cursor-not-allowed"
+                            : "border-primary/40 text-primary hover:bg-primary/5 active:scale-[0.98]"
+                        )}>
+                          <Camera className="w-4 h-4" />
+                          <span className="text-xs font-medium">Camera</span>
+                        </div>
+                      </label>
+                      {/* File/gallery picker */}
+                      <label className="flex-1 cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*,.pdf,.doc,.docx"
+                          multiple
+                          onChange={handleFileSelect}
+                          className="hidden"
+                          disabled={receiptFiles.length >= 5}
+                        />
+                        <div className={cn(
+                          "flex items-center justify-center gap-2 h-11 rounded-lg border border-dashed transition-colors",
+                          receiptFiles.length >= 5
+                            ? "border-muted-foreground/20 text-muted-foreground/30 cursor-not-allowed"
+                            : "border-primary/40 text-primary hover:bg-primary/5 active:scale-[0.98]"
+                        )}>
+                          <ImageIcon className="w-4 h-4" />
+                          <span className="text-xs font-medium">Gallery</span>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* File previews */}
+                    {receiptFiles.length > 0 && (
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {receiptFiles.map((file, idx) => (
+                          <div key={idx} className="relative group">
+                            {receiptPreviews[idx] ? (
+                              <img
+                                src={receiptPreviews[idx]}
+                                alt={file.name}
+                                className="w-16 h-16 rounded-lg object-cover border border-border/50"
+                              />
+                            ) : (
+                              <div className="w-16 h-16 rounded-lg bg-muted/30 border border-border/50 flex flex-col items-center justify-center">
+                                <FileText className="w-5 h-5 text-muted-foreground" />
+                                <span className="text-[8px] text-muted-foreground mt-0.5 truncate max-w-[56px]">
+                                  {file.name.split(".").pop()?.toUpperCase()}
+                                </span>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              title="Remove file"
+                              onClick={() => removeFile(idx)}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Flag */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange("is_flagged", !formData.is_flagged)}
+                      className={cn(
+                        "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0",
+                        formData.is_flagged ? "bg-warning border-warning" : "border-muted-foreground/40"
+                      )}
+                    >
+                      {formData.is_flagged && <Check className="w-3 h-3 text-white" />}
+                    </button>
+                    <span className="text-xs text-muted-foreground">Flag for investigation</span>
+                    {formData.is_flagged && (
+                      <Flag className="w-4 h-4 text-warning ml-auto" />
+                    )}
+                  </div>
+
+                  {formData.is_flagged && (
+                    <div>
+                      <Label className="text-xs font-medium mb-1.5 block">Flag reason *</Label>
+                      <Textarea
+                        value={formData.flag_reason}
+                        onChange={(e) => handleInputChange("flag_reason", e.target.value)}
+                        placeholder="Why flag this expense?"
+                        rows={2}
+                        className="text-xs"
+                      />
+                      {errors.flag_reason && <p className="text-xs text-destructive mt-1">{errors.flag_reason}</p>}
+                    </div>
                   )}
-                  {isUploading ? "Uploading receipts..." : addExpenseMutation.isPending ? "Saving..." : receiptFiles.length > 0 ? `Save with ${receiptFiles.length} receipt${receiptFiles.length > 1 ? "s" : ""}` : "Save Expense"}
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
 
-    {/* 360° Cycle Tracker Form */}
-    <CycleTrackerForm
-      trip={trip}
-      open={showCycleTracker}
-      onOpenChange={setShowCycleTracker}
-    />
-  </>
+                  {/* Submit */}
+                  <Button
+                    onClick={validateAndSubmit}
+                    disabled={addExpenseMutation.isPending || isUploading}
+                    className="w-full h-10 text-sm font-semibold"
+                  >
+                    {addExpenseMutation.isPending || isUploading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                    )}
+                    {isUploading ? "Uploading receipts..." : addExpenseMutation.isPending ? "Saving..." : receiptFiles.length > 0 ? `Save with ${receiptFiles.length} receipt${receiptFiles.length > 1 ? "s" : ""}` : "Save Expense"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 360° Cycle Tracker Form */}
+      <CycleTrackerForm
+        trip={trip}
+        open={showCycleTracker}
+        onOpenChange={setShowCycleTracker}
+      />
+    </>
   );
 }
 
@@ -982,7 +980,7 @@ function ExpenseRow({ entry, attachmentCount = 0, isSystem = false }: { entry: C
             </span>
           )}
           {entry.is_flagged && (
-            <Flag className="w-3 h-3 text-amber-500 shrink-0" />
+            <Flag className="w-3 h-3 text-warning shrink-0" />
           )}
           {attachmentCount > 0 && (
             <span className="flex items-center gap-0.5 text-[10px] text-primary/80">

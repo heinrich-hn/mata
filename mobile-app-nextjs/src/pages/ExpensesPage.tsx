@@ -1,5 +1,3 @@
-"use client";
-
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -128,10 +126,10 @@ const SuccessAnimation = (): JSX.Element => (
   <MobileShell>
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-5 animate-in fade-in">
       <div className="relative">
-        <div className="w-24 h-24 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-6 animate-pulse">
-          <CheckCircle2 className="w-12 h-12 text-emerald-600" strokeWidth={1.5} />
+        <div className="w-24 h-24 rounded-full bg-success/10 dark:bg-success/20 flex items-center justify-center mb-6 animate-pulse">
+          <CheckCircle2 className="w-12 h-12 text-success" strokeWidth={1.5} />
         </div>
-        <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
+        <div className="absolute inset-0 rounded-full bg-success/20 animate-ping" />
       </div>
       <h2 className="text-2xl font-semibold mb-2">Expense Saved!</h2>
       <p className="text-sm text-muted-foreground text-center">
@@ -193,10 +191,10 @@ const ExpenseCard = ({ entry }: { entry: CostEntry }): JSX.Element => {
 
           <div className="text-right shrink-0">
             <div className={cn(
-              "inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm", 
-              entry.is_flagged 
-                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
-                : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+              "inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm",
+              entry.is_flagged
+                ? "bg-warning/10 text-warning dark:bg-warning/20"
+                : "bg-success/10 text-success dark:bg-success/20"
             )}>
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span className="font-medium">Recorded</span>
@@ -238,8 +236,8 @@ const Alert = ({
   children
 }: AlertProps): JSX.Element => {
   const variantClasses = {
-    default: "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300",
-    destructive: "bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300"
+    default: "bg-info/5 border-info/20 text-info dark:bg-info/10 dark:border-info/30",
+    destructive: "bg-destructive/5 border-destructive/20 text-destructive dark:bg-destructive/10 dark:border-destructive/30"
   };
 
   return (
@@ -329,6 +327,7 @@ export default function ExpensesPage(): JSX.Element {
       return (data || []) as Trip[];
     },
     enabled: !!user?.id && !!assignedVehicle?.id,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fetch all trip IDs for this vehicle (including completed) for filtering expenses
@@ -389,10 +388,10 @@ export default function ExpensesPage(): JSX.Element {
 
         if (tripsData) {
           (tripsData as TripData[]).forEach((t: TripData) => {
-            tripMap[t.id] = { 
-              trip_number: t.trip_number, 
-              origin: t.origin, 
-              destination: t.destination 
+            tripMap[t.id] = {
+              trip_number: t.trip_number,
+              origin: t.origin,
+              destination: t.destination
             };
           });
         }
@@ -691,7 +690,7 @@ export default function ExpensesPage(): JSX.Element {
                 {isHighRiskCategory && (
                   <Alert
                     variant="default"
-                    className="border-amber-200 bg-amber-50 text-amber-800"
+                    className="border-warning/20 bg-warning/5 text-warning"
                   >
                     <div className="flex items-start gap-3">
                       <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -760,14 +759,14 @@ export default function ExpensesPage(): JSX.Element {
 
                 {/* ZAR → USD conversion preview */}
                 {formData.currency === 'ZAR' && usdEquivalent && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <div className="bg-info/5 dark:bg-info/10 border border-info/20 dark:border-info/30 rounded-lg p-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-blue-700 dark:text-blue-300">USD equivalent (÷ 18.6)</span>
-                      <span className="text-sm font-bold text-blue-800 dark:text-blue-200 tabular-nums">
+                      <span className="text-xs text-info">USD equivalent (÷ 18.6)</span>
+                      <span className="text-sm font-bold text-info tabular-nums">
                         $ {usdEquivalent}
                       </span>
                     </div>
-                    <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mt-1">
+                    <p className="text-[10px] text-info/70 mt-1">
                       This USD value will be saved and linked to trip costs
                     </p>
                   </div>
@@ -849,7 +848,7 @@ export default function ExpensesPage(): JSX.Element {
                   </div>
                   <Flag className={cn(
                     "w-5 h-5",
-                    formData.is_flagged ? "text-amber-500" : "text-muted-foreground"
+                    formData.is_flagged ? "text-warning" : "text-muted-foreground"
                   )} />
                 </div>
 
@@ -943,7 +942,7 @@ export default function ExpensesPage(): JSX.Element {
                 <Flag className="w-4 h-4" />
                 <span className="text-xs font-medium">Flagged</span>
               </div>
-              <p className="text-2xl font-bold text-amber-600">{flaggedCount}</p>
+              <p className="text-2xl font-bold text-warning">{flaggedCount}</p>
               <p className="text-xs text-muted-foreground">require review</p>
             </CardContent>
           </Card>

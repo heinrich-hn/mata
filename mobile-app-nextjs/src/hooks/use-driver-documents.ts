@@ -1,5 +1,3 @@
-"use client";
-
 import { createClient } from "@/lib/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 
@@ -24,7 +22,7 @@ export interface DriverDocument {
   document_url?: string | null;
   /** Actual DB column used for the stored file link */
   file_url?: string | null;
-  verified: boolean;
+  verified?: boolean;
   verified_at?: string | null;
   verified_by?: string | null;
   notes?: string | null;

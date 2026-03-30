@@ -1,5 +1,3 @@
-"use client";
-
 import { cn } from "@/lib/utils";
 import { ChevronDown, Truck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";

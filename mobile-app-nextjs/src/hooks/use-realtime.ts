@@ -300,13 +300,14 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>(
 }
 
 /**
- * Real-time sync for diesel records - invalidates query cache on changes
+ * Real-time sync for diesel records - invalidates query cache on changes.
+ * Filtered to only watch records for the driver's fleet_number.
  */
-export function useDieselRealtimeSync(driverId: string | undefined) {
+export function useDieselRealtimeSync(driverId: string | undefined, fleetNumber?: string) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!driverId) return;
+    if (!driverId || !fleetNumber) return;
 
     const supabase = createClient();
     const channel = supabase
@@ -317,10 +318,13 @@ export function useDieselRealtimeSync(driverId: string | undefined) {
           event: '*',
           schema: 'public',
           table: 'diesel_records',
+          filter: `fleet_number=eq.${fleetNumber}`,
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ['diesel-records'] });
           queryClient.invalidateQueries({ queryKey: ['recent-diesel'] });
+          queryClient.invalidateQueries({ queryKey: ['monthly-diesel-records'] });
+          queryClient.invalidateQueries({ queryKey: ['recent-diesel-records'] });
         }
       )
       .subscribe();
@@ -328,7 +332,7 @@ export function useDieselRealtimeSync(driverId: string | undefined) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [driverId, queryClient]);
+  }, [driverId, fleetNumber, queryClient]);
 }
 
 /**
@@ -420,17 +424,10 @@ export function useVehicleAssignmentSubscription(userId: string | undefined) {
         },
         () => {
           console.log('Vehicle assignment changed, invalidating queries...');
-          // Invalidate (not reset) so stale data stays visible while refetching
+          // Only invalidate the vehicle query — dependent queries will
+          // automatically refetch when vehicle data changes (new query keys).
           queryClient.invalidateQueries({ queryKey: ['assigned-vehicle'] });
           queryClient.invalidateQueries({ queryKey: ['driver-assigned-vehicle'] });
-          queryClient.invalidateQueries({ queryKey: ['wialon-vehicle'] });
-          // Invalidate data that depends on assigned vehicle
-          queryClient.invalidateQueries({ queryKey: ['monthly-diesel-records'] });
-          queryClient.invalidateQueries({ queryKey: ['monthly-trips'] });
-          queryClient.invalidateQueries({ queryKey: ['recent-diesel-records'] });
-          queryClient.invalidateQueries({ queryKey: ['recent-trips'] });
-          queryClient.invalidateQueries({ queryKey: ['diesel-records'] });
-          queryClient.invalidateQueries({ queryKey: ['diesel-entries'] });
         }
       )
       .subscribe();

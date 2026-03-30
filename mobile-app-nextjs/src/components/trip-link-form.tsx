@@ -1,5 +1,3 @@
-"use client";
-
 // Updated TripLinkForm component to handle existing freight
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -74,12 +72,12 @@ interface FieldRendererProps {
   };
 }
 
-function TripLinkForm({ 
-  trip, 
-  open, 
+function TripLinkForm({
+  trip,
+  open,
   onOpenChange,
-  existingFreight 
-}: { 
+  existingFreight
+}: {
   trip: TripEntry;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -109,7 +107,8 @@ function TripLinkForm({
     try {
       if (existingFreight) {
         // Update existing freight
-        const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
           .from("freight_details")
           .update({
             freight_type: values.freight_type,
@@ -118,22 +117,23 @@ function TripLinkForm({
             additional_notes: values.additional_notes,
             status: values.status,
             updated_at: new Date().toISOString(),
-          } as never)
+          })
           .eq("id", existingFreight.id);
 
         if (error) throw error;
       } else {
         // Insert new freight
-        const { error } = await supabase.from("freight_details").insert({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any).from("freight_details").insert({
           trip_id: trip.id,
           driver_id: user.id,
           vehicle_id: trip.fleet_vehicle_id,
-          freight_type: values.freight_type,
+                    freight_type: values.freight_type,
           cargo_description: values.cargo_description,
           weight_kg: values.weight_kg,
           additional_notes: values.additional_notes,
           status: values.status,
-        } as never);
+        });
 
         if (error) throw error;
       }
@@ -143,7 +143,7 @@ function TripLinkForm({
         queryClient.invalidateQueries({ queryKey: ["monthly-trips"] }),
         queryClient.invalidateQueries({ queryKey: ["freight-details"] }),
       ]);
-      
+
       onOpenChange(false);
       form.reset();
     } catch (error) {
@@ -156,12 +156,13 @@ function TripLinkForm({
 
   const handleDelete = async () => {
     if (!existingFreight?.id) return;
-    
+
     if (!confirm("Are you sure you want to remove this freight?")) return;
-    
+
     setIsDeleting(true);
     try {
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from("freight_details")
         .delete()
         .eq("id", existingFreight.id);
@@ -173,7 +174,7 @@ function TripLinkForm({
         queryClient.invalidateQueries({ queryKey: ["monthly-trips"] }),
         queryClient.invalidateQueries({ queryKey: ["freight-details"] }),
       ]);
-      
+
       onOpenChange(false);
     } catch (error) {
       console.error("Error deleting freight:", error);
@@ -185,13 +186,13 @@ function TripLinkForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {existingFreight ? "Edit Freight Details" : "Link Freight to Trip"}
           </DialogTitle>
           <DialogDescription>
-            {existingFreight 
+            {existingFreight
               ? `Update freight details for trip ${trip.trip_number || trip.id.slice(0, 8)}`
               : `Add freight details for trip ${trip.trip_number || trip.id.slice(0, 8)}`
             }
@@ -207,8 +208,8 @@ function TripLinkForm({
                 render={({ field }: FieldRendererProps) => (
                   <FormItem>
                     <FormLabel>Freight Type *</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
+                    <Select
+                      onValueChange={field.onChange}
                       defaultValue={field.value as string}
                     >
                       <FormControl>
@@ -239,9 +240,9 @@ function TripLinkForm({
                   <FormItem>
                     <FormLabel>Weight (kg) *</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="e.g., 1000" 
+                      <Input
+                        type="number"
+                        placeholder="e.g., 1000"
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                           const value = e.target.value;
                           // Convert to number or use 0 if empty
@@ -288,8 +289,8 @@ function TripLinkForm({
               render={({ field }: FieldRendererProps) => (
                 <FormItem>
                   <FormLabel>Status</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
+                  <Select
+                    onValueChange={field.onChange}
                     defaultValue={field.value as string}
                   >
                     <FormControl>

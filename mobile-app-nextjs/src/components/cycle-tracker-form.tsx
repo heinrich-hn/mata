@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -477,7 +475,7 @@ export function CycleTrackerForm({ trip, open, onOpenChange }: CycleTrackerFormP
   if (isLoadingTracker) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[500px] max-h-[92vh] overflow-y-auto p-0 gap-0" aria-describedby={undefined}>
+        <DialogContent className="left-0 top-0 translate-x-0 translate-y-0 w-full max-w-none h-[100dvh] max-h-none rounded-none border-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-[calc(100%-2rem)] sm:max-w-[500px] sm:h-auto sm:max-h-[92vh] sm:rounded-lg sm:border overflow-y-auto overflow-x-hidden p-0 gap-0" aria-describedby={undefined}>
           <DialogTitle className="sr-only">Loading Tracker</DialogTitle>
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -489,7 +487,7 @@ export function CycleTrackerForm({ trip, open, onOpenChange }: CycleTrackerFormP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[92vh] overflow-y-auto p-0 gap-0" aria-describedby={undefined}>
+      <DialogContent className="left-0 top-0 translate-x-0 translate-y-0 w-full max-w-none h-[100dvh] max-h-none rounded-none border-0 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:w-[calc(100%-2rem)] sm:max-w-[500px] sm:h-auto sm:max-h-[92vh] sm:rounded-lg sm:border overflow-y-auto overflow-x-hidden p-0 gap-0" aria-describedby={undefined}>
         <DialogTitle className="sr-only">360° Time Tracker</DialogTitle>
 
         {/* ─── Sticky Header ─────────────────────────── */}
@@ -514,7 +512,7 @@ export function CycleTrackerForm({ trip, open, onOpenChange }: CycleTrackerFormP
               </div>
             </div>
             {formData.is_completed && (
-              <Badge variant="outline" className="text-[10px] shrink-0 border-emerald-500 text-emerald-500">
+              <Badge variant="outline" className="text-[10px] shrink-0 border-success text-success">
                 Complete
               </Badge>
             )}
@@ -531,8 +529,8 @@ export function CycleTrackerForm({ trip, open, onOpenChange }: CycleTrackerFormP
                   activePhase === phase.num
                     ? "bg-primary text-primary-foreground scale-110"
                     : phaseComplete[phase.num as keyof typeof phaseComplete]
-                    ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30"
-                    : "bg-muted/50 text-muted-foreground"
+                      ? "bg-success/20 text-success border border-success/30"
+                      : "bg-muted/50 text-muted-foreground"
                 )}
                 aria-label={`Go to phase ${phase.num}: ${phase.label}`}
               >
@@ -621,7 +619,7 @@ export function CycleTrackerForm({ trip, open, onOpenChange }: CycleTrackerFormP
               {isSaving ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : saved ? (
-                <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-500" />
+                <CheckCircle2 className="w-4 h-4 mr-2 text-success" />
               ) : (
                 <Clock className="w-4 h-4 mr-2" />
               )}
@@ -940,7 +938,7 @@ function Phase2FarmLoading({
                 className={cn(
                   "px-3 py-1.5 rounded-full text-xs font-medium transition-colors border",
                   selected
-                    ? "bg-amber-500/20 border-amber-500/40 text-amber-400"
+                    ? "bg-warning/20 border-warning/40 text-warning"
                     : "bg-muted/30 border-transparent text-muted-foreground"
                 )}
                 aria-label={`Toggle delay reason: ${reason.label}`}
@@ -1097,9 +1095,9 @@ function Phase3Transit({
         </Button>
 
         {stops.length > 0 && (
-          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <span className="text-xs text-blue-400">Total Transit Stop Time</span>
-            <span className="text-sm font-bold text-blue-300 tabular-nums">
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-info/10 border border-info/20">
+            <span className="text-xs text-info">Total Transit Stop Time</span>
+            <span className="text-sm font-bold text-info tabular-nums">
               {totalMins} min
             </span>
           </div>
@@ -1123,8 +1121,8 @@ function Phase4Depot({
   const routeInfo = data.route === "rezende"
     ? "Rezende Depot: Arrival 05:00 | Departure 07:00 (2 hr window)"
     : data.route === "bulawayo"
-    ? "Bulawayo Depot: Arrival 08:00 | Departure 11:00 (3 hr window)"
-    : "Log depot arrival and offloading times";
+      ? "Bulawayo Depot: Arrival 08:00 | Departure 11:00 (3 hr window)"
+      : "Log depot arrival and offloading times";
 
   return (
     <div className="space-y-4">
@@ -1248,7 +1246,7 @@ function Phase5Return({
             onClick={() => onUpdate("p5_damaged_packaging", !data.p5_damaged_packaging)}
             className={cn(
               "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0",
-              data.p5_damaged_packaging ? "bg-amber-500 border-amber-500" : "border-muted-foreground/40"
+              data.p5_damaged_packaging ? "bg-warning border-warning" : "border-muted-foreground/40"
             )}
             aria-label="Toggle damaged packaging"
             aria-pressed={data.p5_damaged_packaging}
@@ -1427,14 +1425,14 @@ function DurationBadge({
       className={cn(
         "flex items-center justify-between px-3 py-2 rounded-lg border",
         overTarget
-          ? "bg-amber-500/10 border-amber-500/20"
-          : "bg-emerald-500/10 border-emerald-500/20"
+          ? "bg-warning/10 border-warning/20"
+          : "bg-success/10 border-success/20"
       )}
     >
-      <span className={cn("text-xs", overTarget ? "text-amber-400" : "text-emerald-400")}>
+      <span className={cn("text-xs", overTarget ? "text-warning" : "text-success")}>
         {label}
       </span>
-      <span className={cn("text-sm font-bold tabular-nums", overTarget ? "text-amber-300" : "text-emerald-400")}>
+      <span className={cn("text-sm font-bold tabular-nums", overTarget ? "text-warning" : "text-success")}>
         {mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`}
         {target && <span className="text-[10px] font-normal ml-1 opacity-70">(target: {target}m)</span>}
       </span>

@@ -1,9 +1,7 @@
-"use client";
-
 import { Badge } from "@/components/ui/badge";
 import type { DocumentAlert } from "@/hooks/use-driver-documents";
 import { AlertTriangle, Clock, ShieldAlert, X } from "lucide-react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useState } from "react";
 
 interface DocumentExpiryBannerProps {
@@ -20,30 +18,28 @@ export function DocumentExpiryBanner({ alerts, expiredCount, expiringCount }: Do
   const hasExpired = expiredCount > 0;
 
   return (
-    <Link href="/profile/documents" className="block">
+    <Link to="/profile/documents" className="block">
       <div
-        className={`rounded-2xl border shadow-sm p-4 animate-fade-up ${
-          hasExpired
-            ? "border-destructive/30 bg-destructive/5"
-            : "border-amber-500/30 bg-amber-500/5"
-        }`}
+        className={`rounded-2xl border shadow-sm p-4 animate-fade-up ${hasExpired
+          ? "border-destructive/30 bg-destructive/5"
+          : "border-warning/30 bg-warning/5"
+          }`}
       >
         <div className="flex items-start gap-3">
           <div
-            className={`p-2 rounded-xl shrink-0 ${
-              hasExpired ? "bg-destructive/10" : "bg-amber-500/10"
-            }`}
+            className={`p-2 rounded-xl shrink-0 ${hasExpired ? "bg-destructive/10" : "bg-warning/10"
+              }`}
           >
             {hasExpired ? (
               <ShieldAlert className="w-5 h-5 text-destructive" strokeWidth={2} />
             ) : (
-              <AlertTriangle className="w-5 h-5 text-amber-500" strokeWidth={2} />
+              <AlertTriangle className="w-5 h-5 text-warning" strokeWidth={2} />
             )}
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
-              <p className={`text-sm font-semibold ${hasExpired ? "text-destructive" : "text-amber-700 dark:text-amber-400"}`}>
+              <p className={`text-sm font-semibold ${hasExpired ? "text-destructive" : "text-warning"}`}>
                 {hasExpired ? "Document Expired" : "Documents Expiring Soon"}
               </p>
               <button
@@ -64,9 +60,8 @@ export function DocumentExpiryBanner({ alerts, expiredCount, expiringCount }: Do
               {alerts.slice(0, 3).map((alert) => (
                 <div key={alert.documentType} className="flex items-center gap-2">
                   <Clock
-                    className={`w-3.5 h-3.5 shrink-0 ${
-                      alert.status === "expired" ? "text-destructive" : "text-amber-500"
-                    }`}
+                    className={`w-3.5 h-3.5 shrink-0 ${alert.status === "expired" ? "text-destructive" : "text-warning"
+                      }`}
                     strokeWidth={2}
                   />
                   <span className="text-xs text-foreground font-medium truncate">
@@ -96,7 +91,7 @@ export function DocumentExpiryBanner({ alerts, expiredCount, expiringCount }: Do
                 </Badge>
               )}
               {expiringCount > 0 && (
-                <Badge variant="secondary" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">
+                <Badge variant="secondary" className="text-[10px] bg-warning/10 text-warning border-warning/20">
                   {expiringCount} expiring
                 </Badge>
               )}

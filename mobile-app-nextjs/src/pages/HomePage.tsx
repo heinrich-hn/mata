@@ -1,5 +1,3 @@
-"use client";
-
 import { MobileShell } from "@/components/layout";
 import { DocumentExpiryBanner } from "@/components/document-expiry-banner";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
@@ -24,7 +22,7 @@ import {
   TrendingUp,
   Truck
 } from "lucide-react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { useCallback, useMemo } from "react";
 
 interface Vehicle {
@@ -95,23 +93,37 @@ export default function HomePage() {
     return "Driver";
   }, [profile?.full_name, profile?.name, user?.user_metadata, user?.email]);
 
-  // Find driver by email for document expiry notifications
+  // Find driver by auth_user_id (primary) or email (fallback) for document expiry notifications
   const { data: driverRecord } = useQuery<{ id: string } | null>({
-    queryKey: ["driver-for-docs", user?.email],
+    queryKey: ["driver-for-docs", user?.id, user?.email],
     queryFn: async () => {
-      if (!user?.email) return null;
-      const { data, error } = await supabase
-        .from("drivers")
-        .select("id")
-        .eq("email", user.email)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) return null;
-      return data;
+      if (!user) return null;
+      // Try auth_user_id first
+      if (user.id) {
+        const { data } = await supabase
+          .from("drivers")
+          .select("id")
+          .eq("auth_user_id", user.id)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle();
+        if (data) return data;
+      }
+      // Fallback: match by email
+      if (user.email) {
+        const { data } = await supabase
+          .from("drivers")
+          .select("id")
+          .eq("email", user.email)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data) return data;
+      }
+      return null;
     },
-    enabled: !!user?.email,
+    enabled: !!user,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -119,7 +131,7 @@ export default function HomePage() {
   const { alerts, expiredCount, expiringCount, hasAlerts } = useDriverDocuments(driverRecord?.id);
 
   // Real-time subscriptions for dashboard data
-  useDieselRealtimeSync(user?.id);
+  // (diesel sync moved below vehicle query to pass fleet_number filter)
   useFreightRealtimeSync(user?.id);
   useVehicleAssignmentSubscription(user?.id);
 
@@ -180,9 +192,12 @@ export default function HomePage() {
       return null;
     },
     enabled: !!user?.id,
-    staleTime: 1 * 60 * 1000, // 1 min - pick up assignment changes quickly
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    staleTime: 10 * 60 * 1000, // 10 min - realtime subscription handles updates
+    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
   });
+
+  // Diesel realtime sync — needs fleet_number so placed after vehicle query
+  useDieselRealtimeSync(user?.id, vehicle?.fleet_number);
 
   // Note: fleet_vehicle_id column directly links trips to vehicles table
   // No need for wialon_vehicles lookup anymore
@@ -274,7 +289,7 @@ export default function HomePage() {
   });
 
   // Memoized monthly stats
-  const { totalDieselLitres, totalDieselCost, totalTrips, completedTrips, totalDistanceKm, kmTraveled, consumption } = useMemo(() => {
+  const { totalDieselLitres, totalDieselCost, totalTrips, completedTrips, kmTraveled, consumption } = useMemo(() => {
     const dieselLitres = monthlyDiesel.reduce((sum, entry) => sum + (entry.litres_filled || 0), 0);
     const dieselCost = monthlyDiesel.reduce((sum, entry) => sum + (entry.total_cost || 0), 0);
     const trips = monthlyTrips.length;
@@ -364,8 +379,8 @@ export default function HomePage() {
           ) : vehicle ? (
             <div className="rounded-2xl border border-border bg-card shadow-sm p-5 animate-fade-up stagger-1">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <p className="text-[10px] font-bold text-success uppercase tracking-widest">
                   Active Vehicle
                 </p>
               </div>
@@ -422,8 +437,8 @@ export default function HomePage() {
             {/* KM Traveled */}
             <div className="rounded-2xl border border-border bg-card shadow-sm p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="icon-container icon-container-sm bg-orange-500/10">
-                  <Gauge className="w-4 h-4 text-orange-500" strokeWidth={2} />
+                <div className="icon-container icon-container-sm bg-warning/10">
+                  <Gauge className="w-4 h-4 text-warning" strokeWidth={2} />
                 </div>
                 <p className="stat-label">KM Traveled</p>
               </div>
@@ -432,11 +447,11 @@ export default function HomePage() {
             </div>
 
             {/* Diesel Consumption */}
-            <Link href="/diesel" className="block">
+            <Link to="/diesel" className="block">
               <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="icon-container icon-container-sm bg-blue-500/10">
-                    <Droplet className="w-4 h-4 text-blue-500" strokeWidth={2} />
+                  <div className="icon-container icon-container-sm bg-info/10">
+                    <Droplet className="w-4 h-4 text-info" strokeWidth={2} />
                   </div>
                   <p className="stat-label">Diesel</p>
                 </div>
@@ -448,11 +463,11 @@ export default function HomePage() {
             </Link>
 
             {/* Total Trips */}
-            <Link href="/trip" className="block">
+            <Link to="/trip" className="block">
               <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="icon-container icon-container-sm bg-emerald-500/10">
-                    <Activity className="w-4 h-4 text-emerald-500" strokeWidth={2} />
+                  <div className="icon-container icon-container-sm bg-success/10">
+                    <Activity className="w-4 h-4 text-success" strokeWidth={2} />
                   </div>
                   <p className="stat-label">Trips</p>
                 </div>
@@ -464,11 +479,11 @@ export default function HomePage() {
             </Link>
 
             {/* Diesel Cost */}
-            <Link href="/diesel" className="block">
+            <Link to="/diesel" className="block">
               <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="icon-container icon-container-sm bg-amber-500/10">
-                    <TrendingUp className="w-4 h-4 text-amber-500" strokeWidth={2} />
+                  <div className="icon-container icon-container-sm bg-warning/10">
+                    <TrendingUp className="w-4 h-4 text-warning" strokeWidth={2} />
                   </div>
                   <p className="stat-label">Fuel Cost</p>
                 </div>
@@ -484,11 +499,11 @@ export default function HomePage() {
             <div className="space-y-2">
               {/* Show recent trips */}
               {recentTrips.slice(0, 3).map((trip) => (
-                <Link href="/trip" key={trip.id} className="block">
-                  <div className="rounded-2xl border border-border bg-card shadow-sm p-3 flex items-center gap-3 active:scale-[0.98] transition-transform">
-                    <div className={`icon-container icon-container-sm ${trip.status === "completed" ? "bg-emerald-500/10" : "bg-amber-500/10"
+                <Link to="/trip" key={trip.id} className="block">
+                  <div className="rounded-2xl border border-border bg-card shadow-sm p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
+                    <div className={`icon-container icon-container-sm ${trip.status === "completed" ? "bg-success/10" : "bg-warning/10"
                       }`}>
-                      <MapPin className={`w-4 h-4 ${trip.status === "completed" ? "text-emerald-500" : "text-amber-500"
+                      <MapPin className={`w-4 h-4 ${trip.status === "completed" ? "text-success" : "text-warning"
                         }`} strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -505,10 +520,10 @@ export default function HomePage() {
 
               {/* Show recent diesel */}
               {recentDiesel.slice(0, 2).map((entry) => (
-                <Link href="/diesel" key={entry.id} className="block">
-                  <div className="rounded-2xl border border-border bg-card shadow-sm p-3 flex items-center gap-3 active:scale-[0.98] transition-transform">
-                    <div className="icon-container icon-container-sm bg-blue-500/10">
-                      <Droplet className="w-4 h-4 text-blue-500" strokeWidth={2} />
+                <Link to="/diesel" key={entry.id} className="block">
+                  <div className="rounded-2xl border border-border bg-card shadow-sm p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
+                    <div className="icon-container icon-container-sm bg-info/10">
+                      <Droplet className="w-4 h-4 text-info" strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">
@@ -519,7 +534,7 @@ export default function HomePage() {
                       </p>
                     </div>
                     {entry.total_cost && (
-                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                      <p className="text-sm font-semibold text-info">
                         {formatCurrency(entry.total_cost, entry.currency || "USD")}
                       </p>
                     )}
@@ -538,29 +553,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="animate-fade-up stagger-4">
-            <p className="section-title mb-3">Quick Actions</p>
-            <div className="grid grid-cols-2 gap-3">
-              <Link href="/diesel" className="block">
-                <div className="rounded-2xl border border-border bg-card shadow-sm flex flex-col items-center justify-center gap-2 p-4 active:scale-[0.98] transition-transform">
-                  <div className="icon-container icon-container-md bg-blue-500/10">
-                    <Droplet className="w-5 h-5 text-blue-500" strokeWidth={2} />
-                  </div>
-                  <p className="text-sm font-semibold">Record Diesel</p>
-                </div>
-              </Link>
 
-              <Link href="/trip" className="block">
-                <div className="rounded-2xl border border-border bg-card shadow-sm flex flex-col items-center justify-center gap-2 p-4 active:scale-[0.98] transition-transform">
-                  <div className="icon-container icon-container-md bg-emerald-500/10">
-                    <TrendingUp className="w-5 h-5 text-emerald-500" strokeWidth={2} />
-                  </div>
-                  <p className="text-sm font-semibold">View Trips</p>
-                </div>
-              </Link>
-            </div>
-          </div>
         </div>
       </PullToRefresh>
     </MobileShell>

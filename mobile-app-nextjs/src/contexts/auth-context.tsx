@@ -1,5 +1,3 @@
-"use client";
-
 import { createClient } from "@/lib/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 
@@ -74,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mountedRef = useRef(true);
   const fetchVersionRef = useRef(0);
   const isLoadingRef = useRef(true);
-  
+
   // Keep isLoadingRef in sync
   isLoadingRef.current = isLoading;
 
@@ -101,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authUser?: User | null,
   ): Promise<Profile | null> => {
     if (!userEmail || !supabase || !mountedRef.current) return null;
-    
+
     const thisVersion = ++fetchVersionRef.current;
 
     try {
@@ -136,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const userData = data as unknown as UserData;
-      
+
       let roleName: string | null = null;
       if (userData.roles) {
         if (Array.isArray(userData.roles) && userData.roles.length > 0) {
@@ -163,7 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
       if (fetchVersionRef.current !== thisVersion || !mountedRef.current) return null;
-      
+
       console.error("Error fetching profile:", err);
       return authUser ? buildFallbackProfile(userEmail, authUser) : null;
     }
@@ -179,18 +177,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Single initialisation effect
   useEffect(() => {
     mountedRef.current = true;
-    
+
     if (!supabase) return;
 
-    // Safety timeout
+    // Safety timeout — generous to handle slow mobile networks.
+    // Only stops the loading spinner; does NOT clear user state if a cached
+    // session was already loaded (that would wipe visible data).
     const loadingTimeout = setTimeout(() => {
       if (mountedRef.current && isLoadingRef.current) {
         console.warn("Auth init timeout — forcing loading = false");
         setIsLoading(false);
       }
-    }, 3000);
+    }, 10_000);
 
     let initComplete = false;
+
+    // Helper: mark initialisation done and stop the spinner.
+    const finishInit = () => {
+      if (!initComplete && mountedRef.current) {
+        initComplete = true;
+        setIsLoading(false);
+      }
+    };
 
     // Capture the ref object and current value at effect setup for cleanup safety
     const fetchVersion = fetchVersionRef;
@@ -205,71 +213,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
+      // Stop loading NOW — user/session are set, profile can load in background.
+      // This prevents the safety timeout from firing while fetchProfile is slow.
+      finishInit();
+
       if (newSession?.user?.email) {
         const p = await fetchProfile(newSession.user.email, newSession.user);
         if (mountedRef.current) setProfile(p);
       } else {
         setProfile(null);
       }
-
-      if (!initComplete && mountedRef.current) {
-        setIsLoading(false);
-        initComplete = true;
-      }
     });
 
-    // Eagerly kick-off a session check
-    supabase.auth.getSession()
-      .then(async ({ data: { session: existingSession }, error: sessionError }) => {
+    // Validate session server-side with getUser() — getSession() only reads the
+    // cached JWT from storage and will happily return an expired token.
+    // getUser() hits Supabase's /auth/v1/user endpoint to verify + refresh.
+    supabase.auth.getUser()
+      .then(async ({ data: { user: verifiedUser }, error: userError }) => {
         if (!mountedRef.current || initComplete) return;
-        
-        if (sessionError) {
-          console.error("Error getting session:", sessionError);
-          setIsLoading(false);
-          initComplete = true;
+
+        if (userError || !verifiedUser) {
+          // Token expired / invalid — clear stale state so UI shows login
+          console.warn("Session invalid or expired:", userError?.message);
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          finishInit();
           return;
         }
 
-        setSession(existingSession);
-        setUser(existingSession?.user ?? null);
+        // Token is valid — now read the (refreshed) session for the JWT
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
 
-        if (existingSession?.user?.email) {
-          const p = await fetchProfile(existingSession.user.email, existingSession.user);
+        setSession(freshSession);
+        setUser(verifiedUser);
+
+        // Stop loading before the profile network call
+        finishInit();
+
+        if (verifiedUser.email) {
+          const p = await fetchProfile(verifiedUser.email, verifiedUser);
           if (mountedRef.current) setProfile(p);
-        }
-
-        if (mountedRef.current) {
-          setIsLoading(false);
-          initComplete = true;
         }
       })
       .catch((err) => {
         console.error("Auth initialization error:", err);
         if (mountedRef.current) {
-          setIsLoading(false);
-          initComplete = true;
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          finishInit();
         }
       });
 
     return () => {
+      // Unsubscribe FIRST to prevent listener firing after mounted=false
+      subscription.unsubscribe();
       mountedRef.current = false;
       clearTimeout(loadingTimeout);
-      
+
       // Use the captured initial version to increment safely
       // Only increment if no other effect has already incremented it
       if (fetchVersion.current === initialFetchVersion) {
         fetchVersion.current++;
       }
-      
-      subscription.unsubscribe();
     };
   }, [supabase, fetchProfile]); // Keep these dependencies
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!supabase) return { error: new Error("Authentication service not available") };
-    
+
     fetchVersionRef.current++;
-    
+
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
@@ -297,7 +312,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     fetchVersionRef.current++;
-    
+
     if (!supabase) {
       setUser(null);
       setSession(null);

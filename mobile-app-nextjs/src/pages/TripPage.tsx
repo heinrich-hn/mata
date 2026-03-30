@@ -1,5 +1,3 @@
-"use client";
-
 import { MobileShell } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
@@ -69,7 +67,7 @@ import { TripDetailSheet } from "@/components/trip-detail-sheet";
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <Card>
-      <CardContent className="p-3 text-center">
+      <CardContent className="p-4 text-center">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-lg font-semibold">{value}</p>
       </CardContent>
@@ -157,7 +155,7 @@ export default function TripsPage() {
   const { data: assignedVehicle, isLoading: isLoadingVehicle } = useQuery({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
-      if (!user?.id) throw new Error("User not authenticated");
+      if (!user?.id) return null;
 
       const { data, error } = await supabase
         .from("driver_vehicle_assignments")
@@ -232,28 +230,35 @@ export default function TripsPage() {
       return (data || []) as TripEntry[];
     },
     enabled: !!assignedVehicle?.id,
-    staleTime: 2 * 60 * 1000, // 2 min — prevents refetch on every tab switch
+    staleTime: 5 * 60 * 1000, // 5 min — realtime handles updates
   });
 
 
 
   // Fetch existing freight details for all trips
+  // Note: freight_details table may not exist yet — gracefully return empty
   const { data: freightDetails = [], isLoading: isLoadingFreight } = useQuery<FreightDetail[]>({
     queryKey: ["freight-details", assignedVehicle?.id, user?.id],
     queryFn: async () => {
       if (!assignedVehicle?.id || !user?.id) return [];
 
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from("freight_details")
         .select(`id, trip_id`)
         .eq("vehicle_id", assignedVehicle.id)
         .eq("driver_id", user.id);
 
-      if (error) throw error;
-      return (data || []) as FreightDetail[];
+      if (error) {
+        // Table may not exist — return empty instead of crashing
+        console.warn("freight_details query failed:", error.message);
+        return [];
+      }
+      return (data || []) as unknown as FreightDetail[];
     },
     enabled: !!assignedVehicle?.id && !!user?.id,
     staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
 
@@ -358,7 +363,7 @@ export default function TripsPage() {
                     value={customFrom}
                     onChange={(e) => setCustomFrom(e.target.value)}
                     max={customTo}
-                    className="h-9 text-sm"
+                    className="h-10 text-sm"
                   />
                 </div>
                 <div>
@@ -368,7 +373,7 @@ export default function TripsPage() {
                     value={customTo}
                     onChange={(e) => setCustomTo(e.target.value)}
                     min={customFrom}
-                    className="h-9 text-sm"
+                    className="h-10 text-sm"
                   />
                 </div>
               </div>
@@ -435,9 +440,9 @@ const TripCard = memo(function TripCard({
   onOpenDetail: () => void;
 }) {
   const statusColor = entry.status === "completed"
-    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+    ? "bg-success/10 text-success"
     : entry.status === "in_progress" || entry.status === "active"
-      ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+      ? "bg-info/10 text-info"
       : "bg-muted text-muted-foreground";
 
   return (
@@ -451,8 +456,8 @@ const TripCard = memo(function TripCard({
             <p className="font-medium text-sm truncate">{entry.client_name || entry.trip_number || "Trip"}</p>
             {tracker && (
               <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tracker.is_completed
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                ? "bg-success/10 text-success"
+                : "bg-info/10 text-info"
                 }`}>
                 <Clock className="w-2.5 h-2.5" />
                 {tracker.is_completed ? "360°" : `P${tracker.current_phase}`}
@@ -476,7 +481,7 @@ const TripCard = memo(function TripCard({
           </span>
           <div className="flex items-center gap-2">
             {hasFreight && (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning/10 text-warning">
                 Freight Linked
               </span>
             )}

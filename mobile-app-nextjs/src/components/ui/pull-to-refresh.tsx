@@ -1,12 +1,24 @@
-"use client";
-
 import { cn } from "@/lib/utils";
-import { ReactNode, useCallback, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
 interface PullToRefreshProps {
   onRefresh: () => Promise<void>;
   children: ReactNode;
   className?: string;
+}
+
+const THRESHOLD = 80;
+const REFRESH_TIMEOUT_MS = 10_000;
+
+/** Walk up the DOM to find the nearest ancestor with overflow-y scroll/auto. */
+function getScrollParent(node: HTMLElement): HTMLElement {
+  let parent = node.parentElement;
+  while (parent && parent !== document.documentElement) {
+    const { overflowY } = getComputedStyle(parent);
+    if (overflowY === "auto" || overflowY === "scroll") return parent;
+    parent = parent.parentElement;
+  }
+  return document.documentElement;
 }
 
 export function PullToRefresh({ onRefresh, children, className }: PullToRefreshProps) {
@@ -15,50 +27,86 @@ export function PullToRefresh({ onRefresh, children, className }: PullToRefreshP
   const containerRef = useRef<HTMLDivElement>(null);
   const startY = useRef(0);
   const isPulling = useRef(false);
+  const isRefreshingRef = useRef(false);
+  const pullDistanceRef = useRef(0);
+  const onRefreshRef = useRef(onRefresh);
 
-  const threshold = 80;
+  // Keep refs in sync so native listener closures always see latest values
+  isRefreshingRef.current = isRefreshing;
+  onRefreshRef.current = onRefresh;
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (containerRef.current?.scrollTop === 0) {
-      startY.current = e.touches[0].clientY;
-      isPulling.current = true;
-    }
-  }, []);
+  // Attach touch handlers to the nearest scrollable ancestor (MobileShell's
+  // <main>). PullToRefresh itself is NOT a scroll container — that eliminates
+  // nested-scroll-container bugs that freeze scrolling on mobile WebKit.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isPulling.current || isRefreshing) return;
+    const scrollEl = getScrollParent(el);
 
-    const currentY = e.touches[0].clientY;
-    const distance = Math.max(0, currentY - startY.current);
+    // Non-passive handler — only attached when we might need to intercept
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isPulling.current || isRefreshingRef.current) return;
 
-    if (distance > 0 && containerRef.current?.scrollTop === 0) {
-      e.preventDefault();
-      setPullDistance(Math.min(distance * 0.5, threshold * 1.5));
-    }
-  }, [isRefreshing]);
+      const currentY = e.touches[0].clientY;
+      const distance = Math.max(0, currentY - startY.current);
 
-  const handleTouchEnd = useCallback(async () => {
-    isPulling.current = false;
-
-    if (pullDistance >= threshold && !isRefreshing) {
-      setIsRefreshing(true);
-      try {
-        await onRefresh();
-      } finally {
-        setIsRefreshing(false);
+      if (distance > 0 && scrollEl.scrollTop === 0) {
+        e.preventDefault();
+        const capped = Math.min(distance * 0.5, THRESHOLD * 1.5);
+        pullDistanceRef.current = capped;
+        setPullDistance(capped);
       }
-    }
+    };
 
-    setPullDistance(0);
-  }, [pullDistance, isRefreshing, onRefresh]);
+    const onTouchStart = (e: TouchEvent) => {
+      if (scrollEl.scrollTop <= 0 && !isRefreshingRef.current) {
+        startY.current = e.touches[0].clientY;
+        isPulling.current = true;
+        scrollEl.addEventListener("touchmove", onTouchMove, { passive: false });
+      }
+    };
+
+    const onTouchEnd = async () => {
+      // Always remove the non-passive handler so normal scrolling stays fast
+      scrollEl.removeEventListener("touchmove", onTouchMove);
+
+      isPulling.current = false;
+      const dist = pullDistanceRef.current;
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+
+      if (dist >= THRESHOLD && !isRefreshingRef.current) {
+        isRefreshingRef.current = true;
+        setIsRefreshing(true);
+        try {
+          await Promise.race([
+            onRefreshRef.current(),
+            new Promise<void>((resolve) => setTimeout(resolve, REFRESH_TIMEOUT_MS)),
+          ]);
+        } catch (err) {
+          console.error("Pull-to-refresh error:", err);
+        } finally {
+          isRefreshingRef.current = false;
+          setIsRefreshing(false);
+        }
+      }
+    };
+
+    scrollEl.addEventListener("touchstart", onTouchStart, { passive: true });
+    scrollEl.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    return () => {
+      scrollEl.removeEventListener("touchstart", onTouchStart);
+      scrollEl.removeEventListener("touchmove", onTouchMove);
+      scrollEl.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
 
   return (
     <div
       ref={containerRef}
-      className={cn("overflow-auto h-full", className)}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      className={cn(className)}
     >
       {/* Pull indicator */}
       <div

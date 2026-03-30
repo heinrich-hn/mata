@@ -1,9 +1,8 @@
-"use client";
-
 import { useAuth } from "@/contexts/auth-context";
+import { useInactivityTimeout } from "@/hooks/use-inactivity-timeout";
 import { cn } from "@/lib/utils";
 import { AlertCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { BottomNav } from "./bottom-nav";
 
@@ -19,14 +18,17 @@ export function MobileShell({
   showNav = true,
 }: MobileShellProps) {
   const { isLoading, error, user } = useAuth();
-  const router = useRouter();
+  const navigate = useNavigate();
+
+  // Auto sign-out after 5 minutes of inactivity
+  useInactivityTimeout();
 
   // Redirect to login if not authenticated after loading completes
   useEffect(() => {
     if (!isLoading && !user && !error) {
-      router.push("/login");
+      navigate("/login", { replace: true });
     }
-  }, [isLoading, user, error, router]);
+  }, [isLoading, user, error, navigate]);
 
   // Show error state if auth failed to initialize
   if (error) {
@@ -65,10 +67,10 @@ export function MobileShell({
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col h-[100dvh] bg-background">
       <main
         className={cn(
-          "flex-1 overflow-y-auto safe-area-top scrollbar-hide px-4 sm:px-5",
+          "flex-1 min-h-0 overflow-y-auto overscroll-y-none touch-scroll safe-area-top scrollbar-hide px-4 sm:px-5",
           showNav && "pb-32",
           className
         )}
