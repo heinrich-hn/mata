@@ -318,7 +318,7 @@ const ReeferDieselEntryModal = ({
         previous_operating_hours: previousHourReading,
         hours_operated: hoursOperated,
         litres_per_hour: litresPerHour,
-        linked_diesel_record_id: null,
+        linked_diesel_record_id: editRecord?.linked_diesel_record_id ?? null,
         driver_name: formData.driver_name,
         notes: fuelSource === 'bunker' && bunkerDispenseResult
           ? `${formData.notes ? formData.notes + ' | ' : ''}Bunker level after: ${bunkerDispenseResult.new_bunker_level?.toFixed(0)}L`

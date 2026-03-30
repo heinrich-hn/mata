@@ -190,7 +190,7 @@ const DieselManagement = () => {
     addDieselNorm,
     updateDieselNorm,
     deleteDieselNorm,
-    addCostEntry,
+    addCostEntry: _addCostEntry,
     deleteCostEntry,
   } = useOperations();
 
@@ -199,7 +199,7 @@ const DieselManagement = () => {
   const [selectedFleetForBatch, setSelectedFleetForBatch] = useState<string>('');
 
   // Consolidated reefer diesel records hook (CRUD + records from reefer_diesel_records table)
-  const { records: allReeferRecords, createRecordAsync, updateRecordAsync, linkToVehicleAsync, unlinkFromVehicleAsync } = useReeferDieselRecords({});
+  const { records: allReeferRecords, createRecordAsync, updateRecordAsync, deleteRecordAsync: deleteReeferRecordAsync, linkToVehicleAsync, unlinkFromVehicleAsync } = useReeferDieselRecords({});
 
   const truckRecords = useMemo(
     () => dieselRecords.filter(record => !isReeferFleet(record.fleet_number)),
@@ -408,29 +408,29 @@ const DieselManagement = () => {
   };
 
   // Calculate summary statistics (trucks)
-  const totalRecords = truckRecords.length;
+  const _totalRecords = truckRecords.length;
   const totalLitres = truckRecords.reduce((sum, record) => sum + (record.litres_filled || 0), 0);
 
   // Calculate costs by currency
-  const totalCostZAR = truckRecords
+  const _totalCostZAR = truckRecords
     .filter(r => (r.currency || 'ZAR') === 'ZAR')
     .reduce((sum, record) => sum + (record.total_cost || 0), 0);
-  const totalCostUSD = truckRecords
+  const _totalCostUSD = truckRecords
     .filter(r => r.currency === 'USD')
     .reduce((sum, record) => sum + (record.total_cost || 0), 0);
 
   const totalDistance = truckRecords.reduce((sum, record) => sum + (record.distance_travelled || 0), 0);
-  const averageKmPerLitre = totalDistance && totalLitres
+  const _averageKmPerLitre = totalDistance && totalLitres
     ? totalDistance / totalLitres
     : 0;
 
   // Reefer summary statistics
-  const reeferTotalRecords = reeferRecords.length;
-  const reeferTotalLitres = reeferRecords.reduce((sum, record) => sum + (record.litres_filled || 0), 0);
-  const reeferTotalCostZAR = reeferRecords
+  const _reeferTotalRecords = reeferRecords.length;
+  const _reeferTotalLitres = reeferRecords.reduce((sum, record) => sum + (record.litres_filled || 0), 0);
+  const _reeferTotalCostZAR = reeferRecords
     .filter(r => (r.currency || 'ZAR') === 'ZAR')
     .reduce((sum, record) => sum + (record.total_cost || 0), 0);
-  const reeferTotalCostUSD = reeferRecords
+  const _reeferTotalCostUSD = reeferRecords
     .filter(r => r.currency === 'USD')
     .reduce((sum, record) => sum + (record.total_cost || 0), 0);
 
@@ -469,7 +469,7 @@ const DieselManagement = () => {
   });
 
   // Count of debriefed vs pending
-  const debriefStats = {
+  const _debriefStats = {
     total: recordsRequiringDebrief.length,
     pending: recordsRequiringDebrief.filter(r => !r.debrief_signed).length,
     completed: truckRecords.filter(r => r.debrief_signed).length,
@@ -1680,6 +1680,19 @@ const DieselManagement = () => {
     }
   };
 
+  const handleDeleteReeferRecord = async (recordId: string) => {
+    if (confirm('Are you sure you want to delete this reefer diesel record?')) {
+      // Check if record exists in reefer_diesel_records table
+      const existsInReeferTable = allReeferRecords.some(r => r.id === recordId);
+      if (existsInReeferTable) {
+        await deleteReeferRecordAsync(recordId);
+      } else {
+        // Legacy record in diesel_records table
+        await deleteDieselRecord(recordId);
+      }
+    }
+  };
+
   const handleDeleteNorm = async (normId: string) => {
     if (confirm('Are you sure you want to delete this fuel norm?')) {
       await deleteDieselNorm(normId);
@@ -2353,6 +2366,7 @@ const DieselManagement = () => {
                                                     <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Litres</th>
                                                     <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cost</th>
                                                     <th className="text-right px-4 py-3 font-semibold text-cyan-600 dark:text-cyan-400">L/hr</th>
+                                                    <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Linked Vehicle</th>
                                                     <th className="text-center px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Actions</th>
                                                   </tr>
                                                 </thead>
@@ -2409,6 +2423,20 @@ const DieselManagement = () => {
                                                             <span className="text-muted-foreground italic text-xs">-</span>
                                                           )}
                                                         </td>
+                                                        <td className="px-4 py-3">
+                                                          {(() => {
+                                                            const reeferRec = allReeferRecords.find(r => r.id === record.id);
+                                                            if (reeferRec?.linked_horse) {
+                                                              return (
+                                                                <div className="flex items-center gap-1.5">
+                                                                  <Truck className="h-3.5 w-3.5 text-emerald-600" />
+                                                                  <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{reeferRec.linked_horse}</span>
+                                                                </div>
+                                                              );
+                                                            }
+                                                            return <span className="text-xs text-muted-foreground italic">Not linked</span>;
+                                                          })()}
+                                                        </td>
                                                         <td className="px-4 py-3 text-center">
                                                           <DropdownMenu>
                                                             <DropdownMenuTrigger asChild>
@@ -2437,7 +2465,7 @@ const DieselManagement = () => {
                                                                 {allReeferRecords.find(r => r.id === record.id)?.linked_diesel_record_id ? 'Change Vehicle' : 'Link to Vehicle'}
                                                               </DropdownMenuItem>
                                                               <DropdownMenuItem
-                                                                onClick={() => handleDeleteRecord(record.id)}
+                                                                onClick={() => handleDeleteReeferRecord(record.id)}
                                                                 className="text-destructive"
                                                               >
                                                                 <Trash2 className="h-4 w-4 mr-2" />
