@@ -14,6 +14,12 @@ import type {
   WeeklyTrend,
 } from "@/components/reports/types";
 import {
+  DocumentChartBarIcon,
+  MapIcon,
+  PresentationChartLineIcon,
+  TruckIcon,
+} from "@heroicons/react/24/outline";
+import {
   Area,
   AreaChart,
   Bar,
@@ -50,7 +56,8 @@ export function DistributionTab({
         {/* Cargo Type Distribution */}
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <TruckIcon className="h-5 w-5 text-indigo-500" />
               Cargo Type Distribution
             </CardTitle>
             <CardDescription>
@@ -91,7 +98,8 @@ export function DistributionTab({
         {/* Status Distribution */}
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <DocumentChartBarIcon className="h-5 w-5 text-emerald-500" />
               Status Distribution
             </CardTitle>
             <CardDescription>
@@ -133,7 +141,8 @@ export function DistributionTab({
       {/* Top Routes */}
       <Card className="overflow-hidden">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <MapIcon className="h-5 w-5 text-amber-500" />
             Top Routes by Load Volume
           </CardTitle>
           <CardDescription>
@@ -200,7 +209,8 @@ export function DistributionTab({
       {/* Period Trend */}
       <Card className="overflow-hidden">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <PresentationChartLineIcon className="h-5 w-5 text-blue-500" />
             {trendLabel} Load Trends
           </CardTitle>
           <CardDescription>

@@ -17,13 +17,13 @@ import type {
   BackloadWeeklyTrend,
 } from "@/components/reports/types";
 import {
-  ArrowRight,
-  BarChart3,
-  Boxes,
-  Map as MapIcon,
-  Package,
-  TrendingUp,
-} from "lucide-react";
+  CubeIcon,
+  CubeTransparentIcon,
+  DocumentChartBarIcon,
+  MapIcon,
+  PresentationChartLineIcon,
+  TruckIcon,
+} from "@heroicons/react/24/outline";
 import {
   Area,
   AreaChart,
@@ -71,7 +71,7 @@ export function BackloadAnalyticsTab({
           <CardContent className="pt-6 pb-5">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-violet-500" />
+                <TruckIcon className="h-4 w-4 text-violet-500" />
                 <p className="text-xs font-semibold uppercase tracking-wider text-violet-600/70 dark:text-violet-400/70">
                   Total Movements
                 </p>
@@ -90,7 +90,7 @@ export function BackloadAnalyticsTab({
           <CardContent className="pt-6 pb-5">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Boxes className="h-4 w-4 text-cyan-500" />
+                <CubeIcon className="h-4 w-4 text-cyan-500" />
                 <p className="text-xs font-semibold uppercase tracking-wider text-cyan-600/70 dark:text-cyan-400/70">
                   Total Packaging
                 </p>
@@ -109,7 +109,7 @@ export function BackloadAnalyticsTab({
           <CardContent className="pt-6 pb-5">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                <PresentationChartLineIcon className="h-4 w-4 text-emerald-500" />
                 <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/70">
                   Delivery Rate
                 </p>
@@ -179,7 +179,7 @@ export function BackloadAnalyticsTab({
             <Card className="overflow-hidden">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Boxes className="h-5 w-5 text-purple-500" />
+                  <CubeIcon className="h-5 w-5 text-purple-500" />
                   Packaging Type Distribution
                 </CardTitle>
                 <CardDescription>
@@ -226,7 +226,7 @@ export function BackloadAnalyticsTab({
             <Card className="overflow-hidden">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-blue-500" />
+                  <DocumentChartBarIcon className="h-5 w-5 text-blue-500" />
                   Movement Status
                 </CardTitle>
                 <CardDescription>
@@ -274,7 +274,7 @@ export function BackloadAnalyticsTab({
           <Card className="overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <ArrowRight className="h-5 w-5 text-orange-500" />
+                <CubeTransparentIcon className="h-5 w-5 text-orange-500" />
                 Packaging by Destination
               </CardTitle>
               <CardDescription>
@@ -394,7 +394,7 @@ export function BackloadAnalyticsTab({
           <Card className="overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-emerald-500" />
+                <PresentationChartLineIcon className="h-5 w-5 text-emerald-500" />
                 {trendLabel} Packaging Movement Trends
               </CardTitle>
               <CardDescription>
@@ -628,7 +628,7 @@ export function BackloadAnalyticsTab({
             <Card className="overflow-hidden">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Package className="h-5 w-5 text-teal-500" />
+                  <TruckIcon className="h-5 w-5 text-teal-500" />
                   Backload Cargo Types
                 </CardTitle>
                 <CardDescription>
@@ -723,7 +723,7 @@ export function BackloadAnalyticsTab({
           <CardContent className="pt-12 pb-12">
             <div className="text-center space-y-4">
               <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                <Package className="h-8 w-8 text-muted-foreground" />
+                <CubeIcon className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-foreground">

@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 
@@ -359,6 +361,39 @@ const MobileJobCards = () => {
     [filteredCards]
   );
 
+  // Category sort helpers — Horses (H), Reefers (F), LMV (L), Trailers/Interlinks (T), Other
+  const categoryOrder: Record<string, number> = useMemo(() => ({ H: 0, F: 1, L: 2, T: 3 }), []);
+  const getFleetSuffix = useCallback((fn: string) => {
+    const match = fn.match(/[A-Z]$/i);
+    return match ? match[0].toUpperCase() : "";
+  }, []);
+
+  // Group job cards by vehicle, sorted by category then fleet number
+  const groupJobCards = useCallback(
+    (cards: JobCard[]) => {
+      const groups = new Map<string, { vehicle: JobCard["vehicle"]; cards: JobCard[] }>();
+      for (const card of cards) {
+        const key = card.vehicle_id || "unknown";
+        if (!groups.has(key)) {
+          groups.set(key, { vehicle: card.vehicle, cards: [] });
+        }
+        groups.get(key)!.cards.push(card);
+      }
+      return Array.from(groups.values()).sort((a, b) => {
+        const fa = a.vehicle?.fleet_number || "";
+        const fb = b.vehicle?.fleet_number || "";
+        const catA = categoryOrder[getFleetSuffix(fa)] ?? 99;
+        const catB = categoryOrder[getFleetSuffix(fb)] ?? 99;
+        if (catA !== catB) return catA - catB;
+        return fa.localeCompare(fb, undefined, { numeric: true });
+      });
+    },
+    [categoryOrder, getFleetSuffix]
+  );
+
+  const groupedActive = useMemo(() => groupJobCards(activeCards), [groupJobCards, activeCards]);
+  const groupedCompleted = useMemo(() => groupJobCards(completedCards), [groupJobCards, completedCards]);
+
   // Handlers
   const handleJobClick = useCallback((job: JobCard) => {
     setSelectedJob(job);
@@ -473,7 +508,7 @@ const MobileJobCards = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="active" className="mt-3 space-y-2">
+        <TabsContent value="active" className="mt-3 space-y-3">
           {isLoading ? (
             <div className="space-y-2">
               <JobCardSkeleton />
@@ -496,13 +531,35 @@ const MobileJobCards = () => {
               showAction={!searchTerm && selectedPriority === "all"}
             />
           ) : (
-            activeCards.map((card) => (
-              <JobCardItem key={card.id} card={card} onClick={handleJobClick} />
-            ))
+            groupedActive.map((group) => {
+              const label = group.vehicle
+                ? `${group.vehicle.fleet_number || ""} ${group.vehicle.registration_number ? `(${group.vehicle.registration_number})` : ""}`.trim()
+                : "No Vehicle";
+              return (
+                <Collapsible key={group.vehicle?.id || "unknown"}>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-muted/60 hover:bg-muted transition-colors group">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-bold truncate">{label}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 rounded-lg">
+                        {group.cards.length}
+                      </Badge>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-2">
+                    {group.cards.map((card) => (
+                      <JobCardItem key={card.id} card={card} onClick={handleJobClick} />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })
           )}
         </TabsContent>
 
-        <TabsContent value="completed" className="mt-3 space-y-2">
+        <TabsContent value="completed" className="mt-3 space-y-3">
           {completedCards.length === 0 ? (
             <EmptyState
               title="No completed jobs"
@@ -510,9 +567,31 @@ const MobileJobCards = () => {
               showAction={false}
             />
           ) : (
-            completedCards.map((card) => (
-              <JobCardItem key={card.id} card={card} onClick={handleJobClick} />
-            ))
+            groupedCompleted.map((group) => {
+              const label = group.vehicle
+                ? `${group.vehicle.fleet_number || ""} ${group.vehicle.registration_number ? `(${group.vehicle.registration_number})` : ""}`.trim()
+                : "No Vehicle";
+              return (
+                <Collapsible key={group.vehicle?.id || "unknown"}>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-muted/60 hover:bg-muted transition-colors group">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-bold truncate">{label}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 rounded-lg">
+                        {group.cards.length}
+                      </Badge>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-2">
+                    {group.cards.map((card) => (
+                      <JobCardItem key={card.id} card={card} onClick={handleJobClick} />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })
           )}
         </TabsContent>
       </Tabs>

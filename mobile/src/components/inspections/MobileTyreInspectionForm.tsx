@@ -196,6 +196,16 @@ const MobileTyreInspectionForm = () => {
       const pad = (n: number) => n.toString().padStart(2, '0');
       const inspectionNumber = `TYRE-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 
+      // Fetch vehicle's current_odometer for fallback KM calculations
+      let vehicleCurrentOdometer: number | null = null;
+      {
+        const { data: vehData } = await supabase
+          .from("vehicles")
+          .select("current_odometer")
+          .eq("id", vehicleId)
+          .single();
+        vehicleCurrentOdometer = vehData?.current_odometer ?? null;
+      }
       const inspectionRecord: VehicleInspectionRecord = {
         vehicle_id: vehicleId,
         inspector_name: inspectorName,
@@ -259,6 +269,10 @@ const MobileTyreInspectionForm = () => {
               tyre.pressure && `Pressure: ${tyre.pressure} PSI`,
               tyre.condition && `Condition: ${tyre.condition}`,
               tyre.wearPattern && `Wear: ${tyre.wearPattern}`,
+              tyre.serialNumber && `Serial: ${tyre.serialNumber}`,
+              tyre.dotCode && `DOT: ${tyre.dotCode}`,
+              tyre.kmTravelled != null && `KM: ${tyre.kmTravelled}`,
+              tyre.initialTreadDepth != null && `InitialTread: ${tyre.initialTreadDepth}`,
               tyre.notes,
             ].filter(Boolean).join(' | '),
           })
@@ -337,6 +351,23 @@ const MobileTyreInspectionForm = () => {
             tyreUpdates.condition = tyre.condition;
           }
 
+          // Calculate km travelled since installation
+          // Use the best available odometer: manual entry, or fallback to vehicles.current_odometer
+          const currentKm = odometerReading ? parseInt(odometerReading) : null;
+          if (tyre.installationKm) {
+            // Try manual odometer first, then vehicle's current_odometer
+            const bestOdometer = (currentKm != null && currentKm > tyre.installationKm)
+              ? currentKm
+              : (vehicleCurrentOdometer != null && vehicleCurrentOdometer > tyre.installationKm)
+                ? vehicleCurrentOdometer
+                : null;
+
+            if (bestOdometer != null) {
+              tyreUpdates.km_travelled = bestOdometer - tyre.installationKm;
+            }
+            // If neither odometer > installationKm, don't overwrite existing km_travelled
+          }
+
           const { error: tyreUpdateError } = await supabase
             .from("tyres")
             .update(tyreUpdates)
@@ -347,19 +378,26 @@ const MobileTyreInspectionForm = () => {
           }
 
           // 5. Create tyre_lifecycle_event so inspection shows in tyre lifecycle view
+          const bestKmReading = (() => {
+            const manualKm = odometerReading ? parseInt(odometerReading) : null;
+            if (manualKm != null && manualKm > 0) return manualKm;
+            if (vehicleCurrentOdometer != null && vehicleCurrentOdometer > 0) return vehicleCurrentOdometer;
+            return null;
+          })();
+
           const { error: lifecycleError } = await supabase
             .from("tyre_lifecycle_events")
             .insert({
               tyre_id: tyre.tyreCode,
               tyre_code: tyre.dotCode || tyre.tyreCode,
               vehicle_id: vehicleId,
-              event_type: "inspected",
+              event_type: "inspection",
               event_date: now.toISOString(),
               fleet_position: tyre.position,
               performed_by: inspectorName,
               tread_depth_at_event: tyre.treadDepth ? parseFloat(tyre.treadDepth) : null,
               pressure_at_event: tyre.pressure ? parseFloat(tyre.pressure) : null,
-              km_reading: odometerReading ? parseInt(odometerReading) : null,
+              km_reading: bestKmReading,
               notes: `Condition: ${tyre.condition}` +
                 (tyre.wearPattern ? ` | Wear: ${tyre.wearPattern}` : '') +
                 (tyre.notes ? ` | ${tyre.notes}` : ''),
@@ -386,6 +424,53 @@ const MobileTyreInspectionForm = () => {
           .update({ has_fault: true })
           .eq("id", inspectionId);
       }
+
+      // 7. Update vehicles.current_odometer if the inspection odometer is higher
+      const inspOdometer = odometerReading ? parseInt(odometerReading) : null;
+      if (inspOdometer && inspOdometer > 0) {
+        const existingOdo = vehicleCurrentOdometer ?? 0;
+        if (inspOdometer > existingOdo) {
+          await supabase
+            .from("vehicles")
+            .update({ current_odometer: inspOdometer })
+            .eq("id", vehicleId);
+          vehicleCurrentOdometer = inspOdometer;
+        }
+      }
+
+      // 8. Write individual tyre_inspections records so lifecycle view shows mobile inspections
+      for (const tyre of tyreData) {
+        if (tyre.noTyre || !tyre.tyreCode) continue;
+
+        const positionMap: Record<string, string> = {
+          V1: "front_left", V2: "front_right",
+          "1L": "front_left", "1R": "front_right",
+          "2L": "rear_left_outer", "2R": "rear_right_outer",
+          "3L": "rear_left_inner", "3R": "rear_right_inner",
+          "4L": "rear_left_outer", "4R": "rear_right_outer",
+          FL: "front_left", FR: "front_right",
+          RL: "rear_left_outer", RR: "rear_right_outer",
+          RL1: "rear_left_outer", RR1: "rear_right_outer",
+          RL2: "rear_left_inner", RR2: "rear_right_inner",
+          SP: "spare", SPARE: "spare",
+        };
+
+        const posCode = tyre.position.split(' - ')[0]?.trim() || tyre.position;
+        const dbPosition = positionMap[posCode] || "front_left";
+
+        await supabase.from("tyre_inspections").insert([{
+          vehicle_id: vehicleId,
+          position: dbPosition,
+          condition: tyre.condition || "good",
+          tyre_id: tyre.tyreCode.startsWith("NEW_CODE_") ? null : tyre.tyreCode,
+          inspector_name: inspectorName,
+          inspection_date: now.toISOString().split("T")[0],
+          tread_depth: tyre.treadDepth ? parseFloat(tyre.treadDepth) : null,
+          pressure: tyre.pressure ? parseFloat(tyre.pressure) : null,
+          wear_pattern: tyre.wearPattern || null,
+          notes: `Position: ${tyre.positionLabel} | DOT: ${tyre.dotCode || "N/A"} | KM: ${inspOdometer || "N/A"} | Mobile inspection ${inspectionNumber}`,
+        }] as never);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tyre_inspections"] });
@@ -393,6 +478,7 @@ const MobileTyreInspectionForm = () => {
       queryClient.invalidateQueries({ queryKey: ["fleet_tyre_positions"] });
       queryClient.invalidateQueries({ queryKey: ["inspection_faults"] });
       queryClient.invalidateQueries({ queryKey: ["vehicle-faults"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       queryClient.invalidateQueries({ queryKey: ["tyres"] });
       queryClient.invalidateQueries({ queryKey: ["tyre_lifecycle"] });
       toast({

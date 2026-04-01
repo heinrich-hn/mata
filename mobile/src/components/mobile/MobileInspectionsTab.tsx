@@ -8,7 +8,9 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronDown } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import ResolveFaultDialog from "@/components/dialogs/ResolveFaultDialog";
 
@@ -458,6 +460,40 @@ const MobileInspectionsTab = () => {
     [vehicleFaults]
   );
 
+  // Category sort helpers — Horses (H), Reefers (F), LMV (L), Trailers/Interlinks (T), Other
+  const categoryOrder: Record<string, number> = useMemo(() => ({ H: 0, F: 1, L: 2, T: 3 }), []);
+  const getFleetSuffix = useCallback((fn: string) => {
+    const match = fn.match(/[A-Z]$/i);
+    return match ? match[0].toUpperCase() : "";
+  }, []);
+  const sortByCategory = useCallback(
+    (a: { vehicle?: Vehicle }, b: { vehicle?: Vehicle }) => {
+      const fa = a.vehicle?.fleet_number || "";
+      const fb = b.vehicle?.fleet_number || "";
+      const catA = categoryOrder[getFleetSuffix(fa)] ?? 99;
+      const catB = categoryOrder[getFleetSuffix(fb)] ?? 99;
+      if (catA !== catB) return catA - catB;
+      return fa.localeCompare(fb, undefined, { numeric: true });
+    },
+    [categoryOrder, getFleetSuffix]
+  );
+
+  // Group active faults by vehicle for the alerts tab
+  const groupedFaults = useMemo(() => {
+    const groups = new Map<string, { vehicle: Vehicle | undefined; faults: VehicleFault[] }>();
+    for (const fault of activeVehicleFaults) {
+      const key = fault.vehicle_id || "unknown";
+      if (!groups.has(key)) {
+        groups.set(key, {
+          vehicle: fault.vehicle_id ? vehicleMap.get(fault.vehicle_id) : undefined,
+          faults: [],
+        });
+      }
+      groups.get(key)!.faults.push(fault);
+    }
+    return Array.from(groups.values()).sort(sortByCategory);
+  }, [activeVehicleFaults, vehicleMap, sortByCategory]);
+
   // Memoized filtered inspections
   const filteredInspections = useMemo(() => {
     if (!debouncedSearchTerm) return inspections;
@@ -485,6 +521,35 @@ const MobileInspectionsTab = () => {
   const faultInspections = useMemo(
     () => filteredInspections.filter(i => i.has_fault && !i.fault_resolved),
     [filteredInspections]
+  );
+
+  // Group inspections by vehicle helper
+  const groupInspections = useCallback(
+    (list: Inspection[]) => {
+      const groups = new Map<string, { vehicle: Vehicle | undefined; inspections: Inspection[] }>();
+      for (const insp of list) {
+        const key = insp.vehicle_id || "unknown";
+        if (!groups.has(key)) {
+          groups.set(key, {
+            vehicle: insp.vehicle_id ? vehicleMap.get(insp.vehicle_id) : undefined,
+            inspections: [],
+          });
+        }
+        groups.get(key)!.inspections.push(insp);
+      }
+      return Array.from(groups.values()).sort(sortByCategory);
+    },
+    [vehicleMap, sortByCategory]
+  );
+
+  const groupedRecent = useMemo(
+    () => groupInspections(recentInspections),
+    [groupInspections, recentInspections]
+  );
+
+  const groupedFaults2 = useMemo(
+    () => groupInspections(faultInspections),
+    [groupInspections, faultInspections]
   );
 
   // Handlers
@@ -590,7 +655,7 @@ const MobileInspectionsTab = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="recent" className="mt-3 space-y-2">
+        <TabsContent value="recent" className="mt-3 space-y-3">
           {isLoading ? (
             <div className="space-y-2" aria-label="Loading inspections">
               <InspectionCardSkeleton />
@@ -603,44 +668,120 @@ const MobileInspectionsTab = () => {
               onNewInspection={handleNewInspection}
             />
           ) : (
-            recentInspections.map((insp) => (
-              <InspectionCard
-                key={insp.id}
-                inspection={insp}
-                vehicle={insp.vehicle_id ? vehicleMap.get(insp.vehicle_id) : undefined}
-                onClick={handleInspectionClick}
-              />
-            ))
+            groupedRecent.map((group) => {
+              const label = group.vehicle
+                ? `${group.vehicle.fleet_number || ""} ${group.vehicle.registration_number ? `(${group.vehicle.registration_number})` : ""}`.trim()
+                : "Unknown Vehicle";
+              return (
+                <Collapsible key={group.vehicle?.id || "unknown"}>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-muted/60 hover:bg-muted transition-colors group">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-bold truncate">{label}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 rounded-lg">
+                        {group.inspections.length}
+                      </Badge>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-2">
+                    {group.inspections.map((insp) => (
+                      <InspectionCard
+                        key={insp.id}
+                        inspection={insp}
+                        vehicle={group.vehicle}
+                        onClick={handleInspectionClick}
+                      />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })
           )}
         </TabsContent>
 
-        <TabsContent value="faults" className="mt-3 space-y-2">
+        <TabsContent value="faults" className="mt-3 space-y-3">
           {faultInspections.length === 0 ? (
             <EmptyFaultsState />
           ) : (
-            faultInspections.map((insp) => (
-              <InspectionCard
-                key={insp.id}
-                inspection={insp}
-                vehicle={insp.vehicle_id ? vehicleMap.get(insp.vehicle_id) : undefined}
-                onClick={handleInspectionClick}
-              />
-            ))
+            groupedFaults2.map((group) => {
+              const label = group.vehicle
+                ? `${group.vehicle.fleet_number || ""} ${group.vehicle.registration_number ? `(${group.vehicle.registration_number})` : ""}`.trim()
+                : "Unknown Vehicle";
+              return (
+                <Collapsible key={group.vehicle?.id || "unknown"}>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-muted/60 hover:bg-muted transition-colors group">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-bold truncate">{label}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="destructive" className="text-[10px] px-1.5 rounded-lg">
+                        {group.inspections.length}
+                      </Badge>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-2">
+                    {group.inspections.map((insp) => (
+                      <InspectionCard
+                        key={insp.id}
+                        inspection={insp}
+                        vehicle={group.vehicle}
+                        onClick={handleInspectionClick}
+                      />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })
           )}
         </TabsContent>
 
-        <TabsContent value="alerts" className="mt-3 space-y-2">
-          {activeVehicleFaults.length === 0 ? (
+        <TabsContent value="alerts" className="mt-3 space-y-3">
+          {groupedFaults.length === 0 ? (
             <EmptyFaultsState />
           ) : (
-            activeVehicleFaults.map((fault) => (
-              <FaultAlertCard
-                key={fault.id}
-                fault={fault}
-                vehicle={fault.vehicle_id ? vehicleMap.get(fault.vehicle_id) : undefined}
-                onResolve={handleResolveFault}
-              />
-            ))
+            groupedFaults.map((group) => {
+              const label = group.vehicle
+                ? `${group.vehicle.fleet_number || ""} ${group.vehicle.registration_number ? `(${group.vehicle.registration_number})` : ""}`.trim()
+                : "Unknown Vehicle";
+              // Collect unique inspection numbers from the faults in this group
+              const inspNos = Array.from(new Set(
+                group.faults.map(f => f.fault_number?.split("-")[0]).filter(Boolean)
+              ));
+
+              return (
+                <Collapsible key={group.vehicle?.id || "unknown"}>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-muted/60 hover:bg-muted transition-colors group">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-bold truncate">{label}</span>
+                      {inspNos.length > 0 && (
+                        <span className="text-[11px] font-mono text-muted-foreground truncate">
+                          {inspNos.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="destructive" className="text-[10px] px-1.5 rounded-lg">
+                        {group.faults.length}
+                      </Badge>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-2">
+                    {group.faults.map((fault) => (
+                      <FaultAlertCard
+                        key={fault.id}
+                        fault={fault}
+                        vehicle={group.vehicle}
+                        onResolve={handleResolveFault}
+                      />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })
           )}
         </TabsContent>
       </Tabs>

@@ -10,7 +10,6 @@ import { AlertTriangle, Calendar, CheckCircle, DollarSign, TrendingDown } from "
 
 type Tyre = Database["public"]["Tables"]["tyres"]["Row"];
 
-// Extended type with current_position added from join
 type TyreWithPosition = Tyre & {
   current_position: string | null;
 };
@@ -25,294 +24,379 @@ interface PredictionInput {
   purchaseCost: number;
 }
 
-const calculatePrediction = (input: PredictionInput) => {
-  const wearRate = (input.initialTreadDepth - input.currentTreadDepth) / (input.kmTravelled || 1);
-  const minTreadDepth = 3; // mm
-  const remainingTread = input.currentTreadDepth - minTreadDepth;
+interface PredictionResult {
+  predictedRemainingKm: number;
+  estimatedDaysUntilReplacement: number;
+  estimatedReplacementDate: Date;
+  wearRate: number;
+  costPerKm: number;
+  projectedTotalCost: number;
+  lifeUsedPercentage: number;
+}
+
+interface PositionData {
+  count: number;
+  avgWearRate: number;
+  tyres: Array<{ tyre: TyreWithPosition; prediction: PredictionResult; daysInService: number }>;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const MIN_TREAD_DEPTH_MM = 3;
+
+const formatCurrency = (value: number) =>
+  `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const calculatePrediction = (input: PredictionInput): PredictionResult => {
+  const wearRate =
+    (input.initialTreadDepth - input.currentTreadDepth) / (input.kmTravelled || 1);
+  const remainingTread = input.currentTreadDepth - MIN_TREAD_DEPTH_MM;
   const predictedRemainingKm = remainingTread / (wearRate || 0.001);
 
   const avgDailyKm = input.kmTravelled / (input.daysInService || 1);
   const estimatedDaysUntilReplacement = predictedRemainingKm / (avgDailyKm || 1);
+
   const estimatedReplacementDate = new Date();
-  estimatedReplacementDate.setDate(estimatedReplacementDate.getDate() + estimatedDaysUntilReplacement);
+  estimatedReplacementDate.setDate(
+    estimatedReplacementDate.getDate() + estimatedDaysUntilReplacement
+  );
 
   const costPerKm = input.purchaseCost / (input.kmTravelled || 1);
-  const projectedTotalCost = input.purchaseCost + (costPerKm * predictedRemainingKm * 0.1); // 10% maintenance
+  const projectedTotalCost =
+    input.purchaseCost + costPerKm * predictedRemainingKm * 0.1;
 
   return {
     predictedRemainingKm: Math.max(0, Math.round(predictedRemainingKm)),
     estimatedDaysUntilReplacement: Math.max(0, Math.round(estimatedDaysUntilReplacement)),
     estimatedReplacementDate,
-    wearRate: wearRate * 1000, // per 1000km
+    wearRate: wearRate * 1000,
     costPerKm,
     projectedTotalCost,
-    lifeUsedPercentage: ((input.kmTravelled / (input.kmTravelled + predictedRemainingKm)) * 100),
+    lifeUsedPercentage:
+      (input.kmTravelled / (input.kmTravelled + predictedRemainingKm)) * 100,
   };
 };
 
+const getUrgencyVariant = (days: number): "destructive" | "outline" | "secondary" => {
+  if (days <= 7) return "destructive";
+  if (days <= 30) return "outline";
+  return "secondary";
+};
+
+const getUrgencyLabel = (days: number) => {
+  if (days <= 7) return `Urgent — ${days}d`;
+  if (days <= 30) return `Soon — ${days}d`;
+  return `${days}d`;
+};
+
+const getLifeUsedColor = (pct: number) => {
+  if (pct >= 85) return "bg-destructive";
+  if (pct >= 65) return "bg-warning";
+  return "bg-primary";
+};
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 const TyrePredictiveInsights = () => {
-  // Fetch tyres with sufficient data for predictions
   const { data: tyres = [] } = useQuery<TyreWithPosition[]>({
     queryKey: ["tyres_predictions"],
     queryFn: async () => {
-      // Query tyres with position data from tyre_positions
       const { data, error } = await supabase
         .from("tyres")
-        .select(`
-          *,
-          tyre_positions!left(position)
-        `)
+        .select(`*, tyre_positions!left(position)`)
         .not("installation_date", "is", null)
         .not("km_travelled", "is", null)
-        .gt("km_travelled", 1000); // Only tyres with meaningful data
+        .gt("km_travelled", 1000);
 
       if (error) throw error;
 
-      // Transform data to add current_position
-      return (data || []).map(tyre => ({
+      return (data ?? []).map((tyre) => ({
         ...tyre,
-        current_position: Array.isArray(tyre.tyre_positions) && tyre.tyre_positions.length > 0
-          ? tyre.tyre_positions[0].position
-          : null
+        current_position:
+          Array.isArray(tyre.tyre_positions) && tyre.tyre_positions.length > 0
+            ? tyre.tyre_positions[0].position
+            : null,
       })) as TyreWithPosition[];
     },
-  });  // Calculate predictions for all tyres
-  const predictions = tyres.map((tyre: TyreWithPosition) => {
+  });
+
+  const predictions = tyres.map((tyre) => {
     const daysInService = tyre.installation_date
-      ? Math.floor((new Date().getTime() - new Date(tyre.installation_date).getTime()) / (1000 * 60 * 60 * 24))
+      ? Math.floor(
+          (Date.now() - new Date(tyre.installation_date).getTime()) / 86_400_000
+        )
       : 1;
 
     const prediction = calculatePrediction({
-      currentTreadDepth: tyre.current_tread_depth || 8,
-      initialTreadDepth: tyre.initial_tread_depth || 16,
-      kmTravelled: tyre.km_travelled || 0,
+      currentTreadDepth: tyre.current_tread_depth ?? 8,
+      initialTreadDepth: tyre.initial_tread_depth ?? 16,
+      kmTravelled: tyre.km_travelled ?? 0,
       daysInService,
-      fleetType: tyre.current_position?.toString().split('-')[0] || 'unknown',
-      position: tyre.current_position?.toString() || 'unknown',
-      purchaseCost: tyre.purchase_cost_zar || 5000,
+      fleetType: tyre.current_position?.split("-")[0] ?? "unknown",
+      position: tyre.current_position ?? "unknown",
+      purchaseCost: tyre.purchase_cost_zar ?? 5000,
     });
 
-    return {
-      tyre,
-      prediction,
-      daysInService,
-    };
+    return { tyre, prediction, daysInService };
   });
 
-  // Filter critical predictions (30 days or less)
-  const criticalPredictions = predictions.filter(p => p.prediction.estimatedDaysUntilReplacement <= 30 && p.prediction.estimatedDaysUntilReplacement > 0);
+  const criticalPredictions = predictions.filter(
+    (p) =>
+      p.prediction.estimatedDaysUntilReplacement > 0 &&
+      p.prediction.estimatedDaysUntilReplacement <= 30
+  );
+  const upcomingPredictions = predictions.filter(
+    (p) =>
+      p.prediction.estimatedDaysUntilReplacement > 30 &&
+      p.prediction.estimatedDaysUntilReplacement <= 90
+  );
+  const healthyCount =
+    predictions.length - criticalPredictions.length - upcomingPredictions.length;
 
-  // Filter upcoming (30-90 days)
-  const upcomingPredictions = predictions.filter(p => p.prediction.estimatedDaysUntilReplacement > 30 && p.prediction.estimatedDaysUntilReplacement <= 90);
+  const next30DaysCost = criticalPredictions.reduce(
+    (sum, p) => sum + (p.tyre.purchase_cost_zar ?? 5000),
+    0
+  );
+  const next90DaysCost = [...criticalPredictions, ...upcomingPredictions].reduce(
+    (sum, p) => sum + (p.tyre.purchase_cost_zar ?? 5000),
+    0
+  );
 
-  // Budget projections
-  const next30DaysCost = criticalPredictions.reduce((sum, p) => sum + (p.tyre.purchase_cost_zar || 5000), 0);
-  const next90DaysCost = [...criticalPredictions, ...upcomingPredictions].reduce((sum, p) => sum + (p.tyre.purchase_cost_zar || 5000), 0);
-
-  // Position-specific patterns
-  interface PositionData {
-    count: number;
-    avgWearRate: number;
-    tyres: typeof predictions;
-  }
-
-  const positionIssues = predictions.reduce((acc: Record<string, PositionData>, p) => {
-    const position = p.tyre.current_position?.toString();
-    if (!position) return acc;
-
-    if (!acc[position]) {
-      acc[position] = { count: 0, avgWearRate: 0, tyres: [] };
-    }
-    acc[position].count++;
-    acc[position].avgWearRate += p.prediction.wearRate;
-    acc[position].tyres.push(p);
+  const positionMap = predictions.reduce<Record<string, PositionData>>((acc, p) => {
+    const pos = p.tyre.current_position;
+    if (!pos) return acc;
+    if (!acc[pos]) acc[pos] = { count: 0, avgWearRate: 0, tyres: [] };
+    acc[pos].count += 1;
+    acc[pos].avgWearRate += p.prediction.wearRate;
+    acc[pos].tyres.push(p);
     return acc;
   }, {});
 
-  // Identify problematic positions (high wear rate)
-  const problematicPositions = Object.entries(positionIssues)
+  const problematicPositions = Object.entries(positionMap)
     .map(([position, data]) => ({
       position,
       count: data.count,
       avgWearRate: data.avgWearRate / data.count,
-      tyres: data.tyres,
     }))
-    .filter(p => p.count >= 2 && p.avgWearRate > 0.01)
+    .filter((p) => p.count >= 2 && p.avgWearRate > 0.01)
     .sort((a, b) => b.avgWearRate - a.avgWearRate);
 
-  const getUrgencyBadge = (days: number) => {
-    if (days <= 7) return <Badge variant="destructive">Urgent - {days}d</Badge>;
-    if (days <= 30) return <Badge variant="outline" className="border-warning text-warning">Soon - {days}d</Badge>;
-    return <Badge variant="secondary">{days}d</Badge>;
-  };
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Predictive Maintenance Insights</CardTitle>
-          <CardDescription>AI-powered predictions for tyre replacement and maintenance</CardDescription>
+          <CardDescription>
+            Tyre replacement forecasts based on wear-rate modelling
+          </CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-6">
-          {/* Summary Cards */}
+          {/* ── Summary Cards ── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border-destructive/50">
+            <Card className="border-destructive/40">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
                   <AlertTriangle className="w-4 h-4 text-destructive" />
-                  Critical (30 days)
+                  Critical — next 30 days
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{criticalPredictions.length}</div>
+                <p className="text-3xl font-bold">{criticalPredictions.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Est. Cost: ${next30DaysCost.toFixed(2)}
+                  Est. cost: {formatCurrency(next30DaysCost)}
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="border-warning/50">
+            <Card className="border-warning/40">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
                   <Calendar className="w-4 h-4 text-warning" />
-                  Upcoming (90 days)
+                  Upcoming — 30–90 days
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{upcomingPredictions.length}</div>
+                <p className="text-3xl font-bold">{upcomingPredictions.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Est. Cost: ${next90DaysCost.toFixed(2)}
+                  Est. cost: {formatCurrency(next90DaysCost)}
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="border-primary/50">
+            <Card className="border-primary/40">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
                   <CheckCircle className="w-4 h-4 text-primary" />
                   Healthy
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">
-                  {predictions.length - criticalPredictions.length - upcomingPredictions.length}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Good condition</p>
+                <p className="text-3xl font-bold">{healthyCount}</p>
+                <p className="text-xs text-muted-foreground mt-1">No action required</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Critical Replacements */}
+          {/* ── Critical Replacements ── */}
           {criticalPredictions.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-destructive" />
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-destructive flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
                 Immediate Attention Required
               </h3>
               {criticalPredictions.map(({ tyre, prediction }) => (
                 <Alert key={tyre.id} variant="destructive">
-                  <AlertDescription className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">
-                        {tyre.brand} {tyre.model} - {tyre.current_position || 'N/A'}
+                  <AlertDescription className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="font-semibold">
+                        {tyre.brand} {tyre.model}
+                        {tyre.current_position && (
+                          <span className="ml-2 font-mono text-xs opacity-75">
+                            [{tyre.current_position}]
+                          </span>
+                        )}
                       </p>
                       <p className="text-sm">
-                        Current: {tyre.current_tread_depth}mm •
-                        Remaining: ~{prediction.predictedRemainingKm.toLocaleString()}km •
-                        Cost: ${tyre.purchase_cost_zar?.toFixed(2) || 'N/A'}
+                        Tread: {tyre.current_tread_depth ?? "—"}mm &nbsp;·&nbsp;
+                        ~{prediction.predictedRemainingKm.toLocaleString()} km remaining &nbsp;·&nbsp;
+                        {formatCurrency(tyre.purchase_cost_zar ?? 0)}
                       </p>
                     </div>
-                    {getUrgencyBadge(prediction.estimatedDaysUntilReplacement)}
+                    <Badge variant={getUrgencyVariant(prediction.estimatedDaysUntilReplacement)}>
+                      {getUrgencyLabel(prediction.estimatedDaysUntilReplacement)}
+                    </Badge>
                   </AlertDescription>
                 </Alert>
               ))}
-            </div>
+            </section>
           )}
 
-          {/* Upcoming Replacements */}
+          {/* ── Upcoming Replacements ── */}
           {upcomingPredictions.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-warning" />
-                Upcoming Replacements (30-90 days)
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-warning" />
+                Upcoming Replacements
               </h3>
-              <div className="space-y-2">
-                {upcomingPredictions.slice(0, 5).map(({ tyre, prediction }) => (
-                  <div key={tyre.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">
-                        {tyre.brand} {tyre.model} - {tyre.current_position || 'N/A'}
+              <div className="divide-y rounded-lg border overflow-hidden">
+                {upcomingPredictions.slice(0, 6).map(({ tyre, prediction }) => (
+                  <div
+                    key={tyre.id}
+                    className="flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/40 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0 mr-4">
+                      <p className="font-medium text-sm truncate">
+                        {tyre.brand} {tyre.model}
+                        {tyre.current_position && (
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">
+                            [{tyre.current_position}]
+                          </span>
+                        )}
                       </p>
-                      <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                        <span>Est. {formatDate(prediction.estimatedReplacementDate)}</span>
-                        <span>~{prediction.predictedRemainingKm.toLocaleString()}km left</span>
+                      <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                        <span>Due {formatDate(prediction.estimatedReplacementDate)}</span>
+                        <span>~{prediction.predictedRemainingKm.toLocaleString()} km left</span>
+                        <span>{tyre.current_tread_depth ?? "—"}mm tread</span>
                       </div>
-                      <Progress value={prediction.lifeUsedPercentage} className="h-1 mt-2" />
+                      <div className="mt-2 flex items-center gap-2">
+                        <Progress
+                          value={prediction.lifeUsedPercentage}
+                          className={`h-1.5 flex-1 ${getLifeUsedColor(prediction.lifeUsedPercentage)}`}
+                        />
+                        <span className="text-xs text-muted-foreground w-10 text-right">
+                          {Math.round(prediction.lifeUsedPercentage)}%
+                        </span>
+                      </div>
                     </div>
-                    {getUrgencyBadge(prediction.estimatedDaysUntilReplacement)}
+                    <Badge variant={getUrgencyVariant(prediction.estimatedDaysUntilReplacement)}>
+                      {getUrgencyLabel(prediction.estimatedDaysUntilReplacement)}
+                    </Badge>
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Problematic Positions */}
+          {/* ── Problematic Positions ── */}
           {problematicPositions.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <TrendingDown className="w-5 h-5 text-warning" />
-                Problematic Positions
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                <TrendingDown className="w-4 h-4 text-warning" />
+                High-Wear Positions
               </h3>
               <Alert>
                 <AlertTriangle className="w-4 h-4" />
                 <AlertDescription>
-                  <p className="font-medium mb-2">Positions with high wear rates detected:</p>
-                  <div className="space-y-2">
+                  <p className="font-medium mb-3">
+                    The following positions show accelerated wear — inspect alignment and rotation patterns.
+                  </p>
+                  <div className="divide-y">
                     {problematicPositions.slice(0, 3).map((pos) => (
-                      <div key={pos.position} className="flex items-center justify-between text-sm">
-                        <span className="font-mono">{pos.position}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">
-                            {pos.count} tyres • Avg wear: {pos.avgWearRate.toFixed(3)}mm/1000km
-                          </span>
-                          <Badge variant="outline">Check alignment</Badge>
+                      <div
+                        key={pos.position}
+                        className="flex items-center justify-between py-2 text-sm"
+                      >
+                        <span className="font-mono font-medium">{pos.position}</span>
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          <span>{pos.count} tyre{pos.count !== 1 ? "s" : ""}</span>
+                          <span>{pos.avgWearRate.toFixed(3)} mm / 1 000 km</span>
+                          <Badge variant="outline" className="text-xs">
+                            Check alignment
+                          </Badge>
                         </div>
                       </div>
                     ))}
                   </div>
                 </AlertDescription>
               </Alert>
-            </div>
+            </section>
           )}
 
-          {/* Budget Forecast */}
-          <Card className="bg-muted/50">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <DollarSign className="w-5 h-5" />
+          {/* ── Budget Forecast ── */}
+          <Card className="bg-muted/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wide flex items-center gap-2 text-muted-foreground">
+                <DollarSign className="w-4 h-4" />
                 Budget Forecast
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">Next 30 days:</span>
-                <span className="font-bold">${next30DaysCost.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Next 90 days:</span>
-                <span className="font-bold">${next90DaysCost.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t">
-                <span className="text-sm font-medium">Recommended bulk order savings:</span>
-                <span className="font-bold text-success">-${(next90DaysCost * 0.15).toFixed(2)}</span>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Next 30 days</span>
+                  <span className="font-semibold">{formatCurrency(next30DaysCost)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Next 90 days</span>
+                  <span className="font-semibold">{formatCurrency(next90DaysCost)}</span>
+                </div>
+                <div className="flex justify-between pt-3 mt-1 border-t">
+                  <span className="text-muted-foreground">
+                    Bulk order saving (est. 15%)
+                  </span>
+                  <span className="font-semibold text-success">
+                    − {formatCurrency(next90DaysCost * 0.15)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Projected net cost</span>
+                  <span className="font-bold">
+                    {formatCurrency(next90DaysCost * 0.85)}
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* ── Empty State ── */}
           {predictions.length === 0 && (
             <Alert>
               <AlertDescription>
-                Not enough data available for predictions. Ensure tyres have installation dates and KM readings recorded.
+                No prediction data available. Make sure tyres have an installation date and at
+                least 1 000 km recorded before predictions can be generated.
               </AlertDescription>
             </Alert>
           )}

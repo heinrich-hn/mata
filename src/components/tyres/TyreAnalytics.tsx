@@ -1,4 +1,3 @@
-// src/components/TyreAnalytics.tsx
 'use client';
 
 import {
@@ -14,11 +13,16 @@ import { useFleetNumbers } from "@/hooks/useFleetNumbers";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle, Package, TrendingUp } from "lucide-react";
-import { useMemo, useState, useCallback } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, TooltipProps, XAxis, YAxis } from "recharts";
+import { useMemo, useState } from "react";
+import {
+  Bar, BarChart, CartesianGrid, Cell, Legend,
+  Pie, PieChart, ResponsiveContainer, Tooltip,
+  TooltipProps, XAxis, YAxis,
+} from "recharts";
 import { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
-// Local type definitions
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 type Tyre = {
   id: string;
   created_at: string;
@@ -49,217 +53,251 @@ type Tyre = {
   warranty_km: number | null;
 };
 
-// Types for chart data
 type BrandDistributionItem = {
   name: string;
   value: number;
   color: string;
   percentage: string;
+  avgTreadDepth: number;
+  avgKm: number;
 };
 
 type FleetPerformanceItem = {
   fleet: string;
   avgKm: number;
   totalTreadLost: number;
+  avgTreadLost: number;
+  treadEfficiencyPct: number;
   count: number;
+  criticalCount: number;
 };
 
-// Type for tooltip payload
-type TooltipPayloadItem = {
-  color: string;
-  name: string;
-  value: number;
-  unit?: string;
-  payload?: Record<string, unknown>;
-  dataKey?: string;
-};
+// ─── Constants ───────────────────────────────────────────────────────────────
 
-// Constants
 const INITIAL_TREAD_DEPTHS = {
-  steer: 15,   // Steer tyres (V1, V2)
-  drive: 22,   // Drive tyres (V3-V10)
-  trailer: 15, // Trailer tyres (T*)
+  steer: 15,
+  drive: 22,
+  trailer: 15,
 } as const;
 
-// Custom tooltip component with proper types
-const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameType>) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-background border border-border rounded-lg shadow-lg p-3">
-        <p className="font-medium text-sm mb-2">{label}</p>
-        {payload.map((entry, index) => {
-          // Safe type casting with proper structure
-          const typedEntry: TooltipPayloadItem = {
-            color: String(entry.color || '#000'),
-            name: String(entry.name || ''),
-            value: Number(entry.value || 0),
-            unit: entry.unit ? String(entry.unit) : undefined,
-            payload: entry.payload as Record<string, unknown>,
-            dataKey: entry.dataKey ? String(entry.dataKey) : undefined,
-          };
-          
-          return (
-            <div key={index} className="flex items-center gap-2 text-sm">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: typedEntry.color }} />
-              <span className="text-muted-foreground">{typedEntry.name}:</span>
-              <span className="font-medium">
-                {typedEntry.value.toLocaleString()} {typedEntry.unit || ''}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
+const BRAND_COLORS = [
+  "#2563eb", "#16a34a", "#dc2626", "#9333ea",
+  "#ea580c", "#0891b2", "#ca8a04", "#be123c",
+];
+
+const HEALTHY_CONDITIONS = ["excellent", "good"] as const;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const getPositionType = (position: string | null | undefined): 'steer' | 'drive' | 'trailer' | null => {
+  if (!position) return null;
+  if (position.startsWith('V1') || position.startsWith('V2')) return 'steer';
+  if (position.startsWith('V')) return 'drive';
+  if (position.startsWith('T')) return 'trailer';
   return null;
 };
+
+const formatKm = (km: number) => km.toLocaleString("en-US");
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+
+const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameType>) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-background border border-border rounded-lg shadow-lg p-3 min-w-[160px]">
+      {label && <p className="font-semibold text-sm mb-2">{label}</p>}
+      {payload.map((entry, index) => (
+        <div key={index} className="flex items-center justify-between gap-4 text-sm">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: String(entry.color ?? "#000") }} />
+            <span className="text-muted-foreground">{String(entry.name ?? "")}</span>
+          </div>
+          <span className="font-medium tabular-nums">
+            {typeof entry.value === "number"
+              ? entry.name?.toString().toLowerCase().includes("km")
+                ? `${formatKm(entry.value)} km`
+                : `${entry.value.toLocaleString()} mm`
+              : entry.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+const AnalyticsSkeleton = () => (
+  <div className="space-y-8 animate-pulse">
+    <div className="h-8 w-64 bg-muted rounded" />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="h-28 bg-muted rounded-lg" />
+      ))}
+    </div>
+    <div className="h-96 bg-muted rounded-lg" />
+  </div>
+);
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 const TyreAnalytics = () => {
   const [fleetFilter, setFleetFilter] = useState("all");
 
-  // Fetch real tyre data
   const { data: tyres = [], isLoading } = useQuery({
     queryKey: ["tyres_analytics"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tyres")
-        .select("*");
-
+      const { data, error } = await supabase.from("tyres").select("*");
       if (error) throw error;
       return data as unknown as Tyre[];
     },
   });
 
-  // Get unique fleet numbers dynamically from database
   const { data: dynamicFleetNumbers = [] } = useFleetNumbers();
   const fleetTypes = useMemo(() => ["all", ...dynamicFleetNumbers], [dynamicFleetNumbers]);
 
-  // Filter tyres by fleet
   const filteredTyres = useMemo(() => {
     if (fleetFilter === "all") return tyres;
     return tyres.filter((t) => t.position?.startsWith(fleetFilter));
   }, [tyres, fleetFilter]);
 
-  // Helper to determine tyre position type
-  const getPositionType = useCallback((position: string | null | undefined): 'steer' | 'drive' | 'trailer' | null => {
-    if (!position) return null;
-    if (position.startsWith('V1') || position.startsWith('V2')) return 'steer';
-    if (position.startsWith('V')) return 'drive';
-    if (position.startsWith('T')) return 'trailer';
-    return null;
-  }, []);
+  // ── Derived stats ──────────────────────────────────────────────────────────
 
-  // Calculate real stats
   const totalTyres = filteredTyres.length;
   const tyresInService = filteredTyres.filter((t) => t.position).length;
-  const avgTreadDepth = filteredTyres.reduce((sum, t) => sum + (t.current_tread_depth || 0), 0) / totalTyres || 0;
-  const criticalTyres = filteredTyres.filter((t) => t.condition === "needs_replacement").length;
+  const inServicePct = totalTyres > 0 ? ((tyresInService / totalTyres) * 100).toFixed(0) : "0";
+
+  const avgTreadDepth =
+    totalTyres > 0
+      ? filteredTyres.reduce((sum, t) => sum + (t.current_tread_depth ?? 0), 0) / totalTyres
+      : 0;
+
+  const healthyCount = filteredTyres.filter((t) =>
+    HEALTHY_CONDITIONS.includes(t.condition as typeof HEALTHY_CONDITIONS[number])
+  ).length;
+  const healthyPct = totalTyres > 0 ? ((healthyCount / totalTyres) * 100).toFixed(0) : "0";
+
+  const criticalCount = filteredTyres.filter((t) => t.condition === "needs_replacement").length;
+  const criticalPct = totalTyres > 0 ? ((criticalCount / totalTyres) * 100).toFixed(0) : "0";
 
   const stats = [
     {
       title: "Total Tyres",
       value: totalTyres.toString(),
-      change: `${tyresInService} in service`,
+      sub: `${tyresInService} in service (${inServicePct}%)`,
       icon: Package,
       color: "text-primary",
+      bg: "bg-primary/10",
     },
     {
       title: "Avg Tread Depth",
       value: `${avgTreadDepth.toFixed(1)} mm`,
-      change: "Fleet average",
+      sub: `Min safe: ${3} mm`,
       icon: TrendingUp,
       color: "text-success",
+      bg: "bg-success/10",
     },
     {
-      title: "Excellent/Good",
-      value: filteredTyres.filter((t) => ["excellent", "good"].includes(t.condition)).length.toString(),
-      change: "Healthy tyres",
+      title: "Healthy",
+      value: healthyCount.toString(),
+      sub: `${healthyPct}% of fleet`,
       icon: CheckCircle,
       color: "text-info",
+      bg: "bg-info/10",
     },
     {
       title: "Needs Replacement",
-      value: criticalTyres.toString(),
-      change: "Critical attention",
+      value: criticalCount.toString(),
+      sub: `${criticalPct}% of fleet`,
       icon: AlertCircle,
-      color: "text-warning",
+      color: criticalCount > 0 ? "text-destructive" : "text-muted-foreground",
+      bg: criticalCount > 0 ? "bg-destructive/10" : "bg-muted/40",
     },
   ];
 
-  // Brand distribution with better formatting
+  // ── Brand distribution ─────────────────────────────────────────────────────
+
   const brandDistribution = useMemo((): BrandDistributionItem[] => {
-    const counts = filteredTyres.reduce((acc, t) => {
-      const brand = t.brand || 'Unknown';
-      acc[brand] = (acc[brand] || 0) + 1;
+    const map = filteredTyres.reduce((acc, t) => {
+      const brand = t.brand ?? "Unknown";
+      if (!acc[brand]) acc[brand] = { count: 0, treadSum: 0, kmSum: 0 };
+      acc[brand].count += 1;
+      acc[brand].treadSum += t.current_tread_depth ?? 0;
+      acc[brand].kmSum += t.km_travelled ?? 0;
       return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, { count: number; treadSum: number; kmSum: number }>);
 
-    const colors = [
-      "#2563eb", // blue
-      "#16a34a", // green
-      "#dc2626", // red
-      "#9333ea", // purple
-      "#ea580c", // orange
-      "#0891b2", // cyan
-      "#ca8a04", // yellow
-      "#be123c", // rose
-    ];
-
-    return Object.entries(counts).map(([name, value], index) => ({
-      name,
-      value,
-      color: colors[index % colors.length],
-      percentage: ((value / filteredTyres.length) * 100).toFixed(1),
-    }));
+    return Object.entries(map)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, d], index) => ({
+        name,
+        value: d.count,
+        color: BRAND_COLORS[index % BRAND_COLORS.length],
+        percentage: ((d.count / (filteredTyres.length || 1)) * 100).toFixed(1),
+        avgTreadDepth: d.count > 0 ? parseFloat((d.treadSum / d.count).toFixed(1)) : 0,
+        avgKm: d.count > 0 ? Math.round(d.kmSum / d.count) : 0,
+      }));
   }, [filteredTyres]);
 
-  // Fleet performance with tread loss calculation
+  // ── Fleet performance ──────────────────────────────────────────────────────
+
   const fleetPerformance = useMemo((): FleetPerformanceItem[] => {
     return fleetTypes
       .filter((ft) => ft !== "all")
       .map((fleetType) => {
         const fleetTyres = tyres.filter((t) => t.position?.startsWith(fleetType));
-        const avgKm = fleetTyres.reduce((sum, t) => sum + (t.km_travelled || 0), 0) / fleetTyres.length || 0;
-        
-        // Calculate total tread lost based on position type
+        const count = fleetTyres.length;
+
+        const avgKm =
+          count > 0
+            ? Math.round(fleetTyres.reduce((sum, t) => sum + (t.km_travelled ?? 0), 0) / count)
+            : 0;
+
+        let totalExpectedTread = 0;
         const totalTreadLost = fleetTyres.reduce((sum, t) => {
-          const positionType = getPositionType(t.position || t.current_fleet_position);
-          if (!positionType) return sum;
-          
-          const initialDepth = INITIAL_TREAD_DEPTHS[positionType];
-          const currentDepth = t.current_tread_depth || 0;
-          const treadLost = Math.max(0, initialDepth - currentDepth);
-          
-          return sum + treadLost;
+          const posType = getPositionType(t.position ?? t.current_fleet_position);
+          if (!posType) return sum;
+          const initial = INITIAL_TREAD_DEPTHS[posType];
+          totalExpectedTread += initial - 3; // usable tread above min
+          return sum + Math.max(0, initial - (t.current_tread_depth ?? 0));
         }, 0);
+
+        const avgTreadLost = count > 0 ? parseFloat((totalTreadLost / count).toFixed(1)) : 0;
+        const treadEfficiencyPct =
+          totalExpectedTread > 0
+            ? Math.round((1 - totalTreadLost / totalExpectedTread) * 100)
+            : 100;
+
+        const criticalCount = fleetTyres.filter((t) => t.condition === "needs_replacement").length;
 
         return {
           fleet: fleetType,
-          avgKm: Math.round(avgKm),
+          avgKm,
           totalTreadLost: parseFloat(totalTreadLost.toFixed(1)),
-          count: fleetTyres.length,
+          avgTreadLost,
+          treadEfficiencyPct: Math.max(0, treadEfficiencyPct),
+          count,
+          criticalCount,
         };
       });
-  }, [tyres, fleetTypes, getPositionType]);
+  }, [tyres, fleetTypes]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Loading tyre analytics...</div>
-      </div>
-    );
-  }
+  if (isLoading) return <AnalyticsSkeleton />;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-8">
-      {/* Header with filter */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Tyre Analytics</h2>
-          <p className="text-muted-foreground">Comprehensive tyre performance and distribution analysis</p>
+          <p className="text-muted-foreground text-sm">
+            Performance and distribution analysis across your fleet
+          </p>
         </div>
         <Select value={fleetFilter} onValueChange={setFleetFilter}>
-          <SelectTrigger className="w-full sm:w-56">
+          <SelectTrigger className="w-full sm:w-52">
             <SelectValue placeholder="Filter by fleet" />
           </SelectTrigger>
           <SelectContent>
@@ -272,19 +310,23 @@ const TyreAnalytics = () => {
         </Select>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.title} className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-                <Icon className={`w-4 h-4 ${stat.color}`} />
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {stat.title}
+                </CardTitle>
+                <div className={`p-1.5 rounded-md ${stat.bg}`}>
+                  <Icon className={`w-4 h-4 ${stat.color}`} />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground mt-1">{stat.change}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stat.sub}</p>
               </CardContent>
             </Card>
           );
@@ -298,25 +340,26 @@ const TyreAnalytics = () => {
           <TabsTrigger value="performance">Fleet Performance</TabsTrigger>
         </TabsList>
 
+        {/* ── Brand Distribution ── */}
         <TabsContent value="brands" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Brand Distribution</CardTitle>
               <CardDescription>
-                Market share by tyre brand • Total: {filteredTyres.length} tyres
+                Share by brand · {filteredTyres.length} tyres total
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[500px] w-full">
+              <div className="h-[460px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart margin={{ top: 20, right: 30, left: 30, bottom: 20 }}>
                     <Pie
                       data={brandDistribution}
                       cx="50%"
                       cy="45%"
-                      labelLine={{ stroke: '#666', strokeWidth: 1 }}
+                      labelLine={{ stroke: "#6b7280", strokeWidth: 1 }}
                       label={({ name, percentage }) => `${name} (${percentage}%)`}
-                      outerRadius={180}
+                      outerRadius={175}
                       innerRadius={80}
                       paddingAngle={2}
                       dataKey="value"
@@ -326,8 +369,8 @@ const TyreAnalytics = () => {
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend 
-                      verticalAlign="bottom" 
+                    <Legend
+                      verticalAlign="bottom"
                       height={36}
                       formatter={(value: string) => (
                         <span className="text-sm text-muted-foreground">{value}</span>
@@ -338,75 +381,101 @@ const TyreAnalytics = () => {
               </div>
 
               {/* Brand Summary Table */}
-              <div className="mt-8 border-t pt-6">
-                <h4 className="text-sm font-medium mb-4">Brand Summary</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {brandDistribution.map((brand) => (
-                    <div key={brand.name} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: brand.color }} />
-                      <div>
-                        <p className="font-medium text-sm">{brand.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {brand.value} tyres ({brand.percentage}%)
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+              <div className="mt-6 border-t pt-6">
+                <h4 className="text-sm font-semibold mb-4">Brand Breakdown</h4>
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wide">
+                        <th className="text-left px-4 py-2.5">Brand</th>
+                        <th className="text-right px-4 py-2.5">Count</th>
+                        <th className="text-right px-4 py-2.5">Share</th>
+                        <th className="text-right px-4 py-2.5">Avg Tread</th>
+                        <th className="text-right px-4 py-2.5">Avg KM</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {brandDistribution.map((brand) => (
+                        <tr key={brand.name} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: brand.color }}
+                              />
+                              <span className="font-medium">{brand.name}</span>
+                            </div>
+                          </td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">{brand.value}</td>
+                          <td className="text-right px-4 py-2.5 tabular-nums text-muted-foreground">
+                            {brand.percentage}%
+                          </td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">
+                            {brand.avgTreadDepth} mm
+                          </td>
+                          <td className="text-right px-4 py-2.5 tabular-nums text-muted-foreground">
+                            {formatKm(brand.avgKm)} km
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* ── Fleet Performance ── */}
         <TabsContent value="performance">
           <Card>
             <CardHeader>
-              <CardTitle>Fleet Type Performance</CardTitle>
+              <CardTitle>Fleet Performance</CardTitle>
               <CardDescription>
-                Average kilometers traveled and total tread loss by fleet type
+                Average KM travelled and tread wear by fleet
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[500px] w-full">
+              <div className="h-[460px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart 
-                    data={fleetPerformance} 
-                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                  <BarChart
+                    data={fleetPerformance}
+                    margin={{ top: 20, right: 40, left: 20, bottom: 60 }}
                     barGap={8}
-                    barSize={40}
+                    barSize={36}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis 
-                      dataKey="fleet" 
-                      angle={-45} 
-                      textAnchor="end" 
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                    <XAxis
+                      dataKey="fleet"
+                      angle={-40}
+                      textAnchor="end"
                       height={70}
-                      tick={{ fontSize: 12, fill: '#6b7280' }}
+                      tick={{ fontSize: 12, fill: "#6b7280" }}
                     />
-                    <YAxis 
+                    <YAxis
                       yAxisId="left"
-                      tick={{ fontSize: 12, fill: '#6b7280' }}
-                      label={{ 
-                        value: 'Average KM Traveled', 
-                        angle: -90, 
-                        position: 'insideLeft',
-                        style: { fontSize: 12, fill: '#6b7280' }
+                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      label={{
+                        value: "Avg KM",
+                        angle: -90,
+                        position: "insideLeft",
+                        style: { fontSize: 11, fill: "#9ca3af" },
                       }}
                     />
-                    <YAxis 
-                      yAxisId="right" 
+                    <YAxis
+                      yAxisId="right"
                       orientation="right"
-                      tick={{ fontSize: 12, fill: '#6b7280' }}
-                      label={{ 
-                        value: 'Total Tread Lost (mm)', 
-                        angle: 90, 
-                        position: 'insideRight',
-                        style: { fontSize: 12, fill: '#6b7280' }
+                      tick={{ fontSize: 12, fill: "#6b7280" }}
+                      label={{
+                        value: "Tread Lost (mm)",
+                        angle: 90,
+                        position: "insideRight",
+                        style: { fontSize: 11, fill: "#9ca3af" },
                       }}
                     />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend 
-                      verticalAlign="top" 
+                    <Legend
+                      verticalAlign="top"
                       height={36}
                       formatter={(value: string) => (
                         <span className="text-sm text-muted-foreground">{value}</span>
@@ -430,37 +499,72 @@ const TyreAnalytics = () => {
                 </ResponsiveContainer>
               </div>
 
-              {/* Performance Summary Table */}
-              <div className="mt-8 border-t pt-6">
-                <h4 className="text-sm font-medium mb-4">Performance Summary</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {fleetPerformance.map((fleet) => (
-                    <div key={fleet.fleet} className="p-4 bg-muted/50 rounded-lg">
-                      <p className="font-medium text-sm mb-3">Fleet {fleet.fleet}</p>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Tyres:</span>
-                          <span className="font-medium">{fleet.count}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Avg KM:</span>
-                          <span className="font-medium">{fleet.avgKm.toLocaleString()} km</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Tread Lost:</span>
-                          <span className="font-medium">{fleet.totalTreadLost} mm</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+              {/* Fleet Summary Table */}
+              <div className="mt-6 border-t pt-6">
+                <h4 className="text-sm font-semibold mb-4">Fleet Breakdown</h4>
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wide">
+                        <th className="text-left px-4 py-2.5">Fleet</th>
+                        <th className="text-right px-4 py-2.5">Tyres</th>
+                        <th className="text-right px-4 py-2.5">Avg KM</th>
+                        <th className="text-right px-4 py-2.5">Avg Tread Lost</th>
+                        <th className="text-right px-4 py-2.5">Tread Remaining</th>
+                        <th className="text-right px-4 py-2.5">Critical</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {fleetPerformance.map((fleet) => (
+                        <tr key={fleet.fleet} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-2.5 font-medium font-mono">{fleet.fleet}</td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">{fleet.count}</td>
+                          <td className="text-right px-4 py-2.5 tabular-nums text-muted-foreground">
+                            {formatKm(fleet.avgKm)} km
+                          </td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">
+                            {fleet.avgTreadLost} mm
+                          </td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">
+                            <span
+                              className={
+                                fleet.treadEfficiencyPct >= 60
+                                  ? "text-success font-medium"
+                                  : fleet.treadEfficiencyPct >= 30
+                                  ? "text-warning font-medium"
+                                  : "text-destructive font-medium"
+                              }
+                            >
+                              {fleet.treadEfficiencyPct}%
+                            </span>
+                          </td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">
+                            {fleet.criticalCount > 0 ? (
+                              <span className="text-destructive font-semibold">
+                                {fleet.criticalCount}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
 
-              {/* Tread Depth Legend */}
-              <div className="mt-6 p-4 bg-muted/30 rounded-lg">
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium">Initial tread depths:</span> Steer: 15mm, Drive: 22mm, Trailer: 15mm
-                </p>
+                {/* Tread reference */}
+                <div className="mt-4 rounded-lg border bg-muted/30 px-4 py-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    Reference: Initial tread depths by position type
+                  </p>
+                  <div className="flex flex-wrap gap-6 text-xs text-muted-foreground">
+                    <span><span className="font-medium text-foreground">Steer (V1–V2)</span> — 15 mm</span>
+                    <span><span className="font-medium text-foreground">Drive (V3+)</span> — 22 mm</span>
+                    <span><span className="font-medium text-foreground">Trailer (T*)</span> — 15 mm</span>
+                    <span><span className="font-medium text-foreground">Min safe</span> — 3 mm</span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

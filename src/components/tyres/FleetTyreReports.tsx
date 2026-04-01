@@ -1,3 +1,5 @@
+////FleetTyreReports
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -221,6 +223,7 @@ const FleetTyreReports = () => {
         avgCostPerKm: data.totalKm > 0 ? data.totalCost / data.totalKm : null,
         totalMmWorn: data.totalMmWorn,
         kmPerMm: data.totalMmWorn > 0 ? data.totalKm / data.totalMmWorn : null,
+        costPerMm: data.totalMmWorn > 0 ? data.totalCost / data.totalMmWorn : null,
       }))
       .sort((a, b) => b.totalCost - a.totalCost);
   }, [tyres]);
@@ -238,7 +241,11 @@ const FleetTyreReports = () => {
       return sum;
     }, 0),
     brandCount: brandDistribution.length,
+    avgCostPerMm: 0,
   }), [tyres, brandDistribution]);
+
+  // Compute avgCostPerMm from grandTotals
+  const avgCostPerMm = grandTotals.totalMmWorn > 0 ? grandTotals.totalCost / grandTotals.totalMmWorn : null;
 
   // Get unique positions for recommendations filter
   const positions = useMemo(() => {
@@ -625,6 +632,16 @@ const FleetTyreReports = () => {
                     </div>
                   </CardContent>
                 </Card>
+                <Card className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800">
+                  <CardContent className="pt-5 pb-4">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium text-teal-600 dark:text-teal-400 uppercase tracking-wider">Avg Cost/MM</span>
+                      <span className="text-2xl font-bold text-teal-700 dark:text-teal-300 mt-1">
+                        {avgCostPerMm !== null ? `$${avgCostPerMm.toFixed(2)}` : 'N/A'}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
               {/* Charts Row */}
@@ -725,12 +742,13 @@ const FleetTyreReports = () => {
                         <TableHead className="text-right">Total KM</TableHead>
                         <TableHead className="text-right">Cost/KM</TableHead>
                         <TableHead className="text-right">KM/MM</TableHead>
+                        <TableHead className="text-right">Cost/MM</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {brandSummary.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                          <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                             <div className="flex flex-col items-center gap-3">
                               <Package className="h-12 w-12 opacity-30" />
                               <p>No tyre data available</p>
@@ -764,6 +782,13 @@ const FleetTyreReports = () => {
                               {data.kmPerMm !== null ? (
                                 <span className={data.kmPerMm > 5000 ? 'text-green-600 font-medium' : data.kmPerMm < 2000 ? 'text-red-500' : ''}>
                                   {data.kmPerMm.toLocaleString(undefined, { maximumFractionDigits: 0 })} km
+                                </span>
+                              ) : <span className="text-muted-foreground">N/A</span>}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {data.costPerMm !== null ? (
+                                <span className={data.costPerMm < 50 ? 'text-green-600 font-medium' : data.costPerMm > 150 ? 'text-red-500' : ''}>
+                                  ${data.costPerMm.toFixed(2)}
                                 </span>
                               ) : <span className="text-muted-foreground">N/A</span>}
                             </TableCell>
@@ -819,6 +844,9 @@ const FleetTyreReports = () => {
                     <TableHead>Brand/Model</TableHead>
                     <TableHead>Fleet Position</TableHead>
                     <TableHead>Tread Depth</TableHead>
+                    <TableHead>Tread Worn</TableHead>
+                    <TableHead>Wear Rate</TableHead>
+                    <TableHead>Cost/MM</TableHead>
                     <TableHead>Condition</TableHead>
                     <TableHead>KM Travelled</TableHead>
                   </TableRow>
@@ -826,23 +854,34 @@ const FleetTyreReports = () => {
                 <TableBody>
                   {tyres.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         No tyres found for selected fleet
                       </TableCell>
                     </TableRow>
                   ) : (
-                    tyres.slice(0, 10).map((tyre) => (
-                      <TableRow key={tyre.id}>
-                        <TableCell className="font-mono">{tyre.serial_number || tyre.id}</TableCell>
-                        <TableCell>{tyre.brand} {tyre.model}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{tyre.fleet_position || '-'}</Badge>
-                        </TableCell>
-                        <TableCell>{tyre.current_tread_depth} mm</TableCell>
-                        <TableCell>{getConditionBadge(tyre.condition)}</TableCell>
-                        <TableCell>{tyre.km_travelled?.toLocaleString() || 0} km</TableCell>
-                      </TableRow>
-                    ))
+                    tyres.slice(0, 10).map((tyre) => {
+                      const treadWorn = (tyre.initial_tread_depth && tyre.current_tread_depth)
+                        ? tyre.initial_tread_depth - tyre.current_tread_depth : null;
+                      const wearRate = (treadWorn && treadWorn > 0 && tyre.km_travelled && tyre.km_travelled > 0)
+                        ? treadWorn / (tyre.km_travelled / 1000) : null;
+                      const costPerMm = (treadWorn && treadWorn > 0 && tyre.purchase_cost_zar)
+                        ? tyre.purchase_cost_zar / treadWorn : null;
+                      return (
+                        <TableRow key={tyre.id}>
+                          <TableCell className="font-mono">{tyre.serial_number || tyre.id}</TableCell>
+                          <TableCell>{tyre.brand} {tyre.model}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{tyre.fleet_position || '-'}</Badge>
+                          </TableCell>
+                          <TableCell>{tyre.current_tread_depth} mm</TableCell>
+                          <TableCell>{treadWorn !== null && treadWorn > 0 ? `${treadWorn.toFixed(1)} mm` : '-'}</TableCell>
+                          <TableCell>{wearRate !== null ? `${wearRate.toFixed(2)} mm/1000km` : '-'}</TableCell>
+                          <TableCell>{costPerMm !== null ? `$${costPerMm.toFixed(2)}` : '-'}</TableCell>
+                          <TableCell>{getConditionBadge(tyre.condition)}</TableCell>
+                          <TableCell>{tyre.km_travelled?.toLocaleString() || 0} km</TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -952,7 +991,7 @@ const FleetTyreReports = () => {
             </TabsContent>
 
             <TabsContent value="cost" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Total Cost</CardTitle>
@@ -987,6 +1026,15 @@ const FleetTyreReports = () => {
                   <CardContent>
                     <div className="text-2xl font-bold">${costPerKm.toFixed(4)}</div>
                     <p className="text-xs text-muted-foreground mt-1">Per kilometer</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Cost/MM</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{avgCostPerMm !== null ? `$${avgCostPerMm.toFixed(2)}` : 'N/A'}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Per mm tread worn</p>
                   </CardContent>
                 </Card>
               </div>

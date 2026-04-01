@@ -2,21 +2,21 @@ import InspectorProfileSelector from "@/components/inspections/InspectorProfileS
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-Dialog,
-DialogContent,
-DialogDescription,
-DialogFooter,
-DialogHeader,
-DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-Select,
-SelectContent,
-SelectItem,
-SelectTrigger,
-SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -150,19 +150,27 @@ const TyreInspectionDialog = ({
       // If tyre has a valid code, update the tyre record with new inspection data
       if (tyreCode && !tyreCode.startsWith("NEW_CODE_")) {
         // Calculate km travelled since installation
-        const kmTravelled = installationKm ? Math.max(0, kmReading - installationKm) : null;
+        // Only update if odometer > installationKm to avoid writing 0 from bad odometer entries
+        const kmTravelled = (installationKm && kmReading > installationKm)
+          ? kmReading - installationKm
+          : null;
+
+        const tyreUpdateFields: Record<string, unknown> = {
+          current_tread_depth: formData.treadDepth
+            ? parseFloat(formData.treadDepth)
+            : null,
+          condition: formData.condition,
+          notes: formData.notes || null,
+          last_inspection_date: inspectionDateTime.toISOString().split("T")[0],
+        };
+        // Only overwrite km_travelled if we have a valid calculation
+        if (kmTravelled != null) {
+          tyreUpdateFields.km_travelled = kmTravelled;
+        }
 
         await supabase
           .from("tyres")
-          .update({
-            current_tread_depth: formData.treadDepth
-              ? parseFloat(formData.treadDepth)
-              : null,
-            condition: formData.condition,
-            notes: formData.notes || null,
-            last_inspection_date: inspectionDateTime.toISOString().split("T")[0],
-            km_travelled: kmTravelled,
-          })
+          .update(tyreUpdateFields)
           .eq("id", tyreCode);
 
         // Add lifecycle event with metadata
@@ -191,6 +199,23 @@ const TyreInspectionDialog = ({
           },
           notes: formData.notes || null,
         });
+      }
+
+      // Update vehicles.current_odometer if the inspection odometer is higher
+      if (kmReading > 0) {
+        const { data: vehicleData } = await supabase
+          .from("vehicles")
+          .select("current_odometer")
+          .eq("id", vehicleId)
+          .single();
+
+        const existingOdo = vehicleData?.current_odometer ?? 0;
+        if (kmReading > existingOdo) {
+          await supabase
+            .from("vehicles")
+            .update({ current_odometer: kmReading })
+            .eq("id", vehicleId);
+        }
       }
 
       toast({

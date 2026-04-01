@@ -1,6 +1,6 @@
 import { TripHistoryDialog } from "@/components/tracking/TripHistoryDialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -12,6 +12,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useCustomLocations } from "@/hooks/useCustomLocations";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -34,20 +37,6 @@ import {
 import { formatDistance } from "@/lib/waypoints";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import {
-  AlertCircle,
-  Clock,
-  History,
-  Loader2,
-  MapPin,
-  Navigation,
-  Package,
-  RefreshCw,
-  Route,
-  Settings,
-  Target,
-  Truck,
-} from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Circle,
@@ -73,6 +62,10 @@ L.Icon.Default.mergeOptions({
   shadowUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) {
@@ -147,72 +140,166 @@ function calculateETA(
   };
 }
 
+// Professional vehicle marker with clean design
 function createVehicleIcon(
   asset: TelematicsAsset,
   hasActiveLoad = false,
 ): L.DivIcon {
   const isStationary = asset.speedKmH < 5 && !asset.inTrip;
-  const color = isStationary ? "#ef4444" : getStatusColor(asset);
-  const rotation = asset.heading || 0;
+  const color = isStationary ? "#dc2626" : getStatusColor(asset);
   const fleetNumber = asset.name || asset.code || `${asset.id}`;
   const displayNumber =
     fleetNumber.length > 8 ? fleetNumber.substring(0, 7) + "…" : fleetNumber;
 
-  const loadIndicator = hasActiveLoad
-    ? `
-    <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:#7c3aed;color:white;font-size:8px;padding:1px 4px;border-radius:4px;white-space:nowrap;font-weight:bold;border:1px solid white;">
-      LOAD
+  // Clean, professional marker design
+  const markerHtml = `
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+      <div style="
+        width: 32px;
+        height: 32px;
+        background: ${color};
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s;
+      ">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 13L9 17L19 7" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div style="
+        position: absolute;
+        top: 36px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.8);
+        color: white;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+        white-space: nowrap;
+        font-family: system-ui, -apple-system, sans-serif;
+        letter-spacing: 0.3px;
+        backdrop-filter: blur(4px);
+      ">
+        ${displayNumber}
+      </div>
+      ${hasActiveLoad ? `
+      <div style="
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: #7c3aed;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      "></div>
+      ` : ''}
+      ${asset.inTrip ? `
+      <div style="
+        position: absolute;
+        bottom: -4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 6px;
+        height: 6px;
+        background: #22c55e;
+        border-radius: 50%;
+        animation: pulse 1.5s infinite;
+      "></div>
+      ` : ''}
     </div>
-  `
-    : "";
-
-  const statusIndicator = asset.inTrip
-    ? `<div style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:#22c55e;border:2px solid white;animation:pulse 1.5s infinite;"></div>`
-    : "";
-
-  const iconContent = isStationary
-    ? ""
-    : `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2L12 22M12 2L5 9M12 2L19 9"/>
-      </svg>`;
-
-  const fleetLabel = `
-    <div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);background:white;color:#1e293b;font-size:10px;padding:2px 8px;border-radius:4px;white-space:nowrap;font-weight:700;letter-spacing:0.2px;box-shadow:0 1px 3px rgba(0,0,0,0.2);border:1.5px solid ${color};">
-      ${displayNumber}
-    </div>
+    <style>
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+        50% { opacity: 0.5; transform: translateX(-50%) scale(1.2); }
+      }
+    </style>
   `;
 
   return L.divIcon({
-    html: `
-      <div style="width:80px;height:${hasActiveLoad ? "70px" : "55px"};position:relative;display:flex;align-items:flex-start;justify-content:center;padding-top:0;overflow:visible;">
-        <div style="
-          width:28px;height:28px;border-radius:50%;background:${color};
-          border:3px solid ${hasActiveLoad ? "#7c3aed" : "white"};display:flex;align-items:center;justify-content:center;
-          box-shadow:0 2px 8px rgba(0,0,0,0.3);${isStationary ? "" : `transform:rotate(${rotation}deg);`}
-        ">
-          ${iconContent}
-        </div>
-        ${statusIndicator}
-        ${fleetLabel}
-        ${loadIndicator}
-      </div>
-      <style>@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:0.7}}</style>
-    `,
+    html: markerHtml,
     className: "vehicle-marker",
-    iconSize: [80, hasActiveLoad ? 70 : 55],
-    iconAnchor: [40, 14],
-    popupAnchor: [0, -14],
+    iconSize: [48, 56],
+    iconAnchor: [24, 28],
+    popupAnchor: [0, -28],
   });
 }
+
+// Depot marker with professional styling
+function createDepotIcon(type: string): L.DivIcon {
+  const colors: Record<string, string> = {
+    depot: "#059669",
+    warehouse: "#0284c7",
+    market: "#dc2626",
+    default: "#9333ea",
+  };
+  const color = colors[type] || colors.default;
+
+  return L.divIcon({
+    html: `
+      <div style="
+        width: 28px;
+        height: 28px;
+        background: ${color};
+        border-radius: 8px;
+        border: 2px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 9L12 3L21 9L12 15L3 9Z" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.3)"/>
+          <path d="M12 15V21M8 18H16" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+    `,
+    className: "depot-marker",
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+// Custom location marker
+const createCustomLocationIcon = (): L.DivIcon => {
+  return L.divIcon({
+    html: `
+      <div style="
+        width: 26px;
+        height: 26px;
+        background: #f97316;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="8" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.3)"/>
+          <circle cx="12" cy="12" r="3" fill="white"/>
+        </svg>
+      </div>
+    `,
+    className: "custom-location-marker",
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  });
+};
 
 function FitBounds({ assets }: { assets: TelematicsAsset[] }) {
   const map = useMap();
 
   useEffect(() => {
-    // Guard: ensure map is fully initialized before calling fitBounds
     if (!map || !map.getContainer()) return;
 
-    // Use a small delay to ensure map is ready ( Leaflet needs time to initialize)
     const timeoutId = setTimeout(() => {
       if (assets.length === 0) return;
 
@@ -237,6 +324,10 @@ function FitBounds({ assets }: { assets: TelematicsAsset[] }) {
   return null;
 }
 
+// ============================================================================
+// Main Component
+// ============================================================================
+
 export default function LiveTrackingPage() {
   const [assets, setAssets] = useState<TelematicsAsset[]>([]);
   const [activeLoads, setActiveLoads] = useState<ActiveLoadForTracking[]>([]);
@@ -248,11 +339,9 @@ export default function LiveTrackingPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [_refreshInterval, _setRefreshInterval] = useState(10);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-  const [_showLoadsPanel, _setShowLoadsPanel] = useState(true);
   const [geofences, setGeofences] = useState<TelematicsGeofence[]>([]);
   const [showGeofences, setShowGeofences] = useState(true);
   const [showDepots, setShowDepots] = useState(true);
-  const [_showCustomLocations] = useState(true);
   const { data: customLocations = [] } = useCustomLocations();
   const [maximizeMap, setMaximizeMap] = useState(false);
   const [showRouteCalculator, setShowRouteCalculator] = useState(false);
@@ -383,10 +472,8 @@ export default function LiveTrackingPage() {
     [assetToLoadMap],
   );
 
-  // Open trip history for a vehicle
   const openTripHistory = useCallback(async (asset: TelematicsAsset) => {
     setTripHistoryAsset(asset);
-    // Fetch loads linked to this vehicle via fleet_vehicles.telematics_asset_id or registration match
     try {
       const assetName = (asset.name || asset.code || "").toLowerCase();
       const { data } = await supabase
@@ -402,7 +489,6 @@ export default function LiveTrackingPage() {
         .order("loading_date", { ascending: false })
         .limit(20);
 
-      // Filter loads that match this asset
       const vehicleLoads = (data || []).filter((load) => {
         const fv = load.fleet_vehicle as { telematics_asset_id?: string | null; vehicle_id?: string } | null;
         if (fv?.telematics_asset_id && String(fv.telematics_asset_id) === String(asset.id)) return true;
@@ -425,7 +511,6 @@ export default function LiveTrackingPage() {
     [geofences, selectedGeofenceId],
   );
 
-  // Calculate ETA when vehicle and geofence are selected
   useEffect(() => {
     if (!selectedVehicle || !selectedGeofence) {
       setEtaResult(null);
@@ -482,14 +567,12 @@ export default function LiveTrackingPage() {
     toast.success("Disconnected from Telematics");
   };
 
-  // Initial fetch when authenticated
   useEffect(() => {
     if (authenticated && organisationId) {
       fetchAssets();
     }
   }, [authenticated, organisationId, fetchAssets]);
 
-  // Auto-refresh interval
   useEffect(() => {
     if (!autoRefresh || !authenticated) return;
 
@@ -497,7 +580,6 @@ export default function LiveTrackingPage() {
     return () => clearInterval(intervalId);
   }, [autoRefresh, authenticated, _refreshInterval, fetchAssets]);
 
-  // Fetch road route when vehicle or destination geofence changes
   useEffect(() => {
     const fetchRoute = async () => {
       if (!selectedVehicle?.lastLatitude || !selectedVehicle?.lastLongitude || !selectedGeofence) {
@@ -546,10 +628,20 @@ export default function LiveTrackingPage() {
 
   const defaultCenter: [number, number] = [-19.0, 31.0];
 
+  const depotIcon = useCallback((type: string) => createDepotIcon(type), []);
+  const customLocationIcon = useMemo(() => createCustomLocationIcon(), []);
+
   return (
     <>
-      <div className="p-6 space-y-6 animate-fade-in">
+      <div className="p-6 space-y-6">
+        {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Live Fleet Tracking</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Real-time vehicle positions and route monitoring
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             {authenticated ? (
               <>
@@ -557,57 +649,65 @@ export default function LiveTrackingPage() {
                   variant="outline"
                   onClick={fetchAssets}
                   disabled={loading}
+                  size="sm"
                 >
-                  <RefreshCw
-                    className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-                  />
+                  <svg className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                   Refresh
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   onClick={() => setShowSettingsDialog(true)}
-                  aria-label="Settings"
+                  className="h-8 w-8"
                 >
-                  <Settings className="w-4 h-4" />
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
                 </Button>
               </>
             ) : (
               <Button onClick={() => setShowAuthDialog(true)}>
-                <Truck className="w-4 h-4 mr-2" />
                 Connect to Telematics
               </Button>
             )}
           </div>
         </div>
 
+        {/* ETA Calculator Card - Professional Design */}
         {authenticated && !maximizeMap && (
-          <Card className="border-indigo-200 dark:border-indigo-800">
-            <CardHeader className="flex flex-row items-center justify-between py-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Route className="w-5 h-5 text-indigo-600" />
-                Route & ETA Calculator
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowRouteCalculator(!showRouteCalculator)}
-              >
-                {showRouteCalculator ? "Hide" : "Show"}
-              </Button>
+          <Card className="border shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-medium">Route & ETA Calculator</CardTitle>
+                  <CardDescription className="text-xs">
+                    Calculate estimated arrival time for vehicles to destinations
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowRouteCalculator(!showRouteCalculator)}
+                  className="h-8 px-3 text-xs"
+                >
+                  {showRouteCalculator ? "Hide" : "Show"}
+                </Button>
+              </div>
             </CardHeader>
             {showRouteCalculator && (
               <CardContent className="pt-0">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <div className="space-y-2">
-                    <Label htmlFor="vehicle-select" className="text-sm font-medium flex items-center gap-2">
-                      <Truck className="w-4 h-4" />
+                    <Label htmlFor="vehicle-select" className="text-xs font-medium text-muted-foreground">
                       Select Vehicle
                     </Label>
                     <select
                       id="vehicle-select"
                       title="Select vehicle for ETA"
-                      className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                      className="w-full px-3 py-1.5 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                       value={selectedVehicleId || ""}
                       onChange={(e) =>
                         setSelectedVehicleId(
@@ -620,7 +720,7 @@ export default function LiveTrackingPage() {
                         <option key={asset.id} value={asset.id}>
                           {asset.name || asset.code || `Vehicle ${asset.id}`}
                           {asset.speedKmH > 0
-                            ? ` (${asset.speedKmH} km/h)`
+                            ? ` (${Math.round(asset.speedKmH)} km/h)`
                             : " (Stationary)"}
                         </option>
                       ))}
@@ -628,14 +728,13 @@ export default function LiveTrackingPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="geofence-select" className="text-sm font-medium flex items-center gap-2">
-                      <Target className="w-4 h-4" />
-                      Destination Geofence
+                    <Label htmlFor="geofence-select" className="text-xs font-medium text-muted-foreground">
+                      Destination
                     </Label>
                     <select
                       id="geofence-select"
                       title="Select destination geofence"
-                      className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                      className="w-full px-3 py-1.5 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                       value={selectedGeofenceId || ""}
                       onChange={(e) =>
                         setSelectedGeofenceId(
@@ -658,29 +757,27 @@ export default function LiveTrackingPage() {
                   {etaResult && (
                     <>
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
+                        <Label className="text-xs font-medium text-muted-foreground">
                           Estimated Arrival
                         </Label>
-                        <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800">
-                          <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                          <p className="text-xl font-semibold text-primary">
                             {etaResult.etaFormatted}
                           </p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             {etaResult.durationFormatted}
                           </p>
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium flex items-center gap-2">
-                          <Navigation className="w-4 h-4" />
-                          Distance & Speed
+                        <Label className="text-xs font-medium text-muted-foreground">
+                          Distance
                         </Label>
-                        <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800">
-                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        <div className="p-3 rounded-lg bg-muted/30 border">
+                          <p className="text-xl font-semibold">
                             {etaResult.distanceFormatted}
                           </p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             {etaResult.isMoving
                               ? `Moving at ${Math.round(etaResult.speed)} km/h`
                               : "Vehicle stationary"}
@@ -691,7 +788,7 @@ export default function LiveTrackingPage() {
                   )}
 
                   {(!selectedVehicleId || !selectedGeofenceId) && (
-                    <div className="md:col-span-2 flex items-center justify-center p-4 rounded-lg bg-muted/50">
+                    <div className="md:col-span-2 flex items-center justify-center p-4 rounded-lg bg-muted/30">
                       <p className="text-sm text-muted-foreground">
                         Select a vehicle and destination to calculate ETA
                       </p>
@@ -719,29 +816,30 @@ export default function LiveTrackingPage() {
           </Card>
         )}
 
+        {/* Error Alert */}
         {error && (
-          <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
+          <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             {error}
           </div>
         )}
 
+        {/* Main Content */}
         {authenticated && (
-          <div className="flex gap-4">
-            {/* Map Section - takes most of the space */}
+          <div className="flex gap-5">
+            {/* Map Section */}
             <div className="flex-1">
-              <Card className="h-full">
-                <CardHeader className="flex flex-row items-center justify-between py-4">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <MapPin className="w-5 h-5" />
-                    Fleet Map
-                  </CardTitle>
-                  <div className="flex items-center gap-4">
+              <Card className="shadow-sm">
+                <CardHeader className="flex flex-row items-center justify-between py-3 px-5 border-b">
+                  <CardTitle className="text-base font-medium">Fleet Map</CardTitle>
+                  <div className="flex items-center gap-2">
                     <Button
                       variant={maximizeMap ? "default" : "outline"}
                       size="sm"
                       onClick={() => setMaximizeMap((v) => !v)}
-                      className="gap-2"
+                      className="h-8 px-3 text-xs"
                     >
                       {maximizeMap ? "Exit Full Screen" : "Full Screen"}
                     </Button>
@@ -749,9 +847,8 @@ export default function LiveTrackingPage() {
                       variant={showDepots ? "default" : "outline"}
                       size="sm"
                       onClick={() => setShowDepots(!showDepots)}
-                      className="gap-2"
+                      className="h-8 px-3 text-xs"
                     >
-                      <MapPin className="w-4 h-4" />
                       Depots ({DEPOTS.length})
                     </Button>
                     {authenticated && geofences.length > 0 && (
@@ -759,14 +856,13 @@ export default function LiveTrackingPage() {
                         variant={showGeofences ? "default" : "outline"}
                         size="sm"
                         onClick={() => setShowGeofences(!showGeofences)}
-                        className="gap-2"
+                        className="h-8 px-3 text-xs"
                       >
-                        <Target className="w-4 h-4" />
                         Geofences ({geofences.length})
                       </Button>
                     )}
                     {lastRefresh && (
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {lastRefresh.toLocaleTimeString()}
                         {autoRefresh && ` • ${_refreshInterval}s`}
                       </span>
@@ -775,18 +871,21 @@ export default function LiveTrackingPage() {
                 </CardHeader>
                 <CardContent className="p-0">
                   {!authenticated ? (
-                    <div className="h-[600px] flex flex-col items-center justify-center bg-muted/30 rounded-b-lg">
-                      <Truck className="w-16 h-16 text-muted-foreground mb-4" />
-                      <p className="text-lg font-medium mb-2">Connect to Telematics Guru</p>
-                      <p className="text-muted-foreground mb-4">Sign in to view your fleet&apos;s live positions</p>
-                      <Button onClick={() => setShowAuthDialog(true)}>
-                        <Truck className="w-4 h-4 mr-2" />
+                    <div className="h-[600px] flex flex-col items-center justify-center bg-muted/30">
+                      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                        <svg className="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        </svg>
+                      </div>
+                      <p className="text-base font-medium mb-1">Connect to Telematics Guru</p>
+                      <p className="text-sm text-muted-foreground mb-4">Sign in to view your fleet's live positions</p>
+                      <Button onClick={() => setShowAuthDialog(true)} size="sm">
                         Connect Now
                       </Button>
                     </div>
                   ) : loading && assets.length === 0 ? (
                     <div className="h-[600px] flex items-center justify-center">
-                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     </div>
                   ) : (
                     <div className="h-[600px] rounded-b-lg overflow-hidden">
@@ -801,6 +900,7 @@ export default function LiveTrackingPage() {
                           attribution='&copy; <a href="https://carto.com/">Carto</a>'
                         />
 
+                        {/* Geofences */}
                         {showGeofences &&
                           geofences.map((geofence) => {
                             const lat = geofence.latitude ?? geofence.centerLatitude ?? geofence.lat;
@@ -812,44 +912,41 @@ export default function LiveTrackingPage() {
                                 key={geofence.id}
                                 center={[lat, lng]}
                                 radius={radius}
-                                pathOptions={{ color: "#8b5cf6", fillColor: "#8b5cf6", fillOpacity: 0.15, weight: 2 }}
+                                pathOptions={{ color: "#8b5cf6", fillColor: "#8b5cf6", fillOpacity: 0.1, weight: 1.5 }}
                               >
                                 <Tooltip permanent={false} direction="top">
-                                  <div className="font-semibold">{geofence.name}</div>
-                                  {geofence.description && <div className="text-xs text-gray-500">{geofence.description}</div>}
+                                  <div className="text-sm font-medium">{geofence.name}</div>
+                                  {geofence.description && <div className="text-xs text-muted-foreground">{geofence.description}</div>}
                                 </Tooltip>
                               </Circle>
                             );
                           })}
 
+                        {/* Depots */}
                         {showDepots &&
                           DEPOTS.map((depot) => {
-                            const depotIcon = L.divIcon({
-                              className: "depot-marker",
-                              html: `<div style="background: ${depot.type === 'depot' ? '#059669' : depot.type === 'warehouse' ? '#0284c7' : depot.type === 'market' ? '#dc2626' : '#9333ea'}; width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 9v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9"/><path d="M9 22V12h6v10"/><path d="M2 10.6L12 2l10 8.6"/></svg></div>`,
-                              iconSize: [28, 28],
-                              iconAnchor: [14, 14],
-                            });
-                            const color = depot.type === 'depot' ? '#059669' : '#9333ea';
+                            const color = depot.type === 'depot' ? '#059669' : depot.type === 'warehouse' ? '#0284c7' : '#9333ea';
                             return (
                               <React.Fragment key={depot.id}>
                                 {depot.polygon && depot.polygon.length >= 3 ? (
                                   <LeafletPolygon
                                     positions={depot.polygon.map(([lat, lng]) => [lat, lng] as [number, number])}
-                                    pathOptions={{ color, fillColor: color, fillOpacity: 0.25, weight: 2 }}
+                                    pathOptions={{ color, fillColor: color, fillOpacity: 0.15, weight: 1.5 }}
                                   />
                                 ) : (
                                   <Circle
                                     center={[depot.latitude, depot.longitude]}
                                     radius={depot.radius}
-                                    pathOptions={{ color, fillColor: color, fillOpacity: 0.2, weight: 2, dashArray: '5, 5' }}
+                                    pathOptions={{ color, fillColor: color, fillOpacity: 0.1, weight: 1.5, dashArray: '5, 5' }}
                                   />
                                 )}
-                                <Marker position={[depot.latitude, depot.longitude]} icon={depotIcon}>
+                                <Marker position={[depot.latitude, depot.longitude]} icon={depotIcon(depot.type)}>
                                   <Popup>
-                                    <div className="p-1">
-                                      <div className="font-bold text-base">{depot.name}</div>
-                                      <div className="text-sm text-gray-600">{depot.type.charAt(0).toUpperCase() + depot.type.slice(1)} • {depot.country}</div>
+                                    <div className="p-1 min-w-[160px]">
+                                      <div className="font-semibold text-sm">{depot.name}</div>
+                                      <div className="text-xs text-muted-foreground mt-0.5">
+                                        {depot.type.charAt(0).toUpperCase() + depot.type.slice(1)} • {depot.country}
+                                      </div>
                                     </div>
                                   </Popup>
                                 </Marker>
@@ -857,43 +954,40 @@ export default function LiveTrackingPage() {
                             );
                           })}
 
-                        {_showCustomLocations &&
-                          customLocations.map((loc) => {
-                            const locIcon = L.divIcon({
-                              className: "custom-location-marker",
-                              html: `<div style="background: #f97316; width: 26px; height: 26px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div>`,
-                              iconSize: [26, 26],
-                              iconAnchor: [13, 13],
-                            });
-                            return (
-                              <React.Fragment key={loc.id}>
-                                <Circle
-                                  center={[Number(loc.latitude), Number(loc.longitude)]}
-                                  radius={500}
-                                  pathOptions={{ color: '#f97316', fillColor: '#f97316', fillOpacity: 0.2, weight: 2, dashArray: '5, 5' }}
-                                />
-                                <Marker position={[Number(loc.latitude), Number(loc.longitude)]} icon={locIcon}>
-                                  <Popup><div className="font-bold">{loc.name}</div></Popup>
-                                </Marker>
-                              </React.Fragment>
-                            );
-                          })}
+                        {/* Custom Locations */}
+                        {customLocations.map((loc) => (
+                          <React.Fragment key={loc.id}>
+                            <Circle
+                              center={[Number(loc.latitude), Number(loc.longitude)]}
+                              radius={500}
+                              pathOptions={{ color: '#f97316', fillColor: '#f97316', fillOpacity: 0.1, weight: 1.5, dashArray: '5, 5' }}
+                            />
+                            <Marker position={[Number(loc.latitude), Number(loc.longitude)]} icon={customLocationIcon}>
+                              <Popup><div className="font-medium text-sm">{loc.name}</div></Popup>
+                            </Marker>
+                          </React.Fragment>
+                        ))}
 
+                        {/* Route Polyline */}
                         {routeCoords.length > 0 && (
-                          <Polyline positions={routeCoords} pathOptions={{ color: "#4f46e5", weight: 4, opacity: 0.8 }}>
+                          <Polyline 
+                            positions={routeCoords} 
+                            pathOptions={{ color: "#4f46e5", weight: 3, opacity: 0.7 }}
+                          >
                             <Tooltip permanent direction="center">
-                              <div className="text-xs font-medium">
+                              <div className="text-xs bg-background/90 px-2 py-1 rounded shadow-sm">
                                 {etaResult ? (
                                   <>
                                     <div>{etaResult.distanceFormatted}</div>
-                                    <div className="text-indigo-600">ETA: {etaResult.etaFormatted}</div>
+                                    <div className="text-primary">ETA: {etaResult.etaFormatted}</div>
                                   </>
-                                ) : "Calculating..."}
+                                ) : "Calculating route..."}
                               </div>
                             </Tooltip>
                           </Polyline>
                         )}
 
+                        {/* Vehicle Markers */}
                         {assets.map((asset) => {
                           const load = getLoadForAsset(asset);
                           if (asset.lastLatitude === null || asset.lastLongitude === null) return null;
@@ -904,27 +998,41 @@ export default function LiveTrackingPage() {
                               icon={createVehicleIcon(asset, !!load)}
                             >
                               <Popup>
-                                <div className="min-w-[220px]">
-                                  <div className="font-bold text-lg mb-2">{asset.name || asset.code || `Vehicle ${asset.id}`}</div>
+                                <div className="min-w-[240px]">
+                                  <div className="font-semibold text-base mb-2">
+                                    {asset.name || asset.code || `Vehicle ${asset.id}`}
+                                  </div>
                                   {load && (
-                                    <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                                      <div className="flex items-center gap-1 text-purple-700 dark:text-purple-400 font-semibold text-sm mb-1">
-                                        <Package className="w-4 h-4" /> Active Delivery
+                                    <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-md border border-purple-200 dark:border-purple-800">
+                                      <div className="flex items-center gap-1 text-purple-700 dark:text-purple-400 font-medium text-xs mb-1">
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                        </svg>
+                                        Active Delivery
                                       </div>
-                                      <div className="text-xs space-y-1">
+                                      <div className="text-xs space-y-0.5">
                                         <div><span className="font-medium">Load:</span> {load.load_id}</div>
                                         <div><span className="font-medium">To:</span> {load.destination || "N/A"}</div>
                                       </div>
                                     </div>
                                   )}
                                   <div className="space-y-1 text-sm">
-                                    <div><span className="font-medium">Speed:</span> {Math.round(asset.speedKmH)} km/h</div>
-                                    <div><span className="font-medium">Last seen:</span> {formatLastConnected(asset.lastConnectedUtc)}</div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Speed:</span>
+                                      <span className="font-medium">{Math.round(asset.speedKmH)} km/h</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Last seen:</span>
+                                      <span className="text-xs">{formatLastConnected(asset.lastConnectedUtc)}</span>
+                                    </div>
                                     <button
                                       onClick={() => openTripHistory(asset)}
-                                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-medium"
+                                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded text-xs font-medium transition-colors"
                                     >
-                                      <History className="h-3 w-3" /> Trip History
+                                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                      Trip History
                                     </button>
                                   </div>
                                 </div>
@@ -940,37 +1048,53 @@ export default function LiveTrackingPage() {
               </Card>
             </div>
 
-            {/* Fleet Numbers Sidebar */}
+            {/* Fleet List Sidebar */}
             {authenticated && assets.length > 0 && (
               <div className="w-80 shrink-0">
-                <Card className="h-full">
-                  <CardHeader className="py-3">
-                    <CardTitle className="text-lg">Fleet Vehicles ({assets.length})</CardTitle>
+                <Card className="shadow-sm">
+                  <CardHeader className="py-3 px-4 border-b">
+                    <CardTitle className="text-sm font-medium">Fleet Vehicles</CardTitle>
+                    <CardDescription className="text-xs">{assets.length} active vehicles</CardDescription>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
-                      {assets.map((asset) => {
-                        const load = getLoadForAsset(asset);
-                        return (
-                          <div
-                            key={asset.id}
-                            className={`flex items-center gap-3 p-3 border-b hover:bg-muted/50 cursor-pointer transition-colors ${load ? "bg-purple-50/50 dark:bg-purple-900/10" : ""}`}
-                            onClick={() => openTripHistory(asset)}
-                          >
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getStatusColor(asset) }} />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{asset.name || asset.code}</p>
-                              <p className="text-sm text-muted-foreground">{Math.round(asset.speedKmH)} km/h</p>
+                    <ScrollArea className="h-[calc(600px-57px)]">
+                      <div className="divide-y">
+                        {assets.map((asset) => {
+                          const load = getLoadForAsset(asset);
+                          const isStationary = asset.speedKmH < 5 && !asset.inTrip;
+                          return (
+                            <div
+                              key={asset.id}
+                              className={`flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors ${load ? "bg-purple-50/50 dark:bg-purple-900/5" : ""}`}
+                              onClick={() => openTripHistory(asset)}
+                            >
+                              <div 
+                                className="w-2.5 h-2.5 rounded-full" 
+                                style={{ backgroundColor: isStationary ? "#dc2626" : getStatusColor(asset) }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  {asset.name || asset.code || `Vehicle ${asset.id}`}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-xs text-muted-foreground">
+                                    {Math.round(asset.speedKmH)} km/h
+                                  </span>
+                                  {load && (
+                                    <Badge variant="secondary" className="h-4 px-1.5 text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                                      LOAD
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              <svg className="w-3 h-3 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
                             </div>
-                            {load && (
-                              <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs rounded-full">
-                                LOAD
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
                   </CardContent>
                 </Card>
               </div>
@@ -978,54 +1102,67 @@ export default function LiveTrackingPage() {
           </div>
         )}
 
+        {/* Auth Dialog */}
         <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Connect to Telematics Guru</DialogTitle>
+              <DialogTitle className="text-lg font-semibold">Connect to Telematics Guru</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+                <Label htmlFor="username" className="text-sm">Username</Label>
+                <Input 
+                  id="username" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)} 
+                  className="h-9"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Label htmlFor="password" className="text-sm">Password</Label>
+                <Input 
+                  id="password" 
+                  type="password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  className="h-9"
+                />
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox id="rememberMe" checked={rememberMe} onCheckedChange={(c) => setRememberMe(!!c)} />
-                <Label htmlFor="rememberMe" className="text-sm font-medium cursor-pointer">Remember me</Label>
+                <Label htmlFor="rememberMe" className="text-sm cursor-pointer">Remember me</Label>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAuthDialog(false)}>Cancel</Button>
               <Button onClick={handleAuth} disabled={authLoading}>
-                {authLoading ? <Loader2 className="animate-spin mr-2" /> : null}
+                {authLoading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />}
                 {authLoading ? "Connecting..." : "Connect"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
+        {/* Settings Dialog */}
         <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Tracking Settings</DialogTitle>
+              <DialogTitle className="text-lg font-semibold">Tracking Settings</DialogTitle>
             </DialogHeader>
             <div className="space-y-6 py-4">
               <div className="flex items-center justify-between">
-                <Label htmlFor="auto-refresh">Auto Refresh</Label>
+                <Label htmlFor="auto-refresh" className="text-sm">Auto Refresh</Label>
                 <Switch id="auto-refresh" checked={autoRefresh} onCheckedChange={setAutoRefresh} />
               </div>
-              <div className="pt-4 border-t">
-                <Button variant="destructive" className="w-full" onClick={handleLogout}>
-                  Disconnect
-                </Button>
-              </div>
+              <Separator />
+              <Button variant="destructive" className="w-full" onClick={handleLogout}>
+                Disconnect
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
 
+        {/* Trip History Dialog */}
         <TripHistoryDialog
           open={!!tripHistoryAsset}
           onOpenChange={(open) => { if (!open) { setTripHistoryAsset(null); setTripHistoryLoads([]); } }}

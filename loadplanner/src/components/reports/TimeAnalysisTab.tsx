@@ -19,6 +19,13 @@ import type { Load } from "@/hooks/useTrips";
 import { exportPunctualityToExcel } from "@/lib/exportPunctualityToExcel";
 import { exportPunctualityToPdf } from "@/lib/exportReportsToPdf";
 import {
+  ChartBarIcon,
+  ClockIcon,
+  MapIcon,
+  PresentationChartLineIcon,
+  TruckIcon,
+} from "@heroicons/react/24/outline";
+import {
   Bar,
   BarChart,
   CartesianGrid,
@@ -63,7 +70,7 @@ interface TimeAnalysisTabProps {
   }>;
   trendLabel?: "Weekly" | "Monthly";
   filteredLoads: Load[];
-  timeRange: "3months" | "6months" | "12months"; // Fixed: narrowed type from string to literal union
+  timeRange: "3months" | "6months" | "12months";
 }
 
 export function TimeAnalysisTab({
@@ -152,7 +159,8 @@ export function TimeAnalysisTab({
       {/* Period Punctuality Trend */}
       <Card className="overflow-hidden">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <PresentationChartLineIcon className="h-5 w-5 text-indigo-500" />
             {trendLabel} Punctuality Trend
           </CardTitle>
           <CardDescription>
@@ -214,7 +222,8 @@ export function TimeAnalysisTab({
         {/* Delivery Performance Distribution */}
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <ClockIcon className="h-5 w-5 text-emerald-500" />
               Delivery Performance
             </CardTitle>
             <CardDescription>
@@ -294,7 +303,8 @@ export function TimeAnalysisTab({
         {/* Day of Week Distribution */}
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <ChartBarIcon className="h-5 w-5 text-cyan-500" />
               Load Scheduling by Day
             </CardTitle>
             <CardDescription>
@@ -359,7 +369,8 @@ export function TimeAnalysisTab({
       {timeVarianceAnalysis.routePerformance.length > 0 && (
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <MapIcon className="h-5 w-5 text-indigo-500" />
               Destination Performance
             </CardTitle>
             <CardDescription>
@@ -502,7 +513,10 @@ export function TimeAnalysisTab({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Origin Delays (by name)</CardTitle>
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <TruckIcon className="h-5 w-5 text-amber-500" />
+              Origin Delays (by name)
+            </CardTitle>
             <CardDescription>Late arrivals and departures (over 15 min)</CardDescription>
           </CardHeader>
           <CardContent>
@@ -523,7 +537,10 @@ export function TimeAnalysisTab({
         </Card>
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Destination Delays (by name)</CardTitle>
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <MapIcon className="h-5 w-5 text-blue-500" />
+              Destination Delays (by name)
+            </CardTitle>
             <CardDescription>Late arrivals and departures (over 15 min)</CardDescription>
           </CardHeader>
           <CardContent>

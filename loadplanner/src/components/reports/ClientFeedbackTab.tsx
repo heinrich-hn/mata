@@ -26,7 +26,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Frown, MessageSquare, Smile, ThumbsDown, TrendingDown } from 'lucide-react';
+import {
+  ChartBarIcon,
+  FaceFrownIcon,
+  FaceSmileIcon,
+  HandThumbDownIcon,
+  ChatBubbleLeftIcon,
+  ArrowTrendingDownIcon,
+} from '@heroicons/react/24/outline';
 import { useMemo } from 'react';
 
 interface ClientFeedbackTabProps {
@@ -159,7 +166,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
         <Card className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-blue-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-blue-500" />
+              <ChatBubbleLeftIcon className="h-5 w-5 text-blue-500" />
               <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                 {isLoading ? <Skeleton className="h-9 w-16" /> : summary.total}
               </div>
@@ -170,7 +177,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
         <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
-              <Smile className="h-5 w-5 text-green-500" />
+              <FaceSmileIcon className="h-5 w-5 text-green-500" />
               <div className="text-3xl font-bold text-green-600 dark:text-green-400">
                 {isLoading ? <Skeleton className="h-9 w-16" /> : `${summary.happyPct}%`}
               </div>
@@ -181,7 +188,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
         <Card className="bg-gradient-to-br from-red-500/10 to-rose-500/10 border-red-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
-              <ThumbsDown className="h-5 w-5 text-red-500" />
+              <HandThumbDownIcon className="h-5 w-5 text-red-500" />
               <div className="text-3xl font-bold text-red-600 dark:text-red-400">
                 {isLoading ? <Skeleton className="h-9 w-16" /> : summary.unhappy}
               </div>
@@ -192,7 +199,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
         <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-amber-500" />
+              <ArrowTrendingDownIcon className="h-5 w-5 text-amber-500" />
               <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">
                 {isLoading ? <Skeleton className="h-9 w-16" /> : averagePeriodResponses}
               </div>
@@ -208,7 +215,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-primary" />
+              <ChartBarIcon className="h-5 w-5 text-primary" />
               Survey Sentiment Split
             </CardTitle>
             <CardDescription>Happy vs unhappy response distribution</CardDescription>
@@ -218,7 +225,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
               <Skeleton className="h-[320px]" />
             ) : sentimentDistribution.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
-                <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <ChatBubbleLeftIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p className="font-medium">No survey responses yet</p>
               </div>
             ) : (
@@ -251,7 +258,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-amber-500" />
+              <ArrowTrendingDownIcon className="h-5 w-5 text-amber-500" />
               {granularity === 'weekly' ? 'Weekly' : 'Monthly'} Survey Trend
             </CardTitle>
             <CardDescription>
@@ -283,7 +290,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Frown className="h-5 w-5 text-red-500" />
+            <FaceFrownIcon className="h-5 w-5 text-red-500" />
             Client Survey Statistics
           </CardTitle>
           <CardDescription>
@@ -295,7 +302,7 @@ export function ClientFeedbackTab({ granularity, timeRange }: ClientFeedbackTabP
             <Skeleton className="h-[380px]" />
           ) : clientSatisfaction.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <ChatBubbleLeftIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p className="font-medium">No client survey stats yet</p>
             </div>
           ) : (

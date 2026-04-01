@@ -3,6 +3,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import type { DailyPunctualityRow, WeeklyPunctualityRow, DelayBarRow } from "./types";
 import { cn } from "@/lib/utils";
+import {
+  CalendarDaysIcon,
+  ChartBarIcon,
+  ClockIcon,
+  MapPinIcon,
+  TruckIcon,
+} from "@heroicons/react/24/outline";
 
 interface PunctualityTabProps {
   dailyPunctuality: DailyPunctualityRow[];
@@ -23,71 +30,114 @@ export function PunctualityTab({
   delaySummary,
 }: PunctualityTabProps) {
   const getVarianceBadge = (variance: number | null | undefined) => {
-    if (variance === null || variance === undefined) return <Badge variant="outline">No data</Badge>;
-    if (variance <= -5) return <Badge className="bg-blue-500">Early</Badge>;
-    if (variance <= 15) return <Badge className="bg-green-500">On time</Badge>;
-    if (variance <= 30) return <Badge className="bg-yellow-500">Slightly late</Badge>;
-    return <Badge className="bg-red-500">Late</Badge>;
+    if (variance === null || variance === undefined) {
+      return <Badge variant="outline" className="text-muted-foreground">No data</Badge>;
+    }
+    if (variance <= -5) {
+      return <Badge className="bg-blue-500 hover:bg-blue-600 text-white border-0">Early</Badge>;
+    }
+    if (variance <= 15) {
+      return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white border-0">On time</Badge>;
+    }
+    if (variance <= 30) {
+      return <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-0">Slightly late</Badge>;
+    }
+    return <Badge className="bg-red-500 hover:bg-red-600 text-white border-0">Late</Badge>;
+  };
+
+  const formatVariance = (variance: number | null | undefined): string => {
+    if (variance === null || variance === undefined) return '—';
+    const prefix = variance > 0 ? '+' : '';
+    return `${prefix}${variance} min`;
   };
 
   return (
     <div className="space-y-6">
       {/* Daily Punctuality Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Daily Punctuality Analysis</CardTitle>
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-3 border-b border-border/50">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <CalendarDaysIcon className="h-5 w-5 text-indigo-500" />
+            Daily Punctuality Analysis
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <div className="rounded-md border max-h-96 overflow-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/50 sticky top-0">
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Loads</TableHead>
-                  <TableHead>Origin Arrival</TableHead>
-                  <TableHead>Origin Departure</TableHead>
-                  <TableHead>Dest Arrival</TableHead>
-                  <TableHead>Dest Departure</TableHead>
-                  <TableHead>Origin Delays</TableHead>
-                  <TableHead>Dest Delays</TableHead>
+                  <TableHead className="font-semibold">Date</TableHead>
+                  <TableHead className="font-semibold">Loads</TableHead>
+                  <TableHead className="font-semibold">Origin Arrival</TableHead>
+                  <TableHead className="font-semibold">Origin Departure</TableHead>
+                  <TableHead className="font-semibold">Dest Arrival</TableHead>
+                  <TableHead className="font-semibold">Dest Departure</TableHead>
+                  <TableHead className="font-semibold">Origin Delays</TableHead>
+                  <TableHead className="font-semibold">Dest Delays</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {dailyPunctuality.slice(0, 30).map((row) => (
-                  <TableRow key={row.date}>
-                    <TableCell>{row.date}</TableCell>
+                  <TableRow key={row.date} className="hover:bg-muted/30">
+                    <TableCell className="font-medium">{row.date}</TableCell>
                     <TableCell>{row.loads}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span>{row.originArrivalAvg !== null ? `${row.originArrivalAvg} min` : '-'}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn(
+                          "text-sm",
+                          row.originArrivalAvg != null && row.originArrivalAvg > 15 && "text-red-500 font-medium"
+                        )}>
+                          {formatVariance(row.originArrivalAvg)}
+                        </span>
                         {getVarianceBadge(row.originArrivalAvg)}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span>{row.originDepartureAvg !== null ? `${row.originDepartureAvg} min` : '-'}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn(
+                          "text-sm",
+                          row.originDepartureAvg != null && row.originDepartureAvg > 15 && "text-red-500 font-medium"
+                        )}>
+                          {formatVariance(row.originDepartureAvg)}
+                        </span>
                         {getVarianceBadge(row.originDepartureAvg)}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span>{row.destArrivalAvg !== null ? `${row.destArrivalAvg} min` : '-'}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn(
+                          "text-sm",
+                          row.destArrivalAvg != null && row.destArrivalAvg > 15 && "text-red-500 font-medium"
+                        )}>
+                          {formatVariance(row.destArrivalAvg)}
+                        </span>
                         {getVarianceBadge(row.destArrivalAvg)}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span>{row.destDepartureAvg !== null ? `${row.destDepartureAvg} min` : '-'}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn(
+                          "text-sm",
+                          row.destDepartureAvg != null && row.destDepartureAvg > 15 && "text-red-500 font-medium"
+                        )}>
+                          {formatVariance(row.destDepartureAvg)}
+                        </span>
                         {getVarianceBadge(row.destDepartureAvg)}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={row.originDelayCount > 0 ? "destructive" : "secondary"}>
+                      <Badge
+                        variant={row.originDelayCount > 0 ? "destructive" : "secondary"}
+                        className={row.originDelayCount > 0 ? "bg-amber-500 hover:bg-amber-600" : ""}
+                      >
                         {row.originDelayCount}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={row.destDelayCount > 0 ? "destructive" : "secondary"}>
+                      <Badge
+                        variant={row.destDelayCount > 0 ? "destructive" : "secondary"}
+                        className={row.destDelayCount > 0 ? "bg-red-500 hover:bg-red-600" : ""}
+                      >
                         {row.destDelayCount}
                       </Badge>
                     </TableCell>
@@ -100,57 +150,70 @@ export function PunctualityTab({
       </Card>
 
       {/* Weekly Punctuality Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Weekly Punctuality Summary</CardTitle>
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-3 border-b border-border/50">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <ChartBarIcon className="h-5 w-5 text-emerald-500" />
+            Weekly Punctuality Summary
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <div className="rounded-md border max-h-96 overflow-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/50 sticky top-0">
                 <TableRow>
-                  <TableHead>Week</TableHead>
-                  <TableHead>Loads</TableHead>
-                  <TableHead>Avg Origin Arrival</TableHead>
-                  <TableHead>Avg Origin Departure</TableHead>
-                  <TableHead>Avg Dest Arrival</TableHead>
-                  <TableHead>Avg Dest Departure</TableHead>
-                  <TableHead>Origin Delays</TableHead>
-                  <TableHead>Dest Delays</TableHead>
+                  <TableHead className="font-semibold">Week</TableHead>
+                  <TableHead className="font-semibold">Loads</TableHead>
+                  <TableHead className="font-semibold">Avg Origin Arrival</TableHead>
+                  <TableHead className="font-semibold">Avg Origin Departure</TableHead>
+                  <TableHead className="font-semibold">Avg Dest Arrival</TableHead>
+                  <TableHead className="font-semibold">Avg Dest Departure</TableHead>
+                  <TableHead className="font-semibold">Origin Delays</TableHead>
+                  <TableHead className="font-semibold">Dest Delays</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {weeklyPunctuality.map((row) => (
-                  <TableRow key={row.week}>
-                    <TableCell>{row.week}</TableCell>
+                  <TableRow key={row.week} className="hover:bg-muted/30">
+                    <TableCell className="font-medium">{row.week}</TableCell>
                     <TableCell>{row.loads}</TableCell>
                     <TableCell className={cn(
-                      row.originArrivalAvg && row.originArrivalAvg > 15 ? "text-red-500 font-bold" : ""
+                      "font-mono",
+                      row.originArrivalAvg != null && row.originArrivalAvg > 15 ? "text-red-500 font-bold" : "text-muted-foreground"
                     )}>
-                      {row.originArrivalAvg !== null ? `${row.originArrivalAvg} min` : '-'}
+                      {formatVariance(row.originArrivalAvg)}
                     </TableCell>
                     <TableCell className={cn(
-                      row.originDepartureAvg && row.originDepartureAvg > 15 ? "text-red-500 font-bold" : ""
+                      "font-mono",
+                      row.originDepartureAvg != null && row.originDepartureAvg > 15 ? "text-red-500 font-bold" : "text-muted-foreground"
                     )}>
-                      {row.originDepartureAvg !== null ? `${row.originDepartureAvg} min` : '-'}
+                      {formatVariance(row.originDepartureAvg)}
                     </TableCell>
                     <TableCell className={cn(
-                      row.destArrivalAvg && row.destArrivalAvg > 15 ? "text-red-500 font-bold" : ""
+                      "font-mono",
+                      row.destArrivalAvg != null && row.destArrivalAvg > 15 ? "text-red-500 font-bold" : "text-muted-foreground"
                     )}>
-                      {row.destArrivalAvg !== null ? `${row.destArrivalAvg} min` : '-'}
+                      {formatVariance(row.destArrivalAvg)}
                     </TableCell>
                     <TableCell className={cn(
-                      row.destDepartureAvg && row.destDepartureAvg > 15 ? "text-red-500 font-bold" : ""
+                      "font-mono",
+                      row.destDepartureAvg != null && row.destDepartureAvg > 15 ? "text-red-500 font-bold" : "text-muted-foreground"
                     )}>
-                      {row.destDepartureAvg !== null ? `${row.destDepartureAvg} min` : '-'}
+                      {formatVariance(row.destDepartureAvg)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={row.originDelayCount > 0 ? "destructive" : "secondary"}>
+                      <Badge
+                        variant={row.originDelayCount > 0 ? "destructive" : "secondary"}
+                        className={row.originDelayCount > 0 ? "bg-amber-500 hover:bg-amber-600" : ""}
+                      >
                         {row.originDelayCount}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={row.destDelayCount > 0 ? "destructive" : "secondary"}>
+                      <Badge
+                        variant={row.destDelayCount > 0 ? "destructive" : "secondary"}
+                        className={row.destDelayCount > 0 ? "bg-red-500 hover:bg-red-600" : ""}
+                      >
                         {row.destDelayCount}
                       </Badge>
                     </TableCell>
@@ -163,39 +226,93 @@ export function PunctualityTab({
       </Card>
 
       {/* Delay Summary Cards */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Top Origin Delay Locations</CardTitle>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-3 border-b border-border/50">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <TruckIcon className="h-4 w-4 text-amber-500" />
+              Top Origin Delay Locations
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {delaySummary.topOrigins.map(([location, minutes]) => (
-                <div key={location} className="flex justify-between items-center">
-                  <span className="text-sm">{location}</span>
-                  <Badge variant="destructive">{Math.round(minutes)} min</Badge>
+          <CardContent className="pt-4">
+            <div className="space-y-3">
+              {delaySummary.topOrigins.length > 0 ? (
+                delaySummary.topOrigins.map(([location, minutes]) => (
+                  <div key={location} className="flex justify-between items-center group">
+                    <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                      {location}
+                    </span>
+                    <Badge variant="destructive" className="bg-amber-500 hover:bg-amber-600">
+                      {Math.round(minutes)} min
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <ClockIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No delay data available</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Top Destination Delay Locations</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-3 border-b border-border/50">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <MapPinIcon className="h-4 w-4 text-red-500" />
+              Top Destination Delay Locations
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {delaySummary.topDests.map(([location, minutes]) => (
-                <div key={location} className="flex justify-between items-center">
-                  <span className="text-sm">{location}</span>
-                  <Badge variant="destructive">{Math.round(minutes)} min</Badge>
+          <CardContent className="pt-4">
+            <div className="space-y-3">
+              {delaySummary.topDests.length > 0 ? (
+                delaySummary.topDests.map(([location, minutes]) => (
+                  <div key={location} className="flex justify-between items-center group">
+                    <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                      {location}
+                    </span>
+                    <Badge variant="destructive" className="bg-red-500 hover:bg-red-600">
+                      {Math.round(minutes)} min
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <ClockIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No delay data available</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Summary Footer */}
+      {(dailyPunctuality.length > 0 || weeklyPunctuality.length > 0) && (
+        <Card className="bg-slate-50/50 dark:bg-slate-900/30 border-slate-200/50 dark:border-slate-800/30">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                <span>On time: ≤15 min variance</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                <span>Slightly late: 16-30 min</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <span>Late: {'>'}30 min</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <span>Early: ≤-5 min</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

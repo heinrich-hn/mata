@@ -19,6 +19,7 @@ export interface TyreDetails {
   installation_date: string | null;
   installation_km: number | null;
   km_travelled: number | null;
+  purchase_cost_zar: number | null;
   notes: string | null;
   last_inspection_date: string | null;
   next_inspection_date: string | null;
@@ -111,6 +112,7 @@ export function useFleetTyrePositions({ vehicleRegistration, fleetNumber: provid
             installation_date,
             installation_km,
             km_travelled,
+            purchase_cost_zar,
             notes,
             inventory_id,
             last_inspection_date
@@ -161,6 +163,7 @@ export function useFleetTyrePositions({ vehicleRegistration, fleetNumber: provid
               installation_date: tyre.installation_date,
               installation_km: tyre.installation_km,
               km_travelled: tyre.km_travelled,
+              purchase_cost_zar: tyre.purchase_cost_zar,
               notes: tyre.notes,
               last_inspection_date: tyre.last_inspection_date,
               next_inspection_date: null, // Not stored in tyres table

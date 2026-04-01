@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils"; // ✅ ADDED: Missing cn import
 import { getFleetConfig } from "@/constants/fleetTyreConfig";
 import { useFleetTyrePositions } from "@/hooks/useFleetTyrePositions";
@@ -43,20 +44,20 @@ import { useRealtimeTyres } from "@/hooks/useRealtimeTyres";
 import { useVehicles } from "@/hooks/useVehicles";
 import type { LucideIcon } from "lucide-react";
 import {
-AlertTriangle,
-CheckCircle2,
-ChevronRight,
-Circle,
-ClipboardCheck,
-Download,
-FileText,
-History,
-MoreHorizontal,
-Pencil,
-Plus,
-Search,
-Trash2,
-XCircle
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  Circle,
+  ClipboardCheck,
+  Download,
+  FileText,
+  History,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import ExcelJS from "exceljs";
@@ -66,6 +67,7 @@ import autoTable from "jspdf-autotable";
 import TyreInspectionDialog from "./TyreInspectionDialog";
 import TyreLifecycleDialog from "./TyreLifecycleDialog";
 import TyreManagementDialog from "./TyreManagementDialog";
+import { generateTyreInspectionPDF } from "@/lib/tyreInspectionPdfExport";
 
 type TyreCondition = "excellent" | "good" | "fair" | "poor" | "needs_replacement" | "critical";
 
@@ -84,6 +86,7 @@ interface PositionData {
   initialTreadDepth: number | null;
   kmTravelled: number | null;
   installationKm: number | null;
+  purchaseCost: number | null;
   type: string | null;
   nextInspectionDate: string | null;
   lastInspectionDate: string | null;
@@ -237,8 +240,18 @@ const TyreInspection = () => {
           condition: (tyreDetails?.condition as TyreCondition) || null,
           currentTreadDepth: tyreDetails?.current_tread_depth || null,
           initialTreadDepth: tyreDetails?.initial_tread_depth || null,
-          kmTravelled: tyreDetails?.km_travelled || null,
+          kmTravelled: (() => {
+            // Compute actual KM travelled = vehicle odometer - installation odometer
+            const vehicleOdo = (selectedVehicle as Record<string, unknown>)?.current_odometer as number | null;
+            const installKm = tyreDetails?.installation_km ?? null;
+            if (vehicleOdo != null && installKm != null && vehicleOdo > installKm) {
+              return vehicleOdo - installKm;
+            }
+            // Fallback to DB value if no odometer data
+            return tyreDetails?.km_travelled || null;
+          })(),
           installationKm: tyreDetails?.installation_km || null,
+          purchaseCost: tyreDetails?.purchase_cost_zar ?? null,
           type: tyreDetails?.type || null,
           nextInspectionDate: tyreDetails?.next_inspection_date || null,
           lastInspectionDate: tyreDetails?.last_inspection_date || null,
@@ -248,7 +261,7 @@ const TyreInspection = () => {
     } else {
       setPositions([]);
     }
-  }, [fleetConfig, fleetPositions]);
+  }, [fleetConfig, fleetPositions, selectedVehicle]);
 
   const handleInspect = (position: PositionData) => {
     setSelectedPosition(position);
@@ -421,6 +434,89 @@ const TyreInspection = () => {
     });
   };
 
+  const exportVehicleTyreInspectionPDF = async () => {
+    if (!vehicleId || positions.length === 0) {
+      toast({
+        title: "No data",
+        description: "Select a vehicle with tyre positions to export.",
+      });
+      return;
+    }
+
+    const positionsWithTyres = positions.filter((p) => p.tyreCode);
+    if (positionsWithTyres.length === 0) {
+      toast({
+        title: "No tyres",
+        description: "No tyres installed on this vehicle to export.",
+      });
+      return;
+    }
+
+    // Fetch inspection history for this vehicle
+    const { data: inspHistoryData } = await supabase
+      .from("vehicle_inspections")
+      .select("inspection_number, inspection_date, inspector_name, inspection_type, odometer_reading, status, has_fault")
+      .eq("vehicle_id", vehicleId)
+      .order("inspection_date", { ascending: false })
+      .limit(20);
+
+    const inspectionHistory = (inspHistoryData || []).map((h) => ({
+      inspectionNumber: h.inspection_number,
+      inspectionDate: h.inspection_date,
+      inspectorName: h.inspector_name,
+      inspectionType: h.inspection_type,
+      odometerReading: h.odometer_reading,
+      status: h.status,
+      hasFault: h.has_fault || false,
+    }));
+
+    generateTyreInspectionPDF({
+      inspectionNumber: `TYREPOS-${new Date().toISOString().split("T")[0]}`,
+      inspectionDate: new Date().toISOString(),
+      vehicleRegistration: vehicleRegistration || "-",
+      fleetNumber: vehicleFleetNumber,
+      inspectorName: "-",
+      odometerReading: (selectedVehicle as Record<string, unknown>)?.current_odometer as number | null ?? null,
+      status: "report",
+      hasFault: positionsWithTyres.some(
+        (p) => p.condition === "poor" || p.condition === "needs_replacement" || p.condition === "critical"
+      ),
+      positions: positionsWithTyres.map((p) => {
+        const treadWorn = (p.initialTreadDepth != null && p.currentTreadDepth != null)
+          ? p.initialTreadDepth - p.currentTreadDepth : null;
+        const wearRate = (treadWorn && treadWorn > 0 && p.kmTravelled && p.kmTravelled > 0)
+          ? treadWorn / (p.kmTravelled / 1000) : null;
+        const costPerMmVal = (treadWorn && treadWorn > 0 && p.purchaseCost && p.purchaseCost > 0)
+          ? p.purchaseCost / treadWorn : null;
+        return {
+          position: p.position,
+          positionLabel: p.positionLabel,
+          brand: p.brand || "",
+          size: p.size || "",
+          dotCode: p.dotCode || p.serialNumber || "",
+          treadDepth: p.currentTreadDepth?.toString() || "",
+          pressure: "",
+          condition: p.condition || "",
+          wearPattern: "",
+          kmTravelled: p.kmTravelled,
+          installationKm: p.installationKm,
+          purchaseCost: p.purchaseCost,
+          initialTreadDepth: p.initialTreadDepth,
+          treadWorn: treadWorn && treadWorn > 0 ? treadWorn : null,
+          wearRate,
+          costPerMm: costPerMmVal,
+          notes: "",
+        };
+      }),
+      inspectionHistory,
+    });
+
+    toast({
+      title: "Export Successful",
+      description: `Tyre report for ${vehicleRegistration} exported to PDF.`,
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Vehicle Selection by Fleet */}
@@ -461,6 +557,16 @@ const TyreInspection = () => {
             >
               <FileText className="w-4 h-4 mr-2" />
               Export Due (PDF)
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportVehicleTyreInspectionPDF}
+              disabled={!vehicleId}
+              className="border-2 hover:bg-primary/5 transition-all"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Export Inspection (PDF)
             </Button>
           </div>
 
@@ -613,6 +719,9 @@ const TyreInspection = () => {
                                         <TableHead className="min-w-[90px] text-xs py-4 font-bold text-foreground/80 uppercase tracking-wider">Size</TableHead>
                                         <TableHead className="min-w-[120px] text-xs py-4 font-bold text-foreground/80 uppercase tracking-wider">KM Traveled</TableHead>
                                         <TableHead className="min-w-[120px] text-xs py-4 font-bold text-foreground/80 uppercase tracking-wider">Tread (mm)</TableHead>
+                                        <TableHead className="min-w-[100px] text-xs py-4 font-bold text-foreground/80 uppercase tracking-wider">Tread Worn</TableHead>
+                                        <TableHead className="min-w-[110px] text-xs py-4 font-bold text-foreground/80 uppercase tracking-wider">Wear Rate</TableHead>
+                                        <TableHead className="min-w-[100px] text-xs py-4 font-bold text-foreground/80 uppercase tracking-wider">Cost/MM</TableHead>
                                         <TableHead className="min-w-[120px] text-xs py-4 font-bold text-foreground/80 uppercase tracking-wider">Condition</TableHead>
                                         <TableHead className="min-w-[110px] text-xs py-4 font-bold text-foreground/80 uppercase tracking-wider text-right">Actions</TableHead>
                                       </TableRow>
@@ -688,6 +797,41 @@ const TyreInspection = () => {
                                                 )}
                                               </div>
                                             ) : <span className="text-muted-foreground">-</span>}
+                                          </TableCell>
+                                          <TableCell className="py-3">
+                                            {(() => {
+                                              if (pos.initialTreadDepth != null && pos.currentTreadDepth != null) {
+                                                const worn = pos.initialTreadDepth - pos.currentTreadDepth;
+                                                return worn > 0 ? (
+                                                  <span className="font-bold text-foreground">{worn.toFixed(1)} mm</span>
+                                                ) : <span className="text-muted-foreground">0 mm</span>;
+                                              }
+                                              return <span className="text-muted-foreground">-</span>;
+                                            })()}
+                                          </TableCell>
+                                          <TableCell className="py-3">
+                                            {(() => {
+                                              if (pos.initialTreadDepth != null && pos.currentTreadDepth != null && pos.kmTravelled && pos.kmTravelled > 0) {
+                                                const worn = pos.initialTreadDepth - pos.currentTreadDepth;
+                                                if (worn > 0) {
+                                                  const rate = worn / (pos.kmTravelled / 1000);
+                                                  return <span className="font-medium text-foreground">{rate.toFixed(2)} mm/1000km</span>;
+                                                }
+                                              }
+                                              return <span className="text-muted-foreground">-</span>;
+                                            })()}
+                                          </TableCell>
+                                          <TableCell className="py-3">
+                                            {(() => {
+                                              if (pos.initialTreadDepth != null && pos.currentTreadDepth != null && pos.purchaseCost != null && pos.purchaseCost > 0) {
+                                                const worn = pos.initialTreadDepth - pos.currentTreadDepth;
+                                                if (worn > 0) {
+                                                  const costPerMm = pos.purchaseCost / worn;
+                                                  return <span className="font-medium text-emerald-600">${costPerMm.toFixed(2)}</span>;
+                                                }
+                                              }
+                                              return <span className="text-muted-foreground">-</span>;
+                                            })()}
                                           </TableCell>
                                           <TableCell className="py-3">
                                             {getConditionBadge(pos.condition)}
@@ -800,6 +944,8 @@ const TyreInspection = () => {
             dotCode={selectedPosition.dotCode}
             position={selectedPosition.position}
             positionLabel={selectedPosition.positionLabel}
+            vehicleOdometer={(selectedVehicle as Record<string, unknown>)?.current_odometer as number | null ?? null}
+            vehicleRegistration={vehicleRegistration}
           />
 
           <TyreManagementDialog
