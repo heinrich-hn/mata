@@ -349,144 +349,170 @@ const JobCardFollowUpsTab = () => {
 
             {/* Follow-ups list */}
             {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading follow-ups...</div>
+                <div className="text-center py-12 text-muted-foreground">Loading follow-ups...</div>
             ) : filteredFollowUps.length === 0 ? (
                 <Card>
-                    <CardContent className="py-12 text-center">
-                        <ExternalLink className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
-                        <p className="text-muted-foreground">
+                    <CardContent className="py-16 text-center">
+                        <ExternalLink className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+                        <p className="text-base text-muted-foreground">
                             {searchQuery || statusFilter !== "all" ? "No follow-ups match your filters." : "No follow-up questions yet."}
                         </p>
                     </CardContent>
                 </Card>
             ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                     {filteredFollowUps.map((fu) => {
                         const isExpanded = expandedId === fu.id;
                         const commentCount = fu.comments?.length || 0;
+                        const statusKey = fu.status || "pending";
+                        const priorityKey = fu.priority || "medium";
 
                         return (
-                            <Card key={fu.id} className="overflow-hidden">
-                                {/* Header: Vehicle + Job Card */}
+                            <Card key={fu.id} className="overflow-hidden border shadow-sm">
+                                {/* Vehicle & Job Card Header */}
                                 {(fu.job_card?.vehicle || fu.job_card) && (
-                                    <div className="px-4 pt-3 pb-2 bg-muted/30 border-b">
-                                        <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="px-5 py-3 bg-slate-50 dark:bg-slate-900/40 border-b flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-3">
                                             {fu.job_card?.vehicle && (
-                                                <div className="flex items-center gap-1.5">
-                                                    <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                                                    <span className="text-sm font-semibold">
-                                                        {fu.job_card.vehicle.fleet_number && (
-                                                            <span className="font-mono text-xs mr-1">[{fu.job_card.vehicle.fleet_number}]</span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center justify-center h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700">
+                                                        <Truck className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold leading-tight">
+                                                            {fu.job_card.vehicle.fleet_number
+                                                                ? <>{fu.job_card.vehicle.fleet_number} <span className="text-muted-foreground font-normal">-</span> {fu.job_card.vehicle.registration_number}</>
+                                                                : fu.job_card.vehicle.registration_number
+                                                            }
+                                                        </p>
+                                                        {(fu.job_card.vehicle.make || fu.job_card.vehicle.model) && (
+                                                            <p className="text-xs text-muted-foreground leading-tight">
+                                                                {fu.job_card.vehicle.make} {fu.job_card.vehicle.model}
+                                                            </p>
                                                         )}
-                                                        {fu.job_card.vehicle.registration_number}
-                                                    </span>
-                                                    {(fu.job_card.vehicle.make || fu.job_card.vehicle.model) && (
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {fu.job_card.vehicle.make} {fu.job_card.vehicle.model}
-                                                        </span>
-                                                    )}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
-                                        {fu.job_card && (
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="outline" className="text-xs font-mono">
+                                        <div className="flex items-center gap-2">
+                                            {fu.job_card && (
+                                                <Badge variant="secondary" className="text-xs font-mono font-medium">
                                                     Job #{fu.job_card.job_number}
                                                 </Badge>
-                                                {fu.job_card.inspection && (
-                                                    <Badge variant="outline" className="text-xs font-mono bg-indigo-50 text-indigo-700 border-indigo-200">
-                                                        Insp #{fu.job_card.inspection.inspection_number}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        )}
+                                            )}
+                                            {fu.job_card?.inspection && (
+                                                <Badge variant="secondary" className="text-xs font-mono font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                                                    Insp #{fu.job_card.inspection.inspection_number}
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
+
+                                {/* Main clickable row */}
                                 <button
                                     type="button"
-                                    className="w-full p-4 text-left hover:bg-muted/50 transition-colors"
+                                    className="w-full px-5 py-4 text-left hover:bg-muted/40 transition-colors"
                                     onClick={() => setExpandedId(isExpanded ? null : fu.id)}
                                 >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-medium leading-snug ${fu.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1 min-w-0 space-y-2">
+                                            <p className={`text-sm font-semibold leading-normal ${fu.status === "completed" ? "line-through text-muted-foreground" : "text-foreground"}`}>
                                                 {fu.title}
                                             </p>
-                                            {/* Faults preview */}
                                             {fu.job_card?.faults && fu.job_card.faults.length > 0 && (
-                                                <div className="flex items-center gap-1.5 mt-1">
+                                                <div className="flex items-center gap-1.5">
                                                     <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                                                    <span className="text-xs text-amber-700">
-                                                        {fu.job_card.faults.length} fault{fu.job_card.faults.length > 1 ? "s" : ""}
+                                                    <span className="text-xs font-medium text-amber-600">
+                                                        {fu.job_card.faults.length} fault{fu.job_card.faults.length > 1 ? "s" : ""} linked
                                                     </span>
                                                 </div>
                                             )}
-                                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                                <Badge variant="outline" className={`text-[11px] px-1.5 py-0 ${statusColors[fu.status || "pending"] || ""}`}>
-                                                    {(fu.status || "pending").replace("_", " ")}
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <Badge variant="outline" className={`text-xs px-2 py-0.5 font-medium capitalize ${statusColors[statusKey]}`}>
+                                                    {statusKey.replace("_", " ")}
                                                 </Badge>
-                                                <Badge variant="outline" className={`text-[11px] px-1.5 py-0 ${priorityColors[fu.priority || "medium"] || ""}`}>
-                                                    {fu.priority || "medium"}
+                                                <Badge variant="outline" className={`text-xs px-2 py-0.5 font-medium capitalize ${priorityColors[priorityKey]}`}>
+                                                    {priorityKey}
                                                 </Badge>
                                                 {fu.assigned_to && (
                                                     <span className="text-xs text-muted-foreground">
-                                                        Assigned: {fu.assigned_to}
+                                                        Assigned to <span className="font-medium text-foreground">{fu.assigned_to}</span>
                                                     </span>
                                                 )}
                                                 {commentCount > 0 && (
                                                     <span className="text-xs text-muted-foreground">
-                                                        {commentCount} repl{commentCount > 1 ? "ies" : "y"}
+                                                        · {commentCount} {commentCount > 1 ? "replies" : "reply"}
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
-                                        {isExpanded ? (
-                                            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground mt-1" />
-                                        ) : (
-                                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground mt-1" />
-                                        )}
+                                        <div className="shrink-0 mt-0.5">
+                                            {isExpanded ? (
+                                                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                                            ) : (
+                                                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                                            )}
+                                        </div>
                                     </div>
                                 </button>
 
+                                {/* Expanded details */}
                                 {isExpanded && (
-                                    <div className="border-t px-4 pb-4 space-y-3">
-                                        {/* Details */}
-                                        <div className="pt-3 space-y-1 text-sm text-muted-foreground">
-                                            {fu.description && <p className="text-foreground">{fu.description}</p>}
-                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                    <div className="border-t bg-muted/10">
+                                        {/* Description & metadata */}
+                                        <div className="px-5 py-4 space-y-3">
+                                            {fu.description && (
+                                                <p className="text-sm text-foreground leading-relaxed">{fu.description}</p>
+                                            )}
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                                 {fu.job_card && (
-                                                    <span>
-                                                        Job: <strong className="text-foreground">{fu.job_card.title}</strong>
-                                                    </span>
+                                                    <div>
+                                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Job Title</p>
+                                                        <p className="text-sm font-medium mt-0.5">{fu.job_card.title}</p>
+                                                    </div>
                                                 )}
-                                                {fu.due_date && <span>Due: {new Date(fu.due_date).toLocaleDateString()}</span>}
-                                                <span>By: {fu.created_by}</span>
-                                                {fu.created_at && <span>{new Date(fu.created_at).toLocaleDateString()}</span>}
+                                                {fu.due_date && (
+                                                    <div>
+                                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Due Date</p>
+                                                        <p className="text-sm font-medium mt-0.5">{new Date(fu.due_date).toLocaleDateString()}</p>
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Created By</p>
+                                                    <p className="text-sm font-medium mt-0.5">{fu.created_by}</p>
+                                                </div>
+                                                {fu.created_at && (
+                                                    <div>
+                                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Created</p>
+                                                        <p className="text-sm font-medium mt-0.5">{new Date(fu.created_at).toLocaleDateString()}</p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
-                                        {/* Faults */}
+                                        {/* Faults section */}
                                         {fu.job_card?.faults && fu.job_card.faults.length > 0 && (
-                                            <div className="space-y-1.5">
-                                                <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
-                                                    <AlertTriangle className="h-3.5 w-3.5" />
-                                                    Faults ({fu.job_card.faults.length})
-                                                </p>
-                                                <div className="space-y-1 pl-1">
+                                            <div className="px-5 py-4 border-t">
+                                                <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 mb-3">
+                                                    <AlertTriangle className="h-4 w-4" />
+                                                    Linked Faults ({fu.job_card.faults.length})
+                                                </h4>
+                                                <div className="space-y-2">
                                                     {fu.job_card.faults.map((fault) => (
-                                                        <div key={fault.id} className="flex items-start gap-2 text-xs border rounded px-2 py-1.5 bg-amber-50/50">
+                                                        <div key={fault.id} className="flex items-start gap-3 text-sm rounded-lg border px-3 py-2.5 bg-amber-50/60 dark:bg-amber-950/20">
                                                             <Badge
                                                                 variant="outline"
-                                                                className={`text-[10px] px-1.5 py-0 shrink-0 ${fault.severity === "critical" ? "bg-red-50 text-red-700 border-red-200" :
-                                                                    fault.severity === "major" ? "bg-orange-50 text-orange-700 border-orange-200" :
-                                                                        "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                                                className={`text-xs px-2 py-0.5 shrink-0 font-medium capitalize ${fault.severity === "critical" ? "bg-red-100 text-red-700 border-red-300" :
+                                                                    fault.severity === "major" ? "bg-orange-100 text-orange-700 border-orange-300" :
+                                                                        "bg-yellow-100 text-yellow-700 border-yellow-300"
                                                                     }`}
                                                             >
                                                                 {fault.severity || "unknown"}
                                                             </Badge>
-                                                            <span className="text-foreground flex-1">{fault.fault_description}</span>
+                                                            <span className="text-sm text-foreground flex-1 leading-snug">{fault.fault_description}</span>
                                                             {fault.corrective_action_status && (
-                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                                                                <Badge variant="outline" className="text-xs px-2 py-0.5 shrink-0 font-medium capitalize">
                                                                     {fault.corrective_action_status.replace("_", " ")}
                                                                 </Badge>
                                                             )}
@@ -498,58 +524,64 @@ const JobCardFollowUpsTab = () => {
 
                                         {/* Comments thread */}
                                         {fu.comments && fu.comments.length > 0 && (
-                                            <div className="space-y-2 pl-3 border-l-2 border-muted">
-                                                {fu.comments.map((c, i) => (
-                                                    <div key={i} className="text-sm">
-                                                        <p>{c.text}</p>
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {c.author} · {new Date(c.date).toLocaleString()}
-                                                        </span>
-                                                    </div>
-                                                ))}
+                                            <div className="px-5 py-4 border-t">
+                                                <h4 className="text-sm font-semibold mb-3">Replies ({fu.comments.length})</h4>
+                                                <div className="space-y-3 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+                                                    {fu.comments.map((c, i) => (
+                                                        <div key={i} className="space-y-1">
+                                                            <p className="text-sm leading-relaxed text-foreground">{c.text}</p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                <span className="font-medium">{c.author}</span> · {new Date(c.date).toLocaleString()}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
 
-                                        {/* Reply input */}
-                                        {replyingTo === fu.id ? (
-                                            <div className="space-y-2">
-                                                <Textarea
-                                                    value={replyText}
-                                                    onChange={(e) => setReplyText(e.target.value)}
-                                                    placeholder="Write a reply..."
-                                                    rows={2}
-                                                    className="text-sm"
-                                                />
-                                                <div className="flex justify-end gap-2">
-                                                    <Button variant="ghost" size="sm" onClick={() => { setReplyingTo(null); setReplyText(""); }}>
-                                                        Cancel
-                                                    </Button>
-                                                    <Button size="sm" onClick={() => handleReply(fu.id)} disabled={!replyText.trim()}>
-                                                        <Send className="h-3.5 w-3.5 mr-1" />
+                                        {/* Actions */}
+                                        <div className="px-5 py-3 border-t bg-muted/20 flex items-center gap-2 flex-wrap">
+                                            {replyingTo === fu.id ? (
+                                                <div className="w-full space-y-3">
+                                                    <Textarea
+                                                        value={replyText}
+                                                        onChange={(e) => setReplyText(e.target.value)}
+                                                        placeholder="Write a reply..."
+                                                        rows={2}
+                                                        className="text-sm"
+                                                    />
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button variant="ghost" size="sm" onClick={() => { setReplyingTo(null); setReplyText(""); }}>
+                                                            Cancel
+                                                        </Button>
+                                                        <Button size="sm" onClick={() => handleReply(fu.id)} disabled={!replyText.trim()}>
+                                                            <Send className="h-3.5 w-3.5 mr-1.5" />
+                                                            Reply
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <Button variant="outline" size="sm" onClick={() => setReplyingTo(fu.id)}>
+                                                        <ListPlus className="h-4 w-4 mr-1.5" />
                                                         Reply
                                                     </Button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="flex gap-2 flex-wrap">
-                                                <Button variant="outline" size="sm" onClick={() => setReplyingTo(fu.id)}>
-                                                    <ListPlus className="h-3.5 w-3.5 mr-1" />
-                                                    Reply
-                                                </Button>
-                                                <Button variant="outline" size="sm" onClick={() => handleStatusToggle(fu)}>
-                                                    {fu.status === "completed" ? "Reopen" : "Mark Complete"}
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="text-destructive hover:text-destructive"
-                                                    onClick={() => handleDelete(fu.id)}
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                                                    Delete
-                                                </Button>
-                                            </div>
-                                        )}
+                                                    <Button variant="outline" size="sm" onClick={() => handleStatusToggle(fu)}>
+                                                        <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                                                        {fu.status === "completed" ? "Reopen" : "Mark Complete"}
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-destructive hover:text-destructive"
+                                                        onClick={() => handleDelete(fu.id)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4 mr-1.5" />
+                                                        Delete
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </Card>

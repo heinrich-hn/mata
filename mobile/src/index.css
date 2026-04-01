@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -24,6 +26,20 @@
     touch-action: manipulation;
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
+    font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display), var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  code,
+  pre,
+  .font-mono {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
 
   #root {
@@ -68,6 +84,10 @@
   :root {
     color-scheme: light;
 
+    --font-sans: "Manrope";
+    --font-display: "Space Grotesk";
+    --font-mono: "IBM Plex Mono";
+
     /* ==========================================================================
        Primitive Colors – Modern HD Palette
     ========================================================================== */
@@ -105,7 +125,7 @@
     --color-cyan-500: 189 94% 43%;
 
     /* Semantic Tokens – Professional Edition */
-    --background: var(--color-neutral-0);
+    --background: var(--color-neutral-50);
     --foreground: var(--color-neutral-900);
 
     --surface: var(--color-neutral-0);
@@ -116,7 +136,7 @@
     --card: var(--color-neutral-0);
     --card-foreground: var(--color-neutral-900);
     --card-border: var(--color-neutral-200);
-    --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+    --card-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px -1px rgb(0 0 0 / 0.04);
 
     --popover: var(--color-neutral-0);
     --popover-foreground: var(--color-neutral-900);
@@ -165,6 +185,9 @@
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
     --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.05);
     --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+
+    --shadow-card: var(--card-shadow);
+    --shadow-elevated: var(--shadow-md);
 
     /* Smooth Animations */
     --duration-fast: 150ms;

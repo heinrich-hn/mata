@@ -60,35 +60,9 @@ const URGENCY_CONFIG = {
   },
 } as const;
 
-const PRIORITY_STYLES = {
-  critical: "border-red-300 text-red-800 bg-red-50 dark:border-red-600 dark:text-red-100 dark:bg-red-800/40",
-  high: "border-orange-300 text-orange-800 bg-orange-50 dark:border-orange-600 dark:text-orange-100 dark:bg-orange-800/40",
-  medium: "border-blue-300 text-blue-800 bg-blue-50 dark:border-blue-600 dark:text-blue-100 dark:bg-blue-800/40",
-  low: "border-gray-300 text-gray-700 bg-gray-50 dark:border-gray-500 dark:text-gray-100 dark:bg-gray-700/50",
-} as const;
-
 // ============================================================================
 // Sub-components
 // ============================================================================
-const StatCard = ({
-  value,
-  label,
-  colorClass,
-  bgGradient
-}: {
-  value: number;
-  label: string;
-  colorClass: string;
-  bgGradient: string;
-}) => (
-  <Card className={cn("p-2.5 rounded-xl border border-border/40 shadow-sm bg-gradient-to-br", bgGradient)}>
-    <div>
-      <p className={cn("text-lg font-bold", colorClass)}>{value}</p>
-      <p className="text-[10px] text-muted-foreground font-medium">{label}</p>
-    </div>
-  </Card>
-);
-
 const ScheduleCard = ({
   schedule,
   vehicle,
@@ -381,7 +355,7 @@ const MobileMaintenance = () => {
   const { overdue, today: todaySchedules, upcoming, scheduled } = groupedSchedules;
 
   // Fetch completed count for current month
-  const { data: completedCount = 0 } = useQuery({
+  const { data: _completedCount = 0 } = useQuery({
     queryKey: ["maintenance-completed-count"],
     queryFn: async () => {
       const today = new Date();
@@ -543,7 +517,7 @@ const MobileMaintenance = () => {
 
       {/* FAB - New Schedule */}
       <Button
-        className="fixed bottom-6 right-4 h-12 px-4 rounded-xl shadow-lg active:scale-95 transition-transform z-20 touch-target font-semibold text-sm gap-1"
+        className="fixed bottom-24 right-4 h-12 px-4 rounded-xl shadow-lg active:scale-95 transition-transform z-20 touch-target font-semibold text-sm gap-1"
         onClick={() => setAddDialogOpen(true)}
         aria-label="Add maintenance schedule"
       >

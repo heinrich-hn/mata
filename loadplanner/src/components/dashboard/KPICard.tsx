@@ -1,4 +1,4 @@
-import { LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface KPICardProps {
@@ -43,7 +43,7 @@ export function KPICard({ title, value, icon: Icon, variant, trend }: KPICardPro
   return (
     <div className={cn('kpi-card group', styles.card)}>
       <div className={cn('absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl opacity-50 rounded-bl-full', styles.accent)} />
-      
+
       <div className="relative flex items-start justify-between">
         <div>
           <p className="text-sm font-medium text-muted-foreground">{title}</p>

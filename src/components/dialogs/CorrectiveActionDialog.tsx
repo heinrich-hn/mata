@@ -6,6 +6,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { Ban, CheckCircle2, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ const CorrectiveActionDialog = ({
   onCompleted,
 }: CorrectiveActionDialogProps) => {
   const { userName } = useAuth();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [faultActions, setFaultActions] = useState<Record<string, { status: string; notes: string }>>(
     Object.fromEntries(
@@ -58,10 +60,14 @@ const CorrectiveActionDialog = ({
   };
 
   const handleSubmit = async () => {
-    const allResolved = Object.values(faultActions).every(action => action.status !== "pending");
+    // Check at least one fault status has been changed from its original
+    const hasChanges = faults.some(f => {
+      const action = faultActions[f.id];
+      return action && (action.status !== (f.corrective_action_status || "pending") || action.notes !== (f.corrective_action_notes || ""));
+    });
 
-    if (!allResolved) {
-      toast.error("Please resolve all faults before completing");
+    if (!hasChanges) {
+      toast.error("No changes to save");
       return;
     }
 
@@ -87,15 +93,66 @@ const CorrectiveActionDialog = ({
         throw new Error("Failed to update some faults");
       }
 
-      // Update inspection status to completed
-      const { error: inspectionError } = await supabase
-        .from("vehicle_inspections")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
-        .eq("id", inspectionId);
+      // Sync linked vehicle_faults status for each inspection fault
+      const vehicleFaultUpdates = Object.entries(faultActions).map(([faultId, action]) => {
+        const resolvedStatuses = ["fixed", "no_need"];
+        if (resolvedStatuses.includes(action.status)) {
+          return supabase
+            .from("vehicle_faults")
+            .update({
+              status: "resolved" as const,
+              resolution_notes: action.notes || `Corrective action: ${action.status}`,
+              resolved_date: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("inspection_fault_id", faultId);
+        } else if (action.status === "not_fixed") {
+          return supabase
+            .from("vehicle_faults")
+            .update({
+              status: "acknowledged" as const,
+              resolution_notes: action.notes || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("inspection_fault_id", faultId);
+        }
+        return null;
+      }).filter(Boolean);
 
-      if (inspectionError) throw inspectionError;
+      await Promise.all(vehicleFaultUpdates);
 
-      toast.success("Corrective actions recorded and inspection completed");
+      // Check if all faults are now resolved
+      const resolvedStatuses = ["fixed", "completed", "no_need"];
+      const allResolved = Object.values(faultActions).every(a => resolvedStatuses.includes(a.status));
+
+      if (allResolved) {
+        // Update inspection fault_resolved and status
+        const { error: inspectionError } = await supabase
+          .from("vehicle_inspections")
+          .update({
+            status: "completed",
+            completed_at: new Date().toISOString(),
+            fault_resolved: true,
+          })
+          .eq("id", inspectionId);
+
+        if (inspectionError) throw inspectionError;
+      } else {
+        // Some faults still open — make sure fault_resolved is false
+        await supabase
+          .from("vehicle_inspections")
+          .update({ fault_resolved: false })
+          .eq("id", inspectionId);
+      }
+
+      // Invalidate queries so counts update immediately
+      queryClient.invalidateQueries({ queryKey: ["inspection_faults", inspectionId] });
+      queryClient.invalidateQueries({ queryKey: ["inspections-mobile"] });
+      queryClient.invalidateQueries({ queryKey: ["open-faults-count"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle-faults"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle-faults-mobile"] });
+
+      toast.success(allResolved ? "All faults resolved — inspection completed" : "Corrective actions updated");
       onCompleted();
       onOpenChange(false);
     } catch (error) {
@@ -193,7 +250,7 @@ const CorrectiveActionDialog = ({
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={loading}>
-              {loading ? "Saving..." : "Complete Inspection"}
+              {loading ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,7 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useQuery } from "@tanstack/react-query";
-import { FileText } from "lucide-react";
+import { Link2 } from "lucide-react";
+import { useState } from "react";
+import { LinkInspectionToJobCardDialog } from "@/components/dialogs/LinkInspectionJobCardDialogs";
 import JobCardGeneralInfo from "../JobCardGeneralInfo";
 import JobCardHeader from "../JobCardHeader";
 import JobCardLaborTable from "../JobCardLaborTable";
@@ -35,6 +38,7 @@ interface JobCardDetailsDialogProps {
 
 const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCardDetailsDialogProps) => {
   const { toast } = useToast();
+  const [showLinkInspection, setShowLinkInspection] = useState(false);
 
   const { data: vehicle } = useQuery({
     queryKey: ["vehicle", jobCard?.vehicle_id],
@@ -115,6 +119,27 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
         .eq("job_card_id", jobCard.id)
         .order("created_at", { ascending: false });
       return data || [];
+    },
+    enabled: !!jobCard?.id,
+  });
+
+  // Fetch linked inspection
+  const { data: linkedInspection } = useQuery({
+    queryKey: ["job_card_inspection", jobCard?.id],
+    queryFn: async () => {
+      if (!jobCard?.id) return null;
+      const { data: jc } = await supabase
+        .from("job_cards")
+        .select("inspection_id")
+        .eq("id", jobCard.id)
+        .single();
+      if (!jc?.inspection_id) return null;
+      const { data } = await supabase
+        .from("vehicle_inspections")
+        .select("id, inspection_number, inspection_date, status")
+        .eq("id", jc.inspection_id)
+        .single();
+      return data;
     },
     enabled: !!jobCard?.id,
   });
@@ -239,6 +264,43 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
                   vehicle={vehicle}
                   onUpdate={handleJobCardUpdate}
                 />
+
+                {/* Linked Inspection */}
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Link2 className="w-5 h-5 text-blue-500" />
+                        <h3 className="font-semibold text-sm">Linked Inspection</h3>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-xs"
+                        onClick={() => setShowLinkInspection(true)}
+                      >
+                        <Link2 className="h-3.5 w-3.5 mr-1" />
+                        {linkedInspection ? "Change" : "Link"}
+                      </Button>
+                    </div>
+                    {linkedInspection ? (
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-sm font-medium">{linkedInspection.inspection_number}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(linkedInspection.inspection_date).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No linked inspection
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="tasks">
@@ -277,6 +339,16 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
           </div>
         </ScrollArea>
       </DialogContent>
+
+      <LinkInspectionToJobCardDialog
+        open={showLinkInspection}
+        onOpenChange={setShowLinkInspection}
+        jobCardId={jobCard.id}
+        currentInspectionId={linkedInspection?.id ?? null}
+        onLinked={() => {
+          if (onUpdate) onUpdate();
+        }}
+      />
     </Dialog>
   );
 };

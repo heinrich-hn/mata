@@ -5,14 +5,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { cn } from "@/lib/utils";
-
-interface VehicleStats {
-  totalVehicles: number;
-  totalPositions: number;
-  filledPositions: number;
-  emptyPositions: number;
-}
 
 interface Inspection {
   id: string;
@@ -34,20 +26,6 @@ interface QuickActionButtonProps {
   onClick: () => void;
   variant?: "default" | "outline";
 }
-
-const StatCard = ({ value, label, color = "text-foreground", bgGradient }: {
-  value: number;
-  label: string;
-  color?: string;
-  bgGradient?: string;
-}) => (
-  <Card className={cn("border border-border/40 shadow-sm rounded-2xl", bgGradient && `bg-gradient-to-br ${bgGradient}`)}>
-    <CardContent className="p-4">
-      <p className="text-xs font-medium text-muted-foreground mb-1">{label}</p>
-      <p className={cn("text-2xl font-bold", color)}>{value}</p>
-    </CardContent>
-  </Card>
-);
 
 const QuickActionButton = ({ label, description, onClick }: QuickActionButtonProps) => (
   <Button
@@ -86,30 +64,6 @@ const InspectionCardSkeleton = () => (
 
 const MobileTyresTab = () => {
   const navigate = useNavigate();
-
-  // Vehicle tyre stats
-  const { data: vehicleStats, isLoading: statsLoading } = useQuery<VehicleStats>({
-    queryKey: ["tyre-vehicle-stats-mobile"],
-    queryFn: async () => {
-      const [positionsResult, vehiclesResult] = await Promise.all([
-        supabase.from("fleet_tyre_positions").select("id, tyre_code").limit(2000),
-        supabase.from("vehicles").select("id").limit(500),
-      ]);
-
-      const positions = positionsResult.data || [];
-      const totalVehicles = vehiclesResult.data?.length || 0;
-      const filledPositions = positions.filter(p => p.tyre_code && !p.tyre_code.startsWith("NEW_CODE_")).length;
-      const emptyPositions = positions.length - filledPositions;
-
-      return {
-        totalVehicles,
-        totalPositions: positions.length,
-        filledPositions,
-        emptyPositions
-      };
-    },
-    refetchInterval: 60000,
-  });
 
   // Recent tyre inspections
   const { data: recentInspections = [], isLoading: inspectionsLoading } = useQuery<Inspection[]>({
@@ -156,11 +110,6 @@ const MobileTyresTab = () => {
     });
   };
 
-  const getInstallationProgress = () => {
-    if (!vehicleStats || vehicleStats.totalPositions === 0) return 0;
-    return Math.round((vehicleStats.filledPositions / vehicleStats.totalPositions) * 100);
-  };
-
   return (
     <div className="px-4 py-4 space-y-4 pb-safe-bottom">
       {/* Quick Actions */}
@@ -175,63 +124,6 @@ const MobileTyresTab = () => {
           description="Manage positions"
           onClick={() => navigate("/tyre-management")}
         />
-      </div>
-
-      {/* Stats Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Overview
-          </h2>
-          {vehicleStats && vehicleStats.totalPositions > 0 && (
-            <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[10px]">
-              {getInstallationProgress()}% installed
-            </Badge>
-          )}
-        </div>
-
-        {statsLoading ? (
-          <div className="grid grid-cols-3 gap-3">
-            <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-24 rounded-xl" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-3">
-            <StatCard
-              value={vehicleStats?.totalVehicles || 0}
-              label="Vehicles"
-            />
-            <StatCard
-              value={vehicleStats?.filledPositions || 0}
-              label="Installed"
-              color="text-emerald-600"
-              bgGradient="from-emerald-50 to-emerald-100/60"
-            />
-            <StatCard
-              value={vehicleStats?.emptyPositions || 0}
-              label="Empty"
-              color="text-amber-600"
-              bgGradient="from-amber-50 to-amber-100/60"
-            />
-          </div>
-        )}
-
-        {/* Progress Bar */}
-        {vehicleStats && vehicleStats.totalPositions > 0 && (
-          <div className="space-y-1">
-            <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>Installation Progress</span>
-              <span>{vehicleStats.filledPositions} / {vehicleStats.totalPositions}</span>
-            </div>
-            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
-                style={{ width: `${getInstallationProgress()}%` }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Recent Tyre Inspections */}
@@ -263,15 +155,9 @@ const MobileTyresTab = () => {
                 <span className="text-2xl font-bold text-muted-foreground">0</span>
               </div>
               <h3 className="font-bold mb-1">No inspections yet</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-sm text-muted-foreground">
                 Start recording tyre inspections
               </p>
-              <Button
-                onClick={() => navigate("/inspections/tyre")}
-                className="rounded-xl font-semibold"
-              >
-                New Inspection
-              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -325,15 +211,6 @@ const MobileTyresTab = () => {
           </div>
         )}
       </div>
-
-      {/* Summary Footer */}
-      {vehicleStats && (
-        <div className="text-center pt-2">
-          <p className="text-[10px] text-muted-foreground">
-            {vehicleStats.totalPositions} total positions across {vehicleStats.totalVehicles} vehicles
-          </p>
-        </div>
-      )}
     </div>
   );
 };

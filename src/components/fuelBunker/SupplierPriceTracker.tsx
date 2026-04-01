@@ -59,8 +59,6 @@ import {
     generatePriceHistoryPDF,
 } from "@/lib/supplierExport";
 import {
-    ArrowDown,
-    ArrowUp,
     Calendar,
     DollarSign,
     Edit,
@@ -68,11 +66,9 @@ import {
     FileSpreadsheet,
     FileText,
     Loader2,
-    Minus,
     Plus,
     ShoppingCart,
     Trash2,
-    TrendingDown,
     TrendingUp,
     Truck,
     Users,

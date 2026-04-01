@@ -1,11 +1,40 @@
-// @ts-nocheck - This is a Deno edge function, not part of the main TypeScript project
+
 
 const TELEMATICS_API_BASE = 'https://api-emea04.telematics.guru';
 
+type JsonRecord = Record<string, unknown>;
+
+interface TelematicsRequestBody {
+  action?: string;
+  username?: string;
+  password?: string;
+  token?: string;
+  organisationId?: string | number;
+  assetId?: string | number;
+  geofenceId?: string | number;
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null;
+}
+
+function getEnv(name: string): string | undefined {
+  const denoEnv = (globalThis as { Deno?: { env?: { get: (key: string) => string | undefined } } }).Deno?.env;
+  if (denoEnv) {
+    return denoEnv.get(name);
+  }
+
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[name];
+  }
+
+  return undefined;
+}
+
 // System credentials for portal access (should be set as Supabase secrets)
-const TELEMATICS_PORTAL_ORG_ID = parseInt(Deno.env.get('TELEMATICS_PORTAL_ORG_ID') || '0');
-const TELEMATICS_PORTAL_USERNAME = Deno.env.get('TELEMATICS_PORTAL_USERNAME') || '';
-const TELEMATICS_PORTAL_PASSWORD = Deno.env.get('TELEMATICS_PORTAL_PASSWORD') || '';
+const TELEMATICS_PORTAL_ORG_ID = parseInt(getEnv('TELEMATICS_PORTAL_ORG_ID') || '0');
+const TELEMATICS_PORTAL_USERNAME = getEnv('TELEMATICS_PORTAL_USERNAME') || '';
+const TELEMATICS_PORTAL_PASSWORD = getEnv('TELEMATICS_PORTAL_PASSWORD') || '';
 
 // Cache for portal token
 let portalToken: string | null = null;
@@ -16,13 +45,13 @@ async function getPortalToken(): Promise<string | null> {
   if (portalToken && portalTokenExpiry && Date.now() < portalTokenExpiry) {
     return portalToken;
   }
-  
+
   // Authenticate to get new token
   if (!TELEMATICS_PORTAL_USERNAME || !TELEMATICS_PORTAL_PASSWORD) {
     console.error('Portal credentials not configured');
     return null;
   }
-  
+
   const formData = new URLSearchParams();
   formData.append('Username', TELEMATICS_PORTAL_USERNAME);
   formData.append('Password', TELEMATICS_PORTAL_PASSWORD);
@@ -41,10 +70,16 @@ async function getPortalToken(): Promise<string | null> {
   }
 
   const data = await response.json();
+  if (!isJsonRecord(data) || typeof data.access_token !== 'string') {
+    console.error('Authentication response missing access token');
+    return null;
+  }
+
   portalToken = data.access_token;
   // Set expiry to 1 hour before actual expiry to be safe
-  portalTokenExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000;
-  
+  const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : 3600;
+  portalTokenExpiry = Date.now() + (expiresIn - 60) * 1000;
+
   return portalToken;
 }
 
@@ -72,7 +107,15 @@ export default async function handler(request: Request) {
   }
 
   try {
-    const body = await request.json();
+    const rawBody: unknown = await request.json();
+    if (!isJsonRecord(rawBody)) {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const body = rawBody as TelematicsRequestBody;
     const { action, username, password, token, organisationId, assetId } = body;
 
     if (action === 'authenticate') {

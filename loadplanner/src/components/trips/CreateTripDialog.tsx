@@ -142,11 +142,6 @@ export function CreateLoadDialog({
   const customDestinations = customLocations
     .filter((loc) => loc.type !== "farm")
     .map((loc) => loc.name);
-  const availableDestinations =
-    selectedCargoType === "Export"
-      ? [...loadFormConfig.exportDestinations, ...customDestinations]
-      : [...loadFormConfig.destinations, ...customDestinations];
-  const availableOrigins = [...loadFormConfig.origins, ...customOrigins];
 
   // Auto-update times when origin changes
   useEffect(() => {

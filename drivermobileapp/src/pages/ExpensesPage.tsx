@@ -278,29 +278,44 @@ export default function ExpensesPage(): JSX.Element {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Fetch driver's assigned vehicle first
+  const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
+  const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
+
+  // Fetch driver's assigned vehicle (truck) first
+  // Uses same queryFn shape as HomePage ({ truck, reefer }) for cache compatibility
   const { data: assignedVehicle } = useQuery({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id) return { truck: null as null | { id: string; fleet_number: string; registration_number: string; vehicle_type?: string }, reefer: null as null | { id: string; fleet_number: string; registration_number: string; vehicle_type?: string } };
 
       const { data, error } = await supabase
         .from("driver_vehicle_assignments")
-        .select("id, vehicle_id, vehicles (id, fleet_number, registration_number)")
+        .select("id, vehicle_id, vehicles!inner (id, fleet_number, registration_number, vehicle_type)")
         .eq("driver_id", user.id)
         .eq("is_active", true)
-        .order("assigned_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("assigned_at", { ascending: false });
 
-      if (error && error.code !== "PGRST116") throw error;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const assignment = data as any;
-      if (assignment?.vehicles) {
-        const v = Array.isArray(assignment.vehicles) ? assignment.vehicles[0] : assignment.vehicles;
-        return v as { id: string; fleet_number: string; registration_number: string };
-      }
-      return null;
+      if (error) throw error;
+      if (!data || data.length === 0) return { truck: null, reefer: null };
+
+      type VehicleData = { id: string; fleet_number: string; registration_number: string; vehicle_type?: string };
+      type AssignmentRow = { vehicles: VehicleData | VehicleData[] };
+      const rows = data as unknown as AssignmentRow[];
+      const normalizedRows = rows.map(r => ({
+        vehicles: Array.isArray(r.vehicles) ? r.vehicles[0] : r.vehicles,
+      }));
+
+      const truckRow = normalizedRows.find(r => !r.vehicles.vehicle_type || TRUCK_TYPES.includes(r.vehicles.vehicle_type));
+      const reeferRow = normalizedRows.find(r => r.vehicles.vehicle_type && TRAILER_TYPES.includes(r.vehicles.vehicle_type));
+
+      return {
+        truck: truckRow?.vehicles || null,
+        reefer: reeferRow?.vehicles || null,
+      };
+    },
+    select: (data) => {
+      const v = data?.truck;
+      return v ? { id: v.id, fleet_number: v.fleet_number, registration_number: v.registration_number } : null;
     },
     enabled: !!user?.id,
     staleTime: 10 * 60 * 1000,

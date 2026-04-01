@@ -40,19 +40,6 @@ interface Vehicle {
   active?: boolean | null;
 }
 
-interface DriverAssignment {
-  id: string;
-  driver_id: string;
-  vehicle_id: string;
-  assigned_at: string;
-  is_active: boolean;
-  unassigned_at?: string | null;
-  notes?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-  vehicles?: Vehicle | null;
-}
-
 interface Driver {
   id: string;
   driver_number: string;
@@ -63,6 +50,9 @@ interface Driver {
   status: string;
   license_number?: string | null;
 }
+
+const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
+const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
 
 export default function ProfilePage() {
   const { user, profile, signOut: _signOut } = useAuth();
@@ -110,11 +100,11 @@ export default function ProfilePage() {
     staleTime: 10 * 60 * 1000,
   });
 
-  // Fetch current driver assignment (assigned by admin from dashboard)
-  const { data: currentAssignment, isLoading: assignmentLoading } = useQuery<DriverAssignment | null>({
+  // Fetch all active driver assignments (assigned by admin from dashboard)
+  const { data: vehicleAssignments, isLoading: assignmentLoading } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
     queryKey: ["driver-assignment", user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id) return { truck: null, reefer: null };
       try {
         const { data, error } = await supabase
           .from("driver_vehicle_assignments")
@@ -124,10 +114,6 @@ export default function ProfilePage() {
             vehicle_id,
             assigned_at,
             is_active,
-            unassigned_at,
-            notes,
-            created_at,
-            updated_at,
             vehicles!inner (
               id,
               fleet_number,
@@ -140,13 +126,22 @@ export default function ProfilePage() {
           `)
           .eq("driver_id", user.id)
           .eq("is_active", true)
-          .order("assigned_at", { ascending: false })
-          .maybeSingle();
+          .order("assigned_at", { ascending: false });
 
-        if (error && error.code !== "PGRST116") throw error;
-        return data as DriverAssignment | null;
+        if (error) throw error;
+        if (!data || data.length === 0) return { truck: null, reefer: null };
+
+        type AssignmentRow = { vehicles: Vehicle };
+        const rows = data as unknown as AssignmentRow[];
+        const truckRow = rows.find(r => !r.vehicles.vehicle_type || TRUCK_TYPES.includes(r.vehicles.vehicle_type));
+        const reeferRow = rows.find(r => r.vehicles.vehicle_type && TRAILER_TYPES.includes(r.vehicles.vehicle_type));
+
+        return {
+          truck: truckRow?.vehicles || null,
+          reefer: reeferRow?.vehicles || null,
+        };
       } catch {
-        return null;
+        return { truck: null, reefer: null };
       }
     },
     enabled: !!user?.id,
@@ -246,7 +241,9 @@ export default function ProfilePage() {
     },
   ];
 
-  const assignedVehicle = currentAssignment?.vehicles;
+  const assignedTruck = vehicleAssignments?.truck;
+  const assignedReefer = vehicleAssignments?.reefer;
+  const hasAssignment = !!assignedTruck || !!assignedReefer;
 
   return (
     <MobileShell>
@@ -276,9 +273,12 @@ export default function ProfilePage() {
                 Driver: {driver ? `${driver.first_name} ${driver.last_name}` : "Not found"}
               </p>
               <p className="text-xs">Driver ID: {driver?.id || "None"}</p>
-              <p className="text-xs">Assignment: {currentAssignment ? "Active" : "None"}</p>
+              <p className="text-xs">Assignment: {vehicleAssignments?.truck || vehicleAssignments?.reefer ? "Active" : "None"}</p>
               <p className="text-xs">
-                Assigned Vehicle: {assignedVehicle?.fleet_number || "None"}
+                Truck: {vehicleAssignments?.truck?.fleet_number || "None"}
+              </p>
+              <p className="text-xs">
+                Reefer: {vehicleAssignments?.reefer?.fleet_number || "None"}
               </p>
             </CardContent>
           </Card>
@@ -365,47 +365,70 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Assigned Vehicle (read-only — assigned by admin from dashboard) */}
+        {/* Assigned Vehicles (read-only — assigned by admin from dashboard) */}
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Truck className="w-4 h-4 text-primary" strokeWidth={1.5} />
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Assigned Vehicle</p>
-                {assignmentLoading ? (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Loading...
-                  </span>
-                ) : assignedVehicle ? (
-                  <div className="mt-1">
+              <p className="text-sm font-medium">Assigned Vehicles</p>
+            </div>
+            {assignmentLoading ? (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading...
+              </span>
+            ) : hasAssignment ? (
+              <div className="space-y-3">
+                {assignedTruck && (
+                  <div className="pl-2 border-l-2 border-primary/30">
                     <div className="flex items-center gap-2 text-sm">
-                      {getVehicleTypeIcon(assignedVehicle.vehicle_type)}
+                      {getVehicleTypeIcon(assignedTruck.vehicle_type)}
                       <span className="font-semibold">
-                        {assignedVehicle.fleet_number || "Unknown"}
+                        {assignedTruck.fleet_number || "Unknown"}
                       </span>
                       <span className="text-muted-foreground">—</span>
                       <span className="text-muted-foreground">
-                        {assignedVehicle.registration_number || assignedVehicle.registration || "Unknown"}
+                        {assignedTruck.registration_number || assignedTruck.registration || "Unknown"}
                       </span>
                     </div>
-                    {(assignedVehicle.make || assignedVehicle.vehicle_type) && (
+                    {(assignedTruck.make || assignedTruck.vehicle_type) && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {[assignedVehicle.vehicle_type, assignedVehicle.make, assignedVehicle.model]
+                        {[assignedTruck.vehicle_type, assignedTruck.make, assignedTruck.model]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
                     )}
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    No vehicle assigned — contact your administrator
-                  </p>
+                )}
+                {assignedReefer && (
+                  <div className="pl-2 border-l-2 border-blue-400/30">
+                    <div className="flex items-center gap-2 text-sm">
+                      {getVehicleTypeIcon(assignedReefer.vehicle_type)}
+                      <span className="font-semibold">
+                        {assignedReefer.fleet_number || "Unknown"}
+                      </span>
+                      <span className="text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">
+                        {assignedReefer.registration_number || assignedReefer.registration || "Unknown"}
+                      </span>
+                    </div>
+                    {(assignedReefer.make || assignedReefer.vehicle_type) && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {[assignedReefer.vehicle_type, assignedReefer.make, assignedReefer.model]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No vehicle assigned — contact your administrator
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -463,8 +486,8 @@ export default function ProfilePage() {
 
         <p className="text-center text-xs text-muted-foreground pt-2">
           Matanuska Fleet Management •{" "}
-          {assignedVehicle
-            ? `Assigned: ${assignedVehicle.fleet_number || "Unknown"}`
+          {assignedTruck || assignedReefer
+            ? `Assigned: ${[assignedTruck?.fleet_number, assignedReefer?.fleet_number].filter(Boolean).join(" + ") || "Unknown"}`
             : "No assignment"}
         </p>
       </div>

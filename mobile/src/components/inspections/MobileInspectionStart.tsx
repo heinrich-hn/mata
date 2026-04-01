@@ -76,6 +76,7 @@ const MobileInspectionStart = () => {
     if (notesParam && !notes) {
       setNotes(decodeURIComponent(notesParam));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, selectedVehicleId, vehicles]);
 
   const handleVehicleSelect = (vehicleId: string) => {

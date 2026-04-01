@@ -22,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Camera, CheckCircle2, CheckSquare, CircleDashed, Loader2, ShieldAlert, XCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { OutOfCommissionReportDialog } from "@/components/inspections/OutOfCommissionReportDialog";
 
 interface InspectionFormProps {
   inspectionId: string;
@@ -58,14 +59,15 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
   const [showCompletionConfirm, setShowCompletionConfirm] = useState(false);
   const [safeToOperate, setSafeToOperate] = useState<string | null>(null);
   const [completionNotes, setCompletionNotes] = useState("");
+  const [showOutOfCommissionReport, setShowOutOfCommissionReport] = useState(false);
 
-  // Fetch the inspection record for vehicle_id and inspector_name (needed for auto-fault logging)
+  // Fetch the inspection record for vehicle_id, inspector_name, and vehicle details
   const { data: inspectionRecord } = useQuery({
     queryKey: ["vehicle_inspection", inspectionId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicle_inspections")
-        .select("vehicle_id, inspector_name")
+        .select("vehicle_id, inspector_name, vehicle_registration, vehicle_make, vehicle_model, odometer_reading")
         .eq("id", inspectionId)
         .single();
 
@@ -75,13 +77,15 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
     enabled: !!inspectionId,
   });
 
-  // Auto-create an inspection fault and promote to vehicle fault when an item is marked as "fail"
+  // Auto-create an inspection fault and promote to vehicle fault when an item is marked as "fail" or "attention" (warning)
   const autoLogFault = useCallback(
-    async (item: InspectionItem) => {
+    async (item: InspectionItem, itemStatus: "fail" | "attention" = "fail") => {
       try {
+        const statusLabel = itemStatus === "attention" ? "warning" : "failed";
         const description = item.notes
-          ? `${item.item_name} — failed inspection: ${item.notes}`
-          : `${item.item_name} — failed inspection`;
+          ? `${item.item_name} — ${statusLabel} inspection: ${item.notes}`
+          : `${item.item_name} — ${statusLabel} inspection`;
+        const severity = itemStatus === "attention" ? "low" : "medium";
 
         // Create inspection_faults record
         const { data: inspectionFault, error: faultError } = await supabase
@@ -90,7 +94,7 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
             inspection_id: inspectionId,
             inspection_item_id: item.id,
             fault_description: description,
-            severity: "medium" as const,
+            severity: severity as "low" | "medium" | "high" | "critical",
             corrective_action_status: "pending",
             requires_immediate_attention: false,
           })
@@ -99,6 +103,12 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
 
         if (faultError) throw faultError;
 
+        // Mark the inspection as having a fault
+        await supabase
+          .from("vehicle_inspections")
+          .update({ has_fault: true })
+          .eq("id", inspectionId);
+
         // Auto-promote to vehicle fault if we have the vehicle info
         if (inspectionRecord?.vehicle_id && inspectionFault) {
           await promoteToVehicleFault({
@@ -106,7 +116,7 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
             inspectionId,
             vehicleId: inspectionRecord.vehicle_id,
             faultDescription: description,
-            severity: "medium",
+            severity,
             reportedBy: inspectionRecord.inspector_name || "Inspector",
             faultCategory: "inspection",
             component: item.category,
@@ -277,11 +287,11 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
       queryClient.invalidateQueries({ queryKey: ["inspection_items", inspectionId] });
       toast({ title: "Status Updated", description: "Item status has been updated" });
 
-      // Auto-log fault when item is marked as "fail"
-      if (result?.status === "fail") {
-        const failedItem = inspectionItems.find((i) => i.id === result.itemId);
-        if (failedItem) {
-          autoLogFault(failedItem);
+      // Auto-log fault when item is marked as "fail" or "attention" (warning)
+      if (result?.status === "fail" || result?.status === "attention") {
+        const faultItem = inspectionItems.find((i) => i.id === result.itemId);
+        if (faultItem) {
+          autoLogFault(faultItem, result.status as "fail" | "attention");
         }
       }
     },
@@ -395,6 +405,8 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
 
   const incompletedItems = inspectionItems.filter((item) => !item.status);
   const failedItems = inspectionItems.filter((item) => item.status === "fail");
+  const attentionItems = inspectionItems.filter((item) => item.status === "attention");
+  const requiresSafetyDecision = failedItems.length > 0 || attentionItems.length > 0;
 
   return (
     <div className="space-y-6">
@@ -598,11 +610,11 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
                 )}
 
                 {/* Attention items summary */}
-                {inspectionItems.filter((i) => i.status === "attention").length > 0 && (
+                {attentionItems.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-sm font-semibold text-yellow-600">Attention Items ({inspectionItems.filter((i) => i.status === "attention").length})</p>
+                    <p className="text-sm font-semibold text-yellow-600">Attention Items ({attentionItems.length})</p>
                     <div className="space-y-1">
-                      {inspectionItems.filter((i) => i.status === "attention").map((item) => (
+                      {attentionItems.map((item) => (
                         <div key={item.id} className="flex items-start justify-between p-2 rounded border-l-4 border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-950/20">
                           <div className="min-w-0">
                             <p className="text-sm font-medium">{item.item_name}</p>
@@ -617,7 +629,7 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
                 )}
 
                 {/* Safe to operate question */}
-                {failedItems.length > 0 && (
+                {requiresSafetyDecision && (
                   <div className="space-y-3 pt-2 border-t">
                     <Label className="text-sm font-semibold">
                       Is this vehicle safe to operate? <span className="text-destructive">*</span>
@@ -652,21 +664,45 @@ export function InspectionForm({ inspectionId, templateId, onComplete }: Inspect
           <AlertDialogFooter>
             <AlertDialogCancel>Go Back</AlertDialogCancel>
             <AlertDialogAction
-              disabled={failedItems.length > 0 && !safeToOperate}
+              disabled={requiresSafetyDecision && !safeToOperate}
               onClick={(e) => {
-                if (failedItems.length > 0 && !safeToOperate) {
+                if (requiresSafetyDecision && !safeToOperate) {
                   e.preventDefault();
                   return;
                 }
-                completeInspection.mutate({ safeToOperate: safeToOperate || undefined, notes: completionNotes || undefined });
+                if (safeToOperate === "no") {
+                  setShowCompletionConfirm(false);
+                  setShowOutOfCommissionReport(true);
+                } else {
+                  completeInspection.mutate({ safeToOperate: safeToOperate || undefined, notes: completionNotes || undefined });
+                }
               }}
               className={safeToOperate === "no" ? "bg-destructive hover:bg-destructive/90" : ""}
             >
-              {completeInspection.isPending ? "Completing..." : "Confirm & Complete Inspection"}
+              {safeToOperate === "no" ? "Continue to Report" : completeInspection.isPending ? "Completing..." : "Confirm & Complete Inspection"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Out-of-Commission Report Dialog */}
+      <OutOfCommissionReportDialog
+        open={showOutOfCommissionReport}
+        onOpenChange={setShowOutOfCommissionReport}
+        inspectionId={inspectionId}
+        vehicleId={inspectionRecord?.vehicle_id ?? null}
+        vehicleRegistration={inspectionRecord?.vehicle_registration ?? ""}
+        vehicleMake={inspectionRecord?.vehicle_make ?? ""}
+        vehicleModel={inspectionRecord?.vehicle_model ?? ""}
+        odometerReading={inspectionRecord?.odometer_reading ?? null}
+        inspectorName={inspectionRecord?.inspector_name ?? ""}
+        onComplete={() => {
+          setShowOutOfCommissionReport(false);
+          completeInspection.mutate({ safeToOperate: "no", notes: completionNotes || undefined });
+          setSafeToOperate(null);
+          setCompletionNotes("");
+        }}
+      />
     </div>
   );
 }

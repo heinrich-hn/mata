@@ -1,23 +1,21 @@
 import { Button } from "@/components/ui/button";
-import
-  {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-  } from "@/components/ui/dropdown-menu";
-import
-  {
-    AlertTriangle,
-    Archive,
-    ClipboardList,
-    Eye,
-    FileText,
-    Share2,
-    Trash2,
-    Wrench,
-  } from "lucide-react";
+import {
+DropdownMenu,
+DropdownMenuContent,
+DropdownMenuItem,
+DropdownMenuSeparator,
+DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+AlertTriangle,
+Archive,
+ClipboardList,
+Eye,
+FileText,
+Share2,
+Trash2,
+Wrench,
+} from "lucide-react";
 
 interface InspectionActionsMenuProps {
   inspectionId: string;
@@ -71,17 +69,14 @@ export function InspectionActionsMenu({
           Create Job Card
         </DropdownMenuItem>
 
-        {/* FIXED: Disable Corrective Action when no faults need attention */}
-        <DropdownMenuItem 
+        <DropdownMenuItem
           onClick={onCorrectiveAction}
-          disabled={!hasFaultsNeedingAction}
-          className={!hasFaultsNeedingAction ? "opacity-50 cursor-not-allowed" : ""}
         >
           <ClipboardList className="h-4 w-4 mr-2" />
           <span>Corrective Action</span>
-          {!hasFaultsNeedingAction && (
-            <span className="ml-auto text-xs text-muted-foreground">
-              No faults
+          {hasFaultsNeedingAction && (
+            <span className="ml-auto text-xs text-destructive font-medium">
+              Action needed
             </span>
           )}
         </DropdownMenuItem>

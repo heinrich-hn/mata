@@ -375,8 +375,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
       for (const trailer of trailerData) {
         if (trailer.total_litres > 0) {
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any).from('reefer_diesel_records').insert({
+            await supabase.from('reefer_diesel_records').insert({
               reefer_unit: trailer.trailer_id,
               date: enrichedData.date,
               fuel_station: enrichedData.fuel_station,
@@ -432,8 +431,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
     // Sync reefer diesel records for linked trailers
     // First, delete any existing reefer records linked to this diesel record
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('reefer_diesel_records')
+      await supabase.from('reefer_diesel_records')
         .delete()
         .eq('linked_diesel_record_id', record.id);
     } catch (deleteError) {
@@ -453,8 +451,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
       for (const trailer of trailerData) {
         if (trailer.total_litres > 0) {
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any).from('reefer_diesel_records').insert({
+            await supabase.from('reefer_diesel_records').insert({
               reefer_unit: trailer.trailer_id,
               date: enrichedRecord.date,
               fuel_station: enrichedRecord.fuel_station,
@@ -482,8 +479,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
   const deleteDieselRecord = async (id: string) => {
     // First delete any linked reefer diesel records
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('reefer_diesel_records')
+      await supabase.from('reefer_diesel_records')
         .delete()
         .eq('linked_diesel_record_id', id);
     } catch (reeferError) {
@@ -575,7 +571,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // 3. Check for linked reefer records and create cost entries for them
-      const { data: linkedReefers } = await (supabase as any).from('reefer_diesel_records')
+      const { data: linkedReefers } = await supabase.from('reefer_diesel_records')
         .select('*')
         .eq('linked_diesel_record_id', dieselRecord.id);
 
@@ -598,7 +594,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
           const reeferCostId = await addCostEntry(reeferCostEntry);
           costEntryIds.push(reeferCostId);
           // Update reefer record with trip linkage
-          await (supabase as any).from('reefer_diesel_records')
+          await supabase.from('reefer_diesel_records')
             .update({ trip_id: tripId, cost_entry_ids: [reeferCostId] })
             .eq('id', reefer.id);
         }
@@ -642,7 +638,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // Clean up linked reefer records for this specific trip
-        const { data: linkedReefers } = await (supabase as any).from('reefer_diesel_records')
+        const { data: linkedReefers } = await supabase.from('reefer_diesel_records')
           .select('*')
           .eq('linked_diesel_record_id', dieselRecordId)
           .eq('trip_id', tripIdToRemove);
@@ -654,7 +650,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
                 await deleteCostEntry(costId);
               }
             }
-            await (supabase as any).from('reefer_diesel_records')
+            await supabase.from('reefer_diesel_records')
               .update({ trip_id: null, cost_entry_ids: null })
               .eq('id', reefer.id);
           }
@@ -681,7 +677,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // 2. Clean up linked reefer records' trip linkage and cost entries
-        const { data: linkedReefers } = await (supabase as any).from('reefer_diesel_records')
+        const { data: linkedReefers } = await supabase.from('reefer_diesel_records')
           .select('*')
           .eq('linked_diesel_record_id', dieselRecordId);
 
@@ -692,7 +688,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
                 await deleteCostEntry(costId);
               }
             }
-            await (supabase as any).from('reefer_diesel_records')
+            await supabase.from('reefer_diesel_records')
               .update({ trip_id: null, cost_entry_ids: null })
               .eq('id', reefer.id);
           }

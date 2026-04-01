@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Driver } from '@/hooks/useDrivers';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Container, Loader2, Snowflake, Truck } from 'lucide-react';
+import { AlertCircle, Loader2, Snowflake, Truck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface AssignVehicleDialogProps {

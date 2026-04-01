@@ -995,7 +995,7 @@ const FleetTyreReports = () => {
             {/* Rubber Audit Tab */}
             <TabsContent value="rubber-audit" className="mt-4">
               <RubberAuditReport
-                tyres={tyres as any}
+                tyres={tyres}
                 allVehicleFleetNumbers={allVehicleFleetNumbers}
               />
             </TabsContent>

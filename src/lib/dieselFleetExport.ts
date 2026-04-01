@@ -2005,6 +2005,11 @@ export interface YearlyWeeklyExportInput {
   reeferRecords: DieselExportRecord[];
 }
 
+type YearlyReeferRecord = DieselExportRecord & {
+  operating_hours?: number;
+  hours_operated?: number;
+};
+
 /**
  * Generate a yearly Excel workbook with transactions grouped by ISO week.
  * Creates two sheets:
@@ -2130,8 +2135,7 @@ export const generateYearlyWeeklyDieselExcel = async (
   wsTruck.views = [{ state: 'frozen', ySplit: 4 }];
 
   // ── Reefers Sheet ─────────────────────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const reeferAny = reeferRecords as any[];
+  const reeferYearlyRecords = reeferRecords as YearlyReeferRecord[];
   const reeferHeaders = ['Date', 'Reefer Unit', 'Driver', 'Fuel Station', 'Litres', 'Cost/L', 'Total Cost', 'Currency', 'Op. Hours', 'Hrs Operated', 'L/H', 'Notes'];
   const reeferCols = reeferHeaders.length;
 
@@ -2139,7 +2143,7 @@ export const generateYearlyWeeklyDieselExcel = async (
   wsReefer.columns = [14, 14, 24, 28, 12, 12, 14, 8, 14, 14, 8, 32].map(w => ({ width: w }));
   _xlSheetTitle(wsReefer, `REEFER DIESEL TRANSACTIONS — ${year}`, `Generated: ${generatedOn}`, reeferCols);
 
-  const reeferWeeks = groupByWeek(reeferAny);
+  const reeferWeeks = groupByWeek(reeferYearlyRecords);
   const sortedReeferWeeks = Array.from(reeferWeeks.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
   let reeferGrandLitres = 0, reeferGrandCostZAR = 0, reeferGrandCostUSD = 0;
@@ -2151,7 +2155,7 @@ export const generateYearlyWeeklyDieselExcel = async (
     const sorted = records.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     let weekLitres = 0, weekCostZAR = 0, weekCostUSD = 0;
-    sorted.forEach((r: any, i: number) => {
+    sorted.forEach((r, i: number) => {
       const litres = r.litres_filled || 0;
       const cost = r.total_cost || 0;
       const lph = r.hours_operated && litres ? n2(litres / r.hours_operated) : '—';
@@ -2185,7 +2189,7 @@ export const generateYearlyWeeklyDieselExcel = async (
     const grandCostStr = reeferGrandCostUSD > 0
       ? `${n2(reeferGrandCostZAR)} ZAR + ${n2(reeferGrandCostUSD)} USD`
       : `${n2(reeferGrandCostZAR)}`;
-    _xlTotalRow(wsReefer, [`YEAR ${year} GRAND TOTAL — ${reeferAny.filter((r: any) => new Date(r.date).getFullYear() === year).length} transactions`, '', '', '', n2(reeferGrandLitres), '', grandCostStr, '', '', '', '', '']);
+    _xlTotalRow(wsReefer, [`YEAR ${year} GRAND TOTAL — ${reeferYearlyRecords.filter((r) => new Date(r.date).getFullYear() === year).length} transactions`, '', '', '', n2(reeferGrandLitres), '', grandCostStr, '', '', '', '', '']);
   }
   wsReefer.views = [{ state: 'frozen', ySplit: 4 }];
 

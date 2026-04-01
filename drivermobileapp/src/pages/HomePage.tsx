@@ -19,11 +19,15 @@ import {
   Droplet,
   Gauge,
   MapPin,
+  Snowflake,
   TrendingUp,
   Truck
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useCallback, useMemo } from "react";
+
+const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
+const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
 
 interface Vehicle {
   id: string;
@@ -31,6 +35,7 @@ interface Vehicle {
   registration_number: string;
   make?: string;
   model?: string;
+  vehicle_type?: string;
 }
 
 // Diesel records from main dashboard (diesel_records table)
@@ -65,13 +70,6 @@ interface Trip {
   client_name: string | null;
   vehicle_id: string | null;
   fleet_vehicle_id: string | null; // Direct link to vehicles table
-}
-
-// Type for driver_vehicle_assignments join result
-interface DriverVehicleAssignment {
-  id: string;
-  vehicle_id: string;
-  vehicles: Vehicle | Vehicle[] | null;
 }
 
 export default function HomePage() {
@@ -139,6 +137,8 @@ export default function HomePage() {
   const handleRefresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["assigned-vehicle"] }),
+      queryClient.invalidateQueries({ queryKey: ["assigned-vehicles"] }),
+      queryClient.invalidateQueries({ queryKey: ["driver-assignment"] }),
       queryClient.invalidateQueries({ queryKey: ["monthly-diesel-records"] }),
       queryClient.invalidateQueries({ queryKey: ["monthly-trips"] }),
       queryClient.invalidateQueries({ queryKey: ["recent-diesel-records"] }),
@@ -157,11 +157,11 @@ export default function HomePage() {
     };
   }, []);
 
-  // Fetch assigned vehicle from driver_vehicle_assignments
-  const { data: vehicle, isLoading: vehicleLoading } = useQuery({
+  // Fetch all active vehicle assignments — split into truck + reefer
+  const { data: vehicleAssignments, isLoading: vehicleLoading } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id) return { truck: null, reefer: null };
 
       const { data, error } = await supabase
         .from("driver_vehicle_assignments")
@@ -173,28 +173,39 @@ export default function HomePage() {
             fleet_number,
             registration_number,
             make,
-            model
+            model,
+            vehicle_type
           )
         `)
         .eq("driver_id", user.id)
         .eq("is_active", true)
-        .order("assigned_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("assigned_at", { ascending: false });
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) throw error;
+      if (!data || data.length === 0) return { truck: null, reefer: null };
 
-      const assignment = data as DriverVehicleAssignment | null;
-      if (assignment?.vehicles) {
-        const vehicleData = Array.isArray(assignment.vehicles) ? assignment.vehicles[0] : assignment.vehicles;
-        return vehicleData as Vehicle;
-      }
-      return null;
+      type AssignmentRow = { vehicles: Vehicle | Vehicle[] };
+      const rows = data as unknown as AssignmentRow[];
+      const normalizedRows = rows.map(r => ({
+        vehicles: Array.isArray(r.vehicles) ? r.vehicles[0] : r.vehicles,
+      }));
+
+      const truckRow = normalizedRows.find(r => !r.vehicles.vehicle_type || TRUCK_TYPES.includes(r.vehicles.vehicle_type));
+      const reeferRow = normalizedRows.find(r => r.vehicles.vehicle_type && TRAILER_TYPES.includes(r.vehicles.vehicle_type));
+
+      return {
+        truck: truckRow?.vehicles || null,
+        reefer: reeferRow?.vehicles || null,
+      };
     },
     enabled: !!user?.id,
-    staleTime: 10 * 60 * 1000, // 10 min - realtime subscription handles updates
-    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
+
+  // Primary vehicle (truck) used for diesel/trip data queries
+  const vehicle = vehicleAssignments?.truck ?? null;
+  const reefer = vehicleAssignments?.reefer ?? null;
 
   // Diesel realtime sync — needs fleet_number so placed after vehicle query
   useDieselRealtimeSync(user?.id, vehicle?.fleet_number);
@@ -357,13 +368,13 @@ export default function HomePage() {
             </Avatar>
           </div>
 
-          {/* Assigned Vehicle Card */}
+          {/* Assigned Vehicle Cards */}
           {vehicleLoading ? (
             <div className="rounded-2xl border border-border bg-card shadow-sm p-5 animate-fade-up stagger-1">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                  Loading Vehicle...
+                  Loading Vehicles...
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -376,31 +387,64 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-          ) : vehicle ? (
-            <div className="rounded-2xl border border-border bg-card shadow-sm p-5 animate-fade-up stagger-1">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                <p className="text-[10px] font-bold text-success uppercase tracking-widest">
-                  Active Vehicle
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="icon-container icon-container-lg bg-primary/10">
-                  <Truck className="w-6 h-6 text-primary" strokeWidth={2} />
+          ) : vehicle || reefer ? (
+            <div className="space-y-3 animate-fade-up stagger-1">
+              {vehicle && (
+                <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                    <p className="text-[10px] font-bold text-success uppercase tracking-widest">
+                      Active Vehicle
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="icon-container icon-container-lg bg-primary/10">
+                      <Truck className="w-6 h-6 text-primary" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-xl">{vehicle.fleet_number}</p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {vehicle.registration_number}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  {vehicle.make && vehicle.model && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <p className="text-xs text-muted-foreground">
+                        {vehicle.make} {vehicle.model}
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-xl">{vehicle.fleet_number}</p>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {vehicle.registration_number}
-                  </p>
-                </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </div>
-              {vehicle.make && vehicle.model && (
-                <div className="mt-4 pt-4 border-t border-border">
-                  <p className="text-xs text-muted-foreground">
-                    {vehicle.make} {vehicle.model}
-                  </p>
+              )}
+              {reefer && (
+                <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                      Active Reefer
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="icon-container icon-container-lg bg-blue-500/10">
+                      <Snowflake className="w-6 h-6 text-blue-500" strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-xl">{reefer.fleet_number}</p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {reefer.registration_number}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  {reefer.make && reefer.model && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <p className="text-xs text-muted-foreground">
+                        {reefer.make} {reefer.model}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

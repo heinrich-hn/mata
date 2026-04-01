@@ -218,7 +218,7 @@ export function InspectionHistory() {
         .eq("inspection_id", inspection.id);
 
       // Map items to include optional severity field
-      const mappedItems = (items || []).map(item => ({
+      const _mappedItems = (items || []).map(item => ({
         ...item,
         severity: undefined, // Severity not in current schema
       }));

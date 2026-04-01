@@ -70,27 +70,20 @@ import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
-  Calendar,
   CheckCircle2,
   ClipboardList,
   DollarSign,
-  Droplets,
   Edit,
   FileSpreadsheet,
   FileText,
   Fuel,
   History,
   Loader2,
-  Minus,
   Plus,
   Settings,
   Sliders,
   Trash2,
   XCircle,
-  Gauge,
-  Beaker,
-  RefreshCw,
-  ChevronRight,
   Info,
   Scale,
   Wrench,
@@ -102,33 +95,6 @@ import SupplierPriceTracker from "./SupplierPriceTracker";
 import { DatePicker } from "../ui/date-picker";
 
 const FUEL_TYPES = ["Diesel", "Petrol", "LPG", "CNG", "Electric"];
-
-// Helper Components
-interface StatCardProps {
-  title: string;
-  value: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  trend?: number;
-}
-
-const StatCard = ({ title, value, description, icon: Icon, trend }: StatCardProps) => (
-  <Card className="border-0 shadow-sm bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-950 dark:to-gray-900/50">
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-bold">{value}</div>
-      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-        {trend && <span className={trend > 0 ? "text-green-500" : "text-red-500"}>{trend > 0 ? "↑" : "↓"} {Math.abs(trend)}%</span>}
-        {description}
-      </p>
-    </CardContent>
-  </Card>
-);
 
 const MetricBadge = ({ label, value, color }: { label: string; value: string | number; color?: string }) => (
   <div className="flex items-center justify-between text-sm py-1.5 px-3 bg-muted/30 rounded-lg">
@@ -572,15 +538,6 @@ const FuelBunkerManagement = () => {
   const isLowLevel = (bunker: FuelBunker) => {
     return bunker.min_level_alert && bunker.current_level_liters < bunker.min_level_alert;
   };
-  // Stats
-  const totalCapacity = bunkers.reduce((sum, b) => sum + b.capacity_liters, 0);
-  const totalFuel = bunkers.reduce((sum, b) => sum + b.current_level_liters, 0);
-  const lowLevelBunkers = bunkers.filter(isLowLevel);
-  const activeBunkers = bunkers.filter((b) => b.is_active);
-  const totalValue = bunkers.reduce((sum, b) => sum + (b.current_level_liters * (b.unit_cost || 0)), 0);
-  const todayTransactions = transactions.filter(
-    (t) => new Date(t.transaction_date).toDateString() === new Date().toDateString()
-  ).length;
   if (isLoading) {
     return (
       <Layout>

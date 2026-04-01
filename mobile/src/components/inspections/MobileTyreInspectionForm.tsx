@@ -3,37 +3,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Modal from "@/components/ui/modal";
+
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getFleetConfig } from "@/constants/fleetTyreConfig";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { updateFleetTyrePosition, useFleetTyrePositions } from "@/hooks/useFleetTyrePositions";
 import { usePromoteToVehicleFault } from "@/hooks/usePromoteToVehicleFault";
 import { useVehicles } from "@/hooks/useVehicles";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Camera, Check, CheckCircle2, ChevronLeft, ChevronRight, Search, Truck, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleOff, Search, Truck, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 type TyreCondition = "excellent" | "good" | "fair" | "poor" | "needs_replacement";
 
-// TypeScript interface for vehicle inspection record
-interface VehicleInspectionRecord {
-  vehicle_id: string;
-  inspector_profile_id: string | null;
-  inspector_name: string;
-  inspection_date: string;
-  inspection_type: 'tyre';
-  inspection_number: string;
-  initiated_via: string;
-  scanned_vehicle_qr: string | null;
-  vehicle_registration: string;
-  notes: string;
-  odometer_reading?: number | null;
-}
+type VehicleInspectionRecord = Database["public"]["Tables"]["vehicle_inspections"]["Insert"];
 
 interface TyreData {
   position: string;
@@ -62,6 +51,8 @@ interface TyreData {
   installationDate?: string;
   /** Odometer at installation */
   installationKm?: number;
+  /** Position has no tyre installed */
+  noTyre?: boolean;
 }
 
 const MobileTyreInspectionForm = () => {
@@ -83,7 +74,7 @@ const MobileTyreInspectionForm = () => {
 
   const [currentPositionIndex, setCurrentPositionIndex] = useState(0);
   const [tyreData, setTyreData] = useState<TyreData[]>([]);
-  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [_showQRScanner, _setShowQRScanner] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
@@ -91,9 +82,11 @@ const MobileTyreInspectionForm = () => {
   const [odometerReading, setOdometerReading] = useState("");
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const { userName } = useAuth();
+
   // Accept vehicleId directly OR extract from vehicleData object
   const vehicleId = locationState?.vehicleId || locationState?.vehicleData?.id || selectedVehicleId;
-  const inspectorName = locationState?.inspectorName || "";
+  const inspectorName = locationState?.inspectorName || userName || "";
 
   const { data: vehicles } = useVehicles();
   const queryClient = useQueryClient();
@@ -215,6 +208,9 @@ const MobileTyreInspectionForm = () => {
         vehicle_registration: vehicleRegistration,
         notes: `Mobile tyre inspection for ${vehicleRegistration} - ${tyreData.length} positions inspected`,
         odometer_reading: odometerReading ? parseInt(odometerReading) : null,
+        status: 'completed',
+        completed_at: now.toISOString(),
+        completed_by: inspectorName,
       };
 
       // 1. Create vehicle_inspections record and get the ID back
@@ -231,6 +227,20 @@ const MobileTyreInspectionForm = () => {
 
       // 2. Create inspection_items + inspection_faults for each tyre position
       for (const tyre of tyreData) {
+        // Handle positions marked as having no tyre installed
+        if (tyre.noTyre) {
+          await supabase
+            .from("inspection_items")
+            .insert({
+              inspection_id: inspectionId,
+              item_name: `Tyre - ${tyre.positionLabel}`,
+              category: "tyre",
+              status: 'pass',
+              notes: 'No tyre installed at this position',
+            });
+          continue;
+        }
+
         const isFailed = tyre.condition === 'poor' || tyre.condition === 'needs_replacement';
         const itemStatus = isFailed ? 'fail' : 'pass';
 
@@ -343,7 +353,7 @@ const MobileTyreInspectionForm = () => {
               tyre_id: tyre.tyreCode,
               tyre_code: tyre.dotCode || tyre.tyreCode,
               vehicle_id: vehicleId,
-              event_type: "inspection",
+              event_type: "inspected",
               event_date: now.toISOString(),
               fleet_position: tyre.position,
               performed_by: inspectorName,
@@ -389,7 +399,7 @@ const MobileTyreInspectionForm = () => {
         title: "Inspection Saved",
         description: "Tyre inspection completed and faults logged",
       });
-      navigate("/inspections/mobile");
+      navigate("/", { state: { activeTab: "tyres" } });
     },
     onError: (error: Error) => {
       toast({
@@ -552,209 +562,248 @@ const MobileTyreInspectionForm = () => {
             </CardContent>
           </Card>
 
-          {/* Condition Badge */}
-          <Card>
+          {/* No Tyre Toggle */}
+          <Card className={currentTyre.noTyre ? "border-orange-200 bg-orange-50" : ""}>
             <CardContent className="p-4">
-              <div className="flex items-center justify-center gap-3">
-                <ConditionIcon className={`w-8 h-8 ${getConditionColor(currentTyre.condition)}`} />
-                <span className={`text-lg font-semibold ${getConditionColor(currentTyre.condition)}`}>
-                  {currentTyre.condition.replace(/_/g, ' ').toUpperCase()}
-                </span>
-              </div>
-              {currentTyre.pressure && (
-                <div className="text-sm text-muted-foreground text-center mt-1">
-                  PSI: <span className="font-semibold text-foreground">{currentTyre.pressure}</span>
-                </div>
-              )}
+              <Button
+                variant={currentTyre.noTyre ? "default" : "outline"}
+                className={`w-full h-12 text-base font-medium ${currentTyre.noTyre
+                  ? "bg-orange-500 hover:bg-orange-600 text-white"
+                  : "border-dashed border-2"
+                  }`}
+                onClick={() => {
+                  setTyreData((prev) =>
+                    prev.map((tyre, idx) =>
+                      idx === currentPositionIndex
+                        ? { ...tyre, noTyre: !tyre.noTyre }
+                        : tyre
+                    )
+                  );
+                }}
+              >
+                <CircleOff className="w-5 h-5 mr-2" />
+                {currentTyre.noTyre ? "Marked: No Tyre Installed" : "Mark as No Tyre"}
+              </Button>
             </CardContent>
           </Card>
 
-          {/* Form Fields */}
-          <Card>
-            <CardContent className="p-4 space-y-4">
-              {/* Installed Tyre Information (read-only display) */}
-              {(currentTyre.tyreCode || currentTyre.dotCode) && (
-                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">Installed Tyre Details</Label>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {currentTyre.dotCode && (
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">DOT: </span>
-                        <span className="font-semibold text-primary">{currentTyre.dotCode}</span>
+          {currentTyre.noTyre ? (
+            <Card className="border-orange-200">
+              <CardContent className="p-8 text-center space-y-3">
+                <CircleOff className="w-12 h-12 mx-auto text-orange-400" />
+                <h3 className="font-semibold text-lg">No Tyre at This Position</h3>
+                <p className="text-sm text-muted-foreground">
+                  This position will be recorded as empty. Tap the button above to undo.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Condition Badge */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-center gap-3">
+                    <ConditionIcon className={`w-8 h-8 ${getConditionColor(currentTyre.condition)}`} />
+                    <span className={`text-lg font-semibold ${getConditionColor(currentTyre.condition)}`}>
+                      {currentTyre.condition.replace(/_/g, ' ').toUpperCase()}
+                    </span>
+                  </div>
+                  {currentTyre.pressure && (
+                    <div className="text-sm text-muted-foreground text-center mt-1">
+                      PSI: <span className="font-semibold text-foreground">{currentTyre.pressure}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Form Fields */}
+              <Card>
+                <CardContent className="p-4 space-y-4">
+                  {/* Installed Tyre Information (read-only display) */}
+                  {(currentTyre.tyreCode || currentTyre.dotCode) && (
+                    <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Installed Tyre Details</Label>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {currentTyre.dotCode && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">DOT: </span>
+                            <span className="font-semibold text-primary">{currentTyre.dotCode}</span>
+                          </div>
+                        )}
+                        {currentTyre.serialNumber && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Serial: </span>
+                            <span className="font-mono text-xs">{currentTyre.serialNumber}</span>
+                          </div>
+                        )}
+                        {currentTyre.model && (
+                          <div>
+                            <span className="text-muted-foreground">Model: </span>
+                            <span>{currentTyre.model}</span>
+                          </div>
+                        )}
+                        {currentTyre.type && (
+                          <div>
+                            <span className="text-muted-foreground">Type: </span>
+                            <span className="capitalize">{currentTyre.type}</span>
+                          </div>
+                        )}
+                        {currentTyre.initialTreadDepth != null && (
+                          <div>
+                            <span className="text-muted-foreground">Initial Tread: </span>
+                            <span>{currentTyre.initialTreadDepth}mm</span>
+                          </div>
+                        )}
+                        {currentTyre.kmTravelled != null && (
+                          <div>
+                            <span className="text-muted-foreground">KM: </span>
+                            <span>{currentTyre.kmTravelled.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {currentTyre.installationDate && (
+                          <div>
+                            <span className="text-muted-foreground">Installed: </span>
+                            <span>{new Date(currentTyre.installationDate).toLocaleDateString()}</span>
+                          </div>
+                        )}
+                        {currentTyre.installationKm != null && (
+                          <div>
+                            <span className="text-muted-foreground">Install KM: </span>
+                            <span>{currentTyre.installationKm.toLocaleString()}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {currentTyre.serialNumber && (
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">Serial: </span>
-                        <span className="font-mono text-xs">{currentTyre.serialNumber}</span>
-                      </div>
-                    )}
-                    {currentTyre.model && (
-                      <div>
-                        <span className="text-muted-foreground">Model: </span>
-                        <span>{currentTyre.model}</span>
-                      </div>
-                    )}
-                    {currentTyre.type && (
-                      <div>
-                        <span className="text-muted-foreground">Type: </span>
-                        <span className="capitalize">{currentTyre.type}</span>
-                      </div>
-                    )}
-                    {currentTyre.initialTreadDepth != null && (
-                      <div>
-                        <span className="text-muted-foreground">Initial Tread: </span>
-                        <span>{currentTyre.initialTreadDepth}mm</span>
-                      </div>
-                    )}
-                    {currentTyre.kmTravelled != null && (
-                      <div>
-                        <span className="text-muted-foreground">KM: </span>
-                        <span>{currentTyre.kmTravelled.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {currentTyre.installationDate && (
-                      <div>
-                        <span className="text-muted-foreground">Installed: </span>
-                        <span>{new Date(currentTyre.installationDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                    {currentTyre.installationKm != null && (
-                      <div>
-                        <span className="text-muted-foreground">Install KM: </span>
-                        <span>{currentTyre.installationKm.toLocaleString()}</span>
+                    </div>
+                  )}
+
+                  {/* DOT Code — read-only if already set from installed tyre */}
+                  <div className="space-y-2">
+                    <Label className="text-base">DOT Code</Label>
+                    {currentTyre.dotCode ? (
+                      <Input
+                        value={currentTyre.dotCode}
+                        readOnly
+                        className="h-12 text-base bg-muted"
+                      />
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={currentTyre.dotCode || ""}
+                          onChange={(e) => updateCurrentTyre("dotCode", e.target.value)}
+                          placeholder="Enter DOT code"
+                          className="h-12 text-base"
+                        />
+                        {/* QR Scanner button removed */}
                       </div>
                     )}
                   </div>
-                </div>
-              )}
 
-              {/* DOT Code — read-only if already set from installed tyre */}
-              <div className="space-y-2">
-                <Label className="text-base">DOT Code</Label>
-                {currentTyre.dotCode ? (
-                  <Input
-                    value={currentTyre.dotCode}
-                    readOnly
-                    className="h-12 text-base bg-muted"
-                  />
-                ) : (
-                  <div className="flex gap-2">
+                  {/* Brand */}
+                  <div className="space-y-2">
+                    <Label className="text-base">Brand</Label>
                     <Input
-                      value={currentTyre.dotCode || ""}
-                      onChange={(e) => updateCurrentTyre("dotCode", e.target.value)}
-                      placeholder="Enter DOT code"
+                      value={currentTyre.brand}
+                      onChange={(e) => updateCurrentTyre("brand", e.target.value)}
+                      placeholder="Enter brand"
                       className="h-12 text-base"
                     />
-                    {/* QR Scanner button removed */}
                   </div>
-                )}
-              </div>
 
-              {/* Brand */}
-              <div className="space-y-2">
-                <Label className="text-base">Brand</Label>
-                <Input
-                  value={currentTyre.brand}
-                  onChange={(e) => updateCurrentTyre("brand", e.target.value)}
-                  placeholder="Enter brand"
-                  className="h-12 text-base"
-                />
-              </div>
+                  {/* Size */}
+                  <div className="space-y-2">
+                    <Label className="text-base">Size</Label>
+                    <Input
+                      value={currentTyre.size}
+                      onChange={(e) => updateCurrentTyre("size", e.target.value)}
+                      placeholder="e.g., 295/80R22.5"
+                      className="h-12 text-base"
+                    />
+                  </div>
 
-              {/* Size */}
-              <div className="space-y-2">
-                <Label className="text-base">Size</Label>
-                <Input
-                  value={currentTyre.size}
-                  onChange={(e) => updateCurrentTyre("size", e.target.value)}
-                  placeholder="e.g., 295/80R22.5"
-                  className="h-12 text-base"
-                />
-              </div>
+                  {/* Tread Depth and Pressure */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-base">Tread (mm)</Label>
+                      <Input
+                        type="number"
+                        value={currentTyre.treadDepth}
+                        onChange={(e) => updateCurrentTyre("treadDepth", e.target.value)}
+                        placeholder="0.0"
+                        className="h-12 text-base"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-base">Pressure (PSI)</Label>
+                      <Input
+                        type="number"
+                        value={currentTyre.pressure}
+                        onChange={(e) => updateCurrentTyre("pressure", e.target.value)}
+                        placeholder="0"
+                        className="h-12 text-base"
+                      />
+                    </div>
+                  </div>
 
-              {/* Tread Depth and Pressure */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-base">Tread (mm)</Label>
-                  <Input
-                    type="number"
-                    value={currentTyre.treadDepth}
-                    onChange={(e) => updateCurrentTyre("treadDepth", e.target.value)}
-                    placeholder="0.0"
-                    className="h-12 text-base"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-base">Pressure (PSI)</Label>
-                  <Input
-                    type="number"
-                    value={currentTyre.pressure}
-                    onChange={(e) => updateCurrentTyre("pressure", e.target.value)}
-                    placeholder="0"
-                    className="h-12 text-base"
-                  />
-                </div>
-              </div>
+                  {/* Condition */}
+                  <div className="space-y-2">
+                    <Label className="text-base">Condition</Label>
+                    <Select
+                      value={currentTyre.condition}
+                      onValueChange={(value: TyreCondition) =>
+                        updateCurrentTyre("condition", value)
+                      }
+                    >
+                      <SelectTrigger className="h-12 text-base">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="excellent">Excellent</SelectItem>
+                        <SelectItem value="good">Good</SelectItem>
+                        <SelectItem value="fair">Fair</SelectItem>
+                        <SelectItem value="poor">Poor</SelectItem>
+                        <SelectItem value="needs_replacement">Needs Replacement</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              {/* Condition */}
-              <div className="space-y-2">
-                <Label className="text-base">Condition</Label>
-                <Select
-                  value={currentTyre.condition}
-                  onValueChange={(value: TyreCondition) =>
-                    updateCurrentTyre("condition", value)
-                  }
-                >
-                  <SelectTrigger className="h-12 text-base">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="excellent">Excellent</SelectItem>
-                    <SelectItem value="good">Good</SelectItem>
-                    <SelectItem value="fair">Fair</SelectItem>
-                    <SelectItem value="poor">Poor</SelectItem>
-                    <SelectItem value="needs_replacement">Needs Replacement</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  {/* Wear Pattern */}
+                  <div className="space-y-2">
+                    <Label className="text-base">Wear Pattern</Label>
+                    <Select
+                      value={currentTyre.wearPattern}
+                      onValueChange={(value) => updateCurrentTyre("wearPattern", value)}
+                    >
+                      <SelectTrigger className="h-12 text-base">
+                        <SelectValue placeholder="Select wear pattern" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="even">Even Wear</SelectItem>
+                        <SelectItem value="center">Center Wear</SelectItem>
+                        <SelectItem value="edge">Edge Wear (Both)</SelectItem>
+                        <SelectItem value="inner">Inner Edge Wear</SelectItem>
+                        <SelectItem value="outer">Outer Edge Wear</SelectItem>
+                        <SelectItem value="cupping">Cupping/Scalloping</SelectItem>
+                        <SelectItem value="flat_spot">Flat Spots</SelectItem>
+                        <SelectItem value="feathering">Feathering</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              {/* Wear Pattern */}
-              <div className="space-y-2">
-                <Label className="text-base">Wear Pattern</Label>
-                <Select
-                  value={currentTyre.wearPattern || undefined}
-                  onValueChange={(value) => updateCurrentTyre("wearPattern", value)}
-                >
-                  <SelectTrigger className="h-12 text-base">
-                    <SelectValue placeholder="Select wear pattern" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="even">Even Wear</SelectItem>
-                    <SelectItem value="center">Center Wear</SelectItem>
-                    <SelectItem value="edge">Edge Wear (Both)</SelectItem>
-                    <SelectItem value="inner">Inner Edge Wear</SelectItem>
-                    <SelectItem value="outer">Outer Edge Wear</SelectItem>
-                    <SelectItem value="cupping">Cupping/Scalloping</SelectItem>
-                    <SelectItem value="flat_spot">Flat Spots</SelectItem>
-                    <SelectItem value="feathering">Feathering</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Notes */}
-              <div className="space-y-2">
-                <Label className="text-base">Notes</Label>
-                <Textarea
-                  value={currentTyre.notes}
-                  onChange={(e) => updateCurrentTyre("notes", e.target.value)}
-                  placeholder="Additional observations"
-                  rows={4}
-                  className="text-base resize-none"
-                />
-              </div>
-            </CardContent>
-          </Card>
+                  {/* Notes */}
+                  <div className="space-y-2">
+                    <Label className="text-base">Notes</Label>
+                    <Textarea
+                      value={currentTyre.notes}
+                      onChange={(e) => updateCurrentTyre("notes", e.target.value)}
+                      placeholder="Additional observations"
+                      rows={4}
+                      className="text-base resize-none"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </div>
 
@@ -802,13 +851,12 @@ const MobileTyreInspectionForm = () => {
               <Button
                 key={idx}
                 onClick={() => setCurrentPositionIndex(idx)}
-                className={`h-2 rounded-full transition-all ${
-                  idx === currentPositionIndex
-                    ? "w-8 bg-primary"
-                    : idx <= currentPositionIndex
+                className={`h-2 rounded-full transition-all ${idx === currentPositionIndex
+                  ? "w-8 bg-primary"
+                  : idx <= currentPositionIndex
                     ? "w-2 bg-primary/50"
                     : "w-2 bg-muted"
-                }`}
+                  }`}
               />
             ))}
           </div>

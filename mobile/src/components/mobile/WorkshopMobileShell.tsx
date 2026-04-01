@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
@@ -331,7 +330,7 @@ const WorkshopMobileShell = ({
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30 flex flex-col">
+    <div className="h-dvh bg-background flex flex-col overflow-hidden">
       {/* Mobile Header */}
       <header className="fixed top-0 left-0 right-0 border-b border-border/30 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 z-50 safe-area-top">
         <div className="h-16 flex items-center justify-between px-4">
@@ -406,7 +405,7 @@ const WorkshopMobileShell = ({
       </header>
 
       {/* Main Content Area */}
-      <main id="workshop-main-content" className="flex-1 min-h-0 pt-16 pb-20 safe-area-bottom overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <main id="workshop-main-content" className="flex-1 min-h-0 pt-16 pb-28 safe-area-bottom overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="relative">
           {children}
         </div>

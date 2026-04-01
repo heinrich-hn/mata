@@ -74,8 +74,10 @@ export function useDriverAssignedVehicle(driverId?: string) {
     queryFn: async (): Promise<Vehicle | null> => {
       if (!driverId) return null;
 
-      // First check driver_vehicle_assignments table
-      const { data: assignment, error: assignmentError } = await supabase
+      const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
+
+      // Fetch all active assignments to find the truck
+      const { data: assignments, error: assignmentError } = await supabase
         .from('driver_vehicle_assignments')
         .select(`
           *,
@@ -83,22 +85,30 @@ export function useDriverAssignedVehicle(driverId?: string) {
         `)
         .eq('driver_id', driverId)
         .eq('is_active', true)
-        .single();
+        .order('assigned_at', { ascending: false });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const assignmentData = assignment as any;
-      if (!assignmentError && assignmentData?.vehicles) {
-        const v = assignmentData.vehicles as Record<string, unknown>;
-        return {
-          id: v.id as string,
-          fleet_number: (v.fleet_number || '') as string,
-          registration_number: v.registration_number as string,
-          make: v.make as string,
-          model: v.model as string,
-          vehicle_type: v.vehicle_type as string,
-          tonnage: v.tonnage as number | undefined,
-          active: (v.active ?? true) as boolean,
-        };
+      if (!assignmentError && assignments && assignments.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows = assignments as any[];
+        // Prefer truck over reefer/trailer
+        const truckRow = rows.find((r: { vehicles?: { vehicle_type?: string } }) => {
+          const vt = r.vehicles?.vehicle_type;
+          return !vt || TRUCK_TYPES.includes(vt);
+        }) || rows[0];
+
+        const v = truckRow.vehicles as Record<string, unknown>;
+        if (v) {
+          return {
+            id: v.id as string,
+            fleet_number: (v.fleet_number || '') as string,
+            registration_number: v.registration_number as string,
+            make: v.make as string,
+            model: v.model as string,
+            vehicle_type: v.vehicle_type as string,
+            tonnage: v.tonnage as number | undefined,
+            active: (v.active ?? true) as boolean,
+          };
+        }
       }
 
       // Fallback: Check user metadata for assigned vehicle
@@ -428,6 +438,8 @@ export function useVehicleAssignmentSubscription(userId: string | undefined) {
           // automatically refetch when vehicle data changes (new query keys).
           queryClient.invalidateQueries({ queryKey: ['assigned-vehicle'] });
           queryClient.invalidateQueries({ queryKey: ['driver-assigned-vehicle'] });
+          queryClient.invalidateQueries({ queryKey: ['assigned-vehicles'] });
+          queryClient.invalidateQueries({ queryKey: ['driver-assignment'] });
         }
       )
       .subscribe();

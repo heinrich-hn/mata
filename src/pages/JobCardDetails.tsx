@@ -15,8 +15,11 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { generateJobCardPDF, type JobCardExportData } from "@/lib/jobCardExport";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, FileText, Loader2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ArrowLeft, ChevronDown, ClipboardList, FileText, Link2, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { LinkInspectionToJobCardDialog } from "@/components/dialogs/LinkInspectionJobCardDialogs";
 
 type JobCard = Database["public"]["Tables"]["job_cards"]["Row"];
 
@@ -25,6 +28,7 @@ const JobCardDetails = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [showLinkInspection, setShowLinkInspection] = useState(false);
 
   const { data: jobCard, isLoading } = useQuery<JobCard>({
     queryKey: ["job_card", id],
@@ -148,9 +152,60 @@ const JobCardDetails = () => {
 
       const { data, error } = await supabase
         .from("vehicle_inspections")
-        .select("inspection_number, inspection_type, inspection_date")
+        .select("inspection_number, inspection_type, inspection_date, inspector_name, notes")
         .eq("id", jobCard.inspection_id)
         .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!jobCard?.inspection_id,
+  });
+
+  const { data: inspectionItems = [] } = useQuery({
+    queryKey: ["inspection_items_for_export", jobCard?.inspection_id],
+    queryFn: async () => {
+      if (!jobCard?.inspection_id) return [];
+
+      const { data, error } = await supabase
+        .from("inspection_items")
+        .select("item_name, status, notes")
+        .eq("inspection_id", jobCard.inspection_id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!jobCard?.inspection_id,
+  });
+
+  const { data: inspectionFaults = [] } = useQuery({
+    queryKey: ["inspection_faults_for_export", jobCard?.inspection_id],
+    queryFn: async () => {
+      if (!jobCard?.inspection_id) return [];
+
+      const { data, error } = await supabase
+        .from("inspection_faults")
+        .select("fault_description, severity, corrective_action_status, corrective_action_notes")
+        .eq("inspection_id", jobCard.inspection_id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!jobCard?.inspection_id,
+  });
+
+  const { data: oocReport } = useQuery({
+    queryKey: ["ooc_report_for_export", jobCard?.inspection_id],
+    queryFn: async () => {
+      if (!jobCard?.inspection_id) return null;
+
+      const { data, error } = await supabase
+        .from("out_of_commission_reports")
+        .select("vehicle_id_or_license, make_model, year, odometer_hour_meter, location, reason_out_of_commission, immediate_plan, parts_required, additional_notes_safety_concerns, mechanic_name, report_date, report_time, sign_off_date")
+        .eq("inspection_id", jobCard.inspection_id)
+        .maybeSingle();
 
       if (error) throw error;
       return data;
@@ -270,7 +325,41 @@ const JobCardDetails = () => {
         created_by: n.created_by,
         created_at: n.created_at,
       })),
-      inspection: inspection || null,
+      inspection: inspection ? {
+        inspection_number: inspection.inspection_number,
+        inspection_type: inspection.inspection_type,
+        inspection_date: inspection.inspection_date,
+        inspector_name: inspection.inspector_name,
+        notes: inspection.notes,
+        items: inspectionItems.map(item => ({
+          item_name: item.item_name,
+          status: item.status,
+          notes: item.notes,
+        })),
+        faults: inspectionFaults.map(f => ({
+          fault_description: f.fault_description,
+          severity: f.severity,
+          corrective_action_status: f.corrective_action_status,
+          corrective_action_notes: f.corrective_action_notes,
+        })),
+        oocReport: oocReport ? {
+          vehicle_id_or_license: oocReport.vehicle_id_or_license,
+          make_model: oocReport.make_model,
+          year: oocReport.year,
+          odometer_hour_meter: oocReport.odometer_hour_meter,
+          location: oocReport.location,
+          reason_out_of_commission: oocReport.reason_out_of_commission,
+          immediate_plan: Array.isArray(oocReport.immediate_plan) ? oocReport.immediate_plan as string[] : null,
+          parts_required: Array.isArray(oocReport.parts_required)
+            ? (oocReport.parts_required as Array<{ partNameNumber: string; quantity: string; onHand: string; orderNeededBy: string }>)
+            : null,
+          additional_notes_safety_concerns: oocReport.additional_notes_safety_concerns,
+          mechanic_name: oocReport.mechanic_name,
+          report_date: oocReport.report_date,
+          report_time: oocReport.report_time,
+          sign_off_date: oocReport.sign_off_date,
+        } : null,
+      } : null,
     };
 
     generateJobCardPDF(exportData);
@@ -340,64 +429,143 @@ const JobCardDetails = () => {
           jobCard={jobCard}
           vehicle={vehicle}
           onUpdate={handleJobCardUpdate}
+          defaultCollapsed
         />
 
+        {/* Linked Inspection */}
+        <Collapsible defaultOpen={false}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Linked Inspection
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
+                </CardTitle>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={(e) => { e.stopPropagation(); setShowLinkInspection(true); }}>
+                  <Link2 className="h-3.5 w-3.5" />
+                  {jobCard.inspection_id ? "Change" : "Link Inspection"}
+                </Button>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                {inspection ? (
+                  <div
+                    className="flex items-center justify-between p-3 rounded-md border cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => navigate(`/inspections/${jobCard.inspection_id}`)}
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{inspection.inspection_number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {inspection.inspection_type} • {new Date(inspection.inspection_date).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm">View</Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No inspection linked. Click &quot;Link Inspection&quot; to associate one.</p>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
         {/* Tasks */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Tasks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <JobCardTasksTable
-              jobCardId={jobCard.id}
-              tasks={tasks}
-              onTaskUpdate={handleTaskUpdate}
-              onRefresh={handleRefresh}
-            />
-          </CardContent>
-        </Card>
+        <Collapsible defaultOpen={false}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  Tasks
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <JobCardTasksTable
+                  jobCardId={jobCard.id}
+                  tasks={tasks}
+                  onTaskUpdate={handleTaskUpdate}
+                  onRefresh={handleRefresh}
+                />
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* Labor Entries */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Labor Entries</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <JobCardLaborTable
-              jobCardId={jobCard.id}
-              laborEntries={laborEntries}
-              onRefresh={handleRefresh}
-            />
-          </CardContent>
-        </Card>
+        <Collapsible defaultOpen={false}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  Labor Entries
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <JobCardLaborTable
+                  jobCardId={jobCard.id}
+                  laborEntries={laborEntries}
+                  onRefresh={handleRefresh}
+                />
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* Parts Requests */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Parts & Materials</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Cost Summary */}
-            <JobCardCostSummary jobCardId={jobCard.id} />
+        <Collapsible defaultOpen={false}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  Parts &amp; Materials
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-6">
+                {/* Cost Summary */}
+                <JobCardCostSummary jobCardId={jobCard.id} />
 
-            {/* Parts Table */}
-            <JobCardPartsTable
-              jobCardId={jobCard.id}
-              parts={parts}
-              onRefresh={handleRefresh}
-              fleetNumber={vehicle?.fleet_number}
-              jobNumber={jobCard.job_number}
-            />
-          </CardContent>
-        </Card>
+                {/* Parts Table */}
+                <JobCardPartsTable
+                  jobCardId={jobCard.id}
+                  parts={parts}
+                  onRefresh={handleRefresh}
+                  fleetNumber={vehicle?.fleet_number}
+                  jobNumber={jobCard.job_number}
+                />
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* Notes */}
         <JobCardNotes
           jobCardId={jobCard.id}
           notes={notes}
           onRefresh={handleRefresh}
+          defaultCollapsed
         />
       </div>
+
+      <LinkInspectionToJobCardDialog
+        open={showLinkInspection}
+        onOpenChange={setShowLinkInspection}
+        jobCardId={jobCard.id}
+        currentInspectionId={jobCard.inspection_id}
+        onLinked={() => {
+          setShowLinkInspection(false);
+          handleRefresh();
+        }}
+      />
     </Layout>
   );
 };

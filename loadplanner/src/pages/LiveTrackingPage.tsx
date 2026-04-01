@@ -869,7 +869,7 @@ export default function LiveTrackingPage() {
                               <React.Fragment key={loc.id}>
                                 <Circle
                                   center={[Number(loc.latitude), Number(loc.longitude)]}
-                                  radius={loc.radius || 500}
+                                  radius={500}
                                   pathOptions={{ color: '#f97316', fillColor: '#f97316', fillOpacity: 0.2, weight: 2, dashArray: '5, 5' }}
                                 />
                                 <Marker position={[Number(loc.latitude), Number(loc.longitude)]} icon={locIcon}>

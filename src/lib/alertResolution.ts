@@ -10,14 +10,14 @@ export interface ResolveAlertOptions {
   issueType?: string;
   resolutionComment: string;
   resolvedBy: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Temporary interface until you run `npx supabase gen types`
 interface CostEntryForValidation {
   id: string;
   verification_type: string | null;
-  attachments: any[] | null;
+  attachments: unknown[] | null;
   notes: string | null;
   investigation_status: string | null;
 }

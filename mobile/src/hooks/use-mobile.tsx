@@ -28,7 +28,7 @@ export function useIsMobile(): boolean {
     if (typeof window === "undefined") return;
 
     let timeoutId: NodeJS.Timeout;
-    
+
     const handleResize = () => {
       // Debounce resize events for better performance
       clearTimeout(timeoutId);
@@ -39,7 +39,7 @@ export function useIsMobile(): boolean {
 
     // Initial check
     setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-    
+
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
@@ -66,7 +66,7 @@ export function useBreakpoint(): Breakpoint | "xs" {
 
     const updateBreakpoint = () => {
       const width = window.innerWidth;
-      
+
       // Use binary search-like approach for better performance
       if (width >= BREAKPOINTS["2xl"]) {
         setBreakpoint("2xl");
@@ -125,13 +125,13 @@ export function useMediaQuery(breakpoint: Breakpoint): boolean {
     if (typeof window === "undefined") return;
 
     const mql = window.matchMedia(query);
-    
+
     const onChange = (event: MediaQueryListEvent) => {
       setMatches(event.matches);
     };
 
     setMatches(mql.matches);
-    
+
     // Use addEventListener for better compatibility
     mql.addEventListener("change", onChange);
     return () => mql.removeEventListener("change", onChange);
@@ -157,7 +157,7 @@ export function useResponsiveValue<T>(values: Partial<Record<Breakpoint | "xs", 
 
   return React.useMemo(() => {
     const currentIndex = BREAKPOINT_ORDER.indexOf(breakpoint);
-    
+
     // Find the value for current breakpoint or fall back to larger breakpoints
     for (let i = currentIndex; i < BREAKPOINT_ORDER.length; i++) {
       const bp = BREAKPOINT_ORDER[i];
@@ -166,7 +166,7 @@ export function useResponsiveValue<T>(values: Partial<Record<Breakpoint | "xs", 
         return value;
       }
     }
-    
+
     // Fallback to any defined value
     return undefined;
   }, [breakpoint, values]);
@@ -181,7 +181,7 @@ export function useIsTouch(): boolean {
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
-    
+
     const checkTouch = () => {
       return (
         "ontouchstart" in window ||
@@ -190,7 +190,7 @@ export function useIsTouch(): boolean {
         navigator.msMaxTouchPoints > 0
       );
     };
-    
+
     setIsTouch(checkTouch());
   }, []);
 
@@ -208,14 +208,14 @@ export function useIsPortrait(): boolean {
     if (typeof window === "undefined") return;
 
     const mql = window.matchMedia("(orientation: portrait)");
-    
+
     const onChange = (event: MediaQueryListEvent) => {
       setIsPortrait(event.matches);
     };
 
     setIsPortrait(mql.matches);
     mql.addEventListener("change", onChange);
-    
+
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
@@ -238,7 +238,7 @@ export function useWindowSize(): { width: number; height: number } {
     if (typeof window === "undefined") return;
 
     let timeoutId: NodeJS.Timeout;
-    
+
     const handleResize = () => {
       // Debounce for performance
       clearTimeout(timeoutId);
@@ -252,7 +252,7 @@ export function useWindowSize(): { width: number; height: number } {
 
     handleResize();
     window.addEventListener("resize", handleResize);
-    
+
     return () => {
       window.removeEventListener("resize", handleResize);
       clearTimeout(timeoutId);
@@ -324,14 +324,14 @@ export function useMaxMediaQuery(breakpoint: Breakpoint): boolean {
     if (typeof window === "undefined") return;
 
     const mql = window.matchMedia(query);
-    
+
     const onChange = (event: MediaQueryListEvent) => {
       setMatches(event.matches);
     };
 
     setMatches(mql.matches);
     mql.addEventListener("change", onChange);
-    
+
     return () => mql.removeEventListener("change", onChange);
   }, [query]);
 
@@ -354,16 +354,16 @@ export function useBreakpointValue<T>(values: {
 
   return React.useMemo(() => {
     const breakpoints: Record<string, T | undefined> = values;
-    
+
     // Check exact breakpoint first
     if (breakpoints[breakpoint] !== undefined) {
       return breakpoints[breakpoint];
     }
-    
+
     // Fall back to smaller breakpoints
     const order = ["2xl", "xl", "lg", "md", "sm", "base"];
     const currentIndex = order.indexOf(breakpoint === "xs" ? "base" : breakpoint);
-    
+
     for (let i = currentIndex; i < order.length; i++) {
       const bp = order[i];
       const value = breakpoints[bp === "base" ? "base" : bp];
@@ -371,7 +371,7 @@ export function useBreakpointValue<T>(values: {
         return value;
       }
     }
-    
+
     return breakpoints.base;
   }, [breakpoint, values]);
 }
@@ -397,20 +397,20 @@ export function safeMatchMedia(query: string): MediaQueryList | null {
  * Debounced resize observer hook
  */
 export function useDebouncedResize(delay: number = 200): { width: number; height: number } {
-  const [size, setSize] = React.useState({ width: 0, height: 0 });
+  const [_size, setSize] = React.useState({ width: 0, height: 0 });
   const [debouncedSize, setDebouncedSize] = React.useState({ width: 0, height: 0 });
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
     let timeoutId: NodeJS.Timeout;
-    
+
     const handleResize = () => {
       setSize({
         width: window.innerWidth,
         height: window.innerHeight,
       });
-      
+
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         setDebouncedSize({
@@ -422,7 +422,7 @@ export function useDebouncedResize(delay: number = 200): { width: number; height
 
     handleResize();
     window.addEventListener("resize", handleResize);
-    
+
     return () => {
       window.removeEventListener("resize", handleResize);
       clearTimeout(timeoutId);

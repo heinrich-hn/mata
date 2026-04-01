@@ -7,6 +7,7 @@ import WorkshopMobileShell, { type WorkshopTab } from "@/components/mobile/Works
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -89,7 +90,12 @@ const ErrorToast = ({ errors, onDismiss }: { errors: BadgeError[]; onDismiss: ()
 // Main Component
 // ============================================================================
 const WorkshopMobileLayout = () => {
-  const [activeTab, setActiveTab] = useState<WorkshopTab>("job-cards");
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<WorkshopTab>(() => {
+    const requestedTab = (location.state as { activeTab?: WorkshopTab } | null)?.activeTab;
+    const allowedTabs: WorkshopTab[] = ["job-cards", "inspections", "maintenance", "tyres", "follow-ups"];
+    return requestedTab && allowedTabs.includes(requestedTab) ? requestedTab : "job-cards";
+  });
   const [dismissedErrors, setDismissedErrors] = useState<Set<string>>(new Set());
 
   // Job cards badge count (active jobs)

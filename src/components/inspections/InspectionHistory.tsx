@@ -41,6 +41,7 @@ interface InspectionHistoryRecord {
   inspection_number: string;
   inspection_date: string;
   vehicle_registration: string;
+  fleet_number?: string;
   vehicle_make?: string;
   vehicle_model?: string;
   inspector_name: string;
@@ -109,7 +110,10 @@ export function InspectionHistory() {
           notes,
           status,
           inspection_type,
-          initiated_via
+          initiated_via,
+          vehicles (
+            fleet_number
+          )
         `)
         .order("inspection_date", { ascending: false });
 
@@ -168,6 +172,7 @@ export function InspectionHistory() {
             inspection_number: inspection.inspection_number,
             inspection_date: inspection.inspection_date,
             vehicle_registration: inspection.vehicle_registration,
+            fleet_number: (inspection.vehicles as unknown as { fleet_number: string | null } | null)?.fleet_number || undefined,
             vehicle_make: inspection.vehicle_make || undefined,
             vehicle_model: inspection.vehicle_model || undefined,
             inspector_name: inspection.inspector_name,
@@ -481,7 +486,7 @@ export function InspectionHistory() {
       sc.value = `Generated: ${new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' })} \u2022 Car Craft Co Fleet Management`;
       sc.font = { italic: true, size: 9, color: { argb: '666666' }, name: 'Calibri' };
 
-      const headers = ['Report #', 'Date', 'Vehicle Reg', 'Make', 'Model', 'Inspector', 'Faults', 'Corrective Action', 'Linked WO'];
+      const headers = ['Report #', 'Date', 'Fleet #', 'Vehicle Reg', 'Make', 'Model', 'Inspector', 'Faults', 'Corrective Action', 'Linked WO'];
       ws.getRow(4).values = headers;
       styleHeader(ws, 4);
 
@@ -490,6 +495,7 @@ export function InspectionHistory() {
         row.values = [
           insp.inspection_number,
           insp.inspection_date ? new Date(insp.inspection_date).toLocaleDateString('en-ZA') : '',
+          insp.fleet_number || '',
           insp.vehicle_registration,
           insp.vehicle_make || '',
           insp.vehicle_model || '',
@@ -575,10 +581,11 @@ export function InspectionHistory() {
 
       autoTable(doc, {
         startY: 32,
-        head: [['Report #', 'Date', 'Vehicle', 'Make/Model', 'Inspector', 'Faults', 'Corrective Action', 'Linked WO']],
+        head: [['Report #', 'Date', 'Fleet #', 'Vehicle Reg', 'Make/Model', 'Inspector', 'Faults', 'Corrective Action', 'Linked WO']],
         body: filteredInspections.map(insp => [
           insp.inspection_number,
           insp.inspection_date ? new Date(insp.inspection_date).toLocaleDateString('en-ZA') : '-',
+          insp.fleet_number || '-',
           insp.vehicle_registration,
           [insp.vehicle_make, insp.vehicle_model].filter(Boolean).join(' ') || '-',
           insp.inspector_name,
@@ -746,10 +753,10 @@ export function InspectionHistory() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <div className="font-medium">{inspection.vehicle_registration}</div>
-                          {(inspection.vehicle_make || inspection.vehicle_model) && (
+                          <div className="font-medium">{inspection.fleet_number || inspection.vehicle_registration}</div>
+                          {inspection.fleet_number && inspection.vehicle_registration && (
                             <div className="text-muted-foreground text-xs">
-                              {inspection.vehicle_make} {inspection.vehicle_model}
+                              {inspection.vehicle_registration}
                             </div>
                           )}
                         </div>

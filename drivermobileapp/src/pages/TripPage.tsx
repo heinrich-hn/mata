@@ -11,12 +11,16 @@ import { ArrowRight, Calendar, CalendarRange, Clock, MapPin } from "lucide-react
 import { memo, useCallback, useMemo, useState } from "react";
 
 
+const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
+const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
+
 interface Vehicle {
   id: string;
   fleet_number: string;
   registration_number: string;
   make?: string;
   model?: string;
+  vehicle_type?: string;
 }
 
 // Trip entry from main dashboard (trips table)
@@ -38,13 +42,6 @@ export interface TripEntry {
   invoice_amount: number | null;
   status: string | null;
   created_at: string | null;
-}
-
-// Type for driver_vehicle_assignments join result
-interface DriverVehicleAssignment {
-  id: string;
-  vehicle_id: string;
-  vehicles: Vehicle | Vehicle[] | null;
 }
 
 // Freight details interface
@@ -151,42 +148,51 @@ export default function TripsPage() {
     ]);
   }, [queryClient]);
 
-  // Fetch assigned vehicle from driver_vehicle_assignments
+  // Fetch assigned vehicle (truck) from driver_vehicle_assignments
+  // Uses same queryFn shape as HomePage ({ truck, reefer }) for cache compatibility
   const { data: assignedVehicle, isLoading: isLoadingVehicle } = useQuery({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id) return { truck: null as Vehicle | null, reefer: null as Vehicle | null };
 
       const { data, error } = await supabase
         .from("driver_vehicle_assignments")
         .select(`
           id,
           vehicle_id,
-          vehicles (
+          vehicles!inner (
             id,
             fleet_number,
             registration_number,
             make,
-            model
+            model,
+            vehicle_type
           )
         `)
         .eq("driver_id", user.id)
         .eq("is_active", true)
-        .order("assigned_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("assigned_at", { ascending: false });
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) throw error;
+      if (!data || data.length === 0) return { truck: null, reefer: null };
 
-      const assignment = data as DriverVehicleAssignment | null;
-      if (assignment?.vehicles) {
-        const vehicleData = Array.isArray(assignment.vehicles) ? assignment.vehicles[0] : assignment.vehicles;
-        return vehicleData as Vehicle;
-      }
-      return null;
+      type AssignmentRow = { vehicles: Vehicle | Vehicle[] };
+      const rows = data as unknown as AssignmentRow[];
+      const normalizedRows = rows.map(r => ({
+        vehicles: Array.isArray(r.vehicles) ? r.vehicles[0] : r.vehicles,
+      }));
+
+      const truckRow = normalizedRows.find(r => !r.vehicles.vehicle_type || TRUCK_TYPES.includes(r.vehicles.vehicle_type));
+      const reeferRow = normalizedRows.find(r => r.vehicles.vehicle_type && TRAILER_TYPES.includes(r.vehicles.vehicle_type));
+
+      return {
+        truck: truckRow?.vehicles || null,
+        reefer: reeferRow?.vehicles || null,
+      };
     },
+    select: (data) => data?.truck ?? null,
     enabled: !!user?.id,
-    staleTime: 10 * 60 * 1000, // 10 min
+    staleTime: 10 * 60 * 1000,
   });
 
 

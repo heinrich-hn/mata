@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/useDebounce";
+import ResolveFaultDialog from "@/components/dialogs/ResolveFaultDialog";
 
 // ============================================================================
 // Types
@@ -53,6 +54,8 @@ interface VehicleFault {
   reported_date: string | null;
   reported_by: string | null;
   vehicle_id: string | null;
+  inspection_fault_id: string | null;
+  inspection_id: string | null;
 }
 
 const FAULT_SEVERITY_STYLES: Record<string, string> = {
@@ -126,25 +129,6 @@ const StatusBadge = ({ status }: { status: string | null }) => {
     </div>
   );
 };
-
-const QuickActionButton = ({
-  label,
-  onClick
-}: {
-  label: string;
-  onClick: () => void;
-}) => (
-  <Button
-    variant="outline"
-    className="h-auto py-4 flex flex-col items-center gap-2 rounded-2xl border-2 hover:bg-accent active:scale-[0.97] transition-all w-full touch-target"
-    onClick={onClick}
-  >
-    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-      <span className="text-lg font-bold text-primary">+</span>
-    </div>
-    <span className="text-xs font-semibold">{label}</span>
-  </Button>
-);
 
 const InspectionCardSkeleton = () => (
   <Card className="border-0 shadow-sm">
@@ -286,16 +270,21 @@ const EmptyFaultsState = () => (
 const FaultAlertCard = ({
   fault,
   vehicle,
+  onResolve,
 }: {
   fault: VehicleFault;
   vehicle?: Vehicle;
+  onResolve?: (fault: VehicleFault) => void;
 }) => {
   const severityStyle = FAULT_SEVERITY_STYLES[fault.severity || ""] || "bg-gray-50 text-gray-700 border-gray-200";
   const statusStyle = FAULT_STATUS_STYLES[fault.status || ""] || "bg-gray-50 text-gray-700 border-gray-200";
   const borderColor = fault.status === "identified" ? "border-l-rose-500" : fault.status === "acknowledged" ? "border-l-amber-500" : "border-l-emerald-500";
 
   return (
-    <Card className={cn("rounded-2xl shadow-sm border border-border/40 border-l-4", borderColor)}>
+    <Card
+      className={cn("rounded-2xl shadow-sm border border-border/40 border-l-4 cursor-pointer active:scale-[0.98] transition-all", borderColor)}
+      onClick={() => onResolve?.(fault)}
+    >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
@@ -337,6 +326,9 @@ const FaultAlertCard = ({
             </span>
           )}
         </div>
+        <div className="mt-2 pt-2 border-t">
+          <span className="text-xs font-medium text-primary">Tap to resolve</span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -349,7 +341,14 @@ const MobileInspectionsTab = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("recent");
+  const [showResolveDialog, setShowResolveDialog] = useState(false);
+  const [resolvingFault, setResolvingFault] = useState<VehicleFault | null>(null);
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  const handleResolveFault = useCallback((fault: VehicleFault) => {
+    setResolvingFault(fault);
+    setShowResolveDialog(true);
+  }, []);
 
   // Fetch inspections with related fault data
   const {
@@ -369,6 +368,7 @@ const MobileInspectionsTab = () => {
             corrective_action_status
           )
         `)
+        .or("inspection_type.is.null,inspection_type.neq.tyre")
         .order("inspection_date", { ascending: false })
         .limit(50);
 
@@ -378,9 +378,9 @@ const MobileInspectionsTab = () => {
 
       return typedData.map((item) => {
         const faults = item.inspection_faults || [];
+        const resolvedStatuses = ['fixed', 'completed', 'no_need'];
         const hasOpenFaults = faults.some(
-          (f) => f.corrective_action_status !== 'fixed' &&
-            f.corrective_action_status !== 'completed'
+          (f) => !resolvedStatuses.includes(f.corrective_action_status || '')
         );
 
         return {
@@ -427,7 +427,7 @@ const MobileInspectionsTab = () => {
       const { count, error } = await supabase
         .from("inspection_faults")
         .select("*", { count: "exact", head: true })
-        .not("corrective_action_status", "in", '("fixed","completed")');
+        .not("corrective_action_status", "in", '("fixed","completed","no_need")');
 
       if (error) throw error;
       return count || 0;
@@ -442,7 +442,7 @@ const MobileInspectionsTab = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicle_faults")
-        .select("id, fault_number, fault_description, severity, status, component, reported_date, reported_by, vehicle_id")
+        .select("id, fault_number, fault_description, severity, status, component, reported_date, reported_by, vehicle_id, inspection_fault_id, inspection_id")
         .order("reported_date", { ascending: false });
 
       if (error) throw error;
@@ -532,14 +532,6 @@ const MobileInspectionsTab = () => {
 
   return (
     <div className="px-4 py-4 space-y-4 pb-safe-bottom">
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 gap-3">
-        <QuickActionButton
-          label="New Inspection"
-          onClick={handleNewInspection}
-        />
-      </div>
-
       {/* Search */}
       <div className="relative">
         <Input
@@ -646,15 +638,23 @@ const MobileInspectionsTab = () => {
                 key={fault.id}
                 fault={fault}
                 vehicle={fault.vehicle_id ? vehicleMap.get(fault.vehicle_id) : undefined}
+                onResolve={handleResolveFault}
               />
             ))
           )}
         </TabsContent>
       </Tabs>
 
+      {/* Resolve Fault Dialog */}
+      <ResolveFaultDialog
+        open={showResolveDialog}
+        onOpenChange={setShowResolveDialog}
+        fault={resolvingFault}
+      />
+
       {/* FAB - New Inspection */}
       <Button
-        className="fixed bottom-6 right-4 h-14 px-5 rounded-2xl shadow-lg active:scale-95 transition-transform z-20 touch-target font-bold text-base gap-2"
+        className="fixed bottom-24 right-4 h-14 px-5 rounded-2xl shadow-lg active:scale-95 transition-transform z-20 touch-target font-bold text-base gap-2"
         onClick={handleNewInspection}
         aria-label="New inspection"
       >

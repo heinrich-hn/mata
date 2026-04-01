@@ -46,6 +46,7 @@ import { useOperations } from '@/contexts/OperationsContext';
 import { useToast } from '@/hooks/use-toast';
 import { useWialonVehicles } from '@/hooks/useWialonVehicles';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { CostEntry, Trip } from '@/types/operations';
 import { extractFleetNumber } from '@/utils/fleetUtils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -91,6 +92,8 @@ interface ExpenseWithTrip extends CostEntry {
   needsAttention?: boolean;
   missingSlip?: boolean;
 }
+
+type CostEntryRow = Database['public']['Tables']['cost_entries']['Row'];
 
 const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) => {
   const { toast } = useToast();
@@ -154,7 +157,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
     queryKey: ['all-expenses', tripIds],
     queryFn: async () => {
       // Fetch ALL cost_entries using pagination to bypass Supabase's 1000-row default limit
-      let allData: any[] = [];
+      let allData: CostEntryRow[] = [];
       let from = 0;
       const PAGE_SIZE = 1000;
 

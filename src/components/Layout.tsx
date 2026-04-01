@@ -14,8 +14,7 @@ import {
   Fuel,
   Gauge, LayoutDashboard, LogOut, MapPin, Menu,
   Search,
-  ShieldAlert, ShoppingCart,
-  Store,
+  ShoppingCart,
   Truck, Users
 } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";

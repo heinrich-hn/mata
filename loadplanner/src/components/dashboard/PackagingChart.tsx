@@ -47,8 +47,6 @@ const COLORS = {
   pallets: "#f59e0b", // Amber
 };
 
-const CHART_COLORS = ["#22c55e", "#3b82f6", "#f59e0b"];
-
 export function PackagingChart({ loads }: PackagingChartProps) {
   // Get current week date range
   const { weekStart, weekEnd, weekLabel } = useMemo(() => {

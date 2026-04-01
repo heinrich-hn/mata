@@ -53,8 +53,8 @@ interface MobilePageLayoutProps {
  * Mobile page wrapper with safe area handling, scrolling, and mobile-optimized layout.
  * Provides consistent spacing and handles iOS notch, home indicator, and keyboard avoidance.
  */
-const MobilePageLayout = ({ 
-  children, 
+const MobilePageLayout = ({
+  children,
   showBackButton = false,
   header,
   title,
@@ -68,7 +68,7 @@ const MobilePageLayout = ({
   loading = false,
 }: MobilePageLayoutProps) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [startY, setStartY] = useState(0);
+  const [_startY, setStartY] = useState(0);
   const [pullDistance, setPullDistance] = useState(0);
 
   // Background variants
@@ -95,10 +95,10 @@ const MobilePageLayout = ({
 
     const handleTouchMove = (e: TouchEvent) => {
       if (!isPulling) return;
-      
+
       const currentY = e.touches[0].clientY;
       const distance = Math.max(0, currentY - touchStartY);
-      
+
       if (distance > 0 && window.scrollY === 0) {
         e.preventDefault();
         setPullDistance(Math.min(distance, 100));
@@ -173,7 +173,7 @@ const MobilePageLayout = ({
                   </button>
                 )}
                 {title && (
-                  <h1 className="text-xl font-semibold flex-1 truncate">
+                  <h1 className="text-title font-display font-semibold flex-1 truncate">
                     {title}
                   </h1>
                 )}
@@ -201,9 +201,9 @@ const MobilePageLayout = ({
       >
         {/* Pull-to-refresh indicator */}
         {enablePullToRefresh && pullDistance > 0 && (
-          <div 
+          <div
             className="flex justify-center items-center transition-all duration-200"
-            style={{ 
+            style={{
               height: `${pullDistance}px`,
               transform: `translateY(${Math.min(pullDistance * 0.5, 30)}px)`,
             }}

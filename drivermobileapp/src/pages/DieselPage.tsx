@@ -743,7 +743,7 @@ export default function DieselPage() {
     [allDieselRecords]
   );
 
-  // Memoized stats
+  // Memoized stats (truck only — km/L)
   const stats = useMemo(() => {
     const recordsWithDistance = entries.filter((r: DieselEntry) => r.distance_travelled && r.litres_filled);
     const totalKmTravelled = recordsWithDistance.reduce((sum: number, r: DieselEntry) => sum + (r.distance_travelled || 0), 0);
@@ -760,6 +760,22 @@ export default function DieselPage() {
       hasFlagged: flaggedEntries.length > 0,
     };
   }, [entries]);
+
+  // Memoized reefer stats (L/hr — separate from vehicle km/L)
+  const reeferStats = useMemo(() => {
+    if (allReeferRecords.length === 0) return null;
+    const recordsWithHours = allReeferRecords.filter((r: ReeferDieselEntry) => r.hours_operated && r.hours_operated > 0 && r.litres_filled);
+    const totalHours = recordsWithHours.reduce((sum: number, r: ReeferDieselEntry) => sum + (r.hours_operated || 0), 0);
+    const totalLitresForCalc = recordsWithHours.reduce((sum: number, r: ReeferDieselEntry) => sum + (r.litres_filled || 0), 0);
+    const avgLitresPerHour = totalHours > 0 ? totalLitresForCalc / totalHours : 0;
+    const totalLitres = allReeferRecords.reduce((sum: number, e: ReeferDieselEntry) => sum + (e.litres_filled || 0), 0);
+
+    return {
+      totalLitres,
+      avgLitresPerHour,
+      totalHours,
+    };
+  }, [allReeferRecords]);
 
   // Add diesel entry mutation - FIXED with type assertion
   const addMutation = useMutation({
@@ -1254,7 +1270,7 @@ export default function DieselPage() {
                   <p className="text-lg font-bold">
                     {stats.avgKmPerLitre > 0 ? `${stats.avgKmPerLitre.toFixed(2)} km/L` : "N/A"}
                   </p>
-                  <p className="text-xs text-muted-foreground">{monthName} Consumption</p>
+                  <p className="text-xs text-muted-foreground">{monthName} Vehicle Consumption</p>
                 </div>
                 <div className="text-right text-xs text-muted-foreground">
                   {stats.totalLitres > 0 && <p>{formatNumber(stats.totalLitres)} L used</p>}
@@ -1263,6 +1279,28 @@ export default function DieselPage() {
               </div>
             </CardContent>
           </Card>
+
+          {reeferStats && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-sky-100 dark:bg-sky-900/30 rounded-lg">
+                    <Snowflake className="w-4 h-4 text-sky-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-lg font-bold">
+                      {reeferStats.avgLitresPerHour > 0 ? `${reeferStats.avgLitresPerHour.toFixed(2)} L/hr` : "N/A"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{monthName} Reefer Consumption</p>
+                  </div>
+                  <div className="text-right text-xs text-muted-foreground">
+                    {reeferStats.totalLitres > 0 && <p>{formatNumber(reeferStats.totalLitres)} L used</p>}
+                    {reeferStats.totalHours > 0 && <p>{formatNumber(Math.round(reeferStats.totalHours))} hrs</p>}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <div>
             <p className="text-sm font-medium mb-3">{monthName} Entries</p>

@@ -1,13 +1,11 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 import {
   addStyledSheet,
   addSummarySheet,
   createWorkbook,
   saveWorkbook,
   healthColours,
-  colLetter,
   addTitle,
   addSubtitle,
   generatedSubtitle,

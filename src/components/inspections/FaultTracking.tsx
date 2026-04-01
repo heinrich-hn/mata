@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +36,7 @@ import { useMemo, useState } from "react";
 import AddFaultDialog from "../dialogs/AddFaultDialog";
 import EditFaultDialog from "../dialogs/EditFaultDialog";
 import FaultDetailsDialog from "../dialogs/FaultDetailsDialog";
+import ResolveFaultDialog from "../dialogs/ResolveFaultDialog";
 
 type VehicleFault = Database["public"]["Tables"]["vehicle_faults"]["Row"] & {
   vehicles?: {
@@ -85,6 +86,8 @@ const FaultTracking = () => {
   const [selectedFault, setSelectedFault] = useState<VehicleFault | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showResolveDialog, setShowResolveDialog] = useState(false);
+  const [resolvingFault, setResolvingFault] = useState<VehicleFault | null>(null);
   const [deletingFault, setDeletingFault] = useState<VehicleFault | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -150,6 +153,11 @@ const FaultTracking = () => {
   const handleDeleteClick = (fault: VehicleFault) => {
     setDeletingFault(fault);
     setShowDeleteDialog(true);
+  };
+
+  const handleResolveFault = (fault: VehicleFault) => {
+    setResolvingFault(fault);
+    setShowResolveDialog(true);
   };
 
   const handleConfirmDelete = async () => {
@@ -250,6 +258,11 @@ const FaultTracking = () => {
         fault={selectedFault}
         open={showDetailsDialog}
         onOpenChange={setShowDetailsDialog}
+      />
+      <ResolveFaultDialog
+        open={showResolveDialog}
+        onOpenChange={setShowResolveDialog}
+        fault={resolvingFault}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -408,6 +421,11 @@ const FaultTracking = () => {
                                         <DropdownMenuItem onClick={() => handleExportSinglePDF(fault)}>
                                           <Download className="h-4 w-4 mr-2" />
                                           Export PDF
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => handleResolveFault(fault)}>
+                                          <CheckCircle className="h-4 w-4 mr-2 text-emerald-600" />
+                                          {fault.status === "resolved" ? "Reactivate / Update" : "Mark Resolved"}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem

@@ -61,7 +61,7 @@ import {
   Truck,
   User
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -487,6 +487,28 @@ const JobCards = () => {
     return status === "pending" || status === "in_progress" || status === "in progress";
   });
   const allCompletedCards = baseFilteredCards.filter(card => card.status?.toLowerCase() === "completed");
+
+  // Collapse all fleet sections by default on initial load
+  const hasInitialCollapse = useRef(false);
+  useEffect(() => {
+    if (hasInitialCollapse.current) return;
+    if (allActiveCards.length === 0 && allCompletedCards.length === 0) return;
+    hasInitialCollapse.current = true;
+
+    const allFleetKeys = new Set<string>();
+    const collectFleets = (cards: JobCard[]) => {
+      const grouped = groupCardsByCategory(cards);
+      grouped.forEach((fleetMap) => {
+        fleetMap.forEach((_, fleetKey) => allFleetKeys.add(fleetKey));
+      });
+    };
+    collectFleets(allActiveCards);
+    collectFleets(allCompletedCards);
+
+    setClosedActiveFleets(new Set(allFleetKeys));
+    setClosedCompletedFleets(new Set(allFleetKeys));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allActiveCards, allCompletedCards]);
 
   const toggleActiveFleet = (fleet: string) => {
     setClosedActiveFleets(prev => {

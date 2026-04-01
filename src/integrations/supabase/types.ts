@@ -6764,6 +6764,87 @@ export type Database = {
         }
         Relationships: []
       }
+      out_of_commission_reports: {
+        Row: {
+          additional_notes_safety_concerns: string | null
+          created_at: string | null
+          id: string
+          immediate_plan: Json | null
+          inspection_id: string
+          location: string | null
+          make_model: string | null
+          mechanic_name: string
+          mechanic_signature: string | null
+          odometer_hour_meter: string | null
+          parts_required: Json | null
+          reason_out_of_commission: string
+          report_date: string
+          report_time: string
+          sign_off_date: string | null
+          updated_at: string | null
+          vehicle_id: string | null
+          vehicle_id_or_license: string
+          year: string | null
+        }
+        Insert: {
+          additional_notes_safety_concerns?: string | null
+          created_at?: string | null
+          id?: string
+          immediate_plan?: Json | null
+          inspection_id: string
+          location?: string | null
+          make_model?: string | null
+          mechanic_name: string
+          mechanic_signature?: string | null
+          odometer_hour_meter?: string | null
+          parts_required?: Json | null
+          reason_out_of_commission: string
+          report_date?: string
+          report_time?: string
+          sign_off_date?: string | null
+          updated_at?: string | null
+          vehicle_id?: string | null
+          vehicle_id_or_license: string
+          year?: string | null
+        }
+        Update: {
+          additional_notes_safety_concerns?: string | null
+          created_at?: string | null
+          id?: string
+          immediate_plan?: Json | null
+          inspection_id?: string
+          location?: string | null
+          make_model?: string | null
+          mechanic_name?: string
+          mechanic_signature?: string | null
+          odometer_hour_meter?: string | null
+          parts_required?: Json | null
+          reason_out_of_commission?: string
+          report_date?: string
+          report_time?: string
+          sign_off_date?: string | null
+          updated_at?: string | null
+          vehicle_id?: string | null
+          vehicle_id_or_license?: string
+          year?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "out_of_commission_reports_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "out_of_commission_reports_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       overall_condition: {
         Row: {
           created_at: string | null

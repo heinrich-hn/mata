@@ -1,13 +1,12 @@
-import
-  {
-    AlertDialog,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+AlertDialog,
+AlertDialogCancel,
+AlertDialogContent,
+AlertDialogDescription,
+AlertDialogFooter,
+AlertDialogHeader,
+AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +16,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -195,86 +193,70 @@ const JobCardTasksTable = ({ jobCardId, tasks, onTaskUpdate, onRefresh }: JobCar
             No tasks yet. Click "Add Task" to get started.
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12"></TableHead>
-                <TableHead>Task</TableHead>
-                <TableHead>Assignee</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Hours</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tasks.map((task) => (
-                <TableRow key={task.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={task.status === "completed"}
-                      onCheckedChange={() => handleStatusToggle(task)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{task.title}</div>
-                      {task.description && (
-                        <div className="text-sm text-muted-foreground">{task.description}</div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{task.assignee || "-"}</TableCell>
-                  <TableCell>
-                    <Badge variant={getPriorityVariant(task.priority)}>
-                      {task.priority}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={task.status === "completed" ? "default" : "secondary"}>
-                      {task.status.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {task.due_date ? (
-                      <div className="flex items-center gap-1 text-sm">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(task.due_date).toLocaleDateString()}
-                      </div>
-                    ) : (
-                      "-"
+          <div className="space-y-3">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                className="border rounded-xl p-3 space-y-2"
+              >
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={task.status === "completed"}
+                    onCheckedChange={() => handleStatusToggle(task)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-medium text-sm leading-snug ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
+                      {task.title}
+                    </p>
+                    {task.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>
                     )}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {task.actual_hours || task.estimated_hours
-                      ? `${task.actual_hours || 0}/${task.estimated_hours || 0}h`
-                      : "-"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => setEditTask({ ...task })}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteTaskId(task.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                      onClick={() => setEditTask({ ...task })}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteTaskId(task.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pl-7">
+                  <Badge variant={getPriorityVariant(task.priority)} className="text-[10px]">
+                    {task.priority}
+                  </Badge>
+                  <Badge variant={task.status === "completed" ? "default" : "secondary"} className="text-[10px]">
+                    {task.status.replace('_', ' ')}
+                  </Badge>
+                  {task.assignee && (
+                    <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">{task.assignee}</span>
+                  )}
+                  {task.due_date && (
+                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(task.due_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    </span>
+                  )}
+                  {(task.actual_hours || task.estimated_hours) && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {task.actual_hours || 0}/{task.estimated_hours || 0}h
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         <AddTaskForm

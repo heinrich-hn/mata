@@ -29,6 +29,18 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-sans)", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-sans)", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+      },
+      fontSize: {
+        display: ["28px", { lineHeight: "1.1", letterSpacing: "-0.02em" }],
+        title: ["20px", { lineHeight: "1.2", letterSpacing: "-0.01em" }],
+        body: ["15px", { lineHeight: "1.5" }],
+        caption: ["12px", { lineHeight: "1.35" }],
+        label: ["11px", { lineHeight: "1.2", letterSpacing: "0.08em" }],
+      },
       screens: {
         xs: "480px",
         short: { raw: "(max-height: 500px)" },
@@ -174,7 +186,7 @@ export default {
   },
   plugins: [
     tailwindcssAnimate,
-    function({ addUtilities, theme }: PluginAPI) {
+    function ({ addUtilities, theme }: PluginAPI) {
       addUtilities({
         ".touch-target": {
           "min-height": "44px",

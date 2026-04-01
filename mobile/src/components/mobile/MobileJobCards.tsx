@@ -83,22 +83,6 @@ const STATUS_CONFIG = {
   },
 } as const;
 
-// Updated priority colors with amber/gold as primary
-const PRIORITY_COLORS = {
-  urgent: "#f43f5e",
-  high: "#f59e0b", // amber/gold for high priority
-  medium: "#3b82f6",
-  low: "#9ca3af",
-} as const;
-
-// Updated gradient backgrounds with amber accents
-const PRIORITY_BG = {
-  urgent: "bg-gradient-to-r from-red-50 to-transparent dark:from-red-950/20 dark:to-transparent",
-  high: "bg-gradient-to-r from-amber-50 to-transparent dark:from-amber-950/20 dark:to-transparent",
-  medium: "bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/20 dark:to-transparent",
-  low: "bg-gradient-to-r from-gray-50 to-transparent dark:from-gray-800/30 dark:to-transparent",
-} as const;
-
 type StatusKey = keyof typeof STATUS_CONFIG;
 
 // ============================================================================
@@ -181,6 +165,13 @@ const EmptyState = ({
   </div>
 );
 
+const PRIORITY_BORDER_COLORS = {
+  urgent: "border-l-rose-500",
+  high: "border-l-amber-500",
+  medium: "border-l-blue-500",
+  low: "border-l-gray-400",
+} as const;
+
 const JobCardItem = ({
   card,
   onClick
@@ -188,8 +179,7 @@ const JobCardItem = ({
   card: JobCard;
   onClick: (card: JobCard) => void;
 }) => {
-  const borderColor = PRIORITY_COLORS[card.priority?.toLowerCase() as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.low;
-  const bgClass = PRIORITY_BG[card.priority?.toLowerCase() as keyof typeof PRIORITY_BG] || "";
+  const borderClass = PRIORITY_BORDER_COLORS[card.priority?.toLowerCase() as keyof typeof PRIORITY_BORDER_COLORS] || "border-l-gray-400";
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -201,10 +191,9 @@ const JobCardItem = ({
   return (
     <Card
       className={cn(
-        "active:scale-[0.98] transition-all cursor-pointer border border-border/40 shadow-sm hover:shadow-md border-l-4 touch-target rounded-2xl overflow-hidden bg-card",
-        bgClass
+        "active:scale-[0.98] transition-all cursor-pointer rounded-2xl shadow-sm hover:shadow-md border border-border/40 border-l-4 touch-target",
+        borderClass
       )}
-      style={{ borderLeftColor: borderColor }}
       onClick={() => onClick(card)}
       onKeyDown={handleKeyDown}
       role="button"
@@ -214,18 +203,19 @@ const JobCardItem = ({
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="text-[11px] font-mono text-muted-foreground font-semibold bg-muted/60 px-1.5 py-0.5 rounded">
+              <span className="text-xs font-mono text-muted-foreground">
                 #{card.job_number}
               </span>
-              <StatusBadge status={card.status} />
+              <PriorityBadge priority={card.priority} />
             </div>
-            <p className="font-bold text-sm leading-snug line-clamp-2 text-card-foreground">{card.title}</p>
+            <p className="text-sm font-bold truncate">{card.title}</p>
           </div>
+          <StatusBadge status={card.status} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2.5 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
           {card.vehicle && (
-            <span className="font-semibold text-foreground bg-muted/50 px-2 py-0.5 rounded-md">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/60 font-medium truncate max-w-[140px]">
               {card.vehicle.fleet_number || card.vehicle.registration_number}
             </span>
           )}
@@ -233,10 +223,11 @@ const JobCardItem = ({
             <span className="truncate max-w-[120px]">{card.assignee}</span>
           )}
           {card.due_date && (
-            <span className="tabular-nums">
+            <span>
               {new Date(card.due_date).toLocaleDateString("en-GB", {
                 day: "numeric",
                 month: "short",
+                year: "numeric",
               })}
             </span>
           )}
@@ -245,11 +236,6 @@ const JobCardItem = ({
               {card.inspection.inspection_number}
             </span>
           )}
-        </div>
-
-        <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-border/30">
-          <PriorityBadge priority={card.priority} />
-
           {card.partsSummary && card.partsSummary.count > 0 && (
             <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-muted/50 rounded-lg font-semibold text-muted-foreground">
               {card.partsSummary.count} part{card.partsSummary.count > 1 ? "s" : ""}
@@ -533,7 +519,7 @@ const MobileJobCards = () => {
 
       {/* FAB - New Job Card */}
       <Button
-        className="fixed bottom-6 right-4 h-14 rounded-2xl shadow-lg shadow-primary/20 active:scale-95 transition-transform z-20 touch-target px-5 font-bold text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+        className="fixed bottom-24 right-4 h-14 rounded-2xl shadow-lg shadow-primary/20 active:scale-95 transition-transform z-20 touch-target px-5 font-bold text-sm bg-primary text-primary-foreground hover:bg-primary/90"
         onClick={() => setShowAddDialog(true)}
         aria-label="New job card"
       >

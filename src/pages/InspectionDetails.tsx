@@ -20,10 +20,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Calendar, Car, ClipboardList, FileText, MapPin, User } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, ArrowLeft, Calendar, Car, CheckCircle2, ClipboardList, FileText, Link2, MapPin, MoreVertical, User, Wrench, XCircle } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { LinkJobCardToInspectionDialog } from "@/components/dialogs/LinkInspectionJobCardDialogs";
+import { OutOfCommissionReportDialog } from "@/components/inspections/OutOfCommissionReportDialog";
+import { Ban } from "lucide-react";
 
 interface Fault {
   id: string;
@@ -69,11 +79,15 @@ const InspectionDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { userName } = useAuth();
+  const queryClient = useQueryClient();
 
   const [showCorrectiveAction, setShowCorrectiveAction] = useState(false);
   const [showRootCauseAnalysis, setShowRootCauseAnalysis] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showCreateWorkOrder, setShowCreateWorkOrder] = useState(false);
+  const [showLinkJobCard, setShowLinkJobCard] = useState(false);
+  const [showOocReport, setShowOocReport] = useState(false);
 
   // Fetch inspection details
   const { data: inspection, isLoading, refetch } = useQuery<InspectionData>({
@@ -89,6 +103,21 @@ const InspectionDetails = () => {
 
       if (error) throw error;
       return data as InspectionData;
+    },
+    enabled: !!id,
+  });
+
+  // Fetch job cards linked to this inspection
+  const { data: linkedJobCards = [] } = useQuery({
+    queryKey: ["linked-job-cards", id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await supabase
+        .from("job_cards")
+        .select("id, job_number, title, status, priority")
+        .eq("inspection_id", id);
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!id,
   });
@@ -151,9 +180,9 @@ const InspectionDetails = () => {
     enabled: !!id,
   });
 
-  // Calculate if there are any faults that need corrective action
+  // Calculate if there are any faults that still need corrective action (pending or not yet fixed)
   const hasFaultsNeedingAction = faults.some(
-    fault => !fault.corrective_action_status || fault.corrective_action_status === 'pending'
+    fault => !fault.corrective_action_status || fault.corrective_action_status === 'pending' || fault.corrective_action_status === 'not_fixed'
   );
 
   // Action handlers
@@ -178,19 +207,12 @@ const InspectionDetails = () => {
     setShowCreateWorkOrder(true);
   };
 
-  // FIXED: Handle corrective action with proper fault checking
+  // Handle corrective action — allow reopening to update any fault status (e.g. not_fixed → fixed)
   const handleCorrectiveAction = () => {
-    // Check if there are any faults that need corrective action
-    const faultsNeedingAction = faults.filter(
-      fault => !fault.corrective_action_status || fault.corrective_action_status === 'pending'
-    );
-
-    if (faultsNeedingAction.length === 0) {
+    if (faults.length === 0) {
       toast({
-        title: "No Faults Requiring Action",
-        description: faults.length > 0
-          ? "All faults have already been addressed"
-          : "This inspection has no recorded faults",
+        title: "No Faults Found",
+        description: "This inspection has no recorded faults",
       });
       return;
     }
@@ -299,15 +321,100 @@ const InspectionDetails = () => {
 
   // Helper function to format corrective action status for display
   const getCorrectiveActionDisplay = (status: string | null) => {
-    if (!status) return "None taken";
+    switch (status) {
+      case "fixed": return "Fixed";
+      case "not_fixed": return "Not Fixed";
+      case "no_need": return "No Need";
+      case "completed": return "Completed";
+      case "pending": return "Pending";
+      default: return "Pending";
+    }
+  };
 
+  const getCorrectiveActionColor = (status: string | null) => {
     switch (status) {
       case "fixed":
-        return "Fixed";
-      case "pending":
-        return "Pending";
+      case "completed":
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      case "no_need":
+        return "bg-gray-100 text-gray-600 border-gray-200";
+      case "not_fixed":
+        return "bg-rose-100 text-rose-700 border-rose-200";
       default:
-        return status;
+        return "bg-amber-100 text-amber-700 border-amber-200";
+    }
+  };
+
+  const handleInlineFaultAction = async (faultId: string, status: "fixed" | "not_fixed" | "no_need") => {
+    if (!id) return;
+    try {
+      const { error } = await supabase
+        .from("inspection_faults")
+        .update({
+          corrective_action_status: status,
+          corrective_action_date: new Date().toISOString(),
+          corrective_action_by: userName || "Unknown User",
+        })
+        .eq("id", faultId);
+
+      if (error) throw error;
+
+      // Sync linked vehicle_faults
+      const resolvedStatuses = ["fixed", "no_need"];
+      if (resolvedStatuses.includes(status)) {
+        await supabase
+          .from("vehicle_faults")
+          .update({
+            status: "resolved" as const,
+            resolution_notes: `Corrective action: ${status}`,
+            resolved_date: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("inspection_fault_id", faultId);
+      } else if (status === "not_fixed") {
+        await supabase
+          .from("vehicle_faults")
+          .update({
+            status: "acknowledged" as const,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("inspection_fault_id", faultId);
+      }
+
+      // Check if all faults are now resolved
+      const { data: allFaults } = await supabase
+        .from("inspection_faults")
+        .select("corrective_action_status")
+        .eq("inspection_id", id);
+
+      const allResolved = (allFaults || []).every(f =>
+        ["fixed", "completed", "no_need"].includes(f.corrective_action_status || "")
+      );
+
+      await supabase
+        .from("vehicle_inspections")
+        .update({ fault_resolved: allResolved })
+        .eq("id", id);
+
+      // Invalidate queries
+      queryClient.invalidateQueries({ queryKey: ["inspection_faults", id] });
+      queryClient.invalidateQueries({ queryKey: ["inspection", id] });
+      queryClient.invalidateQueries({ queryKey: ["inspections-mobile"] });
+      queryClient.invalidateQueries({ queryKey: ["open-faults-count"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle-faults"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle-faults-mobile"] });
+      queryClient.invalidateQueries({ queryKey: ["out-of-commission-reports"] });
+
+      toast({
+        title: "Updated",
+        description: `Fault marked as ${status.replace("_", " ")}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update fault",
+        variant: "destructive",
+      });
     }
   };
 
@@ -325,19 +432,25 @@ const InspectionDetails = () => {
             </div>
           </div>
 
-          <InspectionActionsMenu
-            inspectionId={inspection.id}
-            inspectionNumber={inspection.inspection_number}
-            onView={handleView}
-            onShare={handleShare}
-            onCreateWorkOrder={handleCreateWorkOrder}
-            onCorrectiveAction={handleCorrectiveAction}
-            onRootCauseAnalysis={handleRootCauseAnalysis}
-            onViewPDF={handleViewPDF}
-            onArchive={handleArchive}
-            onDelete={handleDelete}
-            hasFaultsNeedingAction={hasFaultsNeedingAction}
-          />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowLinkJobCard(true)}>
+              <Link2 className="h-3.5 w-3.5" />
+              Link Job Card
+            </Button>
+            <InspectionActionsMenu
+              inspectionId={inspection.id}
+              inspectionNumber={inspection.inspection_number}
+              onView={handleView}
+              onShare={handleShare}
+              onCreateWorkOrder={handleCreateWorkOrder}
+              onCorrectiveAction={handleCorrectiveAction}
+              onRootCauseAnalysis={handleRootCauseAnalysis}
+              onViewPDF={handleViewPDF}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
+              hasFaultsNeedingAction={hasFaultsNeedingAction}
+            />
+          </div>
         </div>
 
         {/* Show Inspection Form if status is in_progress */}
@@ -499,6 +612,44 @@ const InspectionDetails = () => {
               </Card>
             </div>
 
+            {/* Linked Job Cards */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5" />
+                  Linked Job Cards
+                </CardTitle>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowLinkJobCard(true)}>
+                  <Link2 className="h-3.5 w-3.5" />
+                  {linkedJobCards.length > 0 ? "Manage" : "Link Job Card"}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {linkedJobCards.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No job cards linked to this inspection.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {linkedJobCards.map((jc) => (
+                      <div
+                        key={jc.id}
+                        className="flex items-center justify-between p-3 rounded-md border cursor-pointer hover:bg-accent transition-colors"
+                        onClick={() => navigate(`/job-cards/${jc.id}`)}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">#{jc.job_number}</p>
+                          <p className="text-xs text-muted-foreground truncate">{jc.title}</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Badge variant={jc.priority === "high" || jc.priority === "urgent" ? "destructive" : "secondary"} className="text-xs">{jc.priority}</Badge>
+                          <Badge variant="outline" className="text-xs">{jc.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Notes */}
             {inspection.notes && (
               <Card>
@@ -537,12 +688,12 @@ const InspectionDetails = () => {
                             <div
                               key={item.id}
                               className={`flex items-start justify-between p-3 rounded-lg border-l-4 ${item.status === "fail"
-                                  ? "border-l-red-500 bg-red-50/50 dark:bg-red-950/20"
-                                  : item.status === "attention"
-                                    ? "border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-950/20"
-                                    : item.status === "pass"
-                                      ? "border-l-green-500 bg-green-50/30 dark:bg-green-950/20"
-                                      : "border-l-gray-300 bg-muted/30"
+                                ? "border-l-red-500 bg-red-50/50 dark:bg-red-950/20"
+                                : item.status === "attention"
+                                  ? "border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-950/20"
+                                  : item.status === "pass"
+                                    ? "border-l-green-500 bg-green-50/30 dark:bg-green-950/20"
+                                    : "border-l-gray-300 bg-muted/30"
                                 }`}
                             >
                               <div className="flex-1 min-w-0">
@@ -560,10 +711,10 @@ const InspectionDetails = () => {
                                       : "secondary"
                                 }
                                 className={`ml-2 shrink-0 ${item.status === "pass"
-                                    ? "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/40 dark:text-green-300"
-                                    : item.status === "attention"
-                                      ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 dark:bg-yellow-900/40 dark:text-yellow-300"
-                                      : ""
+                                  ? "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/40 dark:text-green-300"
+                                  : item.status === "attention"
+                                    ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 dark:bg-yellow-900/40 dark:text-yellow-300"
+                                    : ""
                                   }`}
                               >
                                 {item.status?.toUpperCase() || "PENDING"}
@@ -580,11 +731,21 @@ const InspectionDetails = () => {
 
             {/* Faults */}
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5" />
-                  Faults ({faults.length})
+                  Faults ({(() => {
+                    const resolvedStatuses = ["fixed", "completed", "no_need"];
+                    const openCount = faults.filter(f => !resolvedStatuses.includes(f.corrective_action_status || "")).length;
+                    return openCount > 0 ? `${openCount} open / ${faults.length} total` : `${faults.length} total — all resolved`;
+                  })()})
                 </CardTitle>
+                {faults.length > 0 && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setShowOocReport(true)}>
+                    <Ban className="h-3.5 w-3.5" />
+                    Out of Commission Report
+                  </Button>
+                )}
               </CardHeader>
               <CardContent>
                 {faults.length === 0 ? (
@@ -600,22 +761,44 @@ const InspectionDetails = () => {
                           </Badge>
                         </div>
 
-                        {/* FIXED: Always show corrective action status with proper display */}
-                        <>
-                          <Separator />
+                        <Separator />
+                        <div className="flex items-center justify-between">
                           <div className="space-y-1">
                             <p className="text-sm font-medium">Corrective Action Status:</p>
                             <Badge
-                              variant={
-                                fault.corrective_action_status === "fixed"
-                                  ? "default"
-                                  : "secondary"
-                              }
+                              variant="outline"
+                              className={getCorrectiveActionColor(fault.corrective_action_status)}
                             >
                               {getCorrectiveActionDisplay(fault.corrective_action_status)}
                             </Badge>
                           </div>
-                        </>
+
+                          {/* Inline corrective action dropdown */}
+                          {(!fault.corrective_action_status || fault.corrective_action_status === "pending" || fault.corrective_action_status === "not_fixed") && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                                  <Wrench className="h-3.5 w-3.5" />
+                                  Apply Action
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleInlineFaultAction(fault.id, "fixed")}>
+                                  <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" />
+                                  Mark Fixed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleInlineFaultAction(fault.id, "not_fixed")}>
+                                  <XCircle className="h-4 w-4 mr-2 text-rose-600" />
+                                  Not Fixed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleInlineFaultAction(fault.id, "no_need")}>
+                                  <MoreVertical className="h-4 w-4 mr-2 text-gray-500" />
+                                  No Need
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
 
                         {/* Show notes if they exist */}
                         {fault.corrective_action_notes && (
@@ -734,6 +917,37 @@ const InspectionDetails = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Link Job Card Dialog */}
+      <LinkJobCardToInspectionDialog
+        open={showLinkJobCard}
+        onOpenChange={setShowLinkJobCard}
+        inspectionId={inspection.id}
+        onLinked={() => {
+          queryClient.invalidateQueries({ queryKey: ["linked-job-cards", id] });
+        }}
+      />
+
+      {/* Out of Commission Report Dialog */}
+      <OutOfCommissionReportDialog
+        open={showOocReport}
+        onOpenChange={setShowOocReport}
+        inspectionId={inspection.id}
+        vehicleId={inspection.vehicle_id}
+        vehicleRegistration={inspection.vehicle_registration || ""}
+        vehicleMake={inspection.vehicle_make || ""}
+        vehicleModel={inspection.vehicle_model || ""}
+        odometerReading={inspection.odometer_reading}
+        inspectorName={inspection.inspector_name}
+        onComplete={() => {
+          setShowOocReport(false);
+          queryClient.invalidateQueries({ queryKey: ["out-of-commission-reports"] });
+          toast({
+            title: "Report Submitted",
+            description: "Out-of-commission report has been recorded",
+          });
+        }}
+      />
     </Layout>
   );
 };

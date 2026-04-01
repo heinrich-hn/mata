@@ -40,7 +40,7 @@ export function MaintenanceNotifications() {
         (payload) => {
           console.log('New maintenance alert:', payload);
           fetchAlerts();
-          
+
           // Show browser notification
           if (Notification.permission === 'granted') {
             const alert = payload.new as MaintenanceAlert;
@@ -50,7 +50,7 @@ export function MaintenanceNotifications() {
               tag: 'maintenance-alert',
             });
           }
-          
+
           // Show toast notification
           toast({
             title: "New Maintenance Alert",
@@ -64,7 +64,7 @@ export function MaintenanceNotifications() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [toast]);
 
   const fetchAlerts = async () => {
     const { data, error } = await supabase
@@ -156,14 +156,14 @@ export function MaintenanceNotifications() {
 
   const getPriorityBadge = (priority?: string) => {
     if (!priority) return null;
-    
+
     const colors = {
       critical: "bg-red-500",
       high: "bg-orange-500",
       medium: "bg-yellow-500",
       low: "bg-blue-500",
     };
-    
+
     return (
       <Badge className={`${colors[priority as keyof typeof colors] || 'bg-gray-500'} text-white text-xs`}>
         {priority}
@@ -260,19 +260,19 @@ export function MaintenanceNotifications() {
                           </Badge>
                         )}
                       </div>
-                      
+
                       <h4 className="font-semibold text-sm">
                         {alert.maintenance_schedules?.title || 'Scheduled Maintenance'}
                       </h4>
-                      
+
                       <p className="text-sm text-muted-foreground">
                         {alert.message}
                       </p>
-                      
+
                       <p className="text-xs text-muted-foreground">
                         Vehicle ID: {alert.maintenance_schedules?.vehicle_id || 'N/A'}
                       </p>
-                      
+
                       <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
                         <Calendar className="h-3 w-3" />
                         <span>
@@ -291,7 +291,7 @@ export function MaintenanceNotifications() {
                           </span>
                         )}
                       </div>
-                      
+
                       <div className="text-xs text-muted-foreground">
                         Alert sent: {format(new Date(alert.alert_time), 'MMM dd, HH:mm')}
                       </div>

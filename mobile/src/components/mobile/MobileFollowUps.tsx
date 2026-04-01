@@ -202,7 +202,7 @@ const MobileFollowUps = () => {
             if (error) throw error;
 
             const entityIds = [...new Set((data || []).map((d) => d.related_entity_id).filter(Boolean))];
-            let jobCardsMap: Record<string, any> = {};
+            let jobCardsMap: Record<string, Record<string, unknown>> = {};
 
             if (entityIds.length > 0) {
                 const { data: jobCards } = await supabase
@@ -213,7 +213,7 @@ const MobileFollowUps = () => {
                 if (jobCards) {
                     // Fetch vehicles for job cards that have vehicle_id
                     const vehicleIds = [...new Set(jobCards.map((jc) => jc.vehicle_id).filter(Boolean) as string[])];
-                    let vehiclesMap: Record<string, any> = {};
+                    let vehiclesMap: Record<string, Record<string, unknown>> = {};
                     if (vehicleIds.length > 0) {
                         const { data: vehicles } = await supabase
                             .from("vehicles")
@@ -306,7 +306,7 @@ const MobileFollowUps = () => {
         return result;
     }, [followUps, statusFilter, debouncedSearch]);
 
-    const pendingCount = followUps.filter((f) => f.status === "pending").length;
+    const _pendingCount = followUps.filter((f) => f.status === "pending").length;
     const hasFilters = searchQuery !== "" || statusFilter !== "all";
 
     // Handlers
@@ -327,7 +327,7 @@ const MobileFollowUps = () => {
 
         const { error } = await supabase
             .from("action_items")
-            .update({ comments: updatedComments as any })
+            .update({ comments: JSON.parse(JSON.stringify(updatedComments)) })
             .eq("id", followUpId);
 
         if (error) {

@@ -1,17 +1,17 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
-
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
-
     /* Linting */
     "strict": true,
     "forceConsistentCasingInFileNames": true,
@@ -19,5 +19,10 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "tailwind.config.ts", "vitest.config.ts"]
+  "include": [
+    "vite.config.ts",
+    "tailwind.config.ts",
+    "vitest.config.ts",
+    "api/**/*.ts"
+  ]
 }

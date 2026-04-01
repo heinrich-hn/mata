@@ -86,6 +86,8 @@ function mapTrip(trip: RawTrip): Trip {
   };
 }
 
+const EMPTY_TRIPS: Trip[] = [];
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function TripAlertsPage() {
@@ -179,7 +181,7 @@ export default function TripAlertsPage() {
 
   // ── Derived data for the active tab ──────────────────────────────────────
 
-  const trips = activeTab === 'missing_revenue' ? missingRevenueTrips : [];
+  const trips = activeTab === 'missing_revenue' ? missingRevenueTrips : EMPTY_TRIPS;
   const isRefetching = activeTab === 'missing_revenue' ? isRefetchingRevenue : isRefetchingDuplicates;
 
   const refetch = () => {
@@ -263,7 +265,11 @@ export default function TripAlertsPage() {
   const toggleWeek = (weekKey: string) => {
     setExpandedWeeks(prev => {
       const next = new Set(prev);
-      next.has(weekKey) ? next.delete(weekKey) : next.add(weekKey);
+      if (next.has(weekKey)) {
+        next.delete(weekKey);
+      } else {
+        next.add(weekKey);
+      }
       return next;
     });
   };
@@ -271,7 +277,11 @@ export default function TripAlertsPage() {
   const toggleFleet = (key: string) => {
     setExpandedFleets(prev => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
       return next;
     });
   };
@@ -279,7 +289,11 @@ export default function TripAlertsPage() {
   const toggleDuplicate = (pod: string) => {
     setExpandedDuplicates(prev => {
       const next = new Set(prev);
-      next.has(pod) ? next.delete(pod) : next.add(pod);
+      if (next.has(pod)) {
+        next.delete(pod);
+      } else {
+        next.add(pod);
+      }
       return next;
     });
   };
