@@ -1,31 +1,28 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import
-  {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-  } from "@/components/ui/collapsible";
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-  } from "@/components/ui/dialog";
+import {
+Collapsible,
+CollapsibleContent,
+CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogFooter,
+DialogHeader,
+DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "@/components/ui/select";
+import {
+Select,
+SelectContent,
+SelectItem,
+SelectTrigger,
+SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -215,8 +212,8 @@ const TyreManagementDialog = ({
         treadDepth: existingTyre.current_tread_depth?.toString() || "",
         purchaseCostUsd: existingTyre.purchase_cost_zar?.toString() || "",
         startingKm: existingTyre.installation_km?.toString() || "",
-        currentKm: existingTyre.km_travelled 
-          ? ((existingTyre.installation_km || 0) + existingTyre.km_travelled).toString() 
+        currentKm: existingTyre.km_travelled
+          ? ((existingTyre.installation_km || 0) + existingTyre.km_travelled).toString()
           : existingTyre.installation_km?.toString() || "",
         installationDate: installDate,
         currentDate: new Date().toISOString().split("T")[0],
@@ -280,8 +277,8 @@ const TyreManagementDialog = ({
           current_fleet_position: fleetPosition,
           installation_date: tyreForm.installationDate || new Date().toISOString().split("T")[0],
           installation_km: tyreForm.startingKm ? parseInt(tyreForm.startingKm) : null,
-          km_travelled: tyreForm.startingKm && tyreForm.currentKm 
-            ? Math.max(0, parseInt(tyreForm.currentKm) - parseInt(tyreForm.startingKm)) 
+          km_travelled: tyreForm.startingKm && tyreForm.currentKm
+            ? Math.max(0, parseInt(tyreForm.currentKm) - parseInt(tyreForm.startingKm))
             : null,
           installer_name: tyreForm.installerName || null,
           purchase_cost_zar: tyreForm.purchaseCostUsd ? parseFloat(tyreForm.purchaseCostUsd) : null,
@@ -393,8 +390,8 @@ const TyreManagementDialog = ({
           current_tread_depth: tyreForm.treadDepth ? parseFloat(tyreForm.treadDepth) : null,
           installation_date: tyreForm.installationDate || null,
           installation_km: tyreForm.startingKm ? parseInt(tyreForm.startingKm) : null,
-          km_travelled: tyreForm.startingKm && tyreForm.currentKm 
-            ? Math.max(0, parseInt(tyreForm.currentKm) - parseInt(tyreForm.startingKm)) 
+          km_travelled: tyreForm.startingKm && tyreForm.currentKm
+            ? Math.max(0, parseInt(tyreForm.currentKm) - parseInt(tyreForm.startingKm))
             : null,
           installer_name: tyreForm.installerName || null,
           purchase_cost_zar: tyreForm.purchaseCostUsd ? parseFloat(tyreForm.purchaseCostUsd) : null,
@@ -437,12 +434,37 @@ const TyreManagementDialog = ({
 
     setIsSubmitting(true);
     try {
-      // Update tyre - remove from vehicle (store destination in notes/position for tracking)
+      // Fetch the tyre record and vehicle odometer to properly calculate km_travelled
+      const { data: tyreRecord } = await supabase
+        .from("tyres")
+        .select("installation_km, km_travelled")
+        .eq("id", currentTyreCode)
+        .single();
+
+      const { data: vehicleRecord } = await supabase
+        .from("vehicles")
+        .select("current_odometer")
+        .eq("id", vehicleId)
+        .single();
+
+      // Calculate km for this stint: vehicle odometer - installation km
+      const installationKm = tyreRecord?.installation_km || 0;
+      const vehicleOdometer = vehicleRecord?.current_odometer || 0;
+      const currentStintKm = vehicleOdometer > installationKm
+        ? vehicleOdometer - installationKm
+        : 0;
+      // Accumulate lifetime km
+      const previousKm = tyreRecord?.km_travelled || 0;
+      const totalKmTravelled = previousKm + currentStintKm;
+
+      // Update tyre - remove from vehicle, preserve km_travelled
       const { error: updateError } = await supabase
         .from("tyres")
         .update({
           current_fleet_position: null,
           position: removeDestination, // Using position field to track bay location
+          km_travelled: totalKmTravelled,
+          installation_km: null, // Clear since no longer on a vehicle
         })
         .eq("id", currentTyreCode);
 
@@ -466,8 +488,9 @@ const TyreManagementDialog = ({
         fleet_position: `${fleetNumber} ${vehicleRegistration}-${position}`,
         from_position: position,
         to_position: removeDestination,
+        km_reading: vehicleOdometer || null,
         performed_at: new Date().toISOString(),
-        notes: notes || `Removed from ${positionLabel}, moved to ${getBayLabel(removeDestination)}`,
+        notes: notes || `Removed from ${positionLabel}, moved to ${getBayLabel(removeDestination)}. KM travelled this stint: ${currentStintKm.toLocaleString()}, lifetime: ${totalKmTravelled.toLocaleString()}`,
       });
 
       // Record lifecycle event
@@ -478,8 +501,9 @@ const TyreManagementDialog = ({
         event_date: new Date().toISOString(),
         fleet_position: position,
         vehicle_id: vehicleId,
-        notes: `Removed from ${positionLabel} on ${vehicleRegistration}. Moved to: ${getBayLabel(removeDestination)}`,
-        metadata: { destination: removeDestination },
+        km_reading: vehicleOdometer || null,
+        notes: `Removed from ${positionLabel} on ${vehicleRegistration}. Moved to: ${getBayLabel(removeDestination)}. KM this stint: ${currentStintKm.toLocaleString()}, lifetime: ${totalKmTravelled.toLocaleString()}`,
+        metadata: { destination: removeDestination, stintKm: currentStintKm, lifetimeKm: totalKmTravelled },
       });
 
       toast({
@@ -724,11 +748,11 @@ const TyreManagementDialog = ({
                   <div className="h-9 px-3 flex items-center bg-muted rounded-md text-sm">
                     {tyreForm.purchaseCostUsd && tyreForm.startingTreadDepth && tyreForm.treadDepth
                       ? (() => {
-                          const worn = parseFloat(tyreForm.startingTreadDepth) - parseFloat(tyreForm.treadDepth);
-                          return worn > 0 
-                            ? `$${(parseFloat(tyreForm.purchaseCostUsd) / worn).toFixed(2)}`
-                            : "—";
-                        })()
+                        const worn = parseFloat(tyreForm.startingTreadDepth) - parseFloat(tyreForm.treadDepth);
+                        return worn > 0
+                          ? `$${(parseFloat(tyreForm.purchaseCostUsd) / worn).toFixed(2)}`
+                          : "—";
+                      })()
                       : "—"}
                   </div>
                 </div>

@@ -181,6 +181,7 @@ const RemoveTyreDialog = ({ open, onOpenChange, tyre, onRemovalComplete }: Remov
           position: null,
           condition: formData.postRemovalStatus as Database["public"]["Enums"]["tyre_condition"],
           km_travelled: (tyre.km_travelled || 0) + kmTravelled,
+          installation_km: null, // Clear since no longer on a vehicle
           notes: formData.notes || tyre.notes,
           updated_at: new Date().toISOString(),
         })

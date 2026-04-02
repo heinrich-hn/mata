@@ -28,6 +28,7 @@ import BulkTyreInstallImportModal from "../dialogs/BulkTyreInstallImportModal";
 import EditBayTyreDialog from "../dialogs/EditBayTyreDialog";
 import EditInstalledTyreDialog from "../dialogs/EditInstalledTyreDialog";
 import EditTyreDialog from "../dialogs/EditTyreDialog";
+import InstallBayTyreToVehicleDialog from "../dialogs/InstallBayTyreToVehicleDialog";
 import InstallTyreDialog from "../dialogs/InstallTyreDialog";
 import RemoveTyreDialog from "../dialogs/RemoveTyreDialog";
 import TyreInventoryImportModal from "../dialogs/TyreInventoryImportModal";
@@ -101,6 +102,7 @@ const TyreInventory = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editInstalledDialogOpen, setEditInstalledDialogOpen] = useState(false);
   const [editBayTyreDialogOpen, setEditBayTyreDialogOpen] = useState(false);
+  const [installBayTyreToVehicleDialogOpen, setInstallBayTyreToVehicleDialogOpen] = useState(false);
   const [selectedTyre, setSelectedTyre] = useState<InstalledTyreWithVehicle | null>(null);
   const [selectedBayTyre, setSelectedBayTyre] = useState<TyreWithPosition | null>(null);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<TyreStock | null>(null);
@@ -384,7 +386,7 @@ const TyreInventory = () => {
   };
 
   // Render tyre table for bay tabs
-  const renderTyreTable = (tyres: TyreWithPosition[], _bayType: string) => {
+  const renderTyreTable = (tyres: TyreWithPosition[], bayType: string) => {
     if (tyres.length === 0) {
       return (
         <div className="text-center py-12 text-muted-foreground">
@@ -408,6 +410,7 @@ const TyreInventory = () => {
                 <TableHead className="min-w-[90px] py-3.5 font-semibold text-foreground/80">Type</TableHead>
                 <TableHead className="min-w-[100px] py-3.5 font-semibold text-foreground/80">Condition</TableHead>
                 <TableHead className="min-w-[100px] py-3.5 font-semibold text-foreground/80">Tread Depth</TableHead>
+                <TableHead className="min-w-[100px] py-3.5 font-semibold text-foreground/80">Lifetime KM</TableHead>
                 <TableHead className="min-w-[100px] py-3.5 font-semibold text-foreground/80">Added</TableHead>
                 <TableHead className="min-w-[120px] py-3.5 font-semibold text-foreground/80 text-center sticky right-0 bg-gradient-to-r from-muted/80 to-muted/50">Actions</TableHead>
               </TableRow>
@@ -441,9 +444,9 @@ const TyreInventory = () => {
                   <TableCell className="py-3.5">
                     {tyre.condition ? (
                       <Badge className={`capitalize transition-all duration-200 ${tyre.condition === 'excellent' ? 'bg-gradient-to-r from-emerald-500 to-green-400 text-white shadow-sm' :
-                          tyre.condition === 'good' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-sm' :
-                            tyre.condition === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-sm' :
-                              'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-sm'
+                        tyre.condition === 'good' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-sm' :
+                          tyre.condition === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-sm' :
+                            'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-sm'
                         }`}>
                         {tyre.condition.replace('_', ' ')}
                       </Badge>
@@ -451,6 +454,9 @@ const TyreInventory = () => {
                   </TableCell>
                   <TableCell className="py-3.5">
                     <TreadDepthProgress depth={tyre.current_tread_depth} />
+                  </TableCell>
+                  <TableCell className="py-3.5 text-sm font-mono">
+                    {tyre.km_travelled ? tyre.km_travelled.toLocaleString() : '-'}
                   </TableCell>
                   <TableCell className="py-3.5 text-sm text-muted-foreground">
                     {tyre.created_at ? new Date(tyre.created_at).toLocaleDateString() : '-'}
@@ -469,6 +475,20 @@ const TyreInventory = () => {
                       >
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
+                      {bayType !== "scrap" && bayType !== "sold" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:border-green-300"
+                          onClick={() => {
+                            setSelectedBayTyre(tyre);
+                            setInstallBayTyreToVehicleDialogOpen(true);
+                          }}
+                          title="Install to Vehicle"
+                        >
+                          <Truck className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
@@ -589,9 +609,9 @@ const TyreInventory = () => {
                   <TableCell className="py-3.5">
                     {tyre.condition ? (
                       <Badge className={`capitalize transition-all duration-200 ${tyre.condition === 'excellent' ? 'bg-gradient-to-r from-emerald-500 to-green-400 text-white shadow-sm' :
-                          tyre.condition === 'good' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-sm' :
-                            tyre.condition === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-sm' :
-                              'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-sm'
+                        tyre.condition === 'good' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-sm' :
+                          tyre.condition === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-white shadow-sm' :
+                            'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-sm'
                         }`}>
                         {tyre.condition.replace('_', ' ')}
                       </Badge>
@@ -1229,6 +1249,17 @@ const TyreInventory = () => {
         tyre={selectedBayTyre}
         onUpdate={() => {
           refetchBays();
+          setSelectedBayTyre(null);
+        }}
+      />
+
+      <InstallBayTyreToVehicleDialog
+        open={installBayTyreToVehicleDialogOpen}
+        onOpenChange={setInstallBayTyreToVehicleDialogOpen}
+        tyre={selectedBayTyre}
+        onInstallationComplete={() => {
+          refetchBays();
+          refetch();
           setSelectedBayTyre(null);
         }}
       />

@@ -163,12 +163,25 @@ const TyreInspection = () => {
   useEffect(() => {
     // Show positions from fleet config even if no tyres installed yet
     if (fleetConfig) {
+      const vehicleOdo = (selectedVehicle as Record<string, unknown> | undefined)?.current_odometer as number | null | undefined;
       const positionData = fleetConfig.positions.map((pos) => {
         // Find existing position data if available
         const existingData = (fleetPositions || []).find(
           (fp) => fp.position === pos.position
         );
         const tyreDetails = existingData?.tyre_details;
+
+        // Compute km travelled dynamically from vehicle odometer - installation km
+        // This matches the Dashboard's live calculation approach
+        const installKm = tyreDetails?.installation_km ?? null;
+        const storedKm = tyreDetails?.km_travelled ?? null;
+        let computedKmTravelled: number | null = null;
+        if (vehicleOdo != null && installKm != null && vehicleOdo > installKm) {
+          computedKmTravelled = vehicleOdo - installKm;
+        } else {
+          computedKmTravelled = storedKm;
+        }
+
         return {
           position: pos.position,
           positionLabel: pos.label,
@@ -182,8 +195,8 @@ const TyreInspection = () => {
           condition: (tyreDetails?.condition as TyreCondition) || null,
           currentTreadDepth: tyreDetails?.current_tread_depth || null,
           initialTreadDepth: tyreDetails?.initial_tread_depth || null,
-          kmTravelled: tyreDetails?.km_travelled || null,
-          installationKm: tyreDetails?.installation_km || null,
+          kmTravelled: computedKmTravelled,
+          installationKm: installKm,
           type: tyreDetails?.type || null,
           nextInspectionDate: tyreDetails?.next_inspection_date || null,
           lastInspectionDate: tyreDetails?.last_inspection_date || null,
@@ -193,7 +206,7 @@ const TyreInspection = () => {
     } else {
       setPositions([]);
     }
-  }, [fleetConfig, fleetPositions]);
+  }, [fleetConfig, fleetPositions, selectedVehicle]);
 
   const handleInspect = (position: PositionData) => {
     setSelectedPosition(position);
