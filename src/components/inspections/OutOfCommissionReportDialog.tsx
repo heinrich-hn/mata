@@ -12,15 +12,27 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface PartRequired {
     partNameNumber: string;
     quantity: string;
     onHand: string;
     orderNeededBy: string;
+}
+
+export interface OocReportEditData {
+    id: string;
+    year: string | null;
+    location: string | null;
+    reason_out_of_commission: string;
+    immediate_plan: unknown;
+    parts_required: unknown;
+    additional_notes_safety_concerns: string | null;
+    mechanic_name: string;
+    mechanic_signature: string | null;
 }
 
 interface OutOfCommissionReportDialogProps {
@@ -34,6 +46,7 @@ interface OutOfCommissionReportDialogProps {
     odometerReading: number | null;
     inspectorName: string;
     onComplete: () => void;
+    editReport?: OocReportEditData | null;
 }
 
 export function OutOfCommissionReportDialog({
@@ -47,8 +60,11 @@ export function OutOfCommissionReportDialog({
     odometerReading,
     inspectorName,
     onComplete,
+    editReport,
 }: OutOfCommissionReportDialogProps) {
     const { toast } = useToast();
+    const queryClient = useQueryClient();
+    const isEdit = !!editReport;
 
     const now = new Date();
     const [year, setYear] = useState("");
@@ -59,6 +75,31 @@ export function OutOfCommissionReportDialog({
     const [additionalNotes, setAdditionalNotes] = useState("");
     const [mechanicName, setMechanicName] = useState(inspectorName || "");
     const [mechanicSignature, setMechanicSignature] = useState("");
+
+    // Populate form when editing
+    useEffect(() => {
+        if (open && editReport) {
+            setYear(editReport.year || "");
+            setLocation(editReport.location || "");
+            setReason(editReport.reason_out_of_commission);
+            const plan = Array.isArray(editReport.immediate_plan) ? editReport.immediate_plan as string[] : [""];
+            setImmediatePlan(plan.length > 0 ? plan : [""]);
+            const parts = Array.isArray(editReport.parts_required) ? editReport.parts_required as PartRequired[] : [];
+            setPartsRequired(parts);
+            setAdditionalNotes(editReport.additional_notes_safety_concerns || "");
+            setMechanicName(editReport.mechanic_name);
+            setMechanicSignature(editReport.mechanic_signature || "");
+        } else if (open && !editReport) {
+            setYear("");
+            setLocation("");
+            setReason("");
+            setImmediatePlan([""]);
+            setPartsRequired([]);
+            setAdditionalNotes("");
+            setMechanicName(inspectorName || "");
+            setMechanicSignature("");
+        }
+    }, [open, editReport, inspectorName]);
 
     const addPlanStep = () => setImmediatePlan((prev) => [...prev, ""]);
     const removePlanStep = (index: number) =>
@@ -83,11 +124,7 @@ export function OutOfCommissionReportDialog({
             const reportDate = now.toISOString().split("T")[0];
             const reportTime = now.toTimeString().slice(0, 5);
 
-            const { error } = await supabase.from("out_of_commission_reports").insert({
-                inspection_id: inspectionId,
-                vehicle_id: vehicleId,
-                report_date: reportDate,
-                report_time: reportTime,
+            const payload = {
                 vehicle_id_or_license: vehicleRegistration,
                 make_model: `${vehicleMake} ${vehicleModel}`.trim() || null,
                 year: year || null,
@@ -101,13 +138,34 @@ export function OutOfCommissionReportDialog({
                 additional_notes_safety_concerns: additionalNotes || null,
                 mechanic_name: mechanicName,
                 mechanic_signature: mechanicSignature || null,
-                sign_off_date: reportDate,
-            });
+            };
 
-            if (error) throw error;
+            if (isEdit && editReport) {
+                const { error } = await supabase
+                    .from("out_of_commission_reports")
+                    .update(payload)
+                    .eq("id", editReport.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase.from("out_of_commission_reports").insert({
+                    ...payload,
+                    inspection_id: inspectionId,
+                    vehicle_id: vehicleId,
+                    report_date: reportDate,
+                    report_time: reportTime,
+                    sign_off_date: reportDate,
+                });
+                if (error) throw error;
+            }
         },
         onSuccess: () => {
-            toast({ title: "Report Filed", description: "Out-of-commission report has been saved." });
+            toast({
+                title: isEdit ? "Report Updated" : "Report Filed",
+                description: isEdit
+                    ? "Out-of-commission report has been updated."
+                    : "Out-of-commission report has been saved.",
+            });
+            queryClient.invalidateQueries({ queryKey: ["out-of-commission-reports"] });
             onComplete();
         },
         onError: (error) => {
@@ -125,9 +183,13 @@ export function OutOfCommissionReportDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="text-destructive">Out-of-Commission Report</DialogTitle>
+                    <DialogTitle className="text-destructive">
+                        {isEdit ? "Edit Out-of-Commission Report" : "Out-of-Commission Report"}
+                    </DialogTitle>
                     <DialogDescription>
-                        This vehicle has been declared unsafe to operate. Please complete the report below.
+                        {isEdit
+                            ? "Update the details of this out-of-commission report."
+                            : "This vehicle has been declared unsafe to operate. Please complete the report below."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -317,7 +379,7 @@ export function OutOfCommissionReportDialog({
                         onClick={() => submitReport.mutate()}
                     >
                         {submitReport.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Submit Report
+                        {isEdit ? "Save Changes" : "Submit Report"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

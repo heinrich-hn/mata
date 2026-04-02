@@ -3,6 +3,13 @@ import * as timeWindowLib from "@/lib/timeWindow";
 import { computeTimeVariance, formatTimeAsSAST } from "@/lib/timeWindow";
 import { format, getWeek, parseISO } from "date-fns";
 import XLSX from "xlsx-js-style";
+import {
+  COMPANY_NAME,
+  xlSectionHeader,
+  xlGoodVariance, xlBadVariance, xlNeutralVariance, xlAmberVariance,
+  xlMetricLabel, xlMetricValue,
+  applyHeaderStyle, applyTitleRows,
+} from "@/lib/exportStyles";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -48,12 +55,12 @@ function buildNote(
 // Cell styles
 // ---------------------------------------------------------------------------
 
-const greenFill = { fill: { fgColor: { rgb: "C6EFCE" } }, font: { color: { rgb: "006100" } } };
-const redFill = { fill: { fgColor: { rgb: "FFC7CE" } }, font: { color: { rgb: "9C0006" } } };
-const onTimeFill = { fill: { fgColor: { rgb: "DDDDDD" } } };
-const amberFill = { fill: { fgColor: { rgb: "FFE699" } }, font: { color: { rgb: "7F6000" } } };
-const headerFill = { fill: { fgColor: { rgb: "4472C4" } }, font: { color: { rgb: "FFFFFF" }, bold: true }, alignment: { horizontal: "center" as const } };
-const sectionHeaderFill = { fill: { fgColor: { rgb: "D6E4F0" } }, font: { bold: true } };
+// Cell styles — use shared professional palette
+const greenFill = xlGoodVariance;
+const redFill = xlBadVariance;
+const onTimeFill = xlNeutralVariance;
+const amberFill = xlAmberVariance;
+const sectionHeaderFill = xlSectionHeader;
 
 function varianceStyle(diffMin: number | null) {
   if (diffMin === null) return undefined;
@@ -158,24 +165,21 @@ export function exportTimeComparisonToExcel(
   const workbook = XLSX.utils.book_new();
 
   // Title row
-  const titleRow = [`Time Comparison Report — Week ${weekNum}, ${yr}`];
+  const titleRow = [`${COMPANY_NAME} — Time Comparison Report — Week ${weekNum}, ${yr}`];
   const generatedRow = [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`];
 
   // Main sheet
   const worksheet = XLSX.utils.aoa_to_sheet([titleRow, generatedRow, []]);
   XLSX.utils.sheet_add_json(worksheet, excelData.map((d) => d.row), { origin: "A4" });
 
-  // Style title
-  worksheet["A1"] = { v: titleRow[0], s: { font: { bold: true, sz: 14 } } };
-  worksheet["A2"] = { v: generatedRow[0], s: { font: { italic: true, color: { rgb: "666666" } } } };
+  // Apply professional title/subtitle/header styles
+  const colCount = Object.keys(excelData[0]?.row ?? {}).length;
+  const mergeRanges: XLSX.Range[] = [];
+  applyTitleRows(worksheet, colCount, mergeRanges);
 
   // Style header row (row 4, index 3)
   const headerKeys = Object.keys(excelData[0]?.row ?? {});
-  headerKeys.forEach((_, colIdx) => {
-    const cellRef = XLSX.utils.encode_cell({ r: 3, c: colIdx });
-    const cell = worksheet[cellRef];
-    if (cell) cell.s = headerFill;
-  });
+  applyHeaderStyle(worksheet, 3, headerKeys.length);
 
   // Variance column indices within the data (0-based among data columns):
   // Col 9 = Loading Arrival Variance
@@ -239,11 +243,8 @@ export function exportTimeComparisonToExcel(
     { wch: 60 }, // Notes
   ];
 
-  // Merge title
-  worksheet["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
-  ];
+  // Merge title rows
+  worksheet["!merges"] = mergeRanges;
 
   XLSX.utils.book_append_sheet(workbook, worksheet, "Time Comparison");
 
@@ -282,7 +283,21 @@ export function exportTimeComparisonToExcel(
   ];
 
   const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-  summarySheet["!cols"] = [{ wch: 30 }, { wch: 20 }];
+  summarySheet["!cols"] = [{ wch: 34 }, { wch: 20 }];
+
+  // Apply metric styling to data rows
+  for (let r = 1; r <= summaryData.length; r++) {
+    const rA = XLSX.utils.encode_cell({ r, c: 0 });
+    const rB = XLSX.utils.encode_cell({ r, c: 1 });
+    if (summarySheet[rA] && summarySheet[rA].v !== "" && summarySheet[rA].v !== undefined) {
+      summarySheet[rA].s = xlMetricLabel;
+    }
+    if (summarySheet[rB] && summarySheet[rA]?.v !== "" && summarySheet[rA]?.v !== undefined) {
+      summarySheet[rB].s = xlMetricValue;
+    }
+  }
+  applyHeaderStyle(summarySheet, 0, 2);
+
   XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
 
   // -------------------------------------------------------------------------

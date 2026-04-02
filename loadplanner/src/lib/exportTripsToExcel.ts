@@ -4,6 +4,13 @@ import { computeTimeVariance } from "@/lib/timeWindow";
 import { getLocationDisplayName } from "@/lib/utils";
 import { addDays, differenceInDays, format, getWeek, isSameDay, parseISO, startOfWeek } from "date-fns";
 import XLSX from "xlsx-js-style";
+import {
+  BRAND, COMPANY_NAME,
+  xlHeader,
+  xlMetricLabel, xlMetricValue,
+  xlGoodVariance, xlBadVariance, xlNeutralVariance,
+  applyHeaderStyle, applyTitleRows,
+} from "@/lib/exportStyles";
 
 // Status labels
 const statusLabels: Record<string, string> = {
@@ -44,10 +51,10 @@ function computeVariance(
   return { label: v.label, diffMin: v.diffMin };
 }
 
-// Cell style helpers
-const greenFill = { fill: { fgColor: { rgb: "C6EFCE" } }, font: { color: { rgb: "006100" } } };
-const redFill = { fill: { fgColor: { rgb: "FFC7CE" } }, font: { color: { rgb: "9C0006" } } };
-const onTimeFill = { fill: { fgColor: { rgb: "DDDDDD" } } };
+// Cell style helpers — use shared professional styles
+const greenFill = xlGoodVariance;
+const redFill = xlBadVariance;
+const onTimeFill = xlNeutralVariance;
 
 function varianceStyle(diffMin: number | null) {
   if (diffMin === null) return undefined;
@@ -144,22 +151,32 @@ export function exportLoadsToExcel(
 
   // Week info for title
   const titleRow = [
-    `Matanuska Local Planning - Week ${weekNum}, ${yr}`,
+    `${COMPANY_NAME} — Load Planning — Week ${weekNum}, ${yr}`,
+  ];
+  const genRow = [
+    `Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`,
   ];
 
   // Create workbook and worksheet with title row
   const workbook = XLSX.utils.book_new();
 
-  // Create worksheet with title at top
-  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, []]);
+  // Create worksheet with title + generated date rows
+  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, genRow, []]);
 
-  // Add the data starting from row 3 (after title and blank row)
-  XLSX.utils.sheet_add_json(worksheet, excelData.map(d => d.row), { origin: "A3" });
+  // Add the data starting from row 4 (after title, generated, and blank row)
+  XLSX.utils.sheet_add_json(worksheet, excelData.map(d => d.row), { origin: "A4" });
+
+  // Apply professional title/subtitle/header styles
+  const colCount = Object.keys(excelData[0]?.row ?? {}).length || 35;
+  const mergeRanges: XLSX.Range[] = [];
+  applyTitleRows(worksheet, colCount, mergeRanges);
+  worksheet["!merges"] = mergeRanges;
+  applyHeaderStyle(worksheet, 3, colCount);
 
   // Apply conditional fill to variance cells
-  // Data starts at row index 3 (0-based: row 0=title, 1=blank, 2=headers, 3+=data)
+  // Data starts at row index 4 (0-based: row 0=title, 1=generated, 2=blank, 3=headers, 4+=data)
   excelData.forEach((item, rowIdx) => {
-    const excelRow = rowIdx + 3; // 0-based sheet row (title=0, blank=1, header=2)
+    const excelRow = rowIdx + 4; // 0-based sheet row
     varianceKeys.forEach((key, ki) => {
       const col = varianceCols[ki];
       const cellRef = XLSX.utils.encode_cell({ r: excelRow, c: col });
@@ -210,9 +227,6 @@ export function exportLoadsToExcel(
     { wch: 40 }, // Variance Reason
   ];
   worksheet["!cols"] = columnWidths;
-
-  // Merge cells for the title row
-  worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
 
   // Add worksheet to workbook
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
@@ -285,7 +299,26 @@ export function exportLoadsToExcel(
   ];
 
   const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-  summarySheet["!cols"] = [{ wch: 20 }, { wch: 25 }];
+  summarySheet["!cols"] = [{ wch: 26 }, { wch: 25 }];
+
+  // Style summary header row
+  const smH0 = "A1";
+  const smH1 = "B1";
+  if (summarySheet[smH0]) summarySheet[smH0].s = xlHeader;
+  if (summarySheet[smH1]) summarySheet[smH1].s = xlHeader;
+
+  // Style summary data rows
+  for (let r = 1; r <= summaryData.length; r++) {
+    const rA = XLSX.utils.encode_cell({ r, c: 0 });
+    const rB = XLSX.utils.encode_cell({ r, c: 1 });
+    if (summarySheet[rA] && summarySheet[rA].v !== "" && summarySheet[rA].v !== undefined) {
+      summarySheet[rA].s = xlMetricLabel;
+    }
+    if (summarySheet[rB] && summarySheet[rA]?.v !== "" && summarySheet[rA]?.v !== undefined) {
+      summarySheet[rB].s = xlMetricValue;
+    }
+  }
+
   XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
 
   // Generate and download the file
@@ -355,17 +388,27 @@ export function exportLoadsToExcelSimplified(
 
   // Week info for title
   const titleRow = [
-    `Matanuska Local Planning - Week ${weekNum}, ${yr}`,
+    `${COMPANY_NAME} — Load Planning (Simplified) — Week ${weekNum}, ${yr}`,
+  ];
+  const genRow = [
+    `Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`,
   ];
 
   // Create workbook and worksheet with title row
   const workbook = XLSX.utils.book_new();
 
-  // Create worksheet with title at top
-  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, []]);
+  // Create worksheet with title + generated date rows
+  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, genRow, []]);
 
-  // Add the data starting from row 3 (after title and blank row)
-  XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A3" });
+  // Add the data starting from row 4 (after title, generated, and blank row)
+  XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A4" });
+
+  // Apply professional title/subtitle/header styles
+  const simpColCount = 13;
+  const simpMerges: XLSX.Range[] = [];
+  applyTitleRows(worksheet, simpColCount, simpMerges);
+  worksheet["!merges"] = simpMerges;
+  applyHeaderStyle(worksheet, 3, simpColCount);
 
   // Set column widths for simplified version
   const columnWidths = [
@@ -384,9 +427,6 @@ export function exportLoadsToExcelSimplified(
     { wch: 25 }, // Backload Quantities
   ];
   worksheet["!cols"] = columnWidths;
-
-  // Merge cells for the title row
-  worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
 
   // Add worksheet to workbook
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
@@ -411,66 +451,66 @@ export function exportWeeklyLoadsToExcelSimplified(
 // Calendar-layout export — mirrors the weekly planner Gantt view
 // ---------------------------------------------------------------------------
 
-/** Shared cell styles */
+/** Shared cell styles — using corporate brand palette */
 const calStyles = {
   title: {
-    font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
-    fill: { fgColor: { rgb: "1F4E79" } },
+    font: { bold: true, sz: 16, color: { rgb: BRAND.white } },
+    fill: { fgColor: { rgb: BRAND.navy } },
     alignment: { horizontal: "center" as const, vertical: "center" as const },
   },
   subtitle: {
-    font: { sz: 11, color: { rgb: "FFFFFF" } },
-    fill: { fgColor: { rgb: "1F4E79" } },
+    font: { sz: 11, color: { rgb: BRAND.white } },
+    fill: { fgColor: { rgb: BRAND.navy } },
     alignment: { horizontal: "center" as const, vertical: "center" as const },
   },
   dayHeader: {
-    font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
-    fill: { fgColor: { rgb: "2E75B6" } },
+    font: { bold: true, sz: 11, color: { rgb: BRAND.white } },
+    fill: { fgColor: { rgb: BRAND.blue } },
     alignment: { horizontal: "center" as const, vertical: "center" as const },
     border: {
-      bottom: { style: "thin" as const, color: { rgb: "FFFFFF" } },
-      right: { style: "thin" as const, color: { rgb: "FFFFFF" } },
+      bottom: { style: "thin" as const, color: { rgb: BRAND.white } },
+      right: { style: "thin" as const, color: { rgb: BRAND.white } },
     },
   },
   todayHeader: {
-    font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
-    fill: { fgColor: { rgb: "0070C0" } },
+    font: { bold: true, sz: 11, color: { rgb: BRAND.white } },
+    fill: { fgColor: { rgb: BRAND.accent } },
     alignment: { horizontal: "center" as const, vertical: "center" as const },
     border: {
-      bottom: { style: "thin" as const, color: { rgb: "FFFFFF" } },
-      right: { style: "thin" as const, color: { rgb: "FFFFFF" } },
+      bottom: { style: "thin" as const, color: { rgb: BRAND.white } },
+      right: { style: "thin" as const, color: { rgb: BRAND.white } },
     },
   },
   truckHeader: {
-    font: { bold: true, sz: 11, color: { rgb: "1F4E79" } },
-    fill: { fgColor: { rgb: "D6E4F0" } },
+    font: { bold: true, sz: 11, color: { rgb: BRAND.navy } },
+    fill: { fgColor: { rgb: BRAND.lightBlue } },
     alignment: { horizontal: "center" as const, vertical: "center" as const },
     border: {
-      bottom: { style: "thin" as const, color: { rgb: "B4C6E7" } },
-      right: { style: "thin" as const, color: { rgb: "B4C6E7" } },
+      bottom: { style: "thin" as const, color: { rgb: BRAND.midGray } },
+      right: { style: "thin" as const, color: { rgb: BRAND.midGray } },
     },
   },
   emptyCell: {
-    fill: { fgColor: { rgb: "F2F2F2" } },
+    fill: { fgColor: { rgb: BRAND.lightGray } },
     border: {
-      bottom: { style: "thin" as const, color: { rgb: "D9D9D9" } },
-      right: { style: "thin" as const, color: { rgb: "D9D9D9" } },
+      bottom: { style: "thin" as const, color: { rgb: BRAND.midGray } },
+      right: { style: "thin" as const, color: { rgb: BRAND.midGray } },
     },
   },
   weekendEmpty: {
-    fill: { fgColor: { rgb: "E8E8E8" } },
+    fill: { fgColor: { rgb: BRAND.midGray } },
     border: {
-      bottom: { style: "thin" as const, color: { rgb: "D9D9D9" } },
-      right: { style: "thin" as const, color: { rgb: "D9D9D9" } },
+      bottom: { style: "thin" as const, color: { rgb: BRAND.midGray } },
+      right: { style: "thin" as const, color: { rgb: BRAND.midGray } },
     },
   },
 };
 
 const loadStatusColors: Record<string, { bg: string; fg: string }> = {
-  delivered: { bg: "C6EFCE", fg: "006100" },
-  "in-transit": { bg: "BDD7EE", fg: "1F4E79" },
+  delivered: { bg: BRAND.successBg, fg: BRAND.successDk },
+  "in-transit": { bg: BRAND.lightBlue, fg: BRAND.navy },
   scheduled: { bg: "E2D0F8", fg: "5B2C8E" },
-  pending: { bg: "FFF2CC", fg: "7F6000" },
+  pending: { bg: BRAND.warningBg, fg: BRAND.warningDk },
 };
 
 function loadCellStyle(status: string) {

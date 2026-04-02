@@ -46,11 +46,11 @@ export async function createShareableTrackingLink(
   params: CreateShareLinkParams
 ): Promise<ShareLinkResult> {
   const { loadId, telematicsAssetId, expiryHours } = params;
-  
+
   const token = generateToken();
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + expiryHours);
-  
+
   // Use type assertion for the new table until types are regenerated
   const { data, error } = await (supabase as unknown as {
     from: (table: string) => {
@@ -196,33 +196,33 @@ export interface ShareableVehicleInfo {
 }
 
 /**
- * Generate a visual progress bar using Unicode characters
+ * Generate a clean progress bar using Unicode block characters (business-appropriate visual)
  */
 function generateProgressBar(percentage: number, length = 10): string {
   const filled = Math.round((percentage / 100) * length);
   const empty = length - filled;
-  return '▓'.repeat(filled) + '░'.repeat(empty);
+  return '█'.repeat(filled) + '░'.repeat(empty);
 }
 
 /**
- * Get status emoji and label based on load status
+ * Get clean status label (no emojis or colors)
  */
-function getStatusDisplay(status?: string, inTrip?: boolean): { emoji: string; label: string; color: string } {
+function getStatusDisplay(status?: string, inTrip?: boolean): string {
   if (inTrip) {
-    return { emoji: '🟢', label: 'IN TRANSIT', color: 'green' };
+    return 'IN TRANSIT';
   }
-  
+
   switch (status?.toLowerCase()) {
     case 'delivered':
-      return { emoji: '✅', label: 'DELIVERED', color: 'green' };
+      return 'DELIVERED';
     case 'in-transit':
-      return { emoji: '🟢', label: 'IN TRANSIT', color: 'green' };
+      return 'IN TRANSIT';
     case 'scheduled':
-      return { emoji: '🟡', label: 'SCHEDULED', color: 'yellow' };
+      return 'SCHEDULED';
     case 'pending':
-      return { emoji: '🟠', label: 'PENDING', color: 'orange' };
+      return 'PENDING';
     default:
-      return { emoji: '⚪', label: 'UNKNOWN', color: 'gray' };
+      return 'UNKNOWN';
   }
 }
 
@@ -236,38 +236,98 @@ function isValidDate(dateStr: string | undefined | null): boolean {
 }
 
 /**
- * Calculate progress percentage based on load status.
- * Date-based calculation was unreliable because loading_date / offloading_date
- * are date-only strings (no time component), making same-day loads always 0 or 100
- * and multi-day loads show meaningless calendar-time percentages.
+ * Calculate progress percentage based on load dates and actual time window data.
+ * Uses time-based interpolation between loading and offloading dates for
+ * in-transit loads, and respects actual departure/arrival timestamps when available.
  */
-function calculateProgress(status?: string, inTrip?: boolean): number | null {
-  if (inTrip) return 65;
-  switch (status?.toLowerCase()) {
-    case 'pending': return 0;
-    case 'scheduled': return 15;
-    case 'in-transit': return 50;
-    case 'delivered': return 100;
-    default: return null;
+function calculateProgress(
+  status?: string,
+  inTrip?: boolean,
+  loadingDate?: string | null,
+  offloadingDate?: string | null,
+  timeWindow?: unknown,
+): number | null {
+  // Terminal / pre-start states
+  if (status?.toLowerCase() === 'delivered') return 100;
+  if (status?.toLowerCase() === 'pending') return 0;
+
+  // Parse time_window for actual times
+  let actualOriginDeparture: Date | null = null;
+  let actualDestArrival: Date | null = null;
+  try {
+    const tw = typeof timeWindow === 'string' ? JSON.parse(timeWindow) : timeWindow;
+    if (tw && typeof tw === 'object') {
+      const origin = (tw as Record<string, unknown>).origin as Record<string, string> | undefined;
+      const dest = (tw as Record<string, unknown>).destination as Record<string, string> | undefined;
+
+      // If we have an actual departure from origin, use that as the real start
+      if (origin?.actualDeparture && loadingDate && isValidDate(loadingDate)) {
+        const depTime = origin.actualDeparture; // e.g. "08:30"
+        if (/^\d{1,2}:\d{2}/.test(depTime)) {
+          const d = new Date(loadingDate);
+          const [h, m] = depTime.split(':').map(Number);
+          d.setHours(h, m, 0, 0);
+          actualOriginDeparture = d;
+        }
+      }
+
+      // If we already have an actual arrival at destination → effectively delivered
+      if (dest?.actualArrival && offloadingDate && isValidDate(offloadingDate)) {
+        const arrTime = dest.actualArrival;
+        if (/^\d{1,2}:\d{2}/.test(arrTime)) {
+          actualDestArrival = new Date(offloadingDate);
+          const [h, m] = arrTime.split(':').map(Number);
+          actualDestArrival.setHours(h, m, 0, 0);
+        }
+      }
+    }
+  } catch { /* ignore parse errors */ }
+
+  // If actual destination arrival recorded, treat as complete
+  if (actualDestArrival && actualDestArrival.getTime() <= Date.now()) {
+    return 100;
   }
+
+  // For scheduled loads not yet in transit, show small fixed progress
+  if (status?.toLowerCase() === 'scheduled' && !inTrip) {
+    return 5;
+  }
+
+  // Time-based interpolation for in-transit / inTrip
+  if ((status?.toLowerCase() === 'in-transit' || inTrip) && isValidDate(loadingDate) && isValidDate(offloadingDate)) {
+    const now = Date.now();
+    const start = actualOriginDeparture
+      ? actualOriginDeparture.getTime()
+      : new Date(loadingDate!).getTime();
+    const end = new Date(offloadingDate!).getTime();
+
+    // Guard: if start >= end the dates are invalid / same-day — fall back
+    if (end <= start) return 50;
+
+    const elapsed = now - start;
+    const total = end - start;
+    const pct = Math.round((elapsed / total) * 100);
+
+    // Clamp between 5 and 99 (never show 0 or 100 while still in transit)
+    return Math.max(5, Math.min(99, pct));
+  }
+
+  return null;
 }
 
 /**
- * Format date in a friendly way.
- * For date-only strings (yyyy-MM-dd) we show just the date without a bogus
- * midnight time. For full ISO timestamps we include the time.
+ * Format date in a friendly way
  */
 function formatFriendlyDate(dateStr: string | undefined | null): string | null {
   if (!isValidDate(dateStr)) return null;
-  
+
   const date = new Date(dateStr!);
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // Detect date-only strings (e.g. "2026-03-03") — they have no meaningful time
   const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateStr!.trim());
-  
+
   if (date.toDateString() === today.toDateString()) {
     if (isDateOnly) return 'Today';
     return `Today, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -280,11 +340,9 @@ function formatFriendlyDate(dateStr: string | undefined | null): string | null {
 }
 
 /**
- * Build an ETA string from offloading_date + time_window's planned arrival.
- * Falls back to just the friendly date if time_window has no planned arrival.
+ * Build an ETA string from offloading_date + time_window's planned arrival
  */
 function formatETA(offloadingDate: string, timeWindow?: unknown): string | null {
-  // Parse the planned destination arrival time from time_window
   let plannedArrival: string | undefined;
   try {
     const tw = typeof timeWindow === 'string' ? JSON.parse(timeWindow) : timeWindow;
@@ -303,7 +361,6 @@ function formatETA(offloadingDate: string, timeWindow?: unknown): string | null 
   if (!friendlyDate) return null;
 
   if (plannedArrival) {
-    // e.g. "Today, 08:00" or "03 Mar 2026, 08:00"
     return `${friendlyDate}, ${plannedArrival}`;
   }
   return friendlyDate;
@@ -311,7 +368,7 @@ function formatETA(offloadingDate: string, timeWindow?: unknown): string | null 
 
 /**
  * Format share message for different platforms with full load details
- * Supports multiple styling options for different use cases
+ * All styles now use professional business-class formatting
  */
 export function formatShareMessage(
   load: ShareableLoadInfo,
@@ -334,101 +391,95 @@ export function formatShareMessage(
 }
 
 /**
- * Professional format - branded, clean, with visual hierarchy
+ * Professional format – clean corporate layout with aligned fields
  */
 function formatProfessionalMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
   shareUrl?: string
 ): string {
-  const statusDisplay = getStatusDisplay(load.status, vehicleInfo.inTrip);
-  const progress = calculateProgress(load.status, vehicleInfo.inTrip);
+  const status = getStatusDisplay(load.status, vehicleInfo.inTrip);
+  const progress = calculateProgress(load.status, vehicleInfo.inTrip, load.loading_date, load.offloading_date, load.time_window);
   const loadedDate = formatFriendlyDate(load.loading_date);
   const etaDate = formatETA(load.offloading_date, load.time_window);
-  
+
   const lines = [
-    '━━━━━━━━━━━━━━━━━━━━━━',
-    '   🚚 *LOADPLAN TRACKING*',
-    '━━━━━━━━━━━━━━━━━━━━━━',
+    'TRACKING UPDATE',
+    '════════════════════════════════════',
     '',
-    `${statusDisplay.emoji} *Status:* ${statusDisplay.label}`,
+    `Status      : ${status}`,
     '',
-    '📋 *SHIPMENT DETAILS*',
-    '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄',
-    `📦 Load: \`${load.load_id}\``,
-    `📍 ${load.origin}`,
-    `    ↓`,
-    `📍 ${load.destination}`,
+    'SHIPMENT DETAILS',
+    '──────────────────────────────',
+    `Load ID     : ${load.load_id}`,
+    `Route       : ${load.origin} → ${load.destination}`,
     '',
   ];
 
-  // Only add dates if they are valid
   if (loadedDate) {
-    lines.push(`📅 Loaded: ${loadedDate}`);
+    lines.push(`Loading     : ${loadedDate}`);
   }
   if (etaDate) {
-    lines.push(`🎯 ETA: ${etaDate}`);
+    lines.push(`ETA         : ${etaDate}`);
   }
-  
-  // Only add progress bar if it can be calculated
+
   if (progress !== null) {
     lines.push('');
-    lines.push(`*Progress:* ${generateProgressBar(progress)} ${progress}%`);
+    lines.push(`Progress    : ${generateProgressBar(progress)} ${progress}%`);
   }
-  
+
   lines.push('');
 
-  // Cargo info section
   if (load.cargo_type || load.client_name) {
-    lines.push('📦 *CARGO INFO*');
-    lines.push('┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄');
-    if (load.cargo_type) lines.push(`Type: ${load.cargo_type}`);
-    if (load.client_name) lines.push(`Client: ${load.client_name}`);
+    lines.push('CARGO INFORMATION');
+    lines.push('──────────────────────────────');
+    if (load.cargo_type) lines.push(`Cargo Type  : ${load.cargo_type}`);
+    if (load.client_name) lines.push(`Client      : ${load.client_name}`);
     lines.push('');
   }
 
-  // Vehicle & driver section
   if (load.fleet_vehicle?.vehicle_id || load.driver?.name) {
-    lines.push('🚛 *VEHICLE & DRIVER*');
-    lines.push('┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄');
+    lines.push('VEHICLE & DRIVER');
+    lines.push('──────────────────────────────');
     if (load.fleet_vehicle?.vehicle_id) {
-      lines.push(`Vehicle: ${load.fleet_vehicle.vehicle_id}${load.fleet_vehicle.type ? ` (${load.fleet_vehicle.type})` : ''}`);
+      const vehicleDesc = load.fleet_vehicle.type
+        ? `${load.fleet_vehicle.vehicle_id} (${load.fleet_vehicle.type})`
+        : load.fleet_vehicle.vehicle_id;
+      lines.push(`Vehicle     : ${vehicleDesc}`);
     }
     if (load.driver?.name) {
-      lines.push(`Driver: ${load.driver.name}`);
+      lines.push(`Driver      : ${load.driver.name}`);
       if (load.driver.contact) {
-        lines.push(`📞 ${load.driver.contact}`);
+        lines.push(`Contact     : ${load.driver.contact}`);
       }
     }
     lines.push('');
   }
 
-  // Live tracking section
-  if (vehicleInfo.speedKmH !== undefined || vehicleInfo.latitude) {
-    lines.push('📡 *LIVE POSITION*');
-    lines.push('┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄');
+  if (vehicleInfo.speedKmH !== undefined || (vehicleInfo.latitude && vehicleInfo.longitude)) {
+    lines.push('CURRENT POSITION');
+    lines.push('──────────────────────────────');
     if (vehicleInfo.speedKmH !== undefined) {
-      const speedEmoji = vehicleInfo.speedKmH > 60 ? '⚡' : vehicleInfo.speedKmH > 0 ? '🏃' : '⏸️';
-      lines.push(`${speedEmoji} Speed: ${vehicleInfo.speedKmH} km/h`);
+      lines.push(`Speed       : ${vehicleInfo.speedKmH} km/h`);
     }
     if (vehicleInfo.latitude && vehicleInfo.longitude) {
+      lines.push(`GPS         : ${vehicleInfo.latitude.toFixed(6)}, ${vehicleInfo.longitude.toFixed(6)}`);
       lines.push('');
-      lines.push('📍 *View on Maps:*');
+      lines.push('View on Maps:');
       lines.push(`https://maps.google.com/?q=${vehicleInfo.latitude},${vehicleInfo.longitude}`);
     }
     lines.push('');
   }
 
-  // Live tracking link section
   if (shareUrl) {
-    lines.push('━━━━━━━━━━━━━━━━━━━━━━');
-    lines.push('🔴 *LIVE TRACKING*');
+    lines.push('════════════════════════════════════');
+    lines.push('LIVE TRACKING LINK');
     lines.push('');
-    lines.push(`👇 *Tap to track in real-time:*`);
+    lines.push('Tap to track in real-time:');
     lines.push(shareUrl);
     lines.push('');
-    lines.push('_⚡ Live updates • No login required_');
-    lines.push('━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push('Live updates • No login required');
+    lines.push('════════════════════════════════════');
   }
 
   lines.push('');
@@ -438,145 +489,134 @@ function formatProfessionalMessage(
 }
 
 /**
- * Detailed format - comprehensive information for internal use
+ * Detailed format – comprehensive information for internal or partner use
  */
 function formatDetailedMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
   shareUrl?: string
 ): string {
-  const statusDisplay = getStatusDisplay(load.status, vehicleInfo.inTrip);
-  const progress = calculateProgress(load.status, vehicleInfo.inTrip);
-  const loadingDateValid = isValidDate(load.loading_date);
-  const offloadingDateValid = isValidDate(load.offloading_date);
-  
+  const status = getStatusDisplay(load.status, vehicleInfo.inTrip);
+  const progress = calculateProgress(load.status, vehicleInfo.inTrip, load.loading_date, load.offloading_date, load.time_window);
+
   const lines = [
-    '🚚 *LIVE VEHICLE TRACKING*',
-    '═══════════════════════',
+    'LIVE VEHICLE TRACKING',
+    '════════════════════════════════════',
     '',
-    `${statusDisplay.emoji} *Status:* ${statusDisplay.label}`,
+    `Status      : ${status}`,
     '',
-    '📦 *SHIPMENT INFORMATION*',
-    '───────────────────────',
-    `• *Load ID:* ${load.load_id}`,
-    `• *Route:* ${load.origin} → ${load.destination}`,
+    'SHIPMENT INFORMATION',
+    '──────────────────────────────',
+    `Load ID     : ${load.load_id}`,
+    `Route       : ${load.origin} → ${load.destination}`,
   ];
 
-  if (loadingDateValid) {
-    lines.push(`• *Loading Date:* ${new Date(load.loading_date).toLocaleDateString()}`);
+  if (isValidDate(load.loading_date)) {
+    lines.push(`Loading     : ${new Date(load.loading_date).toLocaleDateString('en-GB')}`);
   }
-  if (offloadingDateValid) {
+  if (isValidDate(load.offloading_date)) {
     const eta = formatETA(load.offloading_date, load.time_window);
-    lines.push(`• *Expected Arrival:* ${eta || new Date(load.offloading_date).toLocaleDateString()}`);
+    lines.push(`Expected Arrival : ${eta || new Date(load.offloading_date).toLocaleDateString('en-GB')}`);
   }
   if (load.cargo_type) {
-    lines.push(`• *Cargo Type:* ${load.cargo_type}`);
+    lines.push(`Cargo Type  : ${load.cargo_type}`);
   }
   if (progress !== null) {
-    lines.push(`• *Progress:* ${progress}%`);
+    lines.push(`Progress    : ${progress}%`);
   }
-
   if (load.client_name) {
-    lines.push(`• *Client:* ${load.client_name}`);
+    lines.push(`Client      : ${load.client_name}`);
   }
 
-  // Driver section
   if (load.driver?.name) {
     lines.push('');
-    lines.push('👤 *DRIVER INFORMATION*');
-    lines.push('───────────────────────');
-    lines.push(`• *Name:* ${load.driver.name}`);
+    lines.push('DRIVER INFORMATION');
+    lines.push('──────────────────────────────');
+    lines.push(`Name        : ${load.driver.name}`);
     if (load.driver.contact) {
-      lines.push(`• *Contact:* ${load.driver.contact}`);
+      lines.push(`Contact     : ${load.driver.contact}`);
     }
   }
 
-  // Vehicle section
   if (load.fleet_vehicle?.vehicle_id) {
     lines.push('');
-    lines.push('🚛 *VEHICLE INFORMATION*');
-    lines.push('───────────────────────');
-    lines.push(`• *Fleet No:* ${load.fleet_vehicle.vehicle_id}`);
+    lines.push('VEHICLE INFORMATION');
+    lines.push('──────────────────────────────');
+    lines.push(`Fleet No    : ${load.fleet_vehicle.vehicle_id}`);
     if (load.fleet_vehicle.type) {
-      lines.push(`• *Type:* ${load.fleet_vehicle.type}`);
+      lines.push(`Type        : ${load.fleet_vehicle.type}`);
     }
   }
 
-  // Current status section
   if (vehicleInfo.speedKmH !== undefined) {
     lines.push('');
-    lines.push('📊 *CURRENT STATUS*');
-    lines.push('───────────────────────');
-    lines.push(`• *Speed:* ${vehicleInfo.speedKmH} km/h`);
-    lines.push(`• *Movement:* ${vehicleInfo.inTrip ? '🟢 In Motion' : '🔴 Stationary'}`);
+    lines.push('CURRENT STATUS');
+    lines.push('──────────────────────────────');
+    lines.push(`Speed       : ${vehicleInfo.speedKmH} km/h`);
+    lines.push(`Movement    : ${vehicleInfo.inTrip ? 'In Motion' : 'Stationary'}`);
     if (vehicleInfo.lastConnected) {
-      lines.push(`• *Last Update:* ${vehicleInfo.lastConnected}`);
+      lines.push(`Last Update : ${vehicleInfo.lastConnected}`);
     }
   }
 
-  // Location section
   if (vehicleInfo.latitude && vehicleInfo.longitude) {
     lines.push('');
-    lines.push('📍 *CURRENT LOCATION*');
-    lines.push('───────────────────────');
-    lines.push(`GPS: ${vehicleInfo.latitude.toFixed(6)}, ${vehicleInfo.longitude.toFixed(6)}`);
+    lines.push('CURRENT LOCATION');
+    lines.push('──────────────────────────────');
+    lines.push(`GPS         : ${vehicleInfo.latitude.toFixed(6)}, ${vehicleInfo.longitude.toFixed(6)}`);
     lines.push('');
-    lines.push('*View on Google Maps:*');
+    lines.push('View on Google Maps:');
     lines.push(`https://www.google.com/maps?q=${vehicleInfo.latitude},${vehicleInfo.longitude}`);
   }
 
-  // Live tracking link
   if (shareUrl) {
     lines.push('');
-    lines.push('═══════════════════════');
-    lines.push('🔗 *LIVE TRACKING LINK*');
-    lines.push('───────────────────────');
+    lines.push('════════════════════════════════════');
+    lines.push('LIVE TRACKING LINK');
+    lines.push('──────────────────────────────');
     lines.push(shareUrl);
     lines.push('');
-    lines.push('_This link provides real-time_');
-    lines.push('_vehicle tracking updates._');
+    lines.push('This link provides real-time vehicle tracking updates.');
+    lines.push('════════════════════════════════════');
   }
 
   lines.push('');
-  lines.push('═══════════════════════');
   lines.push('_LoadPlan Fleet Management_');
 
   return lines.join('\n');
 }
 
 /**
- * Compact format - for quick shares and SMS
+ * Compact format – for quick shares and SMS
  */
 function formatCompactMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
   shareUrl?: string
 ): string {
-  const statusDisplay = getStatusDisplay(load.status, vehicleInfo.inTrip);
+  const status = getStatusDisplay(load.status, vehicleInfo.inTrip);
   const etaDate = formatETA(load.offloading_date, load.time_window);
-  
+
   const lines = [
-    `${statusDisplay.emoji} *${load.load_id}*`,
-    '',
-    `📍 ${load.origin} → ${load.destination}`,
+    `${status} • ${load.load_id}`,
+    `${load.origin} → ${load.destination}`,
   ];
 
   if (etaDate) {
-    lines.push(`🎯 ETA: ${etaDate}`);
+    lines.push(`ETA: ${etaDate}`);
   }
 
   if (load.driver?.name) {
-    lines.push(`👤 ${load.driver.name}${load.driver.contact ? ` | ${load.driver.contact}` : ''}`);
+    lines.push(`Driver: ${load.driver.name}${load.driver.contact ? ` | ${load.driver.contact}` : ''}`);
   }
 
   if (vehicleInfo.latitude && vehicleInfo.longitude) {
-    lines.push('');
-    lines.push(`📍 maps.google.com/?q=${vehicleInfo.latitude},${vehicleInfo.longitude}`);
+    lines.push(`Location: https://maps.google.com/?q=${vehicleInfo.latitude},${vehicleInfo.longitude}`);
   }
 
   if (shareUrl) {
     lines.push('');
-    lines.push('🔴 *Track Live:*');
+    lines.push('Track Live:');
     lines.push(shareUrl);
   }
 
@@ -584,7 +624,7 @@ function formatCompactMessage(
 }
 
 /**
- * Minimal format - just the essentials for quick reference
+ * Minimal format – essentials only
  */
 function formatMinimalMessage(
   load: ShareableLoadInfo,
@@ -598,7 +638,7 @@ function formatMinimalMessage(
 
   if (isValidDate(load.offloading_date)) {
     const eta = formatETA(load.offloading_date, load.time_window);
-    lines.push(`ETA: ${eta || new Date(load.offloading_date).toLocaleDateString()}`);
+    lines.push(`ETA: ${eta || new Date(load.offloading_date).toLocaleDateString('en-GB')}`);
   }
 
   if (load.driver?.name) {
@@ -616,37 +656,35 @@ function formatMinimalMessage(
 
 /**
  * Generate a QR code placeholder message (QR codes can't be embedded in WhatsApp text)
- * This provides instructions for the recipient to access tracking
  */
 export function formatQRInstructionsMessage(
   load: ShareableLoadInfo,
   shareUrl: string
 ): string {
   return [
-    '━━━━━━━━━━━━━━━━━━━━━━',
-    '   🚚 *LOADPLAN TRACKING*',
-    '━━━━━━━━━━━━━━━━━━━━━━',
+    'TRACKING INSTRUCTIONS',
+    '════════════════════════════════════',
     '',
-    `📦 Load: *${load.load_id}*`,
-    `📍 ${load.origin} → ${load.destination}`,
+    `Load ID     : ${load.load_id}`,
+    `Route       : ${load.origin} → ${load.destination}`,
     '',
-    '🔗 *TRACK YOUR SHIPMENT*',
-    '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄',
+    'LIVE TRACKING LINK',
+    '──────────────────────────────',
     '',
-    '👇 *Tap the link below:*',
+    'Tap the link below:',
     shareUrl,
     '',
-    '_Or scan the QR code on the_',
-    '_delivery documentation._',
+    'Alternatively, scan the QR code',
+    'provided on the delivery documentation.',
     '',
-    '━━━━━━━━━━━━━━━━━━━━━━',
+    '════════════════════════════════════',
     '_Powered by LoadPlan™_',
   ].join('\n');
 }
 
 /**
  * Generate a customer-facing notification message
- * More formal tone suitable for end customers
+ * Formal tone suitable for end customers
  */
 export function formatCustomerNotificationMessage(
   load: ShareableLoadInfo,
@@ -654,41 +692,48 @@ export function formatCustomerNotificationMessage(
   shareUrl: string,
   companyName = 'LoadPlan'
 ): string {
-  const eta = new Date(load.offloading_date);
-  const etaFormatted = eta.toLocaleDateString('en-GB', { 
-    weekday: 'long', 
-    day: 'numeric', 
-    month: 'long' 
+  const etaFormatted = new Date(load.offloading_date).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
   });
 
-  return [
+  const lines = [
     `Dear Customer,`,
     '',
-    `Your shipment from *${companyName}* is on its way! 📦`,
+    `Your shipment from ${companyName} is on its way.`,
     '',
-    '━━━━━━━━━━━━━━━━━━━━━━',
+    '════════════════════════════════════',
     '',
-    `📋 *Order Reference:* ${load.load_id}`,
-    `📍 *Destination:* ${load.destination}`,
-    `📅 *Expected Delivery:* ${etaFormatted}`,
+    `Order Reference : ${load.load_id}`,
+    `Destination     : ${load.destination}`,
+    `Expected Delivery : ${etaFormatted}`,
     '',
-    load.driver?.name ? `🚛 *Your Driver:* ${load.driver.name}` : '',
-    load.driver?.contact ? `📞 *Driver Contact:* ${load.driver.contact}` : '',
-    '',
-    '━━━━━━━━━━━━━━━━━━━━━━',
-    '',
-    '🔴 *TRACK YOUR DELIVERY LIVE*',
-    '',
-    '👇 Tap below to see real-time location:',
-    shareUrl,
-    '',
-    '━━━━━━━━━━━━━━━━━━━━━━',
-    '',
-    `Thank you for choosing *${companyName}*!`,
-    '',
-    '_This is an automated notification._',
-    '_For queries, please contact our support team._',
-  ].filter(line => line !== '').join('\n');
+  ];
+
+  if (load.driver?.name) {
+    lines.push(`Driver          : ${load.driver.name}`);
+  }
+  if (load.driver?.contact) {
+    lines.push(`Driver Contact  : ${load.driver.contact}`);
+  }
+
+  lines.push('');
+  lines.push('════════════════════════════════════');
+  lines.push('');
+  lines.push('LIVE TRACKING');
+  lines.push('');
+  lines.push('Tap below to see real-time location:');
+  lines.push(shareUrl);
+  lines.push('');
+  lines.push('════════════════════════════════════');
+  lines.push('');
+  lines.push(`Thank you for choosing ${companyName}.`);
+  lines.push('');
+  lines.push('This is an automated notification.');
+  lines.push('For queries, please contact our support team.');
+
+  return lines.join('\n');
 }
 
 /**
@@ -704,6 +749,6 @@ export function formatSmsMessage(
   },
   shareUrl: string
 ): string {
-  const arrivalDate = new Date(load.offloading_date).toLocaleDateString();
+  const arrivalDate = new Date(load.offloading_date).toLocaleDateString('en-GB');
   return `Load ${load.load_id}: ${load.origin} to ${load.destination}. ETA: ${arrivalDate}. ${load.driver?.name ? `Driver: ${load.driver.name}. ` : ''}Track live: ${shareUrl}`;
 }

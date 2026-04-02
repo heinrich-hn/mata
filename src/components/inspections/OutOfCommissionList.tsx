@@ -1,3 +1,13 @@
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,10 +15,11 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { generateOocReportPDF, type OocReportExportData } from "@/lib/oocReportExport";
-import { useQuery } from "@tanstack/react-query";
-import { Ban, Car, CheckCircle2, ExternalLink, FileDown, MapPin, Search, Wrench } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Ban, Car, CheckCircle2, ExternalLink, FileDown, MapPin, Pencil, Search, Trash2, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { OutOfCommissionReportDialog } from "@/components/inspections/OutOfCommissionReportDialog";
 
 interface OocReport {
     id: string;
@@ -24,6 +35,8 @@ interface OocReport {
     parts_required: unknown;
     immediate_plan: unknown;
     additional_notes_safety_concerns: string | null;
+    year: string | null;
+    mechanic_signature: string | null;
     // Joined data
     inspection_number: string | null;
     open_fault_count: number;
@@ -35,6 +48,14 @@ export function OutOfCommissionList() {
     const navigate = useNavigate();
     const [search, setSearch] = useState("");
     const { toast } = useToast();
+    const queryClient = useQueryClient();
+
+    // Delete state
+    const [deleteReport, setDeleteReport] = useState<OocReport | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Edit state
+    const [editingReport, setEditingReport] = useState<OocReport | null>(null);
 
     // Fetch all OOC reports with their inspection fault status
     const { data: reports = [], isLoading } = useQuery<OocReport[]>({
@@ -52,6 +73,8 @@ export function OutOfCommissionList() {
           reason_out_of_commission,
           location,
           mechanic_name,
+          mechanic_signature,
+          year,
           report_date,
           created_at,
           parts_required,
@@ -102,6 +125,8 @@ export function OutOfCommissionList() {
                     parts_required: r.parts_required,
                     immediate_plan: r.immediate_plan,
                     additional_notes_safety_concerns: r.additional_notes_safety_concerns,
+                    year: r.year,
+                    mechanic_signature: r.mechanic_signature,
                     inspection_number: inspectionData?.inspection_number || null,
                     open_fault_count: faultInfo.open,
                     total_fault_count: faultInfo.total,
@@ -130,6 +155,44 @@ export function OutOfCommissionList() {
                 r.inspection_number?.toLowerCase().includes(q)
         );
     }, [activeReports, search]);
+
+    const handleDelete = async () => {
+        if (!deleteReport) return;
+        setIsDeleting(true);
+        try {
+            const { error } = await supabase
+                .from("out_of_commission_reports")
+                .delete()
+                .eq("id", deleteReport.id);
+            if (error) throw error;
+            toast({ title: "Report Deleted", description: "Out-of-commission report has been removed." });
+            queryClient.invalidateQueries({ queryKey: ["out-of-commission-reports"] });
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: error instanceof Error ? error.message : "Failed to delete report",
+                variant: "destructive",
+            });
+        } finally {
+            setIsDeleting(false);
+            setDeleteReport(null);
+        }
+    };
+
+    const handleEditClick = async (report: OocReport, e: React.MouseEvent) => {
+        e.stopPropagation();
+        // Fetch the full report data for editing
+        const { data, error } = await supabase
+            .from("out_of_commission_reports")
+            .select("*")
+            .eq("id", report.id)
+            .single();
+        if (error || !data) {
+            toast({ title: "Error", description: "Could not load report for editing", variant: "destructive" });
+            return;
+        }
+        setEditingReport({ ...report, ...data });
+    };
 
     const handleExportPDF = async (report: OocReport, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -274,12 +337,33 @@ export function OutOfCommissionList() {
                                             year: "numeric",
                                         })}
                                     </span>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1">
                                         {report.inspection_number && (
                                             <Badge variant="outline" className="text-[10px]">
                                                 {report.inspection_number}
                                             </Badge>
                                         )}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0"
+                                            title="Edit Report"
+                                            onClick={(e) => handleEditClick(report, e)}
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                            title="Delete Report"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteReport(report);
+                                            }}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
                                         <Button
                                             variant="ghost"
                                             size="sm"
@@ -306,6 +390,56 @@ export function OutOfCommissionList() {
                         </Card>
                     ))}
                 </div>
+            )}
+
+            {/* Delete confirmation dialog */}
+            <AlertDialog open={!!deleteReport} onOpenChange={(open) => !open && setDeleteReport(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Out-of-Commission Report</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete the report for{" "}
+                            <strong>{deleteReport?.vehicle_id_or_license}</strong>? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isDeleting ? "Deleting..." : "Delete"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Edit dialog */}
+            {editingReport && (
+                <OutOfCommissionReportDialog
+                    open={!!editingReport}
+                    onOpenChange={(open) => !open && setEditingReport(null)}
+                    inspectionId={editingReport.inspection_id}
+                    vehicleId={editingReport.vehicle_id}
+                    vehicleRegistration={editingReport.vehicle_id_or_license}
+                    vehicleMake={editingReport.make_model?.split(" ")[0] || ""}
+                    vehicleModel={editingReport.make_model?.split(" ").slice(1).join(" ") || ""}
+                    odometerReading={null}
+                    inspectorName={editingReport.mechanic_name}
+                    onComplete={() => setEditingReport(null)}
+                    editReport={{
+                        id: editingReport.id,
+                        year: editingReport.year || null,
+                        location: editingReport.location,
+                        reason_out_of_commission: editingReport.reason_out_of_commission,
+                        immediate_plan: editingReport.immediate_plan,
+                        parts_required: editingReport.parts_required,
+                        additional_notes_safety_concerns: editingReport.additional_notes_safety_concerns,
+                        mechanic_name: editingReport.mechanic_name,
+                        mechanic_signature: editingReport.mechanic_signature || null,
+                    }}
+                />
             )}
         </div>
     );

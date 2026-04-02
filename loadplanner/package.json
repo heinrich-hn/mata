@@ -69,6 +69,7 @@
     "tailwindcss-animate": "^1.0.7",
     "util": "^0.12.5",
     "vaul": "^0.9.9",
+    "vercel": "^50.38.2",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0",
     "zod": "^3.25.76"

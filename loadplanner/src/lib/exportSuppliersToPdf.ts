@@ -1,4 +1,5 @@
 import type { Supplier } from "@/hooks/useSuppliers";
+import { COMPANY_NAME, SYSTEM_NAME, pdfColors } from "@/lib/exportStyles";
 import { format } from "date-fns";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -22,15 +23,10 @@ export function exportSuppliersToPdf(
   const margin = 20;
   let yPos = 20;
 
-  // Colors
-  const primaryColor: [number, number, number] = [59, 130, 246]; // Blue
-  const _headerBg: [number, number, number] = [241, 245, 249]; // Light gray
-  const _successColor: [number, number, number] = [34, 197, 94]; // Green
-
   // Helper to add section header
   const addSectionHeader = (
     title: string,
-    color: [number, number, number] = primaryColor,
+    color: [number, number, number] = pdfColors.blue,
   ): number => {
     doc.setFillColor(...color);
     doc.rect(margin, yPos, pageWidth - 2 * margin, 8, "F");
@@ -61,39 +57,56 @@ export function exportSuppliersToPdf(
   };
 
   // ========== HEADER ==========
-  doc.setFillColor(...primaryColor);
-  doc.rect(0, 0, pageWidth, 35, "F");
+  // Top accent strip
+  doc.setFillColor(...pdfColors.navy);
+  doc.rect(0, 0, pageWidth, 3, "F");
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
+  // Company name
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.text("SUPPLIERS REPORT", margin, 18);
+  doc.text(COMPANY_NAME, margin, 14);
 
-  doc.setFontSize(12);
+  // System subtitle
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text(SYSTEM_NAME, margin, 19);
+
+  // Document title (right-aligned)
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("SUPPLIERS REPORT", pageWidth - margin, 14, { align: "right" });
+
+  // Generated date (right-aligned)
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.text(
     `Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`,
-    margin,
-    28,
+    pageWidth - margin,
+    19,
+    { align: "right" },
   );
+
+  // Separator line
+  doc.setDrawColor(...pdfColors.navy);
+  doc.setLineWidth(0.5);
+  doc.line(margin, 23, pageWidth - margin, 23);
 
   // Add filters info if any
   if (filters.status || filters.searchQuery) {
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    let filterText = "Filters: ";
-    if (filters.status) {
-      filterText += `Status: ${filters.status}, `;
-    }
-    if (filters.searchQuery) {
-      filterText += `Search: "${filters.searchQuery}"`;
-    }
-    // Remove trailing comma and space
-    filterText = filterText.replace(/, $/, "");
-    doc.text(filterText, margin, 34);
+    doc.setFontSize(8);
+    doc.setTextColor(...pdfColors.textMuted);
+    doc.setFont("helvetica", "italic");
+    const filterParts: string[] = [];
+    if (filters.status) filterParts.push(`Status: ${filters.status}`);
+    if (filters.searchQuery) filterParts.push(`Search: "${filters.searchQuery}"`);
+    doc.text(`Filters: ${filterParts.join(" • ")}`, margin, 28);
   }
 
-  yPos = 50;
+  yPos = 34;
   doc.setTextColor(0, 0, 0);
 
   // ========== SUMMARY ==========
@@ -141,7 +154,7 @@ export function exportSuppliersToPdf(
       body: tableData,
       margin: { left: margin, right: margin },
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [...primaryColor], textColor: [255, 255, 255] },
+      headStyles: { fillColor: [...pdfColors.navy], textColor: [255, 255, 255], fontStyle: "bold" },
       alternateRowStyles: { fillColor: [245, 245, 245] },
       columnStyles: {
         0: { cellWidth: 25 },
@@ -176,7 +189,7 @@ export function exportSuppliersToPdf(
       { align: "center" },
     );
     doc.text(
-      "LoadFlow - Load Management System",
+      SYSTEM_NAME,
       margin,
       doc.internal.pageSize.getHeight() - 10,
     );

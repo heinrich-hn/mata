@@ -14,6 +14,7 @@ interface Driver {
 interface DriverSelectProps {
   value?: string;
   onValueChange: (value: string) => void;
+  onDriverIdChange?: (driverId: string | null) => void;
   placeholder?: string;
   disabled?: boolean;
   allowCreate?: boolean;
@@ -24,6 +25,7 @@ interface DriverSelectProps {
 export const DriverSelect = ({
   value,
   onValueChange,
+  onDriverIdChange,
   placeholder = 'Select driver...',
   disabled = false,
   showDriverNumber = true,
@@ -77,10 +79,18 @@ export const DriverSelect = ({
     );
   }
 
+  const handleValueChange = (selectedName: string) => {
+    onValueChange(selectedName);
+    if (onDriverIdChange) {
+      const driver = drivers.find(d => getFullName(d) === selectedName);
+      onDriverIdChange(driver?.id ?? null);
+    }
+  };
+
   return (
     <Select
       value={value ?? ''}
-      onValueChange={onValueChange}
+      onValueChange={handleValueChange}
       disabled={disabled}
     >
       <SelectTrigger className="w-full">

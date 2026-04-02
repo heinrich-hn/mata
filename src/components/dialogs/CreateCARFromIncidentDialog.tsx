@@ -5,23 +5,26 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
+import { DriverSelect } from "@/components/ui/driver-select";
+import { InspectorSelect } from "@/components/ui/inspector-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { VehicleSelect } from "@/components/ui/vehicle-select";
 import { useToast } from "@/hooks/use-toast";
 import type { Incident } from "@/hooks/useIncidents";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +42,7 @@ interface CARFormData {
   report_number: string;
   driver_name: string;
   fleet_number: string;
+  vehicle_id: string;
   incident_date: string;
   incident_time: string;
   incident_location: string;
@@ -81,6 +85,7 @@ export default function CreateCARFromIncidentDialog({
     report_number: "",
     driver_name: "",
     fleet_number: "",
+    vehicle_id: "",
     incident_date: "",
     incident_time: "",
     incident_location: "",
@@ -118,6 +123,7 @@ export default function CreateCARFromIncidentDialog({
         report_number: generateCARNumber(),
         driver_name: driverName,
         fleet_number: fleetNumber,
+        vehicle_id: incident.vehicle_id || "",
         incident_date: incident.incident_date,
         incident_time: incident.incident_time || "",
         incident_location: incident.location || "",
@@ -248,19 +254,26 @@ export default function CreateCARFromIncidentDialog({
             <h4 className="font-medium text-sm text-muted-foreground">Incident Details (from {incident.incident_number})</h4>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="driver_name">Driver Name *</Label>
-                <Input
-                  id="driver_name"
-                  value={formData.driver_name}
-                  onChange={(e) => handleInputChange('driver_name', e.target.value)}
+                <Label>Driver Name *</Label>
+                <DriverSelect
+                  value={formData.driver_name || undefined}
+                  onValueChange={(value) => handleInputChange('driver_name', value)}
+                  placeholder="Select driver"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="fleet_number">Fleet Number</Label>
-                <Input
-                  id="fleet_number"
-                  value={formData.fleet_number}
-                  onChange={(e) => handleInputChange('fleet_number', e.target.value)}
+                <Label>Fleet Number / Vehicle</Label>
+                <VehicleSelect
+                  value={formData.vehicle_id || undefined}
+                  onValueChange={(vehicleId) =>
+                    handleInputChange('vehicle_id', vehicleId)
+                  }
+                  onVehicleChange={(vehicle) => {
+                    if (vehicle) {
+                      handleInputChange('fleet_number', vehicle.fleet_number || '');
+                    }
+                  }}
+                  placeholder="Select vehicle"
                 />
               </div>
             </div>
@@ -365,12 +378,11 @@ export default function CreateCARFromIncidentDialog({
           {/* Assignment */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="responsible_person">Responsible Person</Label>
-              <Input
-                id="responsible_person"
-                value={formData.responsible_person}
-                onChange={(e) => handleInputChange('responsible_person', e.target.value)}
-                placeholder="Who is responsible for follow-up?"
+              <Label>Responsible Person</Label>
+              <InspectorSelect
+                value={formData.responsible_person || undefined}
+                onValueChange={(value) => handleInputChange('responsible_person', value)}
+                placeholder="Select responsible person"
               />
             </div>
             <div className="space-y-2">

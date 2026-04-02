@@ -1,4 +1,5 @@
 import type { Load } from "@/hooks/useTrips";
+import { COMPANY_NAME, SYSTEM_NAME, pdfColors } from "@/lib/exportStyles";
 import * as timeWindowLib from "@/lib/timeWindow";
 import { timeToSASTMinutes } from "@/lib/timeWindow";
 import {
@@ -269,27 +270,47 @@ export function exportReportsToPdf({
   const reportDate = format(new Date(), "MMMM d, yyyy");
 
   // Colors
-  const primaryColor: [number, number, number] = [99, 102, 241]; // Indigo
-  const secondaryColor: [number, number, number] = [34, 197, 94]; // Green
-  const textColor: [number, number, number] = [55, 65, 81];
-  const mutedColor: [number, number, number] = [107, 114, 128];
+  const primaryColor: [number, number, number] = pdfColors.navy;
+  const secondaryColor: [number, number, number] = pdfColors.success;
+  const textColor: [number, number, number] = pdfColors.textPrimary;
+  const mutedColor: [number, number, number] = pdfColors.textMuted;
 
   let yPos = 20;
 
-  // Header
-  doc.setFillColor(...primaryColor);
-  doc.rect(0, 0, pageWidth, 28, "F");
+  // Header — corporate banner
+  doc.setFillColor(...pdfColors.navy);
+  doc.rect(0, 0, pageWidth, 3, "F");
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(24);
+  // Company name
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("Load Flow Analytics Report", 12, 17);
+  doc.text(COMPANY_NAME, 12, 14);
 
-  doc.setFontSize(11);
+  // System subtitle
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.text(`Generated: ${reportDate} | Period: Last ${timeRangeLabel}`, 12, 24);
+  doc.text(SYSTEM_NAME, 12, 19);
 
-  yPos = 36;
+  // Document title (right-aligned)
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("ANALYTICS REPORT", pageWidth - 12, 14, { align: "right" });
+
+  // Date & period (right-aligned)
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Generated: ${reportDate} | Period: Last ${timeRangeLabel}`, pageWidth - 12, 19, { align: "right" });
+
+  // Separator line
+  doc.setDrawColor(...pdfColors.navy);
+  doc.setLineWidth(0.5);
+  doc.line(12, 23, pageWidth - 12, 23);
+
+  yPos = 30;
 
   // Summary Statistics Section
   const stats = calculateSummaryStats(filteredLoads);
@@ -402,7 +423,7 @@ export function exportReportsToPdf({
       ]),
       theme: "grid",
       headStyles: {
-        fillColor: [139, 92, 246], // Purple
+        fillColor: pdfColors.blue, // Cargo distribution
         textColor: [255, 255, 255],
         fontStyle: "bold",
         fontSize: 10,
@@ -443,7 +464,7 @@ export function exportReportsToPdf({
       ]),
       theme: "grid",
       headStyles: {
-        fillColor: [245, 158, 11], // Amber
+        fillColor: pdfColors.accent, // Routes
         textColor: [255, 255, 255],
         fontStyle: "bold",
         fontSize: 10,
@@ -488,7 +509,7 @@ export function exportReportsToPdf({
       ]),
       theme: "grid",
       headStyles: {
-        fillColor: [6, 182, 212], // Cyan
+        fillColor: pdfColors.blue, // Day of week
         textColor: [255, 255, 255],
         fontStyle: "bold",
         fontSize: 10,
@@ -535,7 +556,7 @@ export function exportReportsToPdf({
       ]),
       theme: "grid",
       headStyles: {
-        fillColor: [99, 102, 241],
+        fillColor: pdfColors.navy,
         textColor: [255, 255, 255],
         fontStyle: "bold",
         fontSize: 10,
@@ -576,7 +597,7 @@ export function exportReportsToPdf({
       ]),
       theme: "grid",
       headStyles: {
-        fillColor: [236, 72, 153], // Pink
+        fillColor: pdfColors.navy, // Monthly trends
         textColor: [255, 255, 255],
         fontStyle: "bold",
         fontSize: 10,
@@ -604,7 +625,7 @@ export function exportReportsToPdf({
     doc.setFontSize(8);
     doc.setTextColor(...mutedColor);
     doc.text(
-      `Page ${i} of ${pageCount} | Load Flow Analytics Report | Generated ${reportDate}`,
+      `Page ${i} of ${pageCount} | ${SYSTEM_NAME} | Generated ${reportDate}`,
       pageWidth / 2,
       pageHeight - 6,
       { align: "center" },
@@ -619,7 +640,7 @@ export function exportReportsToPdf({
         .split("-")
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(" ");
-  const filename = `LoadFlow_${reportTypeLabel}_Report_${format(new Date(), "yyyy-MM-dd")}.pdf`;
+  const filename = `Matanuska_${reportTypeLabel}_Report_${format(new Date(), "yyyy-MM-dd")}.pdf`;
 
   doc.save(filename);
 }
@@ -630,18 +651,37 @@ export function exportVarianceToPdf(loads: Load[], timeRange: ReportOptions["tim
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const primary: [number, number, number] = [99, 102, 241];
-  const text: [number, number, number] = [55, 65, 81];
+  const primary: [number, number, number] = pdfColors.navy;
+  const text: [number, number, number] = pdfColors.textPrimary;
   const reportDate = format(new Date(), "MMMM d, yyyy");
 
-  // Header
-  doc.setFillColor(...primary);
-  doc.rect(0, 0, pageWidth, 24, "F");
-  doc.setTextColor(255, 255, 255);
+  // Header — corporate banner
+  doc.setFillColor(...pdfColors.navy);
+  doc.rect(0, 0, pageWidth, 3, "F");
+
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text(COMPANY_NAME, 12, 14);
+
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text(SYSTEM_NAME, 12, 19);
+
+  doc.setTextColor(...pdfColors.navy);
   doc.setFontSize(16);
-  doc.text("Punctuality Variance Report", 12, 14);
-  doc.setFontSize(10);
-  doc.text(`Generated: ${reportDate}`, 12, 20);
+  doc.setFont("helvetica", "bold");
+  doc.text("PUNCTUALITY VARIANCE REPORT", pageWidth - 12, 14, { align: "right" });
+
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Generated: ${reportDate}`, pageWidth - 12, 19, { align: "right" });
+
+  doc.setDrawColor(...pdfColors.navy);
+  doc.setLineWidth(0.5);
+  doc.line(10, 23, pageWidth - 10, 23);
 
   // Use the shared parser
   const getTimeWindow = (load: Load): timeWindowLib.TimeWindowDataFull | null => {
@@ -714,7 +754,7 @@ export function exportVarianceToPdf(loads: Load[], timeRange: ReportOptions["tim
     ]);
 
   autoTable(doc, {
-    startY: 30,
+    startY: 28,
     head: [["Date", "Loads", "Avg OA", "Avg OD", "Avg DA", "Avg DD", "Origin Late", "Dest Late"]],
     body: dailyRows,
     theme: "grid",
@@ -768,8 +808,9 @@ export function exportVarianceToPdf(loads: Load[], timeRange: ReportOptions["tim
     y = 16;
   }
 
-  doc.setTextColor(...primary);
+  doc.setTextColor(...pdfColors.navy);
   doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
   doc.text("Delays by Origin (Total Minutes)", 12, y);
   y += 4;
 
@@ -790,8 +831,9 @@ export function exportVarianceToPdf(loads: Load[], timeRange: ReportOptions["tim
     y = 16;
   }
 
-  doc.setTextColor(...primary);
+  doc.setTextColor(...pdfColors.navy);
   doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
   doc.text("Delays by Destination (Total Minutes)", 12, y);
   y += 4;
 
@@ -810,11 +852,11 @@ export function exportVarianceToPdf(loads: Load[], timeRange: ReportOptions["tim
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setTextColor(107, 114, 128);
-    doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 6, { align: "center" });
+    doc.setTextColor(...pdfColors.textMuted);
+    doc.text(`Page ${i} of ${pageCount} | ${SYSTEM_NAME}`, pageWidth / 2, pageHeight - 6, { align: "center" });
   }
 
-  doc.save(`variance-report-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+  doc.save(`Matanuska_Variance_Report_${format(new Date(), "yyyy-MM-dd")}.pdf`);
 }
 
 // Punctuality details PDF (per-load planned vs actual with variances)
@@ -823,18 +865,37 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const primary: [number, number, number] = [99, 102, 241];
-  const text: [number, number, number] = [55, 65, 81];
+  const primary: [number, number, number] = pdfColors.navy;
+  const text: [number, number, number] = pdfColors.textPrimary;
   const reportDate = format(new Date(), "MMMM d, yyyy");
 
-  // Header
-  doc.setFillColor(...primary);
-  doc.rect(0, 0, pageWidth, 24, "F");
-  doc.setTextColor(255, 255, 255);
+  // Header — corporate banner
+  doc.setFillColor(...pdfColors.navy);
+  doc.rect(0, 0, pageWidth, 3, "F");
+
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text(COMPANY_NAME, 12, 14);
+
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text(SYSTEM_NAME, 12, 19);
+
+  doc.setTextColor(...pdfColors.navy);
   doc.setFontSize(16);
-  doc.text("Punctuality Details (Planned vs Actual)", 12, 14);
-  doc.setFontSize(10);
-  doc.text(`Generated: ${reportDate}`, 12, 20);
+  doc.setFont("helvetica", "bold");
+  doc.text("PUNCTUALITY DETAILS", pageWidth - 12, 14, { align: "right" });
+
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Generated: ${reportDate}`, pageWidth - 12, 19, { align: "right" });
+
+  doc.setDrawColor(...pdfColors.navy);
+  doc.setLineWidth(0.5);
+  doc.line(6, 23, pageWidth - 6, 23);
 
   // Use the shared parser
   const getTimeWindow = (load: Load): timeWindowLib.TimeWindowDataFull | null => {
@@ -882,7 +943,7 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
   }
 
   autoTable(doc, {
-    startY: 30,
+    startY: 28,
     head: [[
       "Load ID", "Vehicle", "Origin", "Destination", "Loading Date", "Offloading Date", "Status",
       "O Plan Arr", "O Act Arr", "O Var (min)",
@@ -904,11 +965,11 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
-    doc.setTextColor(107, 114, 128);
-    doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - 6, { align: "center" });
+    doc.setTextColor(...pdfColors.textMuted);
+    doc.text(`Page ${i} of ${pageCount} | ${SYSTEM_NAME}`, pageWidth / 2, pageHeight - 6, { align: "center" });
   }
 
-  doc.save(`punctuality-details-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+  doc.save(`Matanuska_Punctuality_Details_${format(new Date(), "yyyy-MM-dd")}.pdf`);
 }
 
 export type { ReportOptions };

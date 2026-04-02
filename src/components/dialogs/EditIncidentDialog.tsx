@@ -1,61 +1,58 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-  } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { DriverSelect } from "@/components/ui/driver-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { VehicleSelect } from "@/components/ui/vehicle-select";
 import { useToast } from "@/hooks/use-toast";
-import
-  {
-    DOCUMENT_TYPES,
-    useAddTimelineNote,
-    useDeleteIncidentDocument,
-    useIncidentDocuments,
-    useIncidentTimeline,
-    useUploadIncidentDocument,
-  } from "@/hooks/useIncidentDocuments";
+import {
+  DOCUMENT_TYPES,
+  useAddTimelineNote,
+  useDeleteIncidentDocument,
+  useIncidentDocuments,
+  useIncidentTimeline,
+  useUploadIncidentDocument,
+} from "@/hooks/useIncidentDocuments";
 import type { Incident } from "@/hooks/useIncidents";
-import { useVehicles } from "@/hooks/useVehicles";
 import { supabase } from "@/integrations/supabase/client";
 import { recoverIncidentImages } from "@/utils/recoverIncidentImages";
 import { useQueryClient } from "@tanstack/react-query";
-import
-  {
-    AlertTriangle,
-    Calendar,
-    Camera,
-    CheckCircle,
-    Clock,
-    Download,
-    FileText,
-    Image as ImageIcon,
-    MessageSquare,
-    Plus,
-    RefreshCw,
-    Send,
-    Shield,
-    Trash2,
-    Upload,
-    X
-  } from "lucide-react";
+import {
+  AlertTriangle,
+  Calendar,
+  Camera,
+  CheckCircle,
+  Clock,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Send,
+  Shield,
+  Trash2,
+  Upload,
+  X
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface EditIncidentDialogProps {
@@ -99,7 +96,6 @@ const EditIncidentDialog = ({
 }: EditIncidentDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: vehicles = [] } = useVehicles();
   const { data: documents = [] } = useIncidentDocuments(incident?.id || null);
   const { data: timeline = [] } = useIncidentTimeline(incident?.id || null);
   const uploadDocument = useUploadIncidentDocument();
@@ -126,6 +122,7 @@ const EditIncidentDialog = ({
     weatherCondition: "unknown",
     description: "",
     driverName: "",
+    driverId: "",
     severityRating: "3",
     notes: "",
   });
@@ -141,6 +138,7 @@ const EditIncidentDialog = ({
         weatherCondition: incident.weather_condition || "unknown",
         description: incident.description || "",
         driverName: incident.driver_name || "",
+        driverId: incident.driver_id || "",
         severityRating: incident.severity_rating?.toString() || "3",
         notes: incident.notes || "",
       });
@@ -217,6 +215,7 @@ const EditIncidentDialog = ({
           weather_condition: formData.weatherCondition as "clear" | "cloudy" | "rain" | "heavy_rain" | "fog" | "snow" | "hail" | "windy" | "storm" | "unknown",
           description: formData.description || null,
           driver_name: formData.driverName || null,
+          driver_id: formData.driverId || null,
           severity_rating: parseInt(formData.severityRating),
           notes: formData.notes || null,
           images: updatedImages, // JSONB array, not a string
@@ -487,34 +486,14 @@ const EditIncidentDialog = ({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="vehicleId">Vehicle</Label>
-              <Select
-                value={formData.vehicleId}
+              <Label>Vehicle</Label>
+              <VehicleSelect
+                value={formData.vehicleId || undefined}
                 onValueChange={(value) =>
                   setFormData({ ...formData, vehicleId: value })
                 }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select vehicle" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vehicles.map((vehicle) => (
-                    <SelectItem key={vehicle.id} value={vehicle.id}>
-                      <div className="flex items-center gap-2">
-                        {vehicle.fleet_number && (
-                          <Badge variant="secondary" className="font-mono text-xs">
-                            {vehicle.fleet_number}
-                          </Badge>
-                        )}
-                        <span className="font-medium">{vehicle.registration_number}</span>
-                        <span className="text-muted-foreground text-sm">
-                          {vehicle.make} {vehicle.model}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Select vehicle"
+              />
             </div>
 
             <div className="space-y-2">
@@ -572,13 +551,16 @@ const EditIncidentDialog = ({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="driverName">Driver Name</Label>
-              <Input
-                id="driverName"
-                value={formData.driverName}
-                onChange={(e) =>
-                  setFormData({ ...formData, driverName: e.target.value })
+              <Label>Driver Name</Label>
+              <DriverSelect
+                value={formData.driverName || undefined}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, driverName: value })
                 }
+                onDriverIdChange={(driverId) =>
+                  setFormData((prev) => ({ ...prev, driverId: driverId || "" }))
+                }
+                placeholder="Select driver"
               />
             </div>
 

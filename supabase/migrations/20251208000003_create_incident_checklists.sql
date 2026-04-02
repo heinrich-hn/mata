@@ -30,21 +30,25 @@ CREATE INDEX IF NOT EXISTS idx_incident_checklists_incident_id ON incident_check
 ALTER TABLE incident_checklists ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+DROP POLICY IF EXISTS "Allow authenticated users to view incident checklists" ON incident_checklists;
 CREATE POLICY "Allow authenticated users to view incident checklists"
 ON incident_checklists FOR SELECT
 TO authenticated
 USING (true);
 
+DROP POLICY IF EXISTS "Allow authenticated users to create incident checklists" ON incident_checklists;
 CREATE POLICY "Allow authenticated users to create incident checklists"
 ON incident_checklists FOR INSERT
 TO authenticated
 WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow authenticated users to update incident checklists" ON incident_checklists;
 CREATE POLICY "Allow authenticated users to update incident checklists"
 ON incident_checklists FOR UPDATE
 TO authenticated
 USING (true);
 
+DROP POLICY IF EXISTS "Allow authenticated users to delete incident checklists" ON incident_checklists;
 CREATE POLICY "Allow authenticated users to delete incident checklists"
 ON incident_checklists FOR DELETE
 TO authenticated
@@ -59,6 +63,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_incident_checklist_timestamp ON incident_checklists;
 CREATE TRIGGER trigger_update_incident_checklist_timestamp
   BEFORE UPDATE ON incident_checklists
   FOR EACH ROW

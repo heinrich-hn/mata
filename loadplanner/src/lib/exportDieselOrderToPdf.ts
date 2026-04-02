@@ -1,4 +1,5 @@
 import type { DieselOrder } from "@/hooks/useDieselOrders";
+import { COMPANY_NAME, SYSTEM_NAME, pdfColors } from "@/lib/exportStyles";
 import { format, parseISO } from "date-fns";
 import { jsPDF } from "jspdf";
 
@@ -17,15 +18,12 @@ export function exportDieselOrderToPdf(order: DieselOrder): void {
   let yPos = 20;
 
   // Colors
-  const primaryColor: [number, number, number] = [59, 130, 246]; // Blue
   const headerBg: [number, number, number] = [241, 245, 249]; // Light gray
-  const _successColor: [number, number, number] = [34, 197, 94]; // Green
-  const _warningColor: [number, number, number] = [234, 179, 8]; // Yellow/Orange
 
   // Helper to add section header
   const addSectionHeader = (
     title: string,
-    color: [number, number, number] = primaryColor,
+    color: [number, number, number] = pdfColors.blue,
   ): number => {
     doc.setFillColor(...color);
     doc.rect(margin, yPos, pageWidth - 2 * margin, 8, "F");
@@ -56,38 +54,60 @@ export function exportDieselOrderToPdf(order: DieselOrder): void {
   };
 
   // ========== HEADER ==========
-  doc.setFillColor(...primaryColor);
-  doc.rect(0, 0, pageWidth, 35, "F");
+  // Top accent strip
+  doc.setFillColor(...pdfColors.navy);
+  doc.rect(0, 0, pageWidth, 3, "F");
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
+  // Company name
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.text("DIESEL ORDER", margin, 18);
+  doc.text(COMPANY_NAME, margin, 14);
 
+  // System subtitle
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text(SYSTEM_NAME, margin, 19);
+
+  // Document title (right-aligned)
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("DIESEL ORDER", pageWidth - margin, 14, { align: "right" });
+
+  // Order number (right-aligned)
+  doc.setTextColor(...pdfColors.blue);
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
-  doc.text(order.order_number, margin, 28);
+  doc.text(order.order_number, pageWidth - margin, 21, { align: "right" });
 
   // Status badge
   const statusText = statusLabels[order.status] || order.status;
-  const statusWidth = doc.getTextWidth(statusText) + 10;
-  doc.setFillColor(255, 255, 255);
+  const statusWidth = doc.getTextWidth(statusText.toUpperCase()) + 10;
+  doc.setFillColor(...pdfColors.lightBlue);
   doc.roundedRect(
     pageWidth - margin - statusWidth,
-    15,
+    25,
     statusWidth,
-    12,
+    8,
     2,
     2,
     "F",
   );
-  doc.setTextColor(...primaryColor);
-  doc.setFontSize(10);
-  doc.text(statusText.toUpperCase(), pageWidth - margin - statusWidth / 2, 22, {
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text(statusText.toUpperCase(), pageWidth - margin - statusWidth / 2, 30, {
     align: "center",
   });
 
-  yPos = 45;
+  // Separator line
+  doc.setDrawColor(...pdfColors.navy);
+  doc.setLineWidth(0.5);
+  doc.line(margin, 36, pageWidth - margin, 36);
+
+  yPos = 42;
 
   // ========== ORDER DETAILS ==========
   yPos = addSectionHeader("Order Information");
@@ -247,7 +267,7 @@ export function exportDieselOrderToPdf(order: DieselOrder): void {
     margin,
     footerY,
   );
-  doc.text("LoadPlan Fleet Management System", pageWidth - margin, footerY, {
+  doc.text(SYSTEM_NAME, pageWidth - margin, footerY, {
     align: "right",
   });
 

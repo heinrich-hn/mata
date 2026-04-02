@@ -2,7 +2,12 @@ import type { Load } from "@/hooks/useTrips";
 import * as timeWindowLib from "@/lib/timeWindow";
 import { timeToSASTMinutes } from "@/lib/timeWindow";
 import { eachWeekOfInterval, format, parseISO, subMonths } from "date-fns";
-import * as XLSX from "xlsx";
+import XLSX from "xlsx-js-style";
+import {
+  COMPANY_NAME,
+  xlGoodVariance, xlBadVariance, xlNeutralVariance,
+  applyHeaderStyle, applyTitleRows,
+} from "@/lib/exportStyles";
 
 type TimeRange = "3months" | "6months" | "12months";
 
@@ -22,6 +27,19 @@ function filtered(loads: Load[], timeRange: TimeRange): Load[] {
     const d = parseISO(l.loading_date);
     return d >= start && d <= now;
   });
+}
+
+function encodeCell(r: number, c: number): string {
+  let col = "";
+  let n = c;
+  do { col = String.fromCharCode(65 + (n % 26)) + col; n = Math.floor(n / 26) - 1; } while (n >= 0);
+  return `${col}${r + 1}`;
+}
+
+function varianceStyle(v: number | null) {
+  if (v === null) return undefined;
+  if (v === 0) return xlNeutralVariance;
+  return v > 0 ? xlBadVariance : xlGoodVariance;
 }
 
 export function exportVarianceToExcel(loads: Load[], timeRange: TimeRange = "3months") {
@@ -59,7 +77,32 @@ export function exportVarianceToExcel(loads: Load[], timeRange: TimeRange = "3mo
       Status: l.status,
     });
   }
-  const wsDetail = XLSX.utils.json_to_sheet(detailRows);
+  const wsDetail = XLSX.utils.aoa_to_sheet([
+    [`${COMPANY_NAME} — Variance Report (${timeRange})`],
+    [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`],
+    [],
+  ]);
+  XLSX.utils.sheet_add_json(wsDetail, detailRows, { origin: "A4" });
+  const detailColCount = Object.keys(detailRows[0] ?? {}).length || 18;
+  const detailMerges: XLSX.Range[] = [];
+  applyTitleRows(wsDetail, detailColCount, detailMerges);
+  wsDetail["!merges"] = detailMerges;
+  applyHeaderStyle(wsDetail, 3, detailColCount);
+
+  // Variance columns: 7 (Var OA), 10 (Var OD), 13 (Var DA), 16 (Var DD) — 0-based within data
+  const varianceDataCols = [7, 10, 13, 16];
+  detailRows.forEach((row, rowIdx) => {
+    const excelRow = rowIdx + 4;
+    varianceDataCols.forEach((col) => {
+      const cellRef = encodeCell(excelRow, col);
+      const cell = wsDetail[cellRef];
+      if (cell && cell.v !== null && cell.v !== undefined) {
+        const style = varianceStyle(typeof cell.v === "number" ? cell.v : null);
+        if (style) cell.s = style;
+      }
+    });
+  });
+
   wsDetail["!cols"] = [
     { wch: 12 }, { wch: 6 }, { wch: 14 }, { wch: 18 }, { wch: 18 },
     { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 10 },
@@ -93,7 +136,17 @@ export function exportVarianceToExcel(loads: Load[], timeRange: TimeRange = "3mo
     "Origin Late Cnt": v.oLate,
     "Dest Late Cnt": v.dLate,
   }));
-  const wsDaily = XLSX.utils.json_to_sheet(dayRows);
+  const wsDaily = XLSX.utils.aoa_to_sheet([
+    [`${COMPANY_NAME} — Daily Summary (${timeRange})`],
+    [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`],
+    [],
+  ]);
+  XLSX.utils.sheet_add_json(wsDaily, dayRows, { origin: "A4" });
+  const dailyColCount = Object.keys(dayRows[0] ?? {}).length || 8;
+  const dailyMerges: XLSX.Range[] = [];
+  applyTitleRows(wsDaily, dailyColCount, dailyMerges);
+  wsDaily["!merges"] = dailyMerges;
+  applyHeaderStyle(wsDaily, 3, dailyColCount);
   XLSX.utils.book_append_sheet(wb, wsDaily, "Daily Summary");
 
   // Sheet 3: Weekly summary
@@ -132,7 +185,17 @@ export function exportVarianceToExcel(loads: Load[], timeRange: TimeRange = "3mo
     "Origin Late Cnt": v.oLate,
     "Dest Late Cnt": v.dLate,
   }));
-  const wsWeekly = XLSX.utils.json_to_sheet(weekRows);
+  const wsWeekly = XLSX.utils.aoa_to_sheet([
+    [`${COMPANY_NAME} — Weekly Summary (${timeRange})`],
+    [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`],
+    [],
+  ]);
+  XLSX.utils.sheet_add_json(wsWeekly, weekRows, { origin: "A4" });
+  const weeklyColCount = Object.keys(weekRows[0] ?? {}).length || 8;
+  const weeklyMerges: XLSX.Range[] = [];
+  applyTitleRows(wsWeekly, weeklyColCount, weeklyMerges);
+  wsWeekly["!merges"] = weeklyMerges;
+  applyHeaderStyle(wsWeekly, 3, weeklyColCount);
   XLSX.utils.book_append_sheet(wb, wsWeekly, "Weekly Summary");
 
   // Sheet 4: Delay summary by Origin/Destination names
@@ -150,8 +213,12 @@ export function exportVarianceToExcel(loads: Load[], timeRange: TimeRange = "3mo
   }
   const originRows = Object.entries(originSums).sort((a, b) => b[1] - a[1]).map(([loc, mins]) => ({ Origin: loc, "Total Delay (min)": mins }));
   const destRows = Object.entries(destSums).sort((a, b) => b[1] - a[1]).map(([loc, mins]) => ({ Destination: loc, "Total Delay (min)": mins }));
-  const wsOrigin = XLSX.utils.json_to_sheet(originRows);
-  const wsDest = XLSX.utils.json_to_sheet(destRows);
+  const wsOrigin = XLSX.utils.aoa_to_sheet([["Origin", "Total Delay (min)"]]);
+  XLSX.utils.sheet_add_json(wsOrigin, originRows, { origin: "A2", skipHeader: true });
+  applyHeaderStyle(wsOrigin, 0, 2);
+  const wsDest = XLSX.utils.aoa_to_sheet([["Destination", "Total Delay (min)"]]);
+  XLSX.utils.sheet_add_json(wsDest, destRows, { origin: "A2", skipHeader: true });
+  applyHeaderStyle(wsDest, 0, 2);
   XLSX.utils.book_append_sheet(wb, wsOrigin, "Delays by Origin");
   XLSX.utils.book_append_sheet(wb, wsDest, "Delays by Destination");
 

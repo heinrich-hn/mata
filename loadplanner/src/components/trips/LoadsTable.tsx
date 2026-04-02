@@ -46,6 +46,7 @@ import {
   Clock,
   FileDown,
   Fuel,
+  Handshake,
   MapPin,
   MessageCircle,
   MoreHorizontal,
@@ -60,6 +61,7 @@ import {
 import { useMemo, useState } from "react";
 import { AddBackloadDialog } from "./AddBackloadDialog";
 import { AddThirdPartyBackloadDialog } from "./AddThirdPartyBackloadDialog";
+import { AssignSubcontractorDialog } from "./AssignSubcontractorDialog";
 import { AlterLoadTimesDialog } from "./AlterTripTimesDialog";
 import { DeliveryConfirmationDialog } from "./DeliveryConfirmationDialog";
 import { StatusStepper } from "./StatusToggle";
@@ -171,6 +173,8 @@ export function LoadsTable({
   const [loadForDieselOrder, setLoadForDieselOrder] = useState<Load | null>(null);
   const [breakdownDialogOpen, setBreakdownDialogOpen] = useState(false);
   const [loadForBreakdown, setLoadForBreakdown] = useState<Load | null>(null);
+  const [subcontractorDialogOpen, setSubcontractorDialogOpen] = useState(false);
+  const [loadForSubcontractor, setLoadForSubcontractor] = useState<Load | null>(null);
 
   const deleteLoad = useDeleteLoad();
 
@@ -411,6 +415,20 @@ export function LoadsTable({
                           <p className="font-semibold text-foreground">
                             {load.load_id}
                           </p>
+                          {(() => {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const rawTw: any = (() => { try { return typeof load.time_window === "string" ? JSON.parse(load.time_window || "{}") : (load.time_window ?? {}); } catch { return {}; } })();
+                            const sc = rawTw.subcontractor;
+                            if (!sc?.supplierName) return null;
+                            return (
+                              <div className="flex items-center gap-1 mt-0.5" title={`Subcontractor: ${sc.supplierName}`}>
+                                <Handshake className="h-3 w-3 text-indigo-500" />
+                                <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 truncate max-w-[120px]">
+                                  {sc.supplierName}
+                                </span>
+                              </div>
+                            );
+                          })()}
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                             <Truck className="h-3 w-3" />
                             {load.fleet_vehicle?.vehicle_id || "Unassigned"}
@@ -683,6 +701,24 @@ export function LoadsTable({
                               </DropdownMenuItem>
                             )}
 
+                            {load.status !== "delivered" && (() => {
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              const rawTw: any = (() => { try { return typeof load.time_window === "string" ? JSON.parse(load.time_window || "{}") : (load.time_window ?? {}); } catch { return {}; } })();
+                              const hasSubcontractor = !!rawTw.subcontractor?.supplierId;
+                              return (
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLoadForSubcontractor(load);
+                                    setSubcontractorDialogOpen(true);
+                                  }}
+                                >
+                                  <Handshake className="h-4 w-4 mr-2" />
+                                  {hasSubcontractor ? "Reassign Subcontractor" : "Assign to Subcontractor"}
+                                </DropdownMenuItem>
+                              );
+                            })()}
+
                             {load.fleet_vehicle && load.status !== "delivered" && (
                               <DropdownMenuItem
                                 onClick={(e) =>
@@ -865,6 +901,15 @@ export function LoadsTable({
           if (!open) setLoadForBreakdown(null);
         }}
         load={loadForBreakdown}
+      />
+
+      <AssignSubcontractorDialog
+        open={subcontractorDialogOpen}
+        onOpenChange={(open) => {
+          setSubcontractorDialogOpen(open);
+          if (!open) setLoadForSubcontractor(null);
+        }}
+        load={loadForSubcontractor}
       />
     </div>
   );

@@ -1,27 +1,26 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-  } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DriverSelect } from "@/components/ui/driver-select";
+import { InspectorSelect } from "@/components/ui/inspector-select";
+import { VehicleSelect } from "@/components/ui/vehicle-select";
 import { useToast } from "@/hooks/use-toast";
-import { useVehicles } from "@/hooks/useVehicles";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Camera, X } from "lucide-react";
@@ -63,7 +62,6 @@ const WEATHER_CONDITIONS = [
 const AddIncidentDialog = ({ open, onOpenChange }: AddIncidentDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: vehicles = [] } = useVehicles();
   const [loading, setLoading] = useState(false);
   const [images, setImages] = useState<File[]>([]);
   const [formData, setFormData] = useState({
@@ -76,6 +74,7 @@ const AddIncidentDialog = ({ open, onOpenChange }: AddIncidentDialogProps) => {
     description: "",
     reportedBy: "",
     driverName: "",
+    driverId: "",
     severityRating: "3",
   });
 
@@ -174,6 +173,7 @@ const AddIncidentDialog = ({ open, onOpenChange }: AddIncidentDialogProps) => {
           description: formData.description || null,
           reported_by: formData.reportedBy,
           driver_name: formData.driverName || null,
+          driver_id: formData.driverId || null,
           severity_rating: parseInt(formData.severityRating),
           status: "open" as const,
           images: [], // JSONB array, not a string
@@ -226,6 +226,7 @@ const AddIncidentDialog = ({ open, onOpenChange }: AddIncidentDialogProps) => {
         description: "",
         reportedBy: "",
         driverName: "",
+        driverId: "",
         severityRating: "3",
       });
       setImages([]);
@@ -281,34 +282,14 @@ const AddIncidentDialog = ({ open, onOpenChange }: AddIncidentDialogProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="vehicleId">Vehicle</Label>
-            <Select
-              value={formData.vehicleId}
+            <Label>Vehicle</Label>
+            <VehicleSelect
+              value={formData.vehicleId || undefined}
               onValueChange={(value) =>
                 setFormData({ ...formData, vehicleId: value })
               }
-            >
-              <SelectTrigger id="vehicleId">
-                <SelectValue placeholder="Select vehicle (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                {vehicles.map((vehicle) => (
-                  <SelectItem key={vehicle.id} value={vehicle.id}>
-                    <div className="flex items-center gap-2">
-                      {vehicle.fleet_number && (
-                        <Badge variant="secondary" className="font-mono text-xs">
-                          {vehicle.fleet_number}
-                        </Badge>
-                      )}
-                      <span className="font-medium">{vehicle.registration_number}</span>
-                      <span className="text-muted-foreground text-sm">
-                        {vehicle.make} {vehicle.model}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Select vehicle (optional)"
+            />
           </div>
 
           <div className="space-y-2">
@@ -369,26 +350,26 @@ const AddIncidentDialog = ({ open, onOpenChange }: AddIncidentDialogProps) => {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="reportedBy">Reported By *</Label>
-              <Input
-                id="reportedBy"
-                placeholder="Enter name"
-                value={formData.reportedBy}
-                onChange={(e) =>
-                  setFormData({ ...formData, reportedBy: e.target.value })
+              <Label>Reported By *</Label>
+              <InspectorSelect
+                value={formData.reportedBy || undefined}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, reportedBy: value })
                 }
-                required
+                placeholder="Select reporter"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="driverName">Driver Name</Label>
-              <Input
-                id="driverName"
-                placeholder="Enter driver name"
-                value={formData.driverName}
-                onChange={(e) =>
-                  setFormData({ ...formData, driverName: e.target.value })
+              <Label>Driver Name</Label>
+              <DriverSelect
+                value={formData.driverName || undefined}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, driverName: value })
                 }
+                onDriverIdChange={(driverId) =>
+                  setFormData((prev) => ({ ...prev, driverId: driverId || "" }))
+                }
+                placeholder="Select driver"
               />
             </div>
           </div>

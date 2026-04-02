@@ -1,4 +1,5 @@
 import type { Load } from "@/hooks/useTrips";
+import { COMPANY_NAME, SYSTEM_NAME, pdfColors } from "@/lib/exportStyles";
 import * as timeWindowLib from "@/lib/timeWindow";
 import { format, parseISO } from "date-fns";
 import { jsPDF } from "jspdf";
@@ -53,15 +54,14 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
   let yPos = 20;
 
   // Colors
-  const primaryColor: [number, number, number] = [59, 130, 246]; // Blue
   const headerBg: [number, number, number] = [241, 245, 249]; // Light gray
-  const successColor: [number, number, number] = [34, 197, 94]; // Green
+  const successColor: [number, number, number] = pdfColors.success;
   const warningColor: [number, number, number] = [234, 179, 8]; // Yellow/Orange
 
   // Helper to add section header
   const addSectionHeader = (
     title: string,
-    color: [number, number, number] = primaryColor,
+    color: [number, number, number] = pdfColors.blue,
   ): number => {
     doc.setFillColor(...color);
     doc.rect(margin, yPos, pageWidth - 2 * margin, 8, "F");
@@ -94,49 +94,69 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
   const timeWindow = timeWindowLib.parseTimeWindow(load.time_window);
 
   // ========== HEADER ==========
-  doc.setFillColor(...primaryColor);
-  doc.rect(0, 0, pageWidth, 35, "F");
+  // Top accent strip
+  doc.setFillColor(...pdfColors.navy);
+  doc.rect(0, 0, pageWidth, 3, "F");
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
+  // Company name
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.text("LOAD REPORT", margin, 18);
+  doc.text(COMPANY_NAME, margin, 14);
+
+  // System subtitle
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text(SYSTEM_NAME, margin, 19);
+
+  // Document title (right-aligned)
+  doc.setTextColor(...pdfColors.navy);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("LOAD REPORT", pageWidth - margin, 14, { align: "right" });
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
-  doc.text(load.load_id, margin, 28);
+  doc.setTextColor(...pdfColors.blue);
+  doc.text(load.load_id, pageWidth - margin, 21, { align: "right" });
 
   // Status badge
   const statusText = statusLabels[load.status] || load.status;
   const statusWidth = doc.getTextWidth(statusText) + 10;
-  doc.setFillColor(255, 255, 255);
+  doc.setFillColor(...pdfColors.lightBlue);
   doc.roundedRect(
     pageWidth - margin - statusWidth,
-    12,
+    24,
     statusWidth,
-    10,
+    8,
     2,
     2,
     "F",
   );
   doc.setTextColor(
-    ...(load.status === "delivered" ? successColor : primaryColor),
+    ...(load.status === "delivered" ? successColor : pdfColors.navy),
   );
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text(statusText, pageWidth - margin - statusWidth + 5, 19);
+  doc.text(statusText.toUpperCase(), pageWidth - margin - statusWidth + 5, 29);
 
   // Generated date
-  doc.setTextColor(200, 200, 200);
+  doc.setTextColor(...pdfColors.textMuted);
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.text(
     `Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`,
-    pageWidth - margin - 55,
-    28,
+    margin,
+    24,
   );
 
-  yPos = 45;
+  // Separator line
+  doc.setDrawColor(...pdfColors.navy);
+  doc.setLineWidth(0.5);
+  doc.line(margin, 35, pageWidth - margin, 35);
+
+  yPos = 42;
   doc.setTextColor(0, 0, 0);
 
   // ========== LOAD DETAILS ==========
@@ -209,7 +229,7 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
   doc.rect(margin, yPos, (pageWidth - 2 * margin) / 2 - 5, 35, "F");
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...successColor);
+  doc.setTextColor(...pdfColors.success);
   doc.text("ORIGIN", margin + 4, yPos + 6);
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(11);
@@ -234,7 +254,7 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
   doc.rect(destX, yPos, (pageWidth - 2 * margin) / 2 - 5, 35, "F");
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...primaryColor);
+  doc.setTextColor(...pdfColors.blue);
   doc.text("DESTINATION", destX + 4, yPos + 6);
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(11);
@@ -254,7 +274,7 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
   );
 
   // Arrow between origin and destination
-  doc.setFillColor(...primaryColor);
+  doc.setFillColor(...pdfColors.navy);
   const arrowX = margin + (pageWidth - 2 * margin) / 2 - 3;
   doc.triangle(
     arrowX,
@@ -500,7 +520,7 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
       yPos = 20;
     }
 
-    yPos = addSectionHeader("Parent Load Reference", primaryColor);
+    yPos = addSectionHeader("Parent Load Reference", pdfColors.navy);
 
     autoTable(doc, {
       startY: yPos,
@@ -525,7 +545,7 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
       ],
       margin: { left: margin, right: margin },
       styles: { fontSize: 9 },
-      headStyles: { fillColor: primaryColor, textColor: [255, 255, 255] },
+      headStyles: { fillColor: pdfColors.navy, textColor: [255, 255, 255] },
       columnStyles: {
         0: { fontStyle: "bold", cellWidth: 50 },
         1: { cellWidth: "auto" },
@@ -547,7 +567,7 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
       { align: "center" },
     );
     doc.text(
-      "LoadFlow - Load Management System",
+      SYSTEM_NAME,
       margin,
       doc.internal.pageSize.getHeight() - 10,
     );
