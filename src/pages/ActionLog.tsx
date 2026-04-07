@@ -14,12 +14,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOperations } from '@/contexts/OperationsContext';
 import { ActionItem, ActionItemComment, ActionItemProgressLine } from '@/types/operations';
-import { downloadBulkICS } from '@/utils/icsExport';
+import { emailBulkActionItems } from '@/utils/icsExport';
 import { formatDate } from 'date-fns';
 import jsPDF from 'jspdf';
 import {
   Calendar,
-  CalendarPlus,
   CheckCircle,
   ClipboardList,
   Clock,
@@ -28,6 +27,7 @@ import {
   FileSpreadsheet,
   FileText,
   ListChecks,
+  Mail,
   Plus,
   Save,
   Trash2,
@@ -736,11 +736,11 @@ const ActionLog = () => {
                   Export to PDF
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => {
-                  downloadBulkICS(sortedItems);
-                  toast.success(`Exported ${sortedItems.length} items to Outlook (.ics)`);
+                  emailBulkActionItems(sortedItems, activeTab);
+                  toast.success(`Opening email for ${activeTab}'s ${sortedItems.length} action items`);
                 }}>
-                  <CalendarPlus className="w-4 h-4 mr-2" />
-                  Export to Outlook
+                  <Mail className="w-4 h-4 mr-2" />
+                  Email to {activeTab}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -927,6 +927,47 @@ const ActionLog = () => {
 
                         {item.description && (
                           <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+                        )}
+
+                        {/* Inline Progress Lines */}
+                        {(item.progress_lines?.length ?? 0) > 0 && (
+                          <div className="mt-3 border rounded-md p-3 bg-muted/30">
+                            <div className="flex items-center gap-2 mb-2">
+                              <ListChecks className="w-3.5 h-3.5 text-muted-foreground" />
+                              <span className="text-xs font-medium text-muted-foreground">
+                                Progress ({item.progress_lines!.filter(l => l.completed).length}/{item.progress_lines!.length})
+                              </span>
+                              <div className="flex-1 bg-muted rounded-full h-1.5">
+                                <div
+                                  className="bg-success h-1.5 rounded-full transition-all"
+                                  style={{ width: `${(item.progress_lines!.filter(l => l.completed).length / item.progress_lines!.length) * 100}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              {item.progress_lines!.map((line) => {
+                                const lineTargetDate = line.target_date ? new Date(line.target_date) : null;
+                                const lineOverdue = lineTargetDate && new Date() > lineTargetDate && !line.completed;
+                                return (
+                                  <div key={line.id} className={`flex items-center gap-2 text-xs ${line.completed ? 'opacity-50' : ''}`}>
+                                    {line.completed ? (
+                                      <CheckCircle className="w-3.5 h-3.5 text-success shrink-0" />
+                                    ) : (
+                                      <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${lineOverdue ? 'border-destructive' : 'border-muted-foreground'}`} />
+                                    )}
+                                    <span className={`flex-1 ${line.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                      {line.note}
+                                    </span>
+                                    {line.target_date && (
+                                      <span className={`text-[10px] shrink-0 ${lineOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                                        {formatDate(new Date(line.target_date), 'dd MMM')}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         )}
                       </div>
 

@@ -3,15 +3,15 @@ import { Input } from '@/components/ui/input';
 import Modal from '@/components/ui/modal';
 import { Textarea } from '@/components/ui/textarea';
 import { ActionItem, ActionItemProgressLine } from '@/types/operations';
-import { downloadSingleICS } from '@/utils/icsExport';
+import { emailActionItem } from '@/utils/icsExport';
 import { formatDate } from 'date-fns';
 import {
     Calendar,
-    CalendarPlus,
     CheckCircle,
     Circle,
     Clock,
     ListChecks,
+    Mail,
     MessageSquare,
     Plus,
     Send,
@@ -152,11 +152,11 @@ const ActionItemDetails = ({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => downloadSingleICS(actionItem)}
-                title="Export to Outlook"
+                onClick={() => emailActionItem(actionItem)}
+                title="Email to assigned user"
               >
-                <CalendarPlus className="w-3 h-3 mr-1" />
-                Outlook
+                <Mail className="w-3 h-3 mr-1" />
+                Email
               </Button>
 
               {actionItem.status !== 'completed' && actionItem.status !== 'cancelled' && (
@@ -408,10 +408,10 @@ const ActionItemDetails = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => downloadSingleICS(actionItem)}
+            onClick={() => emailActionItem(actionItem)}
           >
-            <CalendarPlus className="w-4 h-4 mr-1" />
-            Export to Outlook
+            <Mail className="w-4 h-4 mr-1" />
+            Email to {actionItem.assigned_to || 'Assignee'}
           </Button>
           <Button variant="outline" onClick={onClose}>
             <X className="w-4 h-4 mr-1" />

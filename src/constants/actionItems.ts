@@ -7,6 +7,14 @@ export const ADMIN_USERS = [
   'Cain',
 ] as const;
 
+export const ADMIN_EMAILS: Record<string, string> = {
+  'Heinrich': 'heinrich@matanuska.co.za',
+  'Alec': 'alec@matanuska.co.zw',
+  'Vimbai': 'vimbai@matanuska.co.zw',
+  'Paul': 'transportmatanuska@gmail.com',
+  'Cain': 'cain@matanuska.co.zw',
+} as const;
+
 export const RESPONSIBLE_PERSONS = [
   ...ADMIN_USERS,
   'Operations Manager',
