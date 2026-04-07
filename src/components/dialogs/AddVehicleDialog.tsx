@@ -1,30 +1,29 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-  } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getFleetConfig, type FleetConfig, type FleetTyrePosition } from "@/constants/fleetTyreConfig";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import VehicleDocumentsSection, { type PendingDocument } from "@/components/Vehicle/VehicleDocumentsSection";
 
 // Default tyre position templates based on vehicle type
 const TYRE_TEMPLATES: Record<string, { label: string; positions: FleetTyrePosition[]; fleetType: FleetConfig['fleetType'] }> = {
@@ -182,6 +181,7 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
 
   const [createTyrePositions, setCreateTyrePositions] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+  const [pendingDocs, setPendingDocs] = useState<PendingDocument[]>([]);
 
   // Extract fleet number and check for existing config
   const fleetNumber = formData.fleet_number?.trim() || null;
@@ -212,7 +212,7 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
   };
 
   const createVehicleMutation = useMutation({
-    mutationFn: async (data: VehicleFormData & { createTyrePositions: boolean; template: string }) => {
+    mutationFn: async (data: VehicleFormData & { createTyrePositions: boolean; template: string; pendingDocs: PendingDocument[] }) => {
       // Create the vehicle first
       const { data: vehicle, error } = await supabase
         .from("vehicles")
@@ -275,15 +275,67 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
         }
       }
 
+      // Upload pending documents
+      if (data.pendingDocs.length > 0) {
+        for (const doc of data.pendingDocs) {
+          try {
+            let publicUrl = "";
+            let fileName = "No file";
+            let fileFormat = "none";
+
+            if (doc.file) {
+              const ext = doc.file.name.split(".").pop() || "dat";
+              const path = `vehicle-documents/${vehicle.id}-${Date.now()}.${ext}`;
+              const { error: uploadError } = await supabase.storage
+                .from("documents")
+                .upload(path, doc.file);
+              if (uploadError) throw uploadError;
+
+              const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+              publicUrl = urlData?.publicUrl as string;
+              fileName = doc.file.name;
+              fileFormat = ext;
+            }
+
+            const docNumber = doc.number || doc.type.toUpperCase();
+            const { error: docError } = await supabase.from("work_documents").insert({
+              vehicle_id: vehicle.id,
+              document_type: "other" as const,
+              document_category: doc.type,
+              document_number: docNumber,
+              title: `${doc.type.toUpperCase()} ${docNumber}`,
+              file_name: fileName,
+              file_format: fileFormat,
+              file_url: publicUrl,
+              uploaded_by: "system",
+              metadata: doc.expiry
+                ? { expiry_date: doc.expiry.toISOString().split("T")[0] }
+                : null,
+            });
+            if (docError) {
+              console.error("Failed to save document:", docError);
+            }
+          } catch (err) {
+            console.error("Failed to upload document:", err);
+          }
+        }
+      }
+
       return vehicle;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
 
       const positionCount = effectivePositions.length;
-      const message = variables.createTyrePositions && positionCount > 0
-        ? `Vehicle created with ${positionCount} tyre positions initialized`
-        : "Vehicle created successfully";
+      const docCount = variables.pendingDocs.length;
+      let message = "Vehicle created successfully";
+      if (variables.createTyrePositions && positionCount > 0 && docCount > 0) {
+        message = `Vehicle created with ${positionCount} tyre positions and ${docCount} document(s)`;
+      } else if (variables.createTyrePositions && positionCount > 0) {
+        message = `Vehicle created with ${positionCount} tyre positions initialized`;
+      } else if (docCount > 0) {
+        message = `Vehicle created with ${docCount} document(s)`;
+      }
 
       toast({
         title: "Success",
@@ -314,6 +366,7 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
     });
     setSelectedTemplate("");
     setCreateTyrePositions(true);
+    setPendingDocs([]);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -332,7 +385,8 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
     createVehicleMutation.mutate({
       ...formData,
       createTyrePositions,
-      template: selectedTemplate
+      template: selectedTemplate,
+      pendingDocs,
     });
   };
 
@@ -500,6 +554,12 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Vehicle Documents */}
+            <VehicleDocumentsSection
+              pendingDocuments={pendingDocs}
+              onPendingDocumentsChange={setPendingDocs}
+            />
 
             {/* Tyre Position Configuration Section */}
             <div className="grid grid-cols-4 items-start gap-4 pt-4 border-t">

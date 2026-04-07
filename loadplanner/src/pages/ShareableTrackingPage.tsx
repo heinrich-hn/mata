@@ -110,7 +110,8 @@ function getHeadingDirection(heading: number): string {
 
 // Create vehicle marker icon
 function createVehicleIcon(asset: TelematicsAsset): L.DivIcon {
-  const color = getStatusColor(asset);
+  const isMoving = (asset.speedKmH ?? 0) >= 5;
+  const color = isMoving ? "#16a34a" : "#dc2626";
   const rotation = asset.heading || 0;
 
   // Get fleet number from asset name or code
@@ -119,38 +120,41 @@ function createVehicleIcon(asset: TelematicsAsset): L.DivIcon {
   const displayNumber =
     fleetNumber.length > 8 ? fleetNumber.substring(0, 7) + "…" : fleetNumber;
 
-  // Fleet number label below the icon - clean professional styling
-  const fleetLabel = `
-    <div style="position:absolute;top:50px;left:50%;transform:translateX(-50%);background:white;color:#1e293b;font-size:12px;padding:4px 10px;border-radius:5px;white-space:nowrap;font-weight:700;letter-spacing:0.2px;box-shadow:0 2px 4px rgba(0,0,0,0.15);border:2px solid ${color};">
-      ${displayNumber}
+  const movingHtml = `
+    <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+      <div style="
+        width:20px;height:20px;border-radius:50%;background:${color};
+        border:2px solid white;display:flex;align-items:center;justify-content:center;
+        box-shadow:0 1px 4px rgba(0,0,0,0.3);transform:rotate(${rotation}deg);
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L12 22M12 2L5 9M12 2L19 9"/>
+        </svg>
+      </div>
+      <div style="position:absolute;top:22px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:white;font-size:9px;font-weight:600;padding:1px 4px;border-radius:3px;white-space:nowrap;font-family:system-ui,-apple-system,sans-serif;line-height:1.2;">
+        ${displayNumber}
+      </div>
+    </div>
+  `;
+
+  const stoppedHtml = `
+    <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+      <div style="
+        width:14px;height:14px;border-radius:50%;background:${color};
+        border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);
+      "></div>
+      <div style="position:absolute;top:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:white;font-size:9px;font-weight:600;padding:1px 4px;border-radius:3px;white-space:nowrap;font-family:system-ui,-apple-system,sans-serif;line-height:1.2;">
+        ${displayNumber}
+      </div>
     </div>
   `;
 
   return L.divIcon({
-    html: `
-      <div style="width:100px;height:80px;position:relative;display:flex;align-items:flex-start;justify-content:center;padding-top:0;overflow:visible;">
-        <div style="
-          width:48px;height:48px;border-radius:50%;background:${color};
-          border:4px solid white;display:flex;align-items:center;justify-content:center;
-          box-shadow:0 4px 12px rgba(0,0,0,0.3);transform:rotate(${rotation}deg);
-        ">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L12 22M12 2L5 9M12 2L19 9"/>
-          </svg>
-        </div>
-        ${
-          asset.inTrip
-            ? `<div style="position:absolute;top:2px;right:22px;width:16px;height:16px;border-radius:50%;background:#22c55e;border:2px solid white;animation:pulse 1.5s infinite;"></div>`
-            : ""
-        }
-        ${fleetLabel}
-      </div>
-      <style>@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:0.7}}</style>
-    `,
+    html: isMoving ? movingHtml : stoppedHtml,
     className: "vehicle-marker",
-    iconSize: [100, 80],
-    iconAnchor: [50, 24],
-    popupAnchor: [0, -24],
+    iconSize: isMoving ? [28, 36] : [22, 30],
+    iconAnchor: isMoving ? [14, 18] : [11, 15],
+    popupAnchor: [0, isMoving ? -18 : -15],
   });
 }
 
@@ -673,11 +677,10 @@ export default function ShareableTrackingPage() {
                             )}
                             {v.diffMin !== null && v.diffMin !== 0 && (
                               v.isLate ? (
-                                <span className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded border ${
-                                  v.diffMin > 60
-                                    ? 'text-red-700 bg-red-50 border-red-200'
-                                    : 'text-amber-700 bg-amber-50 border-amber-200'
-                                }`}>
+                                <span className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded border ${v.diffMin > 60
+                                  ? 'text-red-700 bg-red-50 border-red-200'
+                                  : 'text-amber-700 bg-amber-50 border-amber-200'
+                                  }`}>
                                   <ArrowUp className="w-3 h-3" />{v.label}
                                 </span>
                               ) : (
@@ -767,17 +770,17 @@ export default function ShareableTrackingPage() {
             <MapContainer
               center={
                 asset?.lastLatitude !== null &&
-                asset?.lastLatitude !== undefined &&
-                asset?.lastLongitude !== null &&
-                asset?.lastLongitude !== undefined
+                  asset?.lastLatitude !== undefined &&
+                  asset?.lastLongitude !== null &&
+                  asset?.lastLongitude !== undefined
                   ? [asset.lastLatitude, asset.lastLongitude]
                   : defaultCenter
               }
               zoom={
                 asset?.lastLatitude !== null &&
-                asset?.lastLatitude !== undefined &&
-                asset?.lastLongitude !== null &&
-                asset?.lastLongitude !== undefined
+                  asset?.lastLatitude !== undefined &&
+                  asset?.lastLongitude !== null &&
+                  asset?.lastLongitude !== undefined
                   ? 14
                   : 7
               }
@@ -790,8 +793,8 @@ export default function ShareableTrackingPage() {
               />
 
               {asset &&
-              asset.lastLatitude !== null &&
-              asset.lastLongitude !== null ? (
+                asset.lastLatitude !== null &&
+                asset.lastLongitude !== null ? (
                 <>
                   <Marker
                     position={[asset.lastLatitude, asset.lastLongitude]}

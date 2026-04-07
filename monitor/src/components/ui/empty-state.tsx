@@ -76,11 +76,11 @@ export function EmptyState({
       </div>
 
       {/* Title */}
-      <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
+      <h3 className="text-base font-semibold text-slate-900 mb-1.5">{title}</h3>
 
       {/* Description */}
       {description && (
-        <p className="text-sm text-muted-foreground max-w-md mb-6">
+        <p className="text-[0.8125rem] text-slate-500 max-w-md mb-6">
           {description}
         </p>
       )}

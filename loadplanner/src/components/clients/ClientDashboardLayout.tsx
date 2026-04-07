@@ -6,27 +6,25 @@ import { NavLink, useParams, useLocation } from 'react-router-dom';
 import { ClientPWARegistration } from './ClientPWARegistration';
 import { PWAInstallButton } from './PWAInstallButton';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
-import { Menu, X } from 'lucide-react';
-import { useState } from 'react';
 
 interface ClientDashboardLayoutProps {
   children: ReactNode;
 }
 
 const navItems = [
-  { title: 'Overview', path: '', icon: null },
-  { title: 'Live Map', path: 'live-map', icon: null },
-  { title: 'Loads', path: 'loads', icon: null },
-  { title: 'Deliveries', path: 'deliveries', icon: null },
-  { title: 'Past Deliveries', path: 'past-deliveries', icon: null },
+  { title: 'Overview', path: '' },
+  { title: 'Live Map', path: 'live-map' },
+  { title: 'Loads', path: 'loads' },
+  { title: 'Deliveries', path: 'deliveries' },
+  { title: 'Past Deliveries', path: 'past-deliveries' },
+  { title: 'Documents', path: 'documents' },
 ];
 
 export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) {
   const { clientId } = useParams<{ clientId: string }>();
   const location = useLocation();
   const { data: client, isLoading } = useClient(clientId);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+
   // Determine base path - use /portal for public access, /customers for admin access
   const basePath = location.pathname.startsWith('/portal') ? '/portal' : '/customers';
 
@@ -40,17 +38,17 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
 
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/80 bg-card/90 backdrop-blur-xl supports-[backdrop-filter]:bg-card/70 shadow-sm">
-        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+        <div className="container mx-auto px-4 sm:px-6 py-2.5 sm:py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl overflow-hidden bg-white border border-border shadow-sm flex-shrink-0">
-                <img 
-                  src="/loadplan-logo.png" 
-                  alt="LoadPlan" 
-                  className="h-8 w-8 sm:h-10 sm:w-10 object-contain" 
+              <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden bg-white border border-border shadow-sm flex-shrink-0">
+                <img
+                  src="/loadplan-logo.png"
+                  alt="LoadPlan"
+                  className="h-7 w-7 sm:h-8 sm:w-8 object-contain"
                 />
               </div>
-              
+
               {isLoading ? (
                 <div className="space-y-1">
                   <Skeleton className="h-5 w-32" />
@@ -61,16 +59,16 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
                   <h1 className="font-bold text-base sm:text-lg leading-tight truncate">
                     {client?.name || 'Client Portal'}
                   </h1>
-                  <p className="text-xs text-muted-foreground font-medium">Client Dashboard</p>
+                  <p className="text-xs text-muted-foreground font-medium hidden sm:block">Client Dashboard</p>
                 </div>
               )}
             </div>
 
-            {/* Desktop Actions */}
-            <div className="hidden md:flex items-center gap-3">
+            {/* Actions */}
+            <div className="flex items-center gap-3">
               {isPortal && <PWAInstallButton />}
               {client && (
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="hidden sm:flex items-center gap-4 text-sm text-muted-foreground">
                   {client.contact_person && (
                     <span className="hidden lg:inline-flex items-center gap-1.5">
                       <span className="relative flex h-2 w-2">
@@ -81,8 +79,8 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
                     </span>
                   )}
                   {client.contact_email && (
-                    <a 
-                      href={`mailto:${client.contact_email}`} 
+                    <a
+                      href={`mailto:${client.contact_email}`}
                       className="hover:text-foreground transition-colors"
                     >
                       {client.contact_email}
@@ -91,18 +89,12 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
                 </div>
               )}
             </div>
-
-            {/* Mobile menu button */}
-            <button 
-              className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
           </div>
+        </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1.5 mt-4 overflow-x-auto scrollbar-none pb-0.5">
+        {/* Always-visible horizontal scrollable tab navigation */}
+        <nav className="container mx-auto px-4 sm:px-6">
+          <div className="flex items-center gap-0 overflow-x-auto scrollbar-none -mb-px">
             {navItems.map((item) => (
               <NavLink
                 key={item.path}
@@ -110,78 +102,19 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
                 end={item.path === ''}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap flex-shrink-0',
-                    'hover:bg-muted/80 hover:text-foreground',
+                    'px-4 py-2.5 text-sm font-medium whitespace-nowrap flex-shrink-0 transition-colors border-b-2',
                     isActive
-                      ? 'bg-primary/10 text-primary border border-primary/20 shadow-xs'
-                      : 'text-muted-foreground'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                   )
                 }
               >
-                <span>{item.title}</span>
+                {item.title}
               </NavLink>
             ))}
-          </nav>
-        </div>
-      </header>
-
-      {/* Mobile Navigation */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-b border-border bg-card/90 backdrop-blur-xl">
-          <div className="container mx-auto px-4 py-3">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between pb-2 border-b border-border">
-                <div className="flex items-center gap-3">
-                  {isPortal && <PWAInstallButton />}
-                </div>
-                
-                {client && (
-                  <div className="flex flex-col items-end text-sm text-muted-foreground">
-                    {client.contact_person && (
-                      <span className="flex items-center gap-1.5">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                        {client.contact_person}
-                      </span>
-                    )}
-                    {client.contact_email && (
-                      <a 
-                        href={`mailto:${client.contact_email}`} 
-                        className="hover:text-foreground transition-colors"
-                      >
-                        {client.contact_email}
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              <nav className="flex flex-col gap-1.5 py-2">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.path}
-                    to={`${basePath}/${clientId}${item.path ? `/${item.path}` : ''}`}
-                    end={item.path === ''}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all',
-                        isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-muted/50'
-                      )
-                    }
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <span>{item.title}</span>
-                  </NavLink>
-                ))}
-              </nav>
-            </div>
           </div>
-        </div>
-      )}
+        </nav>
+      </header>
 
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 sm:px-6 py-5 sm:py-7">
@@ -190,11 +123,9 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
 
       {/* Footer */}
       <footer className="border-t border-border/80 bg-card/70 backdrop-blur-sm">
-        <div className="container mx-auto px-4 sm:px-6 py-4 text-center text-xs sm:text-sm text-muted-foreground">
-          <p className="flex items-center justify-center gap-1.5">
-            Powered by 
-            <span className="font-semibold text-foreground">LoadPlan</span> 
-            Fleet Management
+        <div className="container mx-auto px-4 sm:px-6 py-3 text-center text-xs text-muted-foreground">
+          <p>
+            Powered by <span className="font-semibold text-foreground">LoadPlan</span>
           </p>
         </div>
       </footer>

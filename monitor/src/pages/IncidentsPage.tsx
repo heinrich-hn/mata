@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { MapPin, User, Truck } from "lucide-react";
+import { ExportMenu } from "@/components/ExportMenu";
+import { exportIncidents } from "@/lib/monitorExport";
 
 interface Incident {
     id: string;
@@ -64,6 +66,15 @@ export default function IncidentsPage() {
 
     return (
         <div className="monitor-page">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <h1 className="text-lg font-semibold text-slate-900">Incidents</h1>
+                <ExportMenu
+                    disabled={incidents.length === 0}
+                    onExport={(target) => exportIncidents(incidents, target)}
+                />
+            </div>
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/55 to-white">

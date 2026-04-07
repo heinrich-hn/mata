@@ -16,6 +16,7 @@ const queryClient = new QueryClient({
             staleTime: 5 * 60 * 1000,
             gcTime: 15 * 60 * 1000,
             refetchOnWindowFocus: false,
+            refetchOnReconnect: true,
             retry: (failureCount, error) => {
                 const msg = (error as Error)?.message?.toLowerCase() ?? "";
                 if (
@@ -32,13 +33,8 @@ const queryClient = new QueryClient({
     },
 });
 
-// Register service worker (only in production)
-if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-        // SW registration failed — non-critical
-        console.log("Service worker registration failed");
-    });
-}
+// NOTE: Service worker is registered by vite-plugin-pwa (registerType: "autoUpdate").
+// Do NOT manually register /sw.js here — it conflicts with the plugin's lifecycle.
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>

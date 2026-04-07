@@ -145,90 +145,112 @@ function createVehicleIcon(
   asset: TelematicsAsset,
   hasActiveLoad = false,
 ): L.DivIcon {
-  const isStationary = asset.speedKmH < 5 && !asset.inTrip;
-  const color = isStationary ? "#dc2626" : getStatusColor(asset);
+  const isMoving = asset.speedKmH >= 5;
+  const color = isMoving ? "#16a34a" : "#dc2626";
+  const rotation = asset.heading || 0;
   const fleetNumber = asset.name || asset.code || `${asset.id}`;
   const displayNumber =
     fleetNumber.length > 8 ? fleetNumber.substring(0, 7) + "…" : fleetNumber;
 
-  // Clean, professional marker design
-  const markerHtml = `
+  // Stopped: plain red dot. Moving: green circle with directional arrow.
+  const markerHtml = isMoving
+    ? `
     <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
       <div style="
-        width: 32px;
-        height: 32px;
+        width: 20px;
+        height: 20px;
         background: ${color};
         border-radius: 50%;
         border: 2px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: transform 0.2s;
+        transform: rotate(${rotation}deg);
       ">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M5 13L9 17L19 7" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L12 22M12 2L5 9M12 2L19 9" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
       <div style="
         position: absolute;
-        top: 36px;
+        top: 22px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(0,0,0,0.8);
+        background: rgba(0,0,0,0.75);
         color: white;
-        font-size: 11px;
-        font-weight: 500;
-        padding: 2px 6px;
-        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 600;
+        padding: 1px 4px;
+        border-radius: 3px;
         white-space: nowrap;
         font-family: system-ui, -apple-system, sans-serif;
-        letter-spacing: 0.3px;
-        backdrop-filter: blur(4px);
+        line-height: 1.2;
       ">
         ${displayNumber}
       </div>
       ${hasActiveLoad ? `
       <div style="
         position: absolute;
-        top: -8px;
-        right: -8px;
+        top: -4px;
+        right: -4px;
         background: #7c3aed;
-        width: 16px;
-        height: 16px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
-        border: 2px solid white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      "></div>
-      ` : ''}
-      ${asset.inTrip ? `
-      <div style="
-        position: absolute;
-        bottom: -4px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 6px;
-        height: 6px;
-        background: #22c55e;
-        border-radius: 50%;
-        animation: pulse 1.5s infinite;
+        border: 1.5px solid white;
       "></div>
       ` : ''}
     </div>
-    <style>
-      @keyframes pulse {
-        0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
-        50% { opacity: 0.5; transform: translateX(-50%) scale(1.2); }
-      }
-    </style>
+  `
+    : `
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+      <div style="
+        width: 14px;
+        height: 14px;
+        background: ${color};
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      "></div>
+      <div style="
+        position: absolute;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.75);
+        color: white;
+        font-size: 9px;
+        font-weight: 600;
+        padding: 1px 4px;
+        border-radius: 3px;
+        white-space: nowrap;
+        font-family: system-ui, -apple-system, sans-serif;
+        line-height: 1.2;
+      ">
+        ${displayNumber}
+      </div>
+      ${hasActiveLoad ? `
+      <div style="
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        background: #7c3aed;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        border: 1.5px solid white;
+      "></div>
+      ` : ''}
+    </div>
   `;
 
   return L.divIcon({
     html: markerHtml,
     className: "vehicle-marker",
-    iconSize: [48, 56],
-    iconAnchor: [24, 28],
-    popupAnchor: [0, -28],
+    iconSize: isMoving ? [28, 36] : [22, 30],
+    iconAnchor: isMoving ? [14, 18] : [11, 15],
+    popupAnchor: [0, isMoving ? -18 : -15],
   });
 }
 
@@ -970,8 +992,8 @@ export default function LiveTrackingPage() {
 
                         {/* Route Polyline */}
                         {routeCoords.length > 0 && (
-                          <Polyline 
-                            positions={routeCoords} 
+                          <Polyline
+                            positions={routeCoords}
                             pathOptions={{ color: "#4f46e5", weight: 3, opacity: 0.7 }}
                           >
                             <Tooltip permanent direction="center">
@@ -1068,8 +1090,8 @@ export default function LiveTrackingPage() {
                               className={`flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors ${load ? "bg-purple-50/50 dark:bg-purple-900/5" : ""}`}
                               onClick={() => openTripHistory(asset)}
                             >
-                              <div 
-                                className="w-2.5 h-2.5 rounded-full" 
+                              <div
+                                className="w-2.5 h-2.5 rounded-full"
                                 style={{ backgroundColor: isStationary ? "#dc2626" : getStatusColor(asset) }}
                               />
                               <div className="flex-1 min-w-0">
@@ -1111,20 +1133,20 @@ export default function LiveTrackingPage() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-sm">Username</Label>
-                <Input 
-                  id="username" 
-                  value={username} 
-                  onChange={(e) => setUsername(e.target.value)} 
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="h-9"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm">Password</Label>
-                <Input 
-                  id="password" 
-                  type="password" 
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="h-9"
                 />
               </div>

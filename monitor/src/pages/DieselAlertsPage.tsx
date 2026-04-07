@@ -25,6 +25,8 @@ import {
   buildDriverWhatsAppMessage,
   openWhatsApp,
 } from "@/lib/debriefExport";
+import { ExportMenu } from "@/components/ExportMenu";
+import { exportDieselDebriefs } from "@/lib/monitorExport";
 
 interface PendingRecord {
   id: string;
@@ -161,6 +163,10 @@ export default function DieselAlertsPage() {
             <div className="flex items-center gap-2">
               {records.length > 0 && (
                 <>
+                  <ExportMenu
+                    disabled={records.length === 0}
+                    onExport={(target) => exportDieselDebriefs(records, target)}
+                  />
                   <Button
                     variant="outline"
                     size="sm"
@@ -168,7 +174,7 @@ export default function DieselAlertsPage() {
                     className="border-slate-200 text-slate-600 hover:bg-slate-50"
                   >
                     <FileDown className="h-4 w-4 mr-2" />
-                    Export PDF
+                    Debrief PDF
                   </Button>
                   <Button
                     variant="outline"

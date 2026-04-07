@@ -20,7 +20,15 @@ export function createClient() {
     return client;
   }
 
-  client = createSupabaseClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY);
+  client = createSupabaseClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: true,
+      storageKey: 'mata-driver-auth',
+      storage: globalThis.localStorage,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+    },
+  });
 
   return client;
 }

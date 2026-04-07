@@ -15,25 +15,25 @@ export default function AuthPage() {
   }, [session, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <div className="w-full max-w-sm space-y-8">
         {/* Professional Logo */}
         <div className="flex flex-col items-center gap-4">
-          <div className="w-14 h-14 bg-primary rounded-xl flex items-center justify-center shadow-card">
-            <Shield className="h-7 w-7 text-primary-foreground" />
+          <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center shadow-md">
+            <Shield className="h-6 w-6 text-white" />
           </div>
           <div className="text-center">
-            <h1 className="text-xl font-semibold text-foreground tracking-tight">
-              MAT Monitor
+            <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
+              MATA Monitor
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-[0.8125rem] text-slate-400 mt-1 font-medium">
               Fleet Command Center
             </p>
           </div>
         </div>
 
         {/* Auth form */}
-        <div className="bg-card border border-border rounded-xl p-6 shadow-card">
+        <div className="bg-white border border-slate-200/60 rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <Auth
             supabaseClient={supabase}
             appearance={{
@@ -70,8 +70,8 @@ export default function AuthPage() {
           />
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Use your MAT dashboard credentials to sign in.
+        <p className="text-center text-xs text-slate-400">
+          Use your MATA dashboard credentials to sign in.
         </p>
       </div>
     </div>

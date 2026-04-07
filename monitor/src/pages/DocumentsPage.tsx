@@ -20,12 +20,14 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  Mail,
   MessageCircle,
   RefreshCw,
   Truck,
   User,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { exportDocumentAlerts } from "@/lib/monitorExport";
 
 type EntityType = "vehicle" | "driver";
 
@@ -291,6 +293,15 @@ export default function DocumentsPage() {
         >
           <FileSpreadsheet className="h-3.5 w-3.5" />
           Excel
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+          onClick={() => exportDocumentAlerts(toExportAlerts(filtered), entityFilter, 'outlook')}
+        >
+          <Mail className="h-3.5 w-3.5" />
+          Outlook
         </Button>
         <Button
           variant="outline"

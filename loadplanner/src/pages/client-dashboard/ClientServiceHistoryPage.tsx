@@ -1,6 +1,7 @@
 import { FeedbackWidget } from '@/components/clients/FeedbackWidget';
 import { StatusBadge } from '@/components/trips/StatusBadge';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -95,6 +96,8 @@ export default function ClientServiceHistoryPage() {
 
   const currentWeekKey = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
   const [selectedWeek, setSelectedWeek] = useState<string>(currentWeekKey);
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PER_PAGE = 15;
 
   // Build feedback lookup
   const feedbackByLoadId = useMemo(() => {
@@ -242,7 +245,7 @@ export default function ClientServiceHistoryPage() {
       <div className="flex justify-end">
         <div className="flex items-center gap-2 bg-card border border-subtle rounded-lg px-3 py-2 shadow-sm w-full sm:w-auto">
           <Calendar className="h-4 w-4 text-muted-foreground" />
-          <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+          <Select value={selectedWeek} onValueChange={(v) => { setSelectedWeek(v); setHistoryPage(1); }}>
             <SelectTrigger className="w-full sm:w-[200px] border-subtle">
               <SelectValue placeholder="Select week" />
             </SelectTrigger>
@@ -398,16 +401,48 @@ export default function ClientServiceHistoryPage() {
               </p>
             </div>
           ) : (
-            <div className="divide-y">
-              {deliveredLoads.map((load) => (
-                <PastDeliveryRow
-                  key={load.id}
-                  load={load}
-                  clientId={clientId!}
-                  feedback={feedbackByLoadId.get(load.id) ?? null}
-                />
-              ))}
-            </div>
+            <>
+              <div className="divide-y">
+                {deliveredLoads
+                  .slice((historyPage - 1) * HISTORY_PER_PAGE, historyPage * HISTORY_PER_PAGE)
+                  .map((load) => (
+                    <PastDeliveryRow
+                      key={load.id}
+                      load={load}
+                      clientId={clientId!}
+                      feedback={feedbackByLoadId.get(load.id) ?? null}
+                    />
+                  ))}
+              </div>
+              {deliveredLoads.length > HISTORY_PER_PAGE && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-subtle">
+                  <span className="text-xs text-muted-foreground">
+                    Showing {Math.min((historyPage - 1) * HISTORY_PER_PAGE + 1, deliveredLoads.length)}–{Math.min(historyPage * HISTORY_PER_PAGE, deliveredLoads.length)} of {deliveredLoads.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={historyPage <= 1}
+                      onClick={() => setHistoryPage((p) => p - 1)}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Page {historyPage} of {Math.ceil(deliveredLoads.length / HISTORY_PER_PAGE)}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={historyPage * HISTORY_PER_PAGE >= deliveredLoads.length}
+                      onClick={() => setHistoryPage((p) => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -460,7 +495,7 @@ function PastDeliveryRow({
           <div className="w-24 flex-shrink-0">
             <p className="font-mono text-sm font-semibold">{load.load_id}</p>
             {load.fleet_vehicle && (
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Truck className="h-3 w-3" />
                 {load.fleet_vehicle.vehicle_id}
               </p>
@@ -480,7 +515,7 @@ function PastDeliveryRow({
           </div>
 
           <div className="w-24 flex-shrink-0 text-right">
-            <p className="text-[11px] text-muted-foreground flex items-center justify-end gap-1">
+            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
               <Calendar className="h-3 w-3" />
               {safeFormatDate(load.offloading_date, 'dd MMM yyyy')}
             </p>
@@ -497,8 +532,8 @@ function PastDeliveryRow({
 
         <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/40">
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Loading</p>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Loading</p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <p className="text-muted-foreground">Arrival</p>
                 <p className="font-medium">{formatDateTime(load.actual_loading_arrival)}</p>
@@ -512,8 +547,8 @@ function PastDeliveryRow({
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Offloading</p>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Offloading</p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <p className="text-muted-foreground">Arrival</p>
                 <p className="font-medium">{formatDateTime(load.actual_offloading_arrival)}</p>
@@ -557,24 +592,24 @@ function PastDeliveryRow({
           <FeedbackWidget loadId={load.id} clientId={clientId} existingFeedback={feedback} />
         </div>
 
-        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40 text-[11px]">
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40 text-xs">
           <div className="space-y-1">
-            <p className="font-semibold text-muted-foreground">Load Arr</p>
+            <p className="font-semibold text-muted-foreground">Loading Arrived</p>
             <p>{formatDateTime(load.actual_loading_arrival)}</p>
             <p className={cn('font-semibold', loadingArrivalVariance.className)}>{loadingArrivalVariance.label}</p>
           </div>
           <div className="space-y-1">
-            <p className="font-semibold text-muted-foreground">Load Dep</p>
+            <p className="font-semibold text-muted-foreground">Loading Departed</p>
             <p>{formatDateTime(load.actual_loading_departure)}</p>
             <p className={cn('font-semibold', loadingDepartureVariance.className)}>{loadingDepartureVariance.label}</p>
           </div>
           <div className="space-y-1">
-            <p className="font-semibold text-muted-foreground">Off Arr</p>
+            <p className="font-semibold text-muted-foreground">Offloading Arrived</p>
             <p>{formatDateTime(load.actual_offloading_arrival)}</p>
             <p className={cn('font-semibold', offloadingArrivalVariance.className)}>{offloadingArrivalVariance.label}</p>
           </div>
           <div className="space-y-1">
-            <p className="font-semibold text-muted-foreground">Off Dep</p>
+            <p className="font-semibold text-muted-foreground">Offloading Departed</p>
             <p>{formatDateTime(load.actual_offloading_departure)}</p>
             <p className={cn('font-semibold', offloadingDepartureVariance.className)}>{offloadingDepartureVariance.label}</p>
           </div>
@@ -627,7 +662,7 @@ function MetricCard({
             <p className="text-2xl font-semibold tracking-tight">{value}</p>
             <p className="text-xs text-muted-foreground font-medium">{title}</p>
             {subtitle && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
             )}
           </div>
         </div>

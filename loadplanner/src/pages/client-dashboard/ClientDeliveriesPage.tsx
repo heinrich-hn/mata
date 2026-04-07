@@ -152,6 +152,7 @@ export default function ClientDeliveriesPage() {
   const extraDepots = useMemo(() => customLocations.map(customLocationToDepot), [customLocations]);
 
   const [telematicsAssets, setTelematicsAssets] = useState<TelematicsAsset[]>([]);
+  const [lastTelematicsUpdate, setLastTelematicsUpdate] = useState<Date | null>(null);
   const [organisationId, setOrganisationId] = useState<number | null>(() => {
     const stored = localStorage.getItem('telematics_org_id');
     return stored ? parseInt(stored) : null;
@@ -184,6 +185,7 @@ export default function ClientDeliveriesPage() {
 
       const assets = await getAssetsWithPositions(orgId);
       setTelematicsAssets(assets || []);
+      setLastTelematicsUpdate(new Date());
     } catch (error) {
       console.error('Failed to fetch telematics data:', error);
     }
@@ -342,6 +344,11 @@ export default function ClientDeliveriesPage() {
               {loadsWithETA.length} {loadsWithETA.length === 1 ? 'shipment' : 'shipments'}
             </Badge>
           </div>
+          {lastTelematicsUpdate && (
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Tracking updated {Math.round((Date.now() - lastTelematicsUpdate.getTime()) / 1000)}s ago · refreshes every 30s
+            </p>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -648,9 +655,9 @@ function DeliveryRow({ load }: { load: LoadWithETA }) {
               Loading
             </p>
             <div className="text-xs space-y-1">
-              <p>Arr: {formatDateTime(load.actual_loading_arrival)}</p>
+              <p>Arrived: {formatDateTime(load.actual_loading_arrival)}</p>
               <p className={loadingArrivalVariance.className}>{loadingArrivalVariance.label}</p>
-              <p className="mt-1.5">Dep: {formatDateTime(load.actual_loading_departure)}</p>
+              <p className="mt-1.5">Departed: {formatDateTime(load.actual_loading_departure)}</p>
               <p className={loadingDepartureVariance.className}>{loadingDepartureVariance.label}</p>
             </div>
           </div>
@@ -660,9 +667,9 @@ function DeliveryRow({ load }: { load: LoadWithETA }) {
               Offloading
             </p>
             <div className="text-xs space-y-1">
-              <p>Arr: {formatDateTime(load.actual_offloading_arrival)}</p>
+              <p>Arrived: {formatDateTime(load.actual_offloading_arrival)}</p>
               <p className={offloadingArrivalVariance.className}>{offloadingArrivalVariance.label}</p>
-              <p className="mt-1.5">Dep: {formatDateTime(load.actual_offloading_departure)}</p>
+              <p className="mt-1.5">Departed: {formatDateTime(load.actual_offloading_departure)}</p>
               <p className={offloadingDepartureVariance.className}>{offloadingDepartureVariance.label}</p>
             </div>
           </div>

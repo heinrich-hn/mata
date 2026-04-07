@@ -32,18 +32,36 @@ import {
   Truck,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useMemo } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 
 type StatusFilter = 'all' | 'scheduled' | 'in-transit' | 'delivered' | 'pending';
+
+const ITEMS_PER_PAGE = 20;
 
 export default function ClientLoadsPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const { data: loads = [], isLoading } = useClientLoads(clientId);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchQuery = searchParams.get('q') || '';
+  const statusFilter = (searchParams.get('status') || 'all') as StatusFilter;
+  const dateFilter = (searchParams.get('date') || 'all') as 'all' | 'today' | 'week' | 'month';
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
+
+  const updateParam = (key: string, value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === '' || value === 'all' || (key === 'page' && value === '1')) {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      // Reset page when changing filters
+      if (key !== 'page') next.delete('page');
+      return next;
+    });
+  };
 
   // Filter loads
   const filteredLoads = useMemo(() => {
@@ -108,9 +126,7 @@ export default function ClientLoadsPage() {
   }, [loads]);
 
   const clearFilters = () => {
-    setSearchQuery('');
-    setStatusFilter('all');
-    setDateFilter('all');
+    setSearchParams({});
   };
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || dateFilter !== 'all';
@@ -193,13 +209,13 @@ export default function ClientLoadsPage() {
                   placeholder="Search by load ID, origin, destination..."
                   className="pl-9 border-subtle"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => updateParam('q', e.target.value)}
                 />
               </div>
             </div>
             <Select
               value={statusFilter}
-              onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+              onValueChange={(value) => updateParam('status', value)}
             >
               <SelectTrigger className="w-full sm:w-[160px] border-subtle">
                 <SelectValue placeholder="Status" />
@@ -214,7 +230,7 @@ export default function ClientLoadsPage() {
             </Select>
             <Select
               value={dateFilter}
-              onValueChange={(value) => setDateFilter(value as typeof dateFilter)}
+              onValueChange={(value) => updateParam('date', value)}
             >
               <SelectTrigger className="w-full sm:w-[160px] border-subtle">
                 <SelectValue placeholder="Date Range" />
@@ -265,6 +281,36 @@ export default function ClientLoadsPage() {
             </div>
           ) : (
             <>
+              {/* Pagination info */}
+              {filteredLoads.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-between mb-4 text-sm text-muted-foreground">
+                  <span>
+                    Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredLoads.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredLoads.length)} of {filteredLoads.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage <= 1}
+                      onClick={() => updateParam('page', String(currentPage - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs font-medium">
+                      Page {currentPage} of {Math.ceil(filteredLoads.length / ITEMS_PER_PAGE)}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage * ITEMS_PER_PAGE >= filteredLoads.length}
+                      onClick={() => updateParam('page', String(currentPage + 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Desktop Table */}
               <div className="hidden md:block overflow-x-auto rounded-lg border border-subtle">
                 <Table>
@@ -280,18 +326,47 @@ export default function ClientLoadsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLoads.map((load) => (
-                      <LoadRow key={load.id} load={load} />
-                    ))}
+                    {filteredLoads
+                      .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+                      .map((load) => (
+                        <LoadRow key={load.id} load={load} />
+                      ))}
                   </TableBody>
                 </Table>
               </div>
               {/* Mobile Card List */}
               <div className="md:hidden space-y-3">
-                {filteredLoads.map((load) => (
-                  <MobileLoadCard key={load.id} load={load} />
-                ))}
+                {filteredLoads
+                  .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+                  .map((load) => (
+                    <MobileLoadCard key={load.id} load={load} />
+                  ))}
               </div>
+
+              {/* Bottom pagination */}
+              {filteredLoads.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-end gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => updateParam('page', String(currentPage - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Page {currentPage} of {Math.ceil(filteredLoads.length / ITEMS_PER_PAGE)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage * ITEMS_PER_PAGE >= filteredLoads.length}
+                    onClick={() => updateParam('page', String(currentPage + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </CardContent>
@@ -305,7 +380,7 @@ function LoadRow({ load }: { load: Load }) {
   const destination = getLocationDisplayName(load.destination);
 
   return (
-    <TableRow>
+    <TableRow className="hover:bg-muted/30">
       <TableCell>
         <div className="flex items-center gap-2">
           <Package className="h-4 w-4 text-primary" />

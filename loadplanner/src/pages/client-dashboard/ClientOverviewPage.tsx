@@ -97,7 +97,7 @@ export default function ClientOverviewPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">
-                  Welcome back{client?.contact_person ? `, ${client.contact_person.split(' ')[0]}` : ''}!
+                  Welcome back{client?.contact_person ? `, ${client.contact_person.split(' ')[0]}` : ''}
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1.5">
                   Here's an overview of your shipment activity with {client?.name || 'your account'}
@@ -175,7 +175,7 @@ export default function ClientOverviewPage() {
               </div>
             ) : activeLoads.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Truck className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <Truck className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No active deliveries right now</p>
               </div>
             ) : (
@@ -216,7 +216,7 @@ export default function ClientOverviewPage() {
               </div>
             ) : upcomingLoads.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No upcoming shipments scheduled</p>
               </div>
             ) : (
@@ -246,7 +246,7 @@ export default function ClientOverviewPage() {
             ) : (
               <>
                 <div className="text-center">
-                  <div className="text-4xl font-semibold tracking-tight text-emerald-600">{deliveryRate}%</div>
+                  <div className="text-4xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">{deliveryRate}%</div>
                   <p className="text-sm text-muted-foreground mt-1">Completion Rate</p>
                 </div>
                 <div className="space-y-3">
@@ -294,7 +294,7 @@ export default function ClientOverviewPage() {
               </div>
             ) : recentActivity.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Box className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                <Box className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No activity yet</p>
               </div>
             ) : (

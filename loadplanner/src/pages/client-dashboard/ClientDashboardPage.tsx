@@ -5,6 +5,7 @@ import ClientLiveMapPage from './ClientLiveMapPage';
 import ClientLoadsPage from './ClientLoadsPage';
 import ClientDeliveriesPage from './ClientDeliveriesPage';
 import ClientServiceHistoryPage from './ClientServiceHistoryPage';
+import ClientDocumentsPage from './ClientDocumentsPage';
 
 export default function ClientDashboardPage() {
   const { clientId } = useParams<{ clientId: string }>();
@@ -21,6 +22,7 @@ export default function ClientDashboardPage() {
         <Route path="loads" element={<ClientLoadsPage key={clientId} />} />
         <Route path="deliveries" element={<ClientDeliveriesPage key={clientId} />} />
         <Route path="past-deliveries" element={<ClientServiceHistoryPage key={clientId} />} />
+        <Route path="documents" element={<ClientDocumentsPage key={clientId} />} />
         <Route path="*" element={<Navigate to="" replace />} />
       </Routes>
     </ClientDashboardLayout>

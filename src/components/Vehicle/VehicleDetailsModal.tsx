@@ -16,8 +16,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureAlert } from "@/lib/alertUtils";
-import { AlertTriangle, CalendarDays, CheckCircle, Clock, Fuel, Gauge, Pencil, Plus } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle, Circle, Clock, ClipboardList, Fuel, Gauge, Pencil, Plus, Wrench, X } from "lucide-react";
 import React, { useEffect, useState } from 'react';
+import { extractRegistrationNumber } from "@/constants/fleetTyreConfig";
 import FleetTyreLayoutDiagram from "../tyres/FleetTyreLayoutDiagram";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -144,8 +145,157 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
     setLoadingDocs(false);
   };
 
+  // ── Inspections state ──
+  type InspectionRow = {
+    id: string;
+    inspection_number: string;
+    inspection_date: string;
+    inspection_type: string | null;
+    inspector_name: string | null;
+    status: string;
+    has_fault: boolean | null;
+    odometer_reading: number | null;
+    notes: string | null;
+  };
+  const [inspections, setInspections] = useState<InspectionRow[]>([]);
+  const [loadingInspections, setLoadingInspections] = useState(false);
+
+  // ── Job cards / maintenance state ──
+  type JobCardRow = {
+    id: string;
+    job_number: string;
+    title: string;
+    status: string;
+    priority: string;
+    assignee: string | null;
+    due_date: string | null;
+    created_at: string | null;
+    description: string | null;
+  };
+  const [jobCards, setJobCards] = useState<JobCardRow[]>([]);
+  const [loadingJobCards, setLoadingJobCards] = useState(false);
+
+  // ── Fitted tyres state ──
+  type FittedTyre = {
+    id: string;
+    serial_number: string | null;
+    brand: string;
+    model: string;
+    size: string;
+    position: string | null;
+    current_fleet_position: string | null;
+    current_tread_depth: number | null;
+    condition: string | null;
+  };
+  const [fittedTyres, setFittedTyres] = useState<FittedTyre[]>([]);
+  const [loadingTyres, setLoadingTyres] = useState(false);
+
+  // ── Alerts state ──
+  type AlertRow = {
+    id: string;
+    title: string;
+    message: string;
+    severity: string;
+    category: string;
+    status: string;
+    triggered_at: string;
+  };
+  const [vehicleAlerts, setVehicleAlerts] = useState<AlertRow[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+
+  const fetchInspections = async () => {
+    if (!vehicle?.id) return;
+    setLoadingInspections(true);
+    const { data, error } = await supabase
+      .from("vehicle_inspections")
+      .select("id, inspection_number, inspection_date, inspection_type, inspector_name, status, has_fault, odometer_reading, notes")
+      .eq("vehicle_id", vehicle.id)
+      .order("inspection_date", { ascending: false })
+      .limit(20);
+    if (!error && data) setInspections(data);
+    setLoadingInspections(false);
+  };
+
+  const fetchJobCards = async () => {
+    if (!vehicle?.id) return;
+    setLoadingJobCards(true);
+    const { data, error } = await supabase
+      .from("job_cards")
+      .select("id, job_number, title, status, priority, assignee, due_date, created_at, description")
+      .eq("vehicle_id", vehicle.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (!error && data) setJobCards(data);
+    setLoadingJobCards(false);
+  };
+
+  const fetchFittedTyres = async () => {
+    if (!vehicle?.id) return;
+    setLoadingTyres(true);
+    try {
+      // Try via fleet_tyre_positions first (most reliable)
+      const fleet = vehicle.fleetNumber;
+      if (fleet) {
+        const regNo = extractRegistrationNumber(vehicle.registration);
+        const { data: positions } = await supabase
+          .from("fleet_tyre_positions")
+          .select("tyre_code, position")
+          .eq("fleet_number", fleet)
+          .eq("registration_no", regNo);
+        if (positions && positions.length > 0) {
+          const tyreCodes = positions
+            .map((p) => p.tyre_code)
+            .filter((c): c is string => !!c && !c.startsWith("NEW_CODE_"));
+          if (tyreCodes.length > 0) {
+            const { data: tyreData } = await supabase
+              .from("tyres")
+              .select("id, serial_number, brand, model, size, position, current_fleet_position, current_tread_depth, condition")
+              .in("id", tyreCodes);
+            if (tyreData && tyreData.length > 0) {
+              setFittedTyres(tyreData);
+              setLoadingTyres(false);
+              return;
+            }
+          }
+        }
+      }
+      // Fallback: query tyres by current_fleet_position containing registration
+      const { data } = await supabase
+        .from("tyres")
+        .select("id, serial_number, brand, model, size, position, current_fleet_position, current_tread_depth, condition")
+        .ilike("current_fleet_position", `%${vehicle.registration}%`)
+        .is("removal_date", null);
+      if (data && data.length > 0) {
+        setFittedTyres(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch fitted tyres:", err);
+    }
+    setLoadingTyres(false);
+  };
+
+  const fetchAlerts = async () => {
+    if (!vehicle?.id) return;
+    setLoadingAlerts(true);
+    const { data, error } = await supabase
+      .from("alerts")
+      .select("id, title, message, severity, category, status, triggered_at")
+      .eq("source_type", "vehicle")
+      .eq("source_id", vehicle.id)
+      .order("triggered_at", { ascending: false })
+      .limit(20);
+    if (!error && data) setVehicleAlerts(data);
+    setLoadingAlerts(false);
+  };
+
   useEffect(() => {
-    if (isOpen) fetchDocs();
+    if (isOpen) {
+      fetchDocs();
+      fetchInspections();
+      fetchJobCards();
+      fetchFittedTyres();
+      fetchAlerts();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, vehicle?.id]);
 
@@ -180,29 +330,39 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
   const handleAddDoc = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vehicle) return;
-    if (!newDoc.type || !newDoc.number || !newDoc.expiry || !newDoc.file || (newDoc.type === "custom" && !newDoc.customType)) {
-      toast({ title: "Missing fields", description: "Type, number, expiry and file are required", variant: "destructive" });
+    if (!newDoc.type || !newDoc.expiry || (newDoc.type === "custom" && !newDoc.customType)) {
+      toast({ title: "Missing fields", description: "Type and expiry are required", variant: "destructive" });
       return;
     }
     setAdding(true);
     try {
-      // Upload file to 'documents' bucket
-      const ext = newDoc.file.name.split(".").pop() || "dat";
-      const path = `vehicle-documents/${vehicle.id}-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("documents").upload(path, newDoc.file);
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
-      const publicUrl = urlData?.publicUrl as string;
+      let publicUrl = "";
+      let fileName = "No file";
+      let fileFormat = "none";
+
+      if (newDoc.file) {
+        const ext = newDoc.file.name.split(".").pop() || "dat";
+        const path = `vehicle-documents/${vehicle.id}-${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("documents").upload(path, newDoc.file);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+        publicUrl = urlData?.publicUrl as string;
+        fileName = newDoc.file.name;
+        fileFormat = ext;
+      }
+
+      const category = newDoc.type === "custom" ? newDoc.customType : newDoc.type;
+      const docNumber = newDoc.number || category.toUpperCase();
 
       const { data: inserted, error } = await supabase
         .from("work_documents")
         .insert({
           document_type: "other",
-          document_category: newDoc.type === "custom" ? newDoc.customType : newDoc.type,
-          document_number: newDoc.number,
-          title: `${(newDoc.type === "custom" ? newDoc.customType : newDoc.type).toUpperCase()} ${newDoc.number}`,
-          file_name: newDoc.file.name,
-          file_format: ext,
+          document_category: category,
+          document_number: docNumber,
+          title: `${category.toUpperCase()} ${docNumber}`,
+          file_name: fileName,
+          file_format: fileFormat,
           file_url: publicUrl,
           uploaded_by: "system",
           metadata: { expiry_date: newDoc.expiry.toISOString().split('T')[0] },
@@ -336,6 +496,51 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                 </CardContent>
               </Card>
             </div>
+
+            {/* Currently Fitted Tyres */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Circle className="h-5 w-5" />
+                  Currently Fitted Tyres
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingTyres ? (
+                  <p className="text-sm text-muted-foreground">Loading tyres…</p>
+                ) : fittedTyres.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tyres currently fitted to this vehicle.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {fittedTyres.map((t) => (
+                      <div key={t.id} className="border rounded-md p-3 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {t.current_fleet_position || t.position || "—"}
+                          </span>
+                          {t.condition && (
+                            <Badge variant={t.condition === "good" ? "default" : t.condition === "worn" ? "secondary" : "destructive"} className="text-xs">
+                              {t.condition}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="font-medium text-sm">
+                          {t.serial_number || "No serial"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {t.brand} {t.model} — {t.size}
+                        </div>
+                        {t.current_tread_depth != null && (
+                          <div className="text-xs">
+                            Tread: <span className="font-medium">{t.current_tread_depth}mm</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
           <TabsContent value="maintenance">
             {/* Service & Maintenance */}
@@ -375,6 +580,100 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Job Cards */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5" />
+                  Job Cards
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingJobCards ? (
+                  <p className="text-sm text-muted-foreground">Loading job cards…</p>
+                ) : jobCards.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No job cards found for this vehicle.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {jobCards.map((jc) => (
+                      <div key={jc.id} className="border rounded-md p-3 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-medium text-sm truncate">{jc.title}</div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Badge variant={jc.priority === "high" || jc.priority === "critical" ? "destructive" : jc.priority === "medium" ? "secondary" : "outline"} className="text-xs">
+                              {jc.priority}
+                            </Badge>
+                            <Badge variant={jc.status === "completed" ? "default" : jc.status === "in_progress" ? "secondary" : "outline"} className="text-xs">
+                              {jc.status.replace(/_/g, " ")}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                          <span>#{jc.job_number}</span>
+                          {jc.assignee && <span>Assigned: {jc.assignee}</span>}
+                          {jc.due_date && <span>Due: {formatDate(jc.due_date)}</span>}
+                          {jc.created_at && <span>Created: {formatDate(jc.created_at)}</span>}
+                        </div>
+                        {jc.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">{jc.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Inspection History */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Inspection History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingInspections ? (
+                  <p className="text-sm text-muted-foreground">Loading inspections…</p>
+                ) : inspections.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No inspections recorded for this vehicle.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {inspections.map((insp) => (
+                      <div key={insp.id} className="border rounded-md p-3 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-medium text-sm truncate">
+                            #{insp.inspection_number}
+                            {insp.inspection_type && (
+                              <span className="ml-2 text-muted-foreground font-normal capitalize">
+                                ({insp.inspection_type.replace(/_/g, " ")})
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {insp.has_fault && (
+                              <Badge variant="destructive" className="text-xs">Faults</Badge>
+                            )}
+                            <Badge variant={insp.status === "completed" ? "default" : insp.status === "in_progress" ? "secondary" : "outline"} className="text-xs">
+                              {insp.status.replace(/_/g, " ")}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+                          <span>{formatDate(insp.inspection_date)}</span>
+                          {insp.inspector_name && <span>By: {insp.inspector_name}</span>}
+                          {insp.odometer_reading != null && <span>Odo: {insp.odometer_reading.toLocaleString()} km</span>}
+                        </div>
+                        {insp.notes && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">{insp.notes}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -443,36 +742,40 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Add new tracked document */}
-                  <form onSubmit={handleAddDoc} className="flex flex-wrap gap-3 items-end">
-                    <div className="space-y-2">
-                      <Label>Type</Label>
-                      <Select value={newDoc.type} onValueChange={(v) => setNewDoc((s) => ({ ...s, type: v }))}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger>
-                        <SelectContent>
-                          {COMMON_DOC_TYPES.map((t) => (
-                            <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                          ))}
-                          <SelectItem value="custom">Custom</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {newDoc.type === "custom" && (
-                      <div className="flex-1 space-y-2">
-                        <Label>Custom Type</Label>
-                        <Input value={newDoc.customType} onChange={(e) => setNewDoc((s) => ({ ...s, customType: e.target.value }))} placeholder="Enter custom type" />
+                  <form onSubmit={handleAddDoc} className="space-y-3 rounded-md border p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Type</Label>
+                        <Select value={newDoc.type} onValueChange={(v) => setNewDoc((s) => ({ ...s, type: v }))}>
+                          <SelectTrigger className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger>
+                          <SelectContent>
+                            {COMMON_DOC_TYPES.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                            <SelectItem value="custom">Custom</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    )}
-                    <div className="space-y-2">
-                      <Label>Number</Label>
-                      <Input value={newDoc.number} onChange={(e) => setNewDoc((s) => ({ ...s, number: e.target.value }))} placeholder="e.g. LIC-12345" />
+                      {newDoc.type === "custom" && (
+                        <div className="space-y-1">
+                          <Label className="text-xs">Custom Type</Label>
+                          <Input value={newDoc.customType} onChange={(e) => setNewDoc((s) => ({ ...s, customType: e.target.value }))} placeholder="Enter custom type" />
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <Label className="text-xs">Number</Label>
+                        <Input value={newDoc.number} onChange={(e) => setNewDoc((s) => ({ ...s, number: e.target.value }))} placeholder="e.g. LIC-12345" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Expiry</Label>
+                        <DatePicker value={newDoc.expiry} onChange={(date) => setNewDoc((s) => ({ ...s, expiry: date }))} />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Expiry</Label>
-                      <DatePicker value={newDoc.expiry} onChange={(date) => setNewDoc((s) => ({ ...s, expiry: date }))} />
-                    </div>
-                    <div className="flex gap-2">
-                      <Label htmlFor="doc-file" className="sr-only">Upload</Label>
-                      <Input id="doc-file" type="file" accept="*/*" onChange={(e) => setNewDoc((s) => ({ ...s, file: e.target.files?.[0] || null }))} />
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="flex-1 min-w-[200px]">
+                        <Label htmlFor="doc-file" className="text-xs">File</Label>
+                        <Input id="doc-file" type="file" accept="*/*" onChange={(e) => setNewDoc((s) => ({ ...s, file: e.target.files?.[0] || null }))} />
+                      </div>
                       <Button type="submit" disabled={adding} className="whitespace-nowrap"><Plus className="h-4 w-4 mr-1" /> Track</Button>
                     </div>
                   </form>
@@ -488,33 +791,41 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                         const expiry = d?.metadata?.expiry_date;
                         const status = expiry ? (isDateOverdue(expiry) ? "overdue" : (isDateSoon(expiry) ? "soon" : "ok")) : "unset";
                         return (
-                          <div key={d.id} className="flex items-center justify-between border rounded-md p-2">
-                            <div className="min-w-0">
-                              <div className="font-medium truncate">{d.title || `${d.document_type?.toUpperCase()} ${d.document_number}`}</div>
-                              <div className="text-xs text-muted-foreground truncate">{d.file_name}</div>
+                          <div key={d.id} className="border rounded-md p-2 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium truncate">{d.title || `${d.document_type?.toUpperCase()} ${d.document_number}`}</div>
+                                <div className="text-xs text-muted-foreground truncate">{d.file_name}</div>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {editingId !== d.id && (
+                                  <>
+                                    <Badge className={status === "overdue" ? "bg-red-100 text-red-700" : status === "soon" ? "bg-yellow-100 text-yellow-700" : "bg-emerald-100 text-emerald-700"}>
+                                      {expiry ? (status === "ok" ? `Valid until ${formatDate(expiry)}` : status === "soon" ? `Expiring ${formatDate(expiry)}` : `Expired ${formatDate(expiry)}`) : "No expiry set"}
+                                    </Badge>
+                                    <Button variant="ghost" size="icon" title="Edit expiry" onClick={() => {
+                                      const initialDate = expiry ? new Date(expiry) : undefined;
+                                      setEditingExpiry((prev) => ({ ...prev, [d.id]: initialDate }));
+                                      setEditingId(d.id);
+                                    }}>
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <a href={d.file_url} target="_blank" rel="noreferrer" className="text-xs underline">Open</a>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              {editingId === d.id ? (
-                                <div className="flex items-center gap-2">
+                            {editingId === d.id && (
+                              <div className="flex flex-wrap items-center gap-2 pt-1 border-t">
+                                <div className="flex-1 min-w-[160px]">
                                   <DatePicker value={editingExpiry[d.id]} onChange={(date) => setEditingExpiry((prev) => ({ ...prev, [d.id]: date }))} />
-                                  <Button size="sm" type="button" onClick={() => handleUpdateExpiry(d.id, editingExpiry[d.id])}>Save</Button>
                                 </div>
-                              ) : (
-                                <>
-                                  <Badge className={status === "overdue" ? "bg-red-100 text-red-700" : status === "soon" ? "bg-yellow-100 text-yellow-700" : "bg-emerald-100 text-emerald-700"}>
-                                    {expiry ? (status === "ok" ? `Valid until ${formatDate(expiry)}` : status === "soon" ? `Expiring ${formatDate(expiry)}` : `Expired ${formatDate(expiry)}`) : "No expiry set"}
-                                  </Badge>
-                                  <Button variant="ghost" size="icon" title="Edit expiry" onClick={() => {
-                                    const initialDate = expiry ? new Date(expiry) : undefined;
-                                    setEditingExpiry((prev) => ({ ...prev, [d.id]: initialDate }));
-                                    setEditingId(d.id);
-                                  }}>
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <a href={d.file_url} target="_blank" rel="noreferrer" className="text-xs underline">Open</a>
-                                </>
-                              )}
-                            </div>
+                                <Button size="sm" type="button" onClick={() => handleUpdateExpiry(d.id, editingExpiry[d.id])}>Save</Button>
+                                <Button size="sm" variant="ghost" type="button" onClick={() => setEditingId(null)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -532,6 +843,7 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
             />
           </TabsContent>
           <TabsContent value="alerts">
+            {/* Static alerts from vehicle fields */}
             {(
               (vehicle.next_service_due && (isDateOverdue(vehicle.next_service_due) || isDateSoon(vehicle.next_service_due))) ||
               (vehicle.mot_expiry && (isDateOverdue(vehicle.mot_expiry) || isDateSoon(vehicle.mot_expiry))) ||
@@ -541,7 +853,7 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-orange-600">
                       <AlertTriangle className="h-5 w-5" />
-                      Alerts & Notifications
+                      Upcoming / Overdue
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -586,6 +898,52 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                   </CardContent>
                 </Card>
               )}
+
+            {/* Alerts from database */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Alert History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingAlerts ? (
+                  <p className="text-sm text-muted-foreground">Loading alerts…</p>
+                ) : vehicleAlerts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No alerts recorded for this vehicle.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {vehicleAlerts.map((a) => (
+                      <div key={a.id} className="border rounded-md p-3 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {a.severity === "high" || a.severity === "critical" ? (
+                              <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                            ) : a.severity === "medium" ? (
+                              <Clock className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                            ) : (
+                              <CheckCircle className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                            )}
+                            <span className="font-medium text-sm truncate">{a.title}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Badge variant={a.status === "resolved" ? "default" : a.status === "acknowledged" ? "secondary" : "destructive"} className="text-xs">
+                              {a.status}
+                            </Badge>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{a.message}</p>
+                        <div className="text-xs text-muted-foreground flex gap-3">
+                          <span>{formatDate(a.triggered_at)}</span>
+                          <span className="capitalize">{a.category.replace(/_/g, " ")}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </DialogContent>

@@ -15,6 +15,7 @@ export interface Profile {
   avatar_url?: string | null;
 }
 import { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Define the shape of the user data returned from Supabase
 interface UserData {
@@ -67,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   // Refs for mounted state and fetch versioning
   const mountedRef = useRef(true);
@@ -213,6 +215,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
+      // On sign-out or token revocation, clear all query cache immediately
+      // so the next login starts from a clean slate.
+      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED" && !newSession) {
+        queryClient.clear();
+      }
+
       // Stop loading NOW — user/session are set, profile can load in background.
       // This prevents the safety timeout from firing while fetchProfile is slow.
       finishInit();
@@ -238,6 +246,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(null);
           setUser(null);
           setProfile(null);
+          // Clear all cached query data so re-login starts fresh
+          queryClient.clear();
           finishInit();
           return;
         }
@@ -278,7 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fetchVersion.current++;
       }
     };
-  }, [supabase, fetchProfile]); // Keep these dependencies
+  }, [supabase, fetchProfile, queryClient]); // Keep these dependencies
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!supabase) return { error: new Error("Authentication service not available") };
@@ -334,8 +344,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       setProfile(null);
       setIsLoading(false);
+      // Clear stale query cache so re-login fetches fresh data
+      queryClient.clear();
     }
-  }, [supabase]);
+  }, [supabase, queryClient]);
 
   const value = useMemo<AuthContextType>(() => ({
     user,

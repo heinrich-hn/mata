@@ -34,6 +34,7 @@ import {
   Popup,
   TileLayer,
   Tooltip,
+  ZoomControl,
   useMap,
 } from 'react-leaflet';
 import { useParams } from 'react-router-dom';
@@ -348,10 +349,11 @@ export default function ClientLiveMapPage() {
               </div>
             </div>
           ) : (
-            <div className="relative h-[430px] sm:h-[500px] lg:h-[560px]">
+            <div className="relative" style={{ height: 'clamp(400px, calc(100vh - 280px), 700px)' }}>
               <MapContainer
                 center={[-19.5, 30.5]}
                 zoom={7}
+                zoomControl={false}
                 style={{ height: '100%', width: '100%' }}
                 className="z-0"
               >
@@ -359,6 +361,7 @@ export default function ClientLiveMapPage() {
                   url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                 />
+                <ZoomControl position="bottomright" />
 
                 <FitBounds
                   assets={inTransitTrackedVehicles.map((t) => t.asset!)}

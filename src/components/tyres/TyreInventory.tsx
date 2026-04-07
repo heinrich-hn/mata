@@ -33,6 +33,7 @@ import InstallTyreDialog from "../dialogs/InstallTyreDialog";
 import RemoveTyreDialog from "../dialogs/RemoveTyreDialog";
 import TyreInventoryImportModal from "../dialogs/TyreInventoryImportModal";
 import ViewTyreDialog from "../dialogs/ViewTyreDialog";
+import ViewInstalledTyreDialog from "../dialogs/ViewInstalledTyreDialog";
 
 // Extend Tyre type with optional vehicle-related fields
 type TyreWithPosition = Database["public"]["Tables"]["tyres"]["Row"] & {
@@ -1212,6 +1213,17 @@ const TyreInventory = () => {
           setSelectedInventoryItem(tyre);
           setEditDialogOpen(true);
         }}
+      />
+
+      <ViewInstalledTyreDialog
+        open={viewDialogOpen && selectedTyre !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewDialogOpen(false);
+            setSelectedTyre(null);
+          }
+        }}
+        tyre={selectedTyre}
       />
 
       <EditTyreDialog

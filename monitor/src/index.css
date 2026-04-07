@@ -4,14 +4,14 @@
 
 @layer base {
   :root {
-    /* Professional Light Mode Palette - Removed severity colors */
-    --background: 220 14% 96%;
+    /* Professional Light Mode Palette */
+    --background: 220 16% 96%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    /* Professional navy/slate primary */
+    /* Professional navy primary */
     --primary: 222 47% 35%;
     --primary-foreground: 0 0% 100%;
     --secondary: 220 14% 93%;
@@ -20,12 +20,12 @@
     --muted-foreground: 220 9% 46%;
     --accent: 220 14% 93%;
     --accent-foreground: 222 47% 11%;
-    /* Subtle destructive - kept minimal for errors only */
+    /* Subtle destructive */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     /* Subtle borders */
-    --border: 220 13% 88%;
-    --input: 220 13% 88%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
     --ring: 222 47% 35%;
     --radius: 0.5rem;
   }
@@ -38,7 +38,6 @@
     --card-foreground: 220 14% 96%;
     --popover: 222 47% 13%;
     --popover-foreground: 220 14% 96%;
-    /* Professional navy primary */
     --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
     --secondary: 222 47% 16%;
@@ -47,10 +46,8 @@
     --muted-foreground: 220 9% 60%;
     --accent: 222 47% 18%;
     --accent-foreground: 220 14% 96%;
-    /* Minimal destructive */
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
-    /* Subtle borders */
     --border: 217 19% 27%;
     --input: 217 19% 27%;
     --ring: 217 91% 60%;
@@ -64,18 +61,22 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
   }
 
   /* Professional focus styles */
   *:focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-ring/40 ring-offset-1 ring-offset-background;
   }
 
-  /* Ensure minimum touch targets (44x44px) */
-  button,
-  [role="button"] {
-    @apply min-h-[44px] min-w-[44px];
+  /* Sensible touch targets — only enforce on standalone buttons, not inline/icon ones */
+  button:not(.btn-icon):not([data-radix-collection-item]),
+  [role="button"]:not(.btn-icon) {
+    @apply min-h-[36px];
   }
 
   /* Reduced motion support */
@@ -90,51 +91,96 @@
       scroll-behavior: auto !important;
     }
   }
+
+  /* Headings */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
 }
 
 @layer components {
+
+  /* ── Page wrappers ─────────────────────────────────────── */
   .monitor-page {
-    @apply p-6 space-y-6;
-    background-image:
-      radial-gradient(1200px 600px at -10% -10%, rgba(14, 116, 144, 0.12), transparent 50%),
-      radial-gradient(900px 500px at 110% 0%, rgba(37, 99, 235, 0.12), transparent 45%),
-      radial-gradient(1000px 500px at 50% 120%, rgba(245, 158, 11, 0.08), transparent 45%);
+    @apply p-8 space-y-8;
+    background:
+      radial-gradient(ellipse 1100px 500px at 0% 0%, rgba(14, 116, 144, 0.06), transparent 55%),
+      radial-gradient(ellipse 900px 450px at 100% 0%, rgba(37, 99, 235, 0.05), transparent 50%);
   }
 
   .monitor-page-wide {
-    @apply p-6 space-y-6;
-    background-image:
-      radial-gradient(1400px 700px at -10% -10%, rgba(14, 116, 144, 0.1), transparent 52%),
-      radial-gradient(1100px 550px at 110% 0%, rgba(37, 99, 235, 0.1), transparent 48%),
-      radial-gradient(1200px 600px at 50% 120%, rgba(245, 158, 11, 0.07), transparent 45%);
+    @apply p-8 space-y-8;
+    background:
+      radial-gradient(ellipse 1400px 600px at 0% 0%, rgba(14, 116, 144, 0.05), transparent 55%),
+      radial-gradient(ellipse 1100px 500px at 100% 0%, rgba(37, 99, 235, 0.04), transparent 50%);
   }
 
+  /* ── Page header banner ────────────────────────────────── */
   .monitor-page-header {
-    @apply rounded-xl border border-slate-200/90 bg-gradient-to-r from-cyan-50/75 via-white to-blue-50/65 shadow-sm;
+    @apply rounded-xl border border-slate-200/80 shadow-sm;
+    background: linear-gradient(135deg, rgba(241, 245, 249, 0.9) 0%, rgba(255, 255, 255, 0.95) 50%, rgba(241, 245, 249, 0.9) 100%);
   }
 
+  /* ── Card panels ───────────────────────────────────────── */
   .monitor-soft-panel {
-    @apply border border-slate-200/90 bg-gradient-to-b from-white to-slate-50/65 shadow-sm;
+    @apply border border-slate-200/70 bg-white shadow-sm;
   }
 
   .monitor-soft-entry {
-    @apply border border-slate-200/90 bg-gradient-to-r from-white to-slate-50/60 transition-colors hover:from-cyan-50/45 hover:to-blue-50/45;
+    @apply border border-slate-200/60 bg-white transition-all duration-150;
+  }
+
+  .monitor-soft-entry:hover {
+    @apply border-slate-300/80 shadow-sm;
+    background: linear-gradient(135deg, rgba(241, 245, 249, 0.5) 0%, white 100%);
   }
 
   .monitor-soft-row {
-    @apply transition-colors hover:bg-cyan-50/40;
+    @apply transition-colors duration-100;
   }
 
+  .monitor-soft-row:hover {
+    background-color: rgba(241, 245, 249, 0.7);
+  }
+
+  /* ── Table styling ─────────────────────────────────────── */
   table thead tr {
-    @apply bg-slate-50/80;
+    background-color: rgba(248, 250, 252, 0.95);
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  table thead th {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: hsl(var(--muted-foreground));
+    padding: 0.75rem 1rem;
+  }
+
+  table tbody td {
+    font-size: 0.8125rem;
+    padding: 0.75rem 1rem;
+    color: hsl(var(--foreground));
   }
 
   table tbody tr {
-    @apply transition-colors;
+    @apply transition-colors duration-100;
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  table tbody tr:last-child {
+    border-bottom: none;
   }
 
   table tbody tr:hover {
-    @apply bg-cyan-50/35;
+    background-color: rgba(241, 245, 249, 0.6);
   }
 }
 
@@ -365,21 +411,21 @@
 
 /* Professional Scrollbar Styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 3px;
+  background: hsl(var(--muted-foreground) / 0.15);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: hsl(var(--muted-foreground) / 0.3);
 }
 
 /* Dark mode scrollbar */
@@ -398,11 +444,11 @@
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--muted-foreground) / 0.3) hsl(var(--muted));
+  scrollbar-color: hsl(var(--muted-foreground) / 0.15) transparent;
 }
 
 .dark * {
-  scrollbar-color: hsl(var(--muted-foreground) / 0.4) hsl(var(--secondary));
+  scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
 }
 
 /* ==================== SELECTION & TRANSITIONS ==================== */

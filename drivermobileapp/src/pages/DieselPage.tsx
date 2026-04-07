@@ -503,8 +503,13 @@ export default function DieselPage() {
     }
   }, [slipPreviews, pumpPreviews]);
 
-  // Upload photos to Supabase Storage - FIXED with type assertion
-  const uploadDieselPhotos = useCallback(async (entryId: string): Promise<void> => {
+  // Upload photos to Supabase Storage
+  // Diesel slip photos must be attached via a cost_entries row (cost_attachments
+  // has a FK to cost_entries, NOT to diesel_records).
+  const uploadDieselPhotos = useCallback(async (
+    dieselRecordId: string,
+    dieselData: { fleet_number: string; date: string; total_cost: number; currency: string; litres_filled: number; fuel_station: string },
+  ): Promise<void> => {
     const allUploads = [
       ...slipFiles.map((f: File, i: number) => ({ file: f, type: "slip" as const, idx: i })),
       ...pumpFiles.map((f: File, i: number) => ({ file: f, type: "pump" as const, idx: i })),
@@ -514,10 +519,43 @@ export default function DieselPage() {
     setIsUploadingPhotos(true);
     let failedCount = 0;
     try {
+      // 1. Create a cost_entries row linked to this diesel record so we have
+      //    a valid cost_id for the cost_attachments FK constraint.
+      const { data: costEntry, error: costError } = await supabase
+        .from("cost_entries")
+        .insert({
+          diesel_record_id: dieselRecordId,
+          category: "Fuel",
+          sub_category: "Diesel",
+          amount: dieselData.total_cost,
+          currency: dieselData.currency || "USD",
+          date: dieselData.date,
+          notes: `Diesel ${dieselData.litres_filled}L at ${dieselData.fuel_station} [${dieselData.fleet_number}]`,
+          is_system_generated: true,
+          vehicle_identifier: dieselData.fleet_number,
+        } as never)
+        .select("id")
+        .single();
+
+      if (costError || !costEntry) {
+        console.error("Failed to create cost_entries row for attachments:", costError?.message);
+        // Still record the diesel entry — just skip photos
+        setIsUploadingPhotos(false);
+        toast({
+          title: "Photo Upload Issue",
+          description: "Could not link photos to this entry. The diesel record was saved.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const costId = costEntry.id;
+
+      // 2. Upload each file and create cost_attachments rows
       for (const item of allUploads) {
         const fileExt = item.file.name.split(".").pop();
-        const fileName = `${entryId}_${item.type}_${Date.now()}_${item.idx}.${fileExt}`;
-        const filePath = `diesel-slips/${entryId}/${fileName}`;
+        const fileName = `${dieselRecordId}_${item.type}_${Date.now()}_${item.idx}.${fileExt}`;
+        const filePath = `diesel-slips/${dieselRecordId}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from("trip-documents")
@@ -533,11 +571,10 @@ export default function DieselPage() {
           .from("trip-documents")
           .getPublicUrl(filePath);
 
-        // FIX: Add type assertion to bypass TypeScript strict checking
         await supabase
           .from("cost_attachments")
           .insert({
-            cost_id: entryId,
+            cost_id: costId,
             filename: item.file.name,
             file_path: filePath,
             file_url: publicUrl,
@@ -811,12 +848,12 @@ export default function DieselPage() {
         .single();
 
       if (error) throw error;
-      return result;
+      return { ...result, _dieselData: { fleet_number: insertData.fleet_number, date: insertData.date, total_cost: totalCost, currency: insertData.currency, litres_filled: litresFilled, fuel_station: insertData.fuel_station } };
     },
-    onSuccess: async (data: { id: string }) => {
+    onSuccess: async (data: { id: string; _dieselData: { fleet_number: string; date: string; total_cost: number; currency: string; litres_filled: number; fuel_station: string } }) => {
       if (data?.id && (slipFiles.length > 0 || pumpFiles.length > 0)) {
         try {
-          await uploadDieselPhotos(data.id);
+          await uploadDieselPhotos(data.id, data._dieselData);
         } catch {
           toast({
             title: "Photos failed",
@@ -890,12 +927,12 @@ export default function DieselPage() {
         .single();
 
       if (error) throw error;
-      return result;
+      return { ...result, _dieselData: { fleet_number: assignedReefer.fleet_number, date: insertData.date, total_cost: totalCost, currency: insertData.currency, litres_filled: litresFilled, fuel_station: insertData.fuel_station } };
     },
-    onSuccess: async (data: { id: string }) => {
+    onSuccess: async (data: { id: string; _dieselData: { fleet_number: string; date: string; total_cost: number; currency: string; litres_filled: number; fuel_station: string } }) => {
       if (data?.id && (slipFiles.length > 0 || pumpFiles.length > 0)) {
         try {
-          await uploadDieselPhotos(data.id);
+          await uploadDieselPhotos(data.id, data._dieselData);
         } catch {
           toast({
             title: "Photos failed",

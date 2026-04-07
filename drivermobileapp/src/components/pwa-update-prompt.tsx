@@ -52,11 +52,19 @@ export function PwaUpdatePrompt() {
             reloadingRef.current = true;
             setIsUpdating(true);
 
-            // Clear all caches so the reload gets fresh assets
+            // Only clear runtime caches (google-fonts-cache etc.), NOT the
+            // workbox precache.  The new SW has its own precache manifest and
+            // will clean up stale entries itself.  Deleting the precache here
+            // forces a full re-download of every asset on reload, which on
+            // slow mobile connections causes the app to hang/show a blank page.
             try {
                 if ("caches" in window) {
                     const names = await caches.keys();
-                    await Promise.allSettled(names.map((n) => caches.delete(n)));
+                    await Promise.allSettled(
+                        names
+                            .filter((n) => !n.startsWith("workbox-precache"))
+                            .map((n) => caches.delete(n))
+                    );
                 }
             } catch {
                 // non-critical

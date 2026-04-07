@@ -98,7 +98,16 @@ export default defineConfig({
                 globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
                 navigateFallback: "/index.html",
                 navigateFallbackDenylist: [/^\/api/, /^\/auth/],
+                // Ensure Supabase API calls are NEVER intercepted by the SW.
+                // NavigateFallback only applies to navigation requests, but
+                // fetch requests to external origins must also be excluded.
+                navigateFallbackAllowlist: [/^\/$/, /^\/[a-z]/],
                 runtimeCaching: [
+                    {
+                        // Supabase REST / Auth / Realtime — always go to network
+                        urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+                        handler: "NetworkOnly",
+                    },
                     {
                         urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
                         handler: "CacheFirst",

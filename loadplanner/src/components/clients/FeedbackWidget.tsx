@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { ClientFeedback } from '@/hooks/useClientFeedback';
 import { useSubmitFeedback } from '@/hooks/useClientFeedback';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Frown, Loader2, Smile, Send } from 'lucide-react';
 import { useState } from 'react';
@@ -22,10 +23,11 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
   const [submitted, setSubmitted] = useState(!!existingFeedback);
 
   const submitFeedback = useSubmitFeedback();
+  const { toast } = useToast();
 
   const handleRatingClick = (rating: 'happy' | 'unhappy') => {
     if (submitted && existingFeedback?.rating === rating) return;
-    
+
     setSelectedRating(rating);
 
     if (rating === 'happy') {
@@ -35,6 +37,9 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
           onSuccess: () => {
             setSubmitted(true);
             setShowCommentBox(false);
+          },
+          onError: () => {
+            toast({ title: 'Failed to submit feedback', description: 'Please try again.', variant: 'destructive' });
           },
         }
       );
@@ -51,6 +56,9 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
           setSubmitted(true);
           setShowCommentBox(false);
         },
+        onError: () => {
+          toast({ title: 'Failed to submit feedback', description: 'Please try again.', variant: 'destructive' });
+        },
       }
     );
   };
@@ -61,16 +69,16 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
       <div className="flex flex-wrap items-center gap-3 p-3 bg-secondary rounded-lg border">
         <div className="flex items-center gap-2">
           {selectedRating === 'happy' ? (
-            <Badge 
-              variant="default" 
+            <Badge
+              variant="default"
               className="gap-1.5 py-1 px-2.5 text-green-700 bg-green-100 border-green-200 dark:text-green-300 dark:bg-green-900/50 dark:border-green-800"
             >
               <Smile className="h-4 w-4" />
               Satisfied
             </Badge>
           ) : (
-            <Badge 
-              variant="default" 
+            <Badge
+              variant="default"
               className="gap-1.5 py-1 px-2.5 text-red-700 bg-red-100 border-red-200 dark:text-red-300 dark:bg-red-900/50 dark:border-red-800"
             >
               <Frown className="h-4 w-4" />
@@ -78,7 +86,7 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
             </Badge>
           )}
         </div>
-        
+
         <Button
           variant="outline"
           size="sm"
@@ -101,13 +109,13 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
         <h3 className="text-sm font-medium">How was your experience?</h3>
         <span className="text-xs text-muted-foreground">Your feedback helps us improve</span>
       </div>
-      
+
       <div className="flex items-center gap-3 pt-1">
         <Button
           variant="outline"
           size="lg"
           className={cn(
-            'h-12 w-12 p-0 rounded-full transition-all duration-300 shadow-sm',
+            'h-10 w-10 p-0 rounded-full transition-all duration-300 shadow-sm',
             selectedRating === 'happy'
               ? 'bg-green-100 text-green-700 border-green-300 ring-2 ring-green-200 dark:bg-green-900/50 dark:text-green-400 dark:border-green-700 dark:ring-green-900'
               : 'hover:bg-green-50 hover:text-green-700 hover:border-green-200 dark:hover:bg-green-900/30 dark:hover:border-green-800'
@@ -117,17 +125,17 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
           title="Satisfied with service"
         >
           {submitFeedback.isPending && selectedRating === 'happy' ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Smile className="h-6 w-6" />
+            <Smile className="h-5 w-5" />
           )}
         </Button>
-        
+
         <Button
           variant="outline"
           size="lg"
           className={cn(
-            'h-12 w-12 p-0 rounded-full transition-all duration-300 shadow-sm',
+            'h-10 w-10 p-0 rounded-full transition-all duration-300 shadow-sm',
             selectedRating === 'unhappy'
               ? 'bg-red-100 text-red-700 border-red-300 ring-2 ring-red-200 dark:bg-red-900/50 dark:text-red-400 dark:border-red-700 dark:ring-red-900'
               : 'hover:bg-red-50 hover:text-red-700 hover:border-red-200 dark:hover:bg-red-900/30 dark:hover:border-red-800'
@@ -136,7 +144,7 @@ export function FeedbackWidget({ loadId, clientId, existingFeedback }: FeedbackW
           disabled={submitFeedback.isPending}
           title="Needs improvement"
         >
-          <Frown className="h-6 w-6" />
+          <Frown className="h-5 w-5" />
         </Button>
       </div>
 

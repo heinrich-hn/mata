@@ -27,7 +27,7 @@ interface TyreExportData {
   current_fleet_position?: string | null;
   current_tread_depth?: number | null;
   initial_tread_depth?: number | null;
-  pressure_rating?: number | null;
+  pressure_rating?: number | string | null;
   tread_depth_health?: string | null;
   status?: string;
   installation_date?: string | null;
@@ -246,7 +246,7 @@ export function exportVehicleTyresToPDF(
   vehicleInfo: { fleetNumber: string; registration: string },
   filename?: string
 ): void {
-  const doc = new jsPDF("portrait", "mm", "a4");
+  const doc = new jsPDF("landscape", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
 
   // Header
@@ -274,23 +274,28 @@ export function exportVehicleTyresToPDF(
   const summaryText = `Positions: ${totalPositions} | Installed: ${installedTyres} | Warning: ${warningTyres} | Critical: ${criticalTyres}`;
   doc.text(summaryText, pageWidth / 2, 38, { align: "center" });
 
-  // Table data
+  // Table data — all fields matching Excel export
   const tableHeaders = [
-    "Position",
-    "Serial #",
-    "Brand/Model",
-    "Size",
-    "Tread (mm)",
-    "Health",
+    "Pos", "Label", "DOT Code", "Brand", "Model",
+    "Size", "Type", "Status", "Init. Tread", "Curr. Tread",
+    "Health", "Pressure", "Installed", "Notes",
   ];
 
-  const tableData = tyres.map((tyre) => [
-    tyre.position || "-",
-    tyre.serial_number?.substring(0, 15) || "Empty",
-    tyre.serial_number ? `${tyre.brand || "-"} ${tyre.model || ""}` : "-",
+  const tableData = tyres.map((tyre, i) => [
+    tyre.position || `P${i + 1}`,
+    tyre.positionLabel || "-",
+    tyre.dot_code || tyre.serial_number || "Empty",
+    tyre.brand || "-",
+    tyre.model || "-",
     tyre.size || "-",
+    tyre.type || "-",
+    tyre.status || "-",
+    tyre.initial_tread_depth?.toString() || "-",
     tyre.current_tread_depth?.toString() || "-",
     tyre.tread_depth_health || "-",
+    tyre.pressure_rating?.toString() || "-",
+    tyre.installation_date || "-",
+    tyre.notes || "-",
   ]);
 
   autoTable(doc, {
@@ -298,29 +303,21 @@ export function exportVehicleTyresToPDF(
     body: tableData,
     startY: 44,
     styles: {
-      fontSize: 9,
-      cellPadding: 3,
+      fontSize: 7,
+      cellPadding: 2,
     },
     headStyles: {
       fillColor: [59, 130, 246],
       textColor: 255,
       fontStyle: "bold",
-      fontSize: 10,
+      fontSize: 8,
     },
     alternateRowStyles: {
       fillColor: [245, 247, 250],
     },
-    columnStyles: {
-      0: { cellWidth: 25 },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 45 },
-      3: { cellWidth: 30 },
-      4: { cellWidth: 25 },
-      5: { cellWidth: 25 },
-    },
     didParseCell: (data) => {
-      // Color-code health column
-      if (data.section === "body" && data.column.index === 5) {
+      // Color-code health column (index 10)
+      if (data.section === "body" && data.column.index === 10) {
         const health = data.cell.raw as string;
         if (health === "excellent") {
           data.cell.styles.textColor = [34, 197, 94];
@@ -333,10 +330,10 @@ export function exportVehicleTyresToPDF(
           data.cell.styles.fontStyle = "bold";
         }
       }
-      // Style empty positions
-      if (data.section === "body" && data.column.index === 1) {
-        const serial = data.cell.raw as string;
-        if (serial === "Empty") {
+      // Style empty DOT Code positions (index 2)
+      if (data.section === "body" && data.column.index === 2) {
+        const val = data.cell.raw as string;
+        if (val === "Empty") {
           data.cell.styles.textColor = [156, 163, 175];
           data.cell.styles.fontStyle = "italic";
         }
@@ -346,8 +343,9 @@ export function exportVehicleTyresToPDF(
 
   // Add tyre diagram legend at the bottom
   const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 150;
+  const pageHeight = doc.internal.pageSize.getHeight();
 
-  if (finalY < 250) {
+  if (finalY < pageHeight - 30) {
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.text("Health Legend:", 14, finalY + 15);

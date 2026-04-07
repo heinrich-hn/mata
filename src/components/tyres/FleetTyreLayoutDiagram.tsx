@@ -1,12 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import {
   Tooltip,
   TooltipContent,
@@ -20,7 +15,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { exportVehicleTyresToExcel, exportVehicleTyresToPDF } from "@/utils/tyreExport";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, AlertTriangle, CheckCircle, Download, FileSpreadsheet, FileText } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle, FileSpreadsheet, FileText } from "lucide-react";
 
 interface FleetTyreLayoutDiagramProps {
   vehicleId?: string;
@@ -43,18 +38,26 @@ interface FleetPositionStatus {
   position: string;
   positionLabel: string;
   tyreCode: string | null;
+  serialNumber: string | null;
   tyreDetails: {
     brand?: string;
     model?: string;
     size?: string;
+    type?: string;
+    dotCode?: string;
     currentTreadDepth?: number;
+    initialTreadDepth?: number;
+    pressureRating?: string;
     healthStatus?: string;
+    status?: string;
     lastInspectionDate?: string;
+    purchaseDate?: string;
+    notes?: string;
   } | null;
   installationDate?: string | null;
 }
 
-// Tyre wheel component that looks like an actual tyre
+// Tyre wheel component — professional look with proper rubber/rim styling
 interface TyreWheelProps {
   status: FleetPositionStatus;
   size?: "sm" | "md" | "lg";
@@ -63,9 +66,9 @@ interface TyreWheelProps {
 
 const TyreWheel = ({ status, size = "md", isDual = false }: TyreWheelProps) => {
   const sizeClasses = {
-    sm: "w-8 h-12",
-    md: "w-10 h-14",
-    lg: "w-12 h-16",
+    sm: "w-10 h-14",
+    md: "w-12 h-16",
+    lg: "w-14 h-[72px]",
   };
 
   const lastInspectionDate = status.tyreDetails?.lastInspectionDate
@@ -74,15 +77,14 @@ const TyreWheel = ({ status, size = "md", isDual = false }: TyreWheelProps) => {
   const daysSinceInspection = lastInspectionDate && !isNaN(lastInspectionDate.getTime())
     ? Math.floor((Date.now() - lastInspectionDate.getTime()) / (1000 * 60 * 60 * 24))
     : null;
-  const recentlyInspected = typeof daysSinceInspection === "number" && daysSinceInspection <= 30;
 
-  const getHealthColor = (healthStatus?: string) => {
+  const getHealthBorder = (healthStatus?: string) => {
     switch (healthStatus) {
-      case "excellent": return "from-green-600 to-green-400 border-green-700";
-      case "good": return "from-blue-600 to-blue-400 border-blue-700";
-      case "warning": return "from-yellow-600 to-yellow-400 border-yellow-700";
-      case "critical": return "from-red-600 to-red-400 border-red-700";
-      default: return "from-gray-400 to-gray-300 border-gray-500";
+      case "excellent": return "ring-2 ring-green-500";
+      case "good": return "ring-2 ring-blue-500";
+      case "warning": return "ring-2 ring-yellow-500";
+      case "critical": return "ring-2 ring-red-500 animate-pulse";
+      default: return "";
     }
   };
 
@@ -90,11 +92,11 @@ const TyreWheel = ({ status, size = "md", isDual = false }: TyreWheelProps) => {
     switch (healthStatus) {
       case "excellent":
       case "good":
-        return <CheckCircle className="h-3 w-3 text-white" />;
+        return <CheckCircle className="h-3.5 w-3.5 text-green-500" />;
       case "warning":
-        return <AlertTriangle className="h-3 w-3 text-white" />;
+        return <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />;
       case "critical":
-        return <AlertCircle className="h-3 w-3 text-white" />;
+        return <AlertCircle className="h-3.5 w-3.5 text-red-500" />;
       default:
         return null;
     }
@@ -109,72 +111,68 @@ const TyreWheel = ({ status, size = "md", isDual = false }: TyreWheelProps) => {
           <div
             className={cn(
               sizeClasses[size],
-              "relative cursor-pointer transition-all hover:scale-110",
-              isDual ? "mx-0.5" : ""
+              "relative cursor-pointer transition-transform hover:scale-110",
+              isDual ? "mx-px" : ""
             )}
           >
-            {/* Tyre shape - rounded rectangle to look like a tyre from above/side */}
-            <div
-              className={cn(
-                "w-full h-full rounded-sm border-2 flex items-center justify-center",
-                isEmpty
-                  ? "border-dashed border-gray-400 bg-gray-100"
-                  : `bg-gradient-to-b ${getHealthColor(status.tyreDetails?.healthStatus)}`
-              )}
-              style={{
-                borderRadius: "4px 4px 4px 4px",
-                boxShadow: isEmpty ? "none" : "inset 0 2px 4px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.1)",
-              }}
-            >
-              {/* Tyre tread pattern */}
-              {!isEmpty && (
-                <div className="absolute inset-1 flex flex-col justify-evenly">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-0.5 bg-black/20 rounded-full mx-0.5" />
+            {isEmpty ? (
+              /* Empty slot — dashed outline */
+              <div className="w-full h-full rounded-[5px] border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+                <span className="text-[9px] font-semibold text-gray-400">{status.position}</span>
+              </div>
+            ) : (
+              /* Filled tyre — dark rubber look with rim and tread */
+              <div className={cn(
+                "w-full h-full rounded-[5px] overflow-hidden flex flex-col relative",
+                getHealthBorder(status.tyreDetails?.healthStatus)
+              )}>
+                {/* Outer rubber */}
+                <div className="absolute inset-0 bg-gradient-to-b from-gray-800 via-gray-900 to-gray-800 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700" />
+                {/* Tread grooves */}
+                <div className="absolute inset-x-0 top-0 bottom-0 flex flex-col justify-evenly px-[3px] py-1">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex gap-[2px]">
+                      <div className="flex-1 h-[2px] rounded-full bg-gray-600/50" />
+                      <div className="w-[3px]" />
+                      <div className="flex-1 h-[2px] rounded-full bg-gray-600/50" />
+                    </div>
                   ))}
                 </div>
-              )}
-
-              {/* Position label */}
-              <span className={cn(
-                "text-[8px] font-bold z-10 px-1 rounded",
-                isEmpty ? "text-gray-500 bg-white/80" : "text-white bg-black/30"
-              )}>
-                {status.position}
-              </span>
-            </div>
-
-            {/* Health indicator */}
-            {!isEmpty && status.tyreDetails?.healthStatus && (
-              <div className="absolute -top-1 -right-1 z-20">
-                {getHealthIcon(status.tyreDetails.healthStatus)}
+                {/* Centre rim/hub */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-[60%] h-[45%] rounded-[3px] bg-gradient-to-b from-slate-300 to-slate-400 dark:from-slate-500 dark:to-slate-600 border border-slate-500/40 flex items-center justify-center shadow-inner">
+                    <span className="text-[8px] font-bold text-slate-800 dark:text-slate-200 leading-none">
+                      {status.position}
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Recent inspection badge */}
-            {!isEmpty && recentlyInspected && (
-              <div className="absolute -bottom-2 left-0 z-20">
-                <Badge variant="secondary" className="px-1 py-0 text-[9px]">
-                  Inspected ≤30d
-                </Badge>
+            {/* Health indicator dot */}
+            {!isEmpty && status.tyreDetails?.healthStatus && (
+              <div className="absolute -top-1.5 -right-1.5 z-20 bg-white dark:bg-gray-950 rounded-full p-px">
+                {getHealthIcon(status.tyreDetails.healthStatus)}
               </div>
             )}
           </div>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-xs">
           <div className="space-y-1">
-            <p className="font-semibold">{status.positionLabel}</p>
+            <p className="font-semibold text-sm">{status.positionLabel}</p>
             {status.tyreCode ? (
               <>
-                <p className="text-xs font-mono">{status.tyreCode}</p>
+                {status.serialNumber && (
+                  <p className="text-xs font-mono font-semibold">{status.serialNumber}</p>
+                )}
                 {status.tyreDetails && (
                   <>
                     <p className="text-xs">{status.tyreDetails.brand} {status.tyreDetails.model}</p>
-                    <p className="text-xs">{status.tyreDetails.size}</p>
-                    {status.tyreDetails.currentTreadDepth && (
-                      <p className="text-xs">Tread: {status.tyreDetails.currentTreadDepth}mm</p>
+                    <p className="text-xs text-muted-foreground">{status.tyreDetails.size}</p>
+                    {status.tyreDetails.currentTreadDepth != null && (
+                      <p className="text-xs">Tread: <span className="font-medium">{status.tyreDetails.currentTreadDepth}mm</span></p>
                     )}
-                    <p className="text-xs">
+                    <p className="text-xs text-muted-foreground">
                       Last inspection: {lastInspectionDate
                         ? `${lastInspectionDate.toLocaleDateString()}${daysSinceInspection !== null ? ` (${daysSinceInspection}d ago)` : ""}`
                         : "Not recorded"}
@@ -223,107 +221,77 @@ const TruckDiagram = ({ positions }: TruckDiagramProps) => {
   const getPosition = (pos: string) => positions.find(p => p.position === pos);
 
   return (
-    <div className="relative flex flex-col items-center py-4">
-      {/* Direction indicator */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 flex items-center gap-1 text-xs text-muted-foreground">
-        <span>← Front</span>
-      </div>
+    <div className="relative flex flex-col items-center py-6 px-4">
+      <div className="text-xs font-medium text-muted-foreground mb-2 tracking-wide uppercase">Front</div>
 
-      <div className="flex flex-col items-center gap-2 mt-6">
-        {/* Truck body */}
-        <svg viewBox="0 0 200 380" className="w-48 h-auto">
+      <div className="relative">
+        {/* Truck body outline */}
+        <svg viewBox="0 0 160 340" className="w-40 h-auto" aria-label="Truck chassis">
           {/* Cab */}
-          <rect x="40" y="10" width="120" height="80" rx="10" fill="currentColor" className="text-slate-700" />
-          <rect x="50" y="20" width="100" height="40" rx="5" fill="currentColor" className="text-slate-500" />
-          {/* Windshield */}
-          <rect x="55" y="25" width="90" height="30" rx="3" fill="currentColor" className="text-sky-200/50" />
+          <rect x="30" y="8" width="100" height="70" rx="8" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400" />
+          <rect x="40" y="18" width="80" height="28" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+          <text x="80" y="56" textAnchor="middle" className="fill-slate-400 text-[9px] font-semibold">CAB</text>
 
-          {/* Chassis/Frame */}
-          <rect x="50" y="90" width="100" height="260" rx="5" fill="currentColor" className="text-slate-600" />
-
+          {/* Chassis */}
+          <rect x="35" y="82" width="90" height="230" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2" className="text-slate-300" />
           {/* Frame rails */}
-          <rect x="55" y="95" width="8" height="250" fill="currentColor" className="text-slate-800" />
-          <rect x="137" y="95" width="8" height="250" fill="currentColor" className="text-slate-800" />
+          <line x1="50" y1="82" x2="50" y2="312" stroke="currentColor" strokeWidth="2" className="text-slate-350" />
+          <line x1="110" y1="82" x2="110" y2="312" stroke="currentColor" strokeWidth="2" className="text-slate-350" />
 
-          {/* Cross members */}
-          <rect x="55" y="120" width="90" height="4" fill="currentColor" className="text-slate-800" />
-          <rect x="55" y="200" width="90" height="4" fill="currentColor" className="text-slate-800" />
-          <rect x="55" y="280" width="90" height="4" fill="currentColor" className="text-slate-800" />
+          {/* Axle lines */}
+          <line x1="10" y1="45" x2="150" y2="45" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+          <line x1="10" y1="210" x2="150" y2="210" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+          <line x1="10" y1="265" x2="150" y2="265" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+
+          {/* Axle labels */}
+          <text x="80" y="100" textAnchor="middle" className="fill-slate-400 text-[8px]">STEER AXLE</text>
+          <text x="80" y="200" textAnchor="middle" className="fill-slate-400 text-[8px]">DRIVE AXLE 1</text>
+          <text x="80" y="255" textAnchor="middle" className="fill-slate-400 text-[8px]">DRIVE AXLE 2</text>
 
           {/* Fifth wheel */}
-          <ellipse cx="100" cy="320" rx="35" ry="15" fill="currentColor" className="text-slate-400" />
+          <ellipse cx="80" cy="300" rx="25" ry="8" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+          <text x="80" y="303" textAnchor="middle" className="fill-slate-400 text-[7px]">5TH WHEEL</text>
         </svg>
 
-        {/* Wheel positions - overlaid on SVG */}
-        <div className="absolute flex flex-col gap-0" style={{ top: "85px" }}>
+        {/* Wheel positions overlaid */}
+        <div className="absolute inset-0 flex flex-col items-center">
           {/* Front Axle */}
-          <div className="flex justify-between w-56 mb-32">
-            <div className="flex flex-col items-center">
-              {getPosition("V1") && <TyreWheel status={getPosition("V1")!} size="lg" />}
-            </div>
-            <div className="flex flex-col items-center">
-              {getPosition("V2") && <TyreWheel status={getPosition("V2")!} size="lg" />}
-            </div>
+          <div className="flex justify-between w-52 absolute" style={{ top: "26px" }}>
+            {getPosition("V1") && <TyreWheel status={getPosition("V1")!} size="lg" />}
+            {getPosition("V2") && <TyreWheel status={getPosition("V2")!} size="lg" />}
           </div>
 
           {/* Rear Axle 1 (Dual) */}
-          <div className="flex justify-between w-64 mb-6">
-            <div className="flex flex-col items-center">
-              {getPosition("V3") && getPosition("V4") && (
-                <DualWheel
-                  outerStatus={getPosition("V3")!}
-                  innerStatus={getPosition("V4")!}
-                  side="left"
-                />
-              )}
-            </div>
-            <div className="flex flex-col items-center">
-              {getPosition("V5") && getPosition("V6") && (
-                <DualWheel
-                  innerStatus={getPosition("V5")!}
-                  outerStatus={getPosition("V6")!}
-                  side="right"
-                />
-              )}
-            </div>
+          <div className="flex justify-between w-56 absolute" style={{ top: "174px" }}>
+            {getPosition("V3") && getPosition("V4") && (
+              <DualWheel outerStatus={getPosition("V3")!} innerStatus={getPosition("V4")!} side="left" />
+            )}
+            {getPosition("V5") && getPosition("V6") && (
+              <DualWheel innerStatus={getPosition("V5")!} outerStatus={getPosition("V6")!} side="right" />
+            )}
           </div>
 
           {/* Rear Axle 2 (Dual) */}
-          <div className="flex justify-between w-64 mb-4">
-            <div className="flex flex-col items-center">
-              {getPosition("V7") && getPosition("V8") && (
-                <DualWheel
-                  outerStatus={getPosition("V7")!}
-                  innerStatus={getPosition("V8")!}
-                  side="left"
-                />
-              )}
-            </div>
-            <div className="flex flex-col items-center">
-              {getPosition("V9") && getPosition("V10") && (
-                <DualWheel
-                  innerStatus={getPosition("V9")!}
-                  outerStatus={getPosition("V10")!}
-                  side="right"
-                />
-              )}
-            </div>
+          <div className="flex justify-between w-56 absolute" style={{ top: "230px" }}>
+            {getPosition("V7") && getPosition("V8") && (
+              <DualWheel outerStatus={getPosition("V7")!} innerStatus={getPosition("V8")!} side="left" />
+            )}
+            {getPosition("V9") && getPosition("V10") && (
+              <DualWheel innerStatus={getPosition("V9")!} outerStatus={getPosition("V10")!} side="right" />
+            )}
           </div>
         </div>
       </div>
 
       {/* Spare tyre */}
       {getPosition("SP") && (
-        <div className="mt-4 flex flex-col items-center">
-          <span className="text-xs text-muted-foreground mb-1">Spare</span>
+        <div className="mt-6 flex flex-col items-center">
+          <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">Spare</span>
           <TyreWheel status={getPosition("SP")!} size="md" />
         </div>
       )}
 
-      {/* Direction indicator */}
-      <div className="mt-4 flex items-center gap-1 text-xs text-muted-foreground">
-        <span>Rear →</span>
-      </div>
+      <div className="text-xs font-medium text-muted-foreground mt-3 tracking-wide uppercase">Rear</div>
     </div>
   );
 };
@@ -334,95 +302,62 @@ const SingleAxleTruckDiagram = ({ positions }: TruckDiagramProps) => {
   const getPosition = (pos: string) => positions.find(p => p.position === pos);
 
   return (
-    <div className="relative flex flex-col items-center py-4">
-      {/* Direction indicator */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 flex items-center gap-1 text-xs text-muted-foreground">
-        <span>← Front</span>
-      </div>
+    <div className="relative flex flex-col items-center py-6 px-4">
+      <div className="text-xs font-medium text-muted-foreground mb-2 tracking-wide uppercase">Front</div>
 
-      <div className="flex flex-col items-center gap-2 mt-6">
-        {/* Truck body - shorter for single axle */}
-        <svg viewBox="0 0 200 300" className="w-44 h-auto">
+      <div className="relative">
+        <svg viewBox="0 0 160 260" className="w-36 h-auto" aria-label="Single axle truck chassis">
           {/* Cab */}
-          <rect x="40" y="10" width="120" height="80" rx="10" fill="currentColor" className="text-slate-700" />
-          <rect x="50" y="20" width="100" height="40" rx="5" fill="currentColor" className="text-slate-500" />
-          {/* Windshield */}
-          <rect x="55" y="25" width="90" height="30" rx="3" fill="currentColor" className="text-sky-200/50" />
-          {/* Mirrors */}
-          <rect x="25" y="35" width="12" height="6" rx="2" fill="currentColor" className="text-slate-600" />
-          <rect x="163" y="35" width="12" height="6" rx="2" fill="currentColor" className="text-slate-600" />
+          <rect x="30" y="8" width="100" height="70" rx="8" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400" />
+          <rect x="40" y="18" width="80" height="28" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+          <text x="80" y="56" textAnchor="middle" className="fill-slate-400 text-[9px] font-semibold">CAB</text>
 
-          {/* Chassis/Frame - shorter */}
-          <rect x="50" y="90" width="100" height="180" rx="5" fill="currentColor" className="text-slate-600" />
+          {/* Chassis */}
+          <rect x="35" y="82" width="90" height="150" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2" className="text-slate-300" />
+          <line x1="50" y1="82" x2="50" y2="232" stroke="currentColor" strokeWidth="2" className="text-slate-350" />
+          <line x1="110" y1="82" x2="110" y2="232" stroke="currentColor" strokeWidth="2" className="text-slate-350" />
 
-          {/* Frame rails */}
-          <rect x="55" y="95" width="8" height="170" fill="currentColor" className="text-slate-800" />
-          <rect x="137" y="95" width="8" height="170" fill="currentColor" className="text-slate-800" />
+          {/* Axle lines */}
+          <line x1="10" y1="45" x2="150" y2="45" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+          <line x1="10" y1="180" x2="150" y2="180" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
 
-          {/* Cross members */}
-          <rect x="55" y="120" width="90" height="4" fill="currentColor" className="text-slate-800" />
-          <rect x="55" y="180" width="90" height="4" fill="currentColor" className="text-slate-800" />
+          {/* Axle labels */}
+          <text x="80" y="100" textAnchor="middle" className="fill-slate-400 text-[8px]">STEER</text>
+          <text x="80" y="170" textAnchor="middle" className="fill-slate-400 text-[8px]">DRIVE</text>
 
           {/* Fifth wheel */}
-          <ellipse cx="100" cy="240" rx="35" ry="15" fill="currentColor" className="text-slate-400" />
-
-          {/* Axle indicators */}
-          <text x="100" y="65" textAnchor="middle" className="text-[8px] fill-white font-bold">STEER</text>
-          <text x="100" y="205" textAnchor="middle" className="text-[8px] fill-white font-bold">DRIVE</text>
+          <ellipse cx="80" cy="220" rx="25" ry="8" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+          <text x="80" y="223" textAnchor="middle" className="fill-slate-400 text-[7px]">5TH WHEEL</text>
         </svg>
 
-        {/* Wheel positions - overlaid on SVG */}
-        <div className="absolute flex flex-col gap-0" style={{ top: "80px" }}>
-          {/* Front Steer Axle - single tyres */}
-          <div className="flex justify-between w-52 mb-20">
-            <div className="flex flex-col items-center">
-              {getPosition("V1") && <TyreWheel status={getPosition("V1")!} size="lg" />}
-              <span className="text-[9px] text-muted-foreground mt-1">Steer L</span>
-            </div>
-            <div className="flex flex-col items-center">
-              {getPosition("V2") && <TyreWheel status={getPosition("V2")!} size="lg" />}
-              <span className="text-[9px] text-muted-foreground mt-1">Steer R</span>
-            </div>
+        <div className="absolute inset-0 flex flex-col items-center">
+          {/* Front Steer Axle */}
+          <div className="flex justify-between w-48 absolute" style={{ top: "26px" }}>
+            {getPosition("V1") && <TyreWheel status={getPosition("V1")!} size="lg" />}
+            {getPosition("V2") && <TyreWheel status={getPosition("V2")!} size="lg" />}
           </div>
 
-          {/* Rear Drive Axle - dual wheels */}
-          <div className="flex justify-between w-60">
-            <div className="flex flex-col items-center">
-              {getPosition("V3") && getPosition("V4") && (
-                <DualWheel
-                  outerStatus={getPosition("V3")!}
-                  innerStatus={getPosition("V4")!}
-                  side="left"
-                />
-              )}
-              <span className="text-[9px] text-muted-foreground mt-1">Drive L</span>
-            </div>
-            <div className="flex flex-col items-center">
-              {getPosition("V5") && getPosition("V6") && (
-                <DualWheel
-                  innerStatus={getPosition("V5")!}
-                  outerStatus={getPosition("V6")!}
-                  side="right"
-                />
-              )}
-              <span className="text-[9px] text-muted-foreground mt-1">Drive R</span>
-            </div>
+          {/* Rear Drive Axle (Dual) */}
+          <div className="flex justify-between w-52 absolute" style={{ top: "148px" }}>
+            {getPosition("V3") && getPosition("V4") && (
+              <DualWheel outerStatus={getPosition("V3")!} innerStatus={getPosition("V4")!} side="left" />
+            )}
+            {getPosition("V5") && getPosition("V6") && (
+              <DualWheel innerStatus={getPosition("V5")!} outerStatus={getPosition("V6")!} side="right" />
+            )}
           </div>
         </div>
       </div>
 
-      {/* Spare tyre */}
+      {/* Spare */}
       {getPosition("SP") && (
         <div className="mt-6 flex flex-col items-center">
-          <span className="text-xs text-muted-foreground mb-1">Spare</span>
+          <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">Spare</span>
           <TyreWheel status={getPosition("SP")!} size="md" />
         </div>
       )}
 
-      {/* Direction indicator */}
-      <div className="mt-4 flex items-center gap-1 text-xs text-muted-foreground">
-        <span>Rear →</span>
-      </div>
+      <div className="text-xs font-medium text-muted-foreground mt-3 tracking-wide uppercase">Rear</div>
     </div>
   );
 };
@@ -432,36 +367,36 @@ const LMVDiagram = ({ positions }: TruckDiagramProps) => {
   const getPosition = (pos: string) => positions.find(p => p.position === pos);
 
   return (
-    <div className="relative flex flex-col items-center py-4">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
-        ← Front
-      </div>
+    <div className="relative flex flex-col items-center py-6 px-4">
+      <div className="text-xs font-medium text-muted-foreground mb-2 tracking-wide uppercase">Front</div>
 
-      <div className="flex flex-col items-center gap-2 mt-6">
-        {/* LMV body */}
-        <svg viewBox="0 0 160 240" className="w-36 h-auto">
-          {/* Body */}
-          <rect x="30" y="10" width="100" height="200" rx="15" fill="currentColor" className="text-slate-600" />
+      <div className="relative">
+        <svg viewBox="0 0 140 220" className="w-32 h-auto" aria-label="Light vehicle">
+          {/* Body outline */}
+          <rect x="25" y="8" width="90" height="200" rx="12" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400" />
           {/* Windshield */}
-          <rect x="40" y="20" width="80" height="35" rx="5" fill="currentColor" className="text-sky-200/50" />
+          <rect x="35" y="18" width="70" height="30" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
           {/* Roof */}
-          <rect x="40" y="60" width="80" height="60" rx="3" fill="currentColor" className="text-slate-500" />
+          <rect x="35" y="55" width="70" height="50" rx="3" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="3 2" className="text-slate-200" />
           {/* Rear window */}
-          <rect x="45" y="130" width="70" height="30" rx="5" fill="currentColor" className="text-sky-200/30" />
-          {/* Bed/cargo */}
-          <rect x="35" y="165" width="90" height="40" rx="5" fill="currentColor" className="text-slate-700" />
+          <rect x="38" y="115" width="64" height="25" rx="4" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+
+          {/* Axle lines */}
+          <line x1="8" y1="40" x2="132" y2="40" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+          <line x1="8" y1="170" x2="132" y2="170" stroke="currentColor" strokeWidth="1.5" className="text-slate-300" />
+
+          <text x="70" y="90" textAnchor="middle" className="fill-slate-400 text-[9px] font-semibold">LMV</text>
         </svg>
 
-        {/* Wheel positions */}
-        <div className="absolute flex flex-col" style={{ top: "70px" }}>
+        <div className="absolute inset-0 flex flex-col items-center">
           {/* Front wheels */}
-          <div className="flex justify-between w-44 mb-24">
+          <div className="flex justify-between w-40 absolute" style={{ top: "22px" }}>
             {getPosition("V1") && <TyreWheel status={getPosition("V1")!} size="md" />}
             {getPosition("V2") && <TyreWheel status={getPosition("V2")!} size="md" />}
           </div>
 
           {/* Rear wheels */}
-          <div className="flex justify-between w-44">
+          <div className="flex justify-between w-40 absolute" style={{ top: "142px" }}>
             {getPosition("V3") && <TyreWheel status={getPosition("V3")!} size="md" />}
             {getPosition("V4") && <TyreWheel status={getPosition("V4")!} size="md" />}
           </div>
@@ -470,202 +405,212 @@ const LMVDiagram = ({ positions }: TruckDiagramProps) => {
 
       {/* Spare */}
       {getPosition("SP") && (
-        <div className="mt-4 flex flex-col items-center">
-          <span className="text-xs text-muted-foreground mb-1">Spare</span>
+        <div className="mt-6 flex flex-col items-center">
+          <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">Spare</span>
           <TyreWheel status={getPosition("SP")!} size="sm" />
         </div>
       )}
 
-      <div className="mt-4 text-xs text-muted-foreground">Rear →</div>
+      <div className="text-xs font-medium text-muted-foreground mt-3 tracking-wide uppercase">Rear</div>
     </div>
   );
 };
 
-// Reefer Trailer diagram (7-9 positions)
+// Reefer Trailer diagram — Super Single config (T1-T6 = 3 axles × 2 singles + SP)
+// Also supports dual-wheel reefer if T3 is on same axle as T1 (i.e. >6 trailer positions)
 const ReeferDiagram = ({ positions }: TruckDiagramProps) => {
   const getPosition = (pos: string) => positions.find(p => p.position === pos);
-  const hasSecondAxle = positions.some(p => p.position === "T5");
-  const hasDualWheels = positions.some(p => p.position === "T3"); // 4+ tyres per axle
+  const posCount = positions.filter(p => p.position.startsWith("T")).length;
+  const isSuperSingle = posCount <= 6;
+  const hasThirdAxle = positions.some(p => p.position === "T5");
 
   return (
-    <div className="relative flex flex-col items-center py-4">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
-        ← Kingpin
+    <div className="flex flex-col items-center py-6 px-4 gap-1">
+      <div className="text-xs font-medium text-muted-foreground tracking-wide uppercase">Kingpin</div>
+
+      {/* Kingpin icon */}
+      <svg viewBox="0 0 40 20" className="w-8 h-4">
+        <circle cx="20" cy="8" r="5" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400" />
+        <line x1="20" y1="13" x2="20" y2="20" stroke="currentColor" strokeWidth="2" className="text-slate-400" />
+      </svg>
+
+      {/* Trailer body with reefer unit */}
+      <div className="border-2 border-slate-400 rounded px-6 py-3 flex flex-col items-center gap-2 min-w-[160px]">
+        {/* Reefer unit header */}
+        <div className="border border-slate-300 rounded px-3 py-1 w-full text-center">
+          <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wider">Reefer Unit</span>
+        </div>
+
+        {/* Cargo area */}
+        <div className="border border-dashed border-slate-300 rounded px-4 py-6 w-full text-center">
+          <span className="text-[9px] text-slate-300">CARGO</span>
+        </div>
       </div>
 
-      <div className="flex flex-col items-center gap-2 mt-6">
-        {/* Reefer trailer body */}
-        <svg viewBox="0 0 180 280" className="w-40 h-auto">
-          {/* Kingpin */}
-          <circle cx="90" cy="15" r="8" fill="currentColor" className="text-slate-400" />
-          <rect x="85" y="15" width="10" height="15" fill="currentColor" className="text-slate-500" />
-
-          {/* Trailer body */}
-          <rect x="20" y="30" width="140" height="220" rx="5" fill="currentColor" className="text-slate-500" />
-
-          {/* Reefer unit (at front) */}
-          <rect x="25" y="35" width="130" height="30" rx="3" fill="currentColor" className="text-slate-700" />
-          <rect x="30" y="40" width="40" height="20" rx="2" fill="currentColor" className="text-slate-600" />
-          <circle cx="110" cy="50" r="8" fill="currentColor" className="text-slate-800" />
-
-          {/* Insulated walls pattern */}
-          <rect x="30" y="70" width="120" height="170" rx="3" fill="currentColor" className="text-slate-400" />
-
-          {/* Door lines */}
-          <line x1="90" y1="180" x2="90" y2="245" stroke="currentColor" className="text-slate-600" strokeWidth="2" />
-          <circle cx="85" cy="210" r="3" fill="currentColor" className="text-slate-600" />
-          <circle cx="95" cy="210" r="3" fill="currentColor" className="text-slate-600" />
-        </svg>
-
-        {/* Wheel positions */}
-        <div className="absolute flex flex-col gap-4" style={{ top: hasSecondAxle ? "200px" : "230px" }}>
-          {/* Axle 1 */}
-          <div className="flex justify-between w-52">
-            {hasDualWheels ? (
-              <>
-                {getPosition("T1") && getPosition("T2") && (
-                  <DualWheel
-                    outerStatus={getPosition("T1")!}
-                    innerStatus={getPosition("T2")!}
-                    side="left"
-                  />
-                )}
-                {getPosition("T3") && getPosition("T4") && (
-                  <DualWheel
-                    innerStatus={getPosition("T3")!}
-                    outerStatus={getPosition("T4")!}
-                    side="right"
-                  />
-                )}
-              </>
-            ) : (
-              <>
+      {/* Axle section — flows naturally, no overlap possible */}
+      <div className="flex flex-col items-center gap-5 mt-2">
+        {isSuperSingle ? (
+          <>
+            {/* Axle 1: T1 left, T2 right */}
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 1</span>
+              <div className="flex items-center gap-8">
                 {getPosition("T1") && <TyreWheel status={getPosition("T1")!} size="md" />}
+                <div className="w-10 h-[1.5px] bg-slate-300" />
                 {getPosition("T2") && <TyreWheel status={getPosition("T2")!} size="md" />}
-              </>
-            )}
-          </div>
-
-          {/* Axle 2 (if present) */}
-          {hasSecondAxle && (
-            <div className="flex justify-between w-52">
-              {hasDualWheels ? (
-                <>
-                  {getPosition("T5") && getPosition("T6") && (
-                    <DualWheel
-                      outerStatus={getPosition("T5")!}
-                      innerStatus={getPosition("T6")!}
-                      side="left"
-                    />
-                  )}
-                  {getPosition("T7") && getPosition("T8") && (
-                    <DualWheel
-                      innerStatus={getPosition("T7")!}
-                      outerStatus={getPosition("T8")!}
-                      side="right"
-                    />
-                  )}
-                </>
-              ) : (
-                <>
-                  {getPosition("T5") && <TyreWheel status={getPosition("T5")!} size="md" />}
-                  {getPosition("T6") && <TyreWheel status={getPosition("T6")!} size="md" />}
-                </>
-              )}
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Axle 2: T3 left, T4 right */}
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 2</span>
+              <div className="flex items-center gap-8">
+                {getPosition("T3") && <TyreWheel status={getPosition("T3")!} size="md" />}
+                <div className="w-10 h-[1.5px] bg-slate-300" />
+                {getPosition("T4") && <TyreWheel status={getPosition("T4")!} size="md" />}
+              </div>
+            </div>
+
+            {/* Axle 3: T5 left, T6 right */}
+            {hasThirdAxle && (
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 3</span>
+                <div className="flex items-center gap-8">
+                  {getPosition("T5") && <TyreWheel status={getPosition("T5")!} size="md" />}
+                  <div className="w-10 h-[1.5px] bg-slate-300" />
+                  {getPosition("T6") && <TyreWheel status={getPosition("T6")!} size="md" />}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Dual Wheel Axle 1 */}
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 1</span>
+              <div className="flex items-center gap-6">
+                {getPosition("T1") && getPosition("T2") && (
+                  <DualWheel outerStatus={getPosition("T1")!} innerStatus={getPosition("T2")!} side="left" />
+                )}
+                <div className="w-8 h-[1.5px] bg-slate-300" />
+                {getPosition("T3") && getPosition("T4") && (
+                  <DualWheel innerStatus={getPosition("T3")!} outerStatus={getPosition("T4")!} side="right" />
+                )}
+              </div>
+            </div>
+
+            {/* Dual Wheel Axle 2 */}
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 2</span>
+              <div className="flex items-center gap-6">
+                {getPosition("T5") && getPosition("T6") && (
+                  <DualWheel outerStatus={getPosition("T5")!} innerStatus={getPosition("T6")!} side="left" />
+                )}
+                <div className="w-8 h-[1.5px] bg-slate-300" />
+                {getPosition("T7") && getPosition("T8") && (
+                  <DualWheel innerStatus={getPosition("T7")!} outerStatus={getPosition("T8")!} side="right" />
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Spare */}
       {getPosition("SP") && (
         <div className="mt-4 flex flex-col items-center">
-          <span className="text-xs text-muted-foreground mb-1">Spare</span>
+          <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">Spare</span>
           <TyreWheel status={getPosition("SP")!} size="sm" />
         </div>
       )}
 
-      <div className="mt-4 text-xs text-muted-foreground">Rear →</div>
+      <div className="text-xs font-medium text-muted-foreground mt-2 tracking-wide uppercase">Rear</div>
     </div>
   );
 };
 
-// Interlink Trailer diagram (17 positions - 4 axles)
+// Interlink Trailer diagram (17 positions - 4 axles with dual wheels)
 const InterlinkDiagram = ({ positions }: TruckDiagramProps) => {
   const getPosition = (pos: string) => positions.find(p => p.position === pos);
 
   return (
-    <div className="relative flex flex-col items-center py-4">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
-        ← Kingpin
+    <div className="flex flex-col items-center py-6 px-4 gap-1">
+      <div className="text-xs font-medium text-muted-foreground tracking-wide uppercase">Kingpin</div>
+
+      {/* Kingpin icon */}
+      <svg viewBox="0 0 40 20" className="w-8 h-4">
+        <circle cx="20" cy="8" r="5" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400" />
+        <line x1="20" y1="13" x2="20" y2="20" stroke="currentColor" strokeWidth="2" className="text-slate-400" />
+      </svg>
+
+      {/* Trailer body */}
+      <div className="border-2 border-slate-400 rounded px-6 py-3 flex flex-col items-center gap-1 min-w-[180px]">
+        {/* Panel ribs + cargo label */}
+        <div className="w-full space-y-3 py-4">
+          {[0, 1, 2, 3, 4].map(i => (
+            <div key={i} className="h-[0.5px] bg-slate-300 w-full" />
+          ))}
+        </div>
+        <span className="text-[9px] text-slate-300">CARGO</span>
+        <div className="w-full space-y-3 py-4">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="h-[0.5px] bg-slate-300 w-full" />
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-col items-center gap-2 mt-6">
-        {/* Interlink trailer body */}
-        <svg viewBox="0 0 200 400" className="w-44 h-auto">
-          {/* Kingpin */}
-          <circle cx="100" cy="15" r="10" fill="currentColor" className="text-slate-400" />
-          <rect x="95" y="15" width="10" height="20" fill="currentColor" className="text-slate-500" />
-
-          {/* Long trailer body */}
-          <rect x="15" y="35" width="170" height="340" rx="5" fill="currentColor" className="text-slate-500" />
-
-          {/* Side ribs/panels */}
-          {[0, 1, 2, 3, 4, 5].map(i => (
-            <rect
-              key={i}
-              x="20"
-              y={50 + i * 50}
-              width="160"
-              height="3"
-              fill="currentColor"
-              className="text-slate-600"
-            />
-          ))}
-
-          {/* Rear doors */}
-          <line x1="100" y1="340" x2="100" y2="370" stroke="currentColor" className="text-slate-600" strokeWidth="2" />
-          <circle cx="95" cy="355" r="3" fill="currentColor" className="text-slate-600" />
-          <circle cx="105" cy="355" r="3" fill="currentColor" className="text-slate-600" />
-        </svg>
-
-        {/* Wheel positions - 4 axles with dual wheels */}
-        <div className="absolute flex flex-col gap-3" style={{ top: "260px" }}>
-          {/* Axle 1 */}
-          <div className="flex justify-between w-56">
+      {/* 4 Axles with dual wheels — flows naturally, no overlap */}
+      <div className="flex flex-col items-center gap-5 mt-2">
+        {/* Axle 1: T1-T4 */}
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 1</span>
+          <div className="flex items-center gap-4">
             {getPosition("T1") && getPosition("T2") && (
               <DualWheel outerStatus={getPosition("T1")!} innerStatus={getPosition("T2")!} side="left" />
             )}
+            <div className="w-8 h-[1.5px] bg-slate-300" />
             {getPosition("T3") && getPosition("T4") && (
               <DualWheel innerStatus={getPosition("T3")!} outerStatus={getPosition("T4")!} side="right" />
             )}
           </div>
+        </div>
 
-          {/* Axle 2 */}
-          <div className="flex justify-between w-56">
+        {/* Axle 2: T5-T8 */}
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 2</span>
+          <div className="flex items-center gap-4">
             {getPosition("T5") && getPosition("T6") && (
               <DualWheel outerStatus={getPosition("T5")!} innerStatus={getPosition("T6")!} side="left" />
             )}
+            <div className="w-8 h-[1.5px] bg-slate-300" />
             {getPosition("T7") && getPosition("T8") && (
               <DualWheel innerStatus={getPosition("T7")!} outerStatus={getPosition("T8")!} side="right" />
             )}
           </div>
+        </div>
 
-          {/* Axle 3 */}
-          <div className="flex justify-between w-56">
+        {/* Axle 3: T9-T12 */}
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 3</span>
+          <div className="flex items-center gap-4">
             {getPosition("T9") && getPosition("T10") && (
               <DualWheel outerStatus={getPosition("T9")!} innerStatus={getPosition("T10")!} side="left" />
             )}
+            <div className="w-8 h-[1.5px] bg-slate-300" />
             {getPosition("T11") && getPosition("T12") && (
               <DualWheel innerStatus={getPosition("T11")!} outerStatus={getPosition("T12")!} side="right" />
             )}
           </div>
+        </div>
 
-          {/* Axle 4 */}
-          <div className="flex justify-between w-56">
+        {/* Axle 4: T13-T16 */}
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[7px] font-medium text-slate-400 uppercase">Axle 4</span>
+          <div className="flex items-center gap-4">
             {getPosition("T13") && getPosition("T14") && (
               <DualWheel outerStatus={getPosition("T13")!} innerStatus={getPosition("T14")!} side="left" />
             )}
+            <div className="w-8 h-[1.5px] bg-slate-300" />
             {getPosition("T15") && getPosition("T16") && (
               <DualWheel innerStatus={getPosition("T15")!} outerStatus={getPosition("T16")!} side="right" />
             )}
@@ -676,12 +621,12 @@ const InterlinkDiagram = ({ positions }: TruckDiagramProps) => {
       {/* Spare */}
       {getPosition("SP") && (
         <div className="mt-4 flex flex-col items-center">
-          <span className="text-xs text-muted-foreground mb-1">Spare</span>
+          <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">Spare</span>
           <TyreWheel status={getPosition("SP")!} size="sm" />
         </div>
       )}
 
-      <div className="mt-4 text-xs text-muted-foreground">Rear →</div>
+      <div className="text-xs font-medium text-muted-foreground mt-2 tracking-wide uppercase">Rear</div>
     </div>
   );
 };
@@ -710,17 +655,48 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
     enabled: !!fleetConfig,
   });
 
-  // Fetch tyre details
+  // Fetch tyre details — query by both fleet position text AND tyre codes from fleet_tyre_positions
+  const tyreCodes = fleetPositions
+    .map((fp: FleetPositionRow) => fp.tyre_code)
+    .filter((c): c is string => !!c && !c.startsWith("NEW_CODE_"));
+
   const { data: tyreDetails = [] } = useQuery({
-    queryKey: ["tyre_details", registrationNumber, fleetNumber],
+    queryKey: ["tyre_details", registrationNumber, fleetNumber, tyreCodes.join(",")],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const results: TyreRow[] = [];
+
+      // Query 1: by current_fleet_position containing registration
+      const { data: byPos } = await supabase
         .from("tyres")
         .select("*")
         .like("current_fleet_position", `%${registrationNumber}%`);
+      if (byPos) results.push(...byPos);
 
-      if (error) throw error;
-      return (data || []) as TyreRow[];
+      // Query 2: by tyre codes (id or serial_number) from fleet_tyre_positions
+      if (tyreCodes.length > 0) {
+        const { data: byId } = await supabase
+          .from("tyres")
+          .select("*")
+          .in("id", tyreCodes);
+        if (byId) {
+          for (const t of byId) {
+            if (!results.some(r => r.id === t.id)) results.push(t);
+          }
+        }
+
+        // Also try matching by serial_number in case tyre_code stores serial numbers
+        const { data: bySerial } = await supabase
+          .from("tyres")
+          .select("*")
+          .in("serial_number", tyreCodes);
+        if (bySerial) {
+          for (const t of bySerial) {
+            if (!results.some(r => r.id === t.id)) results.push(t);
+          }
+        }
+      }
+
+      return results as TyreRow[];
     },
     enabled: !!registrationNumber,
   });
@@ -757,13 +733,21 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
       position: pos.position,
       positionLabel: pos.label,
       tyreCode: tyreCode || null,
+      serialNumber: tyreDetail?.serial_number || null,
       tyreDetails: tyreDetail ? {
         brand: tyreDetail.brand,
         model: tyreDetail.model,
         size: tyreDetail.size,
+        type: tyreDetail.type,
+        dotCode: tyreDetail.dot_code,
         currentTreadDepth: tyreDetail.current_tread_depth,
+        initialTreadDepth: tyreDetail.initial_tread_depth,
+        pressureRating: tyreDetail.pressure_health,
         healthStatus: tyreDetail.tread_depth_health,
+        status: tyreDetail.condition,
         lastInspectionDate: tyreDetail.last_inspection_date,
+        purchaseDate: tyreDetail.purchase_date,
+        notes: tyreDetail.notes,
       } : null,
       installationDate: tyreDetail?.installation_date,
     };
@@ -773,13 +757,20 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
     return positionStatuses.map((status) => ({
       position: status.position,
       positionLabel: status.positionLabel,
-      serial_number: status.tyreCode || "",
+      serial_number: status.tyreDetails?.dotCode || status.tyreCode || "",
       brand: status.tyreDetails?.brand || "",
       model: status.tyreDetails?.model || "",
       size: status.tyreDetails?.size || "",
-      current_tread_depth: status.tyreDetails?.currentTreadDepth || null,
+      type: status.tyreDetails?.type || "",
+      dot_code: status.tyreDetails?.dotCode || "",
+      status: status.tyreDetails?.status || "",
+      initial_tread_depth: status.tyreDetails?.initialTreadDepth ?? null,
+      current_tread_depth: status.tyreDetails?.currentTreadDepth ?? null,
       tread_depth_health: status.tyreDetails?.healthStatus || null,
+      pressure_rating: status.tyreDetails?.pressureRating ?? null,
       installation_date: status.installationDate || null,
+      purchase_date: status.tyreDetails?.purchaseDate || null,
+      notes: status.tyreDetails?.notes || "",
     }));
   };
 
@@ -787,7 +778,17 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
   const renderDiagram = () => {
     const posCount = positionStatuses.length;
 
-    // LMV (5 positions)
+    // Use fleetConfig.fleetType when available for correct diagram selection
+    if (fleetConfig.fleetType === "reefer") {
+      return <ReeferDiagram positions={positionStatuses} />;
+    }
+
+    if (fleetConfig.fleetType === "trailer") {
+      return <InterlinkDiagram positions={positionStatuses} />;
+    }
+
+    // Horse/vehicle types — determine by position count
+    // LMV (5 positions or fewer)
     if (posCount <= 5 && positionStatuses.some(p => p.position === "V1")) {
       return <LMVDiagram positions={positionStatuses} />;
     }
@@ -806,13 +807,11 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
       return <TruckDiagram positions={positionStatuses} />;
     }
 
-    // Interlink trailer (17 positions with T1-T16 + SP)
-    if (posCount >= 17 && positionStatuses.some(p => p.position === "T16")) {
-      return <InterlinkDiagram positions={positionStatuses} />;
-    }
-
-    // Reefer trailer (7-9 positions)
+    // Fallback: trailer-type positions (T-prefix)
     if (positionStatuses.some(p => p.position === "T1")) {
+      if (posCount >= 17) {
+        return <InterlinkDiagram positions={positionStatuses} />;
+      }
       return <ReeferDiagram positions={positionStatuses} />;
     }
 
@@ -841,34 +840,40 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
               {registrationNumber} • {fleetConfig.fleetType.charAt(0).toUpperCase() + fleetConfig.fleetType.slice(1)} • {fleetConfig.positions.length} positions
             </CardDescription>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={async () => {
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
                   await exportVehicleTyresToExcel(getExportData(), { fleetNumber, registration: registrationNumber });
                   toast({ title: "Exported", description: `Tyres for ${fleetNumber} exported to Excel` });
-                }}
-              >
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Export to Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
+                } catch (err) {
+                  console.error("Excel export failed:", err);
+                  toast({ title: "Export Failed", description: "Could not export to Excel.", variant: "destructive" });
+                }
+              }}
+            >
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                try {
                   exportVehicleTyresToPDF(getExportData(), { fleetNumber, registration: registrationNumber });
                   toast({ title: "Exported", description: `Tyres for ${fleetNumber} exported to PDF` });
-                }}
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Export to PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                } catch (err) {
+                  console.error("PDF export failed:", err);
+                  toast({ title: "Export Failed", description: "Could not export to PDF.", variant: "destructive" });
+                }
+              }}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              PDF
+            </Button>
+          </div>
         </div>
 
         {/* Summary stats */}
@@ -898,23 +903,23 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
         {/* Legend */}
         <div className="mt-6 flex flex-wrap gap-4 items-center justify-center border-t pt-4">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-b from-green-600 to-green-400"></div>
+            <div className="w-4 h-4 rounded-full bg-gradient-to-b from-gray-800 to-gray-900 ring-2 ring-green-500"></div>
             <span className="text-xs">Excellent</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-b from-blue-600 to-blue-400"></div>
+            <div className="w-4 h-4 rounded-full bg-gradient-to-b from-gray-800 to-gray-900 ring-2 ring-blue-500"></div>
             <span className="text-xs">Good</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-b from-yellow-600 to-yellow-400"></div>
+            <div className="w-4 h-4 rounded-full bg-gradient-to-b from-gray-800 to-gray-900 ring-2 ring-yellow-500"></div>
             <span className="text-xs">Warning</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-b from-red-600 to-red-400"></div>
+            <div className="w-4 h-4 rounded-full bg-gradient-to-b from-gray-800 to-gray-900 ring-2 ring-red-500"></div>
             <span className="text-xs">Critical</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded border-2 border-dashed border-gray-400"></div>
+            <div className="w-4 h-4 rounded-full border-2 border-dashed border-gray-400"></div>
             <span className="text-xs">Empty</span>
           </div>
         </div>
@@ -936,17 +941,25 @@ const FleetTyreLayoutDiagram = ({ registrationNumber, fleetNumber }: FleetTyreLa
                 </Badge>
                 <div className="flex-1 min-w-0">
                   {status.tyreCode ? (
-                    <div className="truncate">
-                      <span className="font-medium">{status.tyreDetails?.brand}</span>
-                      {status.tyreDetails?.currentTreadDepth && (
-                        <span className="text-muted-foreground ml-1">
-                          {status.tyreDetails.currentTreadDepth}mm
-                        </span>
+                    <div>
+                      {status.serialNumber && (
+                        <div className="font-mono text-[10px] text-foreground font-semibold truncate">
+                          {status.serialNumber}
+                        </div>
                       )}
-                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                      <div className="truncate">
+                        <span className="font-medium">{status.tyreDetails?.brand} {status.tyreDetails?.model}</span>
+                        {status.tyreDetails?.currentTreadDepth != null && (
+                          <span className="text-muted-foreground ml-1">
+                            {status.tyreDetails.currentTreadDepth}mm
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                        {status.tyreDetails?.size}
                         {status.tyreDetails?.lastInspectionDate
-                          ? `Last insp: ${new Date(status.tyreDetails.lastInspectionDate).toLocaleDateString()}`
-                          : "No inspection recorded"}
+                          ? ` • Insp: ${new Date(status.tyreDetails.lastInspectionDate).toLocaleDateString()}`
+                          : ""}
                       </div>
                     </div>
                   ) : (

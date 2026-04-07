@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Truck, Fuel, Wrench, FileText, Activity, Server,
-  AlertTriangle, Clock, TrendingUp, ShieldAlert, UserX, MapPin
+  AlertTriangle, Clock, TrendingUp, ShieldAlert, UserX
 } from "lucide-react";
 import { useTripAlertCounts } from "@/hooks/useTripAlertCounts";
 import { useDieselCounts } from "@/hooks/useDieselCounts";
@@ -11,7 +11,6 @@ import { useFaultCounts } from "@/hooks/useFaultCounts";
 import { useDocumentCounts } from "@/hooks/useDocumentCounts";
 import { useIncidentCounts } from "@/hooks/useIncidentCounts";
 import { useDriverBehaviorCounts } from "@/hooks/useDriverBehaviorCounts";
-import { useGeofenceCounts } from "@/hooks/useGeofenceCounts";
 
 const QUICK_ACTIONS = [
   {
@@ -80,17 +79,6 @@ const QUICK_ACTIONS = [
     iconClass: "bg-violet-100 text-violet-700",
     badgeClass: "bg-violet-100 text-violet-700 border-violet-200",
   },
-  {
-    to: "/geofence",
-    icon: MapPin,
-    label: "Geofence",
-    hook: useGeofenceCounts,
-    countKey: 'active' as const,
-    description: "Zone breaches",
-    cardClass: "border-cyan-200/80 from-cyan-50/55 to-white",
-    iconClass: "bg-cyan-100 text-cyan-700",
-    badgeClass: "bg-cyan-100 text-cyan-700 border-cyan-200",
-  },
 ];
 
 export default function CommandCenterPage() {
@@ -98,6 +86,12 @@ export default function CommandCenterPage() {
 
   return (
     <div className="monitor-page">
+      {/* Page header */}
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Command Center</h1>
+        <p className="text-sm text-slate-500 mt-1">Fleet operations overview</p>
+      </div>
+
       {/* Quick Action Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {QUICK_ACTIONS.map(({ to, icon: Icon, label, hook, countKey, description, cardClass, iconClass, badgeClass }) => {
@@ -107,22 +101,22 @@ export default function CommandCenterPage() {
           return (
             <Card
               key={to}
-              className={`border bg-gradient-to-br hover:shadow-md transition-all cursor-pointer group ${cardClass}`}
+              className={`border bg-gradient-to-br hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group ${cardClass}`}
               onClick={() => navigate(to)}
             >
-              <CardContent className="p-6">
+              <CardContent className="p-5">
                 <div className="flex items-start justify-between">
-                  <div className={`p-3 rounded-lg ${iconClass}`}>
-                    <Icon className="h-6 w-6" />
+                  <div className={`p-2.5 rounded-lg ${iconClass}`}>
+                    <Icon className="h-5 w-5" />
                   </div>
                   {count > 0 && (
-                    <Badge className={`text-xs ${badgeClass}`}>
+                    <Badge className={`text-[0.6875rem] ${badgeClass}`}>
                       {count}
                     </Badge>
                   )}
                 </div>
-                <h3 className="text-base font-medium text-slate-900 mt-4">{label}</h3>
-                <p className="text-sm text-slate-500 mt-1">
+                <h3 className="text-sm font-semibold text-slate-900 mt-3">{label}</h3>
+                <p className="text-[0.8125rem] text-slate-500 mt-0.5">
                   {count > 0 ? `${count} ${description}` : `No active ${description.toLowerCase()}`}
                 </p>
               </CardContent>
@@ -132,98 +126,103 @@ export default function CommandCenterPage() {
       </div>
 
       {/* Live Activity Feed */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Recent Activity */}
-        <Card className="lg:col-span-2 border-slate-200">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500 flex items-center gap-2">
-              <Activity className="h-4 w-4" />
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <Activity className="h-3.5 w-3.5" />
               Recent Activity
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {/* Activity stream with neutral colors */}
-              <div className="flex items-center gap-3 text-sm">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-                <span className="flex-1 text-slate-600">System operational</span>
-                <span className="text-slate-400">Just now</span>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-sm py-1">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0" />
+                <span className="flex-1 text-slate-600 text-[0.8125rem]">System operational</span>
+                <span className="text-xs text-slate-400">Just now</span>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                <span className="flex-1 text-slate-600">Trip alerts updated</span>
-                <span className="text-slate-400">2 min ago</span>
+              <div className="flex items-center gap-3 text-sm py-1">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" />
+                <span className="flex-1 text-slate-600 text-[0.8125rem]">Trip alerts updated</span>
+                <span className="text-xs text-slate-400">2 min ago</span>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <div className="w-2 h-2 bg-rose-500 rounded-full" />
-                <span className="flex-1 text-slate-600">New fault detected</span>
-                <span className="text-slate-400">5 min ago</span>
+              <div className="flex items-center gap-3 text-sm py-1">
+                <div className="w-1.5 h-1.5 bg-rose-500 rounded-full flex-shrink-0" />
+                <span className="flex-1 text-slate-600 text-[0.8125rem]">New fault detected</span>
+                <span className="text-xs text-slate-400">5 min ago</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* System Status */}
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-500 flex items-center gap-2">
-              <Server className="h-4 w-4" />
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <Server className="h-3.5 w-3.5" />
               System Status
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-600">Database</span>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between py-0.5">
+              <span className="text-[0.8125rem] text-slate-600">Database</span>
               <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50">
                 Operational
               </Badge>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-600">Realtime</span>
+            <div className="flex items-center justify-between py-0.5">
+              <span className="text-[0.8125rem] text-slate-600">Realtime</span>
               <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
                 Connected
               </Badge>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-600">API</span>
-              <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">
+            <div className="flex items-center justify-between py-0.5">
+              <span className="text-[0.8125rem] text-slate-600">API</span>
+              <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50">
                 Healthy
               </Badge>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-600">Last Sync</span>
-              <span className="text-xs text-slate-400">30s ago</span>
+            <div className="flex items-center justify-between py-0.5">
+              <span className="text-[0.8125rem] text-slate-600">Last Sync</span>
+              <span className="text-xs text-slate-400 font-medium">30s ago</span>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Stats - Neutral colors */}
+      {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50/55 to-white">
-          <CardContent className="p-4 flex items-center gap-3">
-            <TrendingUp className="h-8 w-8 text-emerald-600" />
+        <Card className="border-emerald-200/60 bg-gradient-to-br from-emerald-50/40 to-white">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-2.5 rounded-lg bg-emerald-100">
+              <TrendingUp className="h-5 w-5 text-emerald-600" />
+            </div>
             <div>
-              <p className="text-xs uppercase tracking-wider text-slate-500">Resolution Rate</p>
-              <p className="text-xl font-bold text-slate-900">94%</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Resolution Rate</p>
+              <p className="text-xl font-bold text-slate-900 mt-0.5">94%</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/55 to-white">
-          <CardContent className="p-4 flex items-center gap-3">
-            <Clock className="h-8 w-8 text-blue-600" />
+        <Card className="border-blue-200/60 bg-gradient-to-br from-blue-50/40 to-white">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-2.5 rounded-lg bg-blue-100">
+              <Clock className="h-5 w-5 text-blue-600" />
+            </div>
             <div>
-              <p className="text-xs uppercase tracking-wider text-slate-500">Avg Response Time</p>
-              <p className="text-xl font-bold text-slate-900">2.4m</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Avg Response Time</p>
+              <p className="text-xl font-bold text-slate-900 mt-0.5">2.4m</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-rose-200/80 bg-gradient-to-br from-rose-50/55 to-white">
-          <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="h-8 w-8 text-rose-600" />
+        <Card className="border-rose-200/60 bg-gradient-to-br from-rose-50/40 to-white">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-2.5 rounded-lg bg-rose-100">
+              <AlertTriangle className="h-5 w-5 text-rose-600" />
+            </div>
             <div>
-              <p className="text-xs uppercase tracking-wider text-slate-500">Open Issues</p>
-              <p className="text-xl font-bold text-slate-900">3</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Open Issues</p>
+              <p className="text-xl font-bold text-slate-900 mt-0.5">3</p>
             </div>
           </CardContent>
         </Card>

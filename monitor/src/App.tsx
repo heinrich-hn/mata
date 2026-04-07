@@ -6,7 +6,6 @@ import { useDieselAlerts } from "@/hooks/useDieselAlerts";
 import { useDriverBehaviorAlerts } from "@/hooks/useDriverBehaviorAlerts";
 import { useDriverDocumentAlerts } from "@/hooks/useDriverDocumentAlerts";
 import { useFaultAlerts } from "@/hooks/useFaultAlerts";
-import { useGeofenceAlerts } from "@/hooks/useGeofenceAlerts";
 import { useIncidentAlerts } from "@/hooks/useIncidentAlerts";
 import { useMaintenanceAlerts } from "@/hooks/useMaintenanceAlerts";
 import { useTripAlerts } from "@/hooks/useTripAlerts";
@@ -14,14 +13,12 @@ import { useVehicleDocumentAlerts } from "@/hooks/useVehicleDocumentAlerts";
 import { supabase } from "@/integrations/supabase/client";
 import AlertDetailPage from "@/pages/AlertDetailPage";
 import AlertsPage from "@/pages/AlertsPage";
-import AnalyticsPage from "@/pages/AnalyticsPage";
 import AuthPage from "@/pages/AuthPage";
 import ConfigPage from "@/pages/ConfigPage";
 import DieselAlertsPage from "@/pages/DieselAlertsPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import DriverBehaviorPage from "@/pages/DriverBehaviorPage";
 import FaultsPage from "@/pages/FaultsPage";
-import GeofencePage from "@/pages/GeofencePage";
 import IncidentsPage from "@/pages/IncidentsPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import TripAlertsPage from "@/pages/TripAlertsPage";
@@ -287,7 +284,6 @@ function AppContent() {
   useMaintenanceAlerts(true);
   useIncidentAlerts(true);
   useDriverBehaviorAlerts(true);
-  useGeofenceAlerts(true);
   useTripAlerts(trips, { enabled: true }); // Monitor trips for alerts
 
   return (
@@ -304,7 +300,6 @@ function AppContent() {
         <Route index element={<Navigate to="/alerts" replace />} />
         <Route path="alerts" element={<AlertsPage />} />
         <Route path="alerts/:id" element={<AlertDetailPage />} />
-        <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="config" element={<ConfigPage />} />
         <Route path="faults" element={<FaultsPage />} />
         <Route path="trip-alerts" element={<TripAlertsPage />} />
@@ -312,7 +307,6 @@ function AppContent() {
         <Route path="diesel-alerts" element={<DieselAlertsPage />} />
         <Route path="incidents" element={<IncidentsPage />} />
         <Route path="driver-behavior" element={<DriverBehaviorPage />} />
-        <Route path="geofence" element={<GeofencePage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

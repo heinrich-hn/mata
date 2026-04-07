@@ -24,6 +24,8 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { ExportMenu } from "@/components/ExportMenu";
+import { exportTripAlerts } from "@/lib/monitorExport";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -410,10 +412,16 @@ export default function TripAlertsPage() {
                   <p className="text-xs text-slate-500">Completed trips without base revenue</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching} className="border-slate-200 text-slate-600 hover:bg-slate-50">
-                <RefreshCw className={cn("h-4 w-4 mr-2", isRefetching && "animate-spin")} />
-                Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                <ExportMenu
+                  disabled={filteredTrips.length === 0}
+                  onExport={(target) => exportTripAlerts(filteredTrips, 'missing_revenue', target)}
+                />
+                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching} className="border-slate-200 text-slate-600 hover:bg-slate-50">
+                  <RefreshCw className={cn("h-4 w-4 mr-2", isRefetching && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
             </div>
 
             {/* Filter bar */}
@@ -684,10 +692,19 @@ export default function TripAlertsPage() {
                   <p className="text-xs text-slate-500">Active trips sharing the same reference number</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching} className="border-slate-200 text-slate-600 hover:bg-slate-50">
-                <RefreshCw className={cn("h-4 w-4 mr-2", isRefetching && "animate-spin")} />
-                Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                <ExportMenu
+                  disabled={duplicateGroups.length === 0}
+                  onExport={(target) => {
+                    const allDupTrips = filteredDuplicateGroups.flatMap(g => g.trips);
+                    exportTripAlerts(allDupTrips, 'duplicate_pods', target);
+                  }}
+                />
+                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching} className="border-slate-200 text-slate-600 hover:bg-slate-50">
+                  <RefreshCw className={cn("h-4 w-4 mr-2", isRefetching && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
             </div>
 
             {/* Search */}

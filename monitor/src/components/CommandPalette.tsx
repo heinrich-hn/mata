@@ -27,8 +27,7 @@ const NAV_ITEMS = [
   { to: "/faults", label: "Go to Faults", shortcut: "3" },
   { to: "/documents", label: "Go to Documents", shortcut: "4" },
   { to: "/diesel-alerts", label: "Go to Diesel Alerts", shortcut: "5" },
-  { to: "/analytics", label: "Go to Analytics", shortcut: "6" },
-  { to: "/config", label: "Go to Alert Rules", shortcut: "7" },
+  { to: "/config", label: "Go to Alert Rules", shortcut: "6" },
 ];
 
 export default function CommandPalette({ open, setOpen }: CommandPaletteProps) {

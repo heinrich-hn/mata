@@ -27,7 +27,7 @@ interface AlertMetadata {
 
 export function useDriverDocumentAlerts(enabled: boolean = true) {
   const isMounted = useRef(true);
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<ReturnType<typeof setInterval>>(); // Fixed: Changed from NodeJS.Timeout
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel>>();
 
   const formatDate = useCallback((date: string): string => {
