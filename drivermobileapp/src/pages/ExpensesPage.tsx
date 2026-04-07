@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Trash2,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
@@ -288,7 +289,7 @@ export default function ExpensesPage(): JSX.Element {
   const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
 
   // Fetch driver's assigned vehicle (truck) first
-  // Uses same queryFn shape as HomePage ({ truck, reefer }) for cache compatibility
+  // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID)
   const { data: assignedVehicle } = useQuery({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
@@ -374,27 +375,60 @@ export default function ExpensesPage(): JSX.Element {
     isLoading: entriesLoading,
     error: entriesError
   } = useQuery<CostEntry[]>({
-    queryKey: ["expense-entries", vehicleTripIds],
+    queryKey: ["expense-entries", vehicleTripIds, assignedVehicle?.fleet_number],
     queryFn: async () => {
-      if (vehicleTripIds.length === 0) return [];
+      // Fetch trip-linked expenses
+      let tripRows: CostEntryRow[] = [];
+      if (vehicleTripIds.length > 0) {
+        const { data, error } = await supabase
+          .from("cost_entries")
+          .select(
+            "id, trip_id, category, sub_category, amount, currency, reference_number, date, notes, is_flagged, flag_reason, created_at"
+          )
+          .eq("is_system_generated", false)
+          .in("trip_id", vehicleTripIds)
+          .order("created_at", { ascending: false })
+          .limit(50);
 
-      // Only fetch cost entries for this driver's vehicle's trips
-      const { data, error } = await supabase
-        .from("cost_entries")
-        .select(
-          "id, trip_id, category, sub_category, amount, currency, reference_number, date, notes, is_flagged, flag_reason, created_at"
-        )
-        .eq("is_system_generated", false)
-        .in("trip_id", vehicleTripIds)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.error("Error fetching expenses:", error);
-        throw error;
+        if (error) {
+          console.error("Error fetching trip expenses:", error);
+          throw error;
+        }
+        tripRows = (data ?? []) as CostEntryRow[];
       }
 
-      const rows = (data ?? []) as CostEntryRow[];
+      // Also fetch standalone expenses (no trip) for this vehicle
+      let standaloneRows: CostEntryRow[] = [];
+      if (assignedVehicle?.fleet_number) {
+        const { data, error } = await supabase
+          .from("cost_entries")
+          .select(
+            "id, trip_id, category, sub_category, amount, currency, reference_number, date, notes, is_flagged, flag_reason, created_at"
+          )
+          .eq("is_system_generated", false)
+          .is("trip_id", null)
+          .eq("vehicle_identifier", assignedVehicle.fleet_number)
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        if (!error && data) {
+          standaloneRows = data as CostEntryRow[];
+        }
+      }
+
+      // Merge and deduplicate by id
+      const seen = new Set<string>();
+      const allRows: CostEntryRow[] = [];
+      for (const row of [...tripRows, ...standaloneRows]) {
+        if (!seen.has(row.id)) {
+          seen.add(row.id);
+          allRows.push(row);
+        }
+      }
+      // Sort by created_at descending
+      allRows.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+
+      const rows = allRows.slice(0, 50);
 
       // Fetch trip info separately for entries that have a trip_id
       const tripIdsSet = new Set(rows.map((e: CostEntryRow) => e.trip_id).filter(Boolean) as string[]);
@@ -534,6 +568,7 @@ export default function ExpensesPage(): JSX.Element {
         is_flagged: shouldFlag,
         flag_reason: flagReason || null,
         is_system_generated: false,
+        vehicle_identifier: assignedVehicle?.fleet_number || null,
       };
 
       const { data: result, error } = await supabase
@@ -607,6 +642,7 @@ export default function ExpensesPage(): JSX.Element {
         notes: `${data.notes.trim()}${zarNote} [Submitted by: ${profile?.name || user.email || 'Driver'}]`.trim(),
         is_flagged: shouldFlag,
         flag_reason: flagReason || null,
+        vehicle_identifier: assignedVehicle?.fleet_number || null,
       };
 
       const { data: result, error } = await supabase
@@ -646,6 +682,49 @@ export default function ExpensesPage(): JSX.Element {
       toast({
         title: "Error",
         description: error.message || "Failed to update expense",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      if (!user?.id) throw new Error("Authentication required");
+
+      // Delete attachments first (if any)
+      await supabase
+        .from("cost_attachments")
+        .delete()
+        .eq("cost_id", entryId);
+
+      const { error } = await supabase
+        .from("cost_entries")
+        .delete()
+        .eq("id", entryId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expense-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["cost-entries"] });
+      if (editingEntry?.trip_id) {
+        queryClient.invalidateQueries({ queryKey: ["trip-expenses", editingEntry.trip_id] });
+      }
+
+      resetForm();
+      setEditingEntry(null);
+      setViewMode("list");
+
+      toast({
+        title: "Deleted",
+        description: "Expense has been deleted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete expense",
         variant: "destructive",
       });
     },
@@ -737,7 +816,7 @@ export default function ExpensesPage(): JSX.Element {
   }
 
   const isEditing = viewMode === 'edit';
-  const isMutating = addMutation.isPending || editMutation.isPending;
+  const isMutating = addMutation.isPending || editMutation.isPending || deleteMutation.isPending;
 
   // Add/Edit Expense View
   if (viewMode === "add" || viewMode === "edit") {
@@ -1030,6 +1109,34 @@ export default function ExpensesPage(): JSX.Element {
                 </>
               )}
             </Button>
+
+            {/* Delete Button — only in edit mode */}
+            {isEditing && editingEntry && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="lg"
+                className="w-full h-14 text-base font-semibold"
+                disabled={isMutating}
+                onClick={() => {
+                  if (window.confirm("Delete this expense? This cannot be undone.")) {
+                    deleteMutation.mutate(editingEntry.id);
+                  }
+                }}
+              >
+                {deleteMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-5 h-5 mr-2" />
+                    Delete Expense
+                  </>
+                )}
+              </Button>
+            )}
           </form>
         </div>
       </MobileShell>

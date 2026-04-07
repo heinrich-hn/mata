@@ -149,7 +149,7 @@ export default function TripsPage() {
   }, [queryClient]);
 
   // Fetch assigned vehicle (truck) from driver_vehicle_assignments
-  // Uses same queryFn shape as HomePage ({ truck, reefer }) for cache compatibility
+  // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID)
   const { data: assignedVehicle, isLoading: isLoadingVehicle } = useQuery({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
@@ -241,26 +241,26 @@ export default function TripsPage() {
 
 
 
-  // Fetch existing freight details for all trips
-  // Note: freight_details table may not exist yet — gracefully return empty
+  // Check which trips have loads linked via the loads table
   const { data: freightDetails = [], isLoading: isLoadingFreight } = useQuery<FreightDetail[]>({
     queryKey: ["freight-details", assignedVehicle?.id, user?.id],
     queryFn: async () => {
       if (!assignedVehicle?.id || !user?.id) return [];
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from("freight_details")
-        .select(`id, trip_id`)
-        .eq("vehicle_id", assignedVehicle.id)
-        .eq("driver_id", user.id);
+      const { data, error } = await supabase
+        .from("loads")
+        .select("id, assigned_trip_id")
+        .eq("assigned_vehicle_id", assignedVehicle.id)
+        .not("assigned_trip_id", "is", null);
 
       if (error) {
-        // Table may not exist — return empty instead of crashing
-        console.warn("freight_details query failed:", error.message);
+        console.warn("loads query for freight check failed:", error.message);
         return [];
       }
-      return (data || []) as unknown as FreightDetail[];
+      return (data || []).map((row: { id: string; assigned_trip_id: string }) => ({
+        id: row.id,
+        trip_id: row.assigned_trip_id,
+      })) as FreightDetail[];
     },
     enabled: !!assignedVehicle?.id && !!user?.id,
     staleTime: 5 * 60 * 1000,

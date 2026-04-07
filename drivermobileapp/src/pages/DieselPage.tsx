@@ -596,6 +596,7 @@ export default function DieselPage() {
   }, [slipFiles, pumpFiles, supabase, user?.email, toast]);
 
   // Query 1: All active vehicle assignments — split into truck + reefer client-side
+  // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID)
   const { data: vehicleAssignments, isLoading: _isLoadingVehicle } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
     queryKey: ["assigned-vehicles", user?.id],
     queryFn: async () => {

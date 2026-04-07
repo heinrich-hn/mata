@@ -4,6 +4,7 @@ import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/auth-context";
 import { useDriverDocuments } from "@/hooks/use-driver-documents";
+import { useDriverRecord } from "@/hooks/use-driver-record";
 import {
   useDieselRealtimeSync,
   useFreightRealtimeSync,
@@ -91,42 +92,16 @@ export default function HomePage() {
     return "Driver";
   }, [profile?.full_name, profile?.name, user?.user_metadata, user?.email]);
 
-  // Find driver by auth_user_id (primary) or email (fallback) for document expiry notifications
-  const { data: driverRecord } = useQuery<{ id: string } | null>({
-    queryKey: ["driver-for-docs", user?.id, user?.email],
-    queryFn: async () => {
-      if (!user) return null;
-      // Try auth_user_id first
-      if (user.id) {
-        const { data } = await supabase
-          .from("drivers")
-          .select("id")
-          .eq("auth_user_id", user.id)
-          .eq("status", "active")
-          .limit(1)
-          .maybeSingle();
-        if (data) return data;
-      }
-      // Fallback: match by email
-      if (user.email) {
-        const { data } = await supabase
-          .from("drivers")
-          .select("id")
-          .eq("email", user.email)
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (data) return data;
-      }
-      return null;
-    },
-    enabled: !!user,
-    staleTime: 10 * 60 * 1000,
-  });
+  // Find driver by auth_user_id (primary) or email (fallback)
+  const { data: driverRecord } = useDriverRecord();
+
+  // The driver's DB id (from the drivers table), used for document lookups only.
+  // NOTE: driver_vehicle_assignments.driver_id references auth.users(id) (Auth UUID),
+  // NOT drivers.id. Use user.id for assignment queries.
+  const driverId = driverRecord?.id ?? undefined;
 
   // Document expiry alerts
-  const { alerts, expiredCount, expiringCount, hasAlerts } = useDriverDocuments(driverRecord?.id);
+  const { alerts, expiredCount, expiringCount, hasAlerts } = useDriverDocuments(driverId);
 
   // Real-time subscriptions for dashboard data
   // (diesel sync moved below vehicle query to pass fleet_number filter)
@@ -158,6 +133,7 @@ export default function HomePage() {
   }, []);
 
   // Fetch all active vehicle assignments — split into truck + reefer
+  // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID)
   const { data: vehicleAssignments, isLoading: vehicleLoading } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {

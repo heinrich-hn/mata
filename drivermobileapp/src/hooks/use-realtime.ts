@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 // NOTE: Do NOT create a module-level supabase client here.
 // Always call createClient() inside hooks/components so the singleton
@@ -276,8 +276,10 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>(
   filter?: { column: string; value: string | undefined }
 ) {
   const queryClient = useQueryClient();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (filter && !filter.value) return;
 
     const supabase = createClient();
@@ -296,6 +298,7 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>(
           ...(filter && { filter: `${filter.column}=eq.${filter.value}` }),
         },
         (payload: RealtimePostgresChangesPayload<T>) => {
+          if (!mountedRef.current) return;
           console.log(`[Realtime] ${tableName} change:`, payload.eventType);
           queryClient.invalidateQueries({ queryKey });
         }
@@ -303,6 +306,7 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>(
       .subscribe();
 
     return () => {
+      mountedRef.current = false;
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -315,8 +319,10 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>(
  */
 export function useDieselRealtimeSync(driverId: string | undefined, fleetNumber?: string) {
   const queryClient = useQueryClient();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!driverId || !fleetNumber) return;
 
     const supabase = createClient();
@@ -331,6 +337,7 @@ export function useDieselRealtimeSync(driverId: string | undefined, fleetNumber?
           filter: `fleet_number=eq.${fleetNumber}`,
         },
         () => {
+          if (!mountedRef.current) return;
           queryClient.invalidateQueries({ queryKey: ['diesel-records'] });
           queryClient.invalidateQueries({ queryKey: ['recent-diesel'] });
           queryClient.invalidateQueries({ queryKey: ['monthly-diesel-records'] });
@@ -340,18 +347,23 @@ export function useDieselRealtimeSync(driverId: string | undefined, fleetNumber?
       .subscribe();
 
     return () => {
+      mountedRef.current = false;
       supabase.removeChannel(channel);
     };
   }, [driverId, fleetNumber, queryClient]);
 }
 
 /**
- * Real-time sync for freight entries - invalidates query cache on changes
+ * Real-time sync for freight/loads - invalidates query cache on changes.
+ * Watches the loads table (not freight_entries) filtered by assigned_vehicle_id
+ * derived from the driver's assignment.
  */
 export function useFreightRealtimeSync(driverId: string | undefined) {
   const queryClient = useQueryClient();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!driverId) return;
 
     const supabase = createClient();
@@ -362,17 +374,18 @@ export function useFreightRealtimeSync(driverId: string | undefined) {
         {
           event: '*',
           schema: 'public',
-          table: 'freight_entries',
-          filter: `driver_id=eq.${driverId}`,
+          table: 'loads',
         },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['freight-entries'] });
-          queryClient.invalidateQueries({ queryKey: ['recent-freight'] });
+          if (!mountedRef.current) return;
+          queryClient.invalidateQueries({ queryKey: ['freight-details'] });
+          queryClient.invalidateQueries({ queryKey: ['assigned-loads'] });
         }
       )
       .subscribe();
 
     return () => {
+      mountedRef.current = false;
       supabase.removeChannel(channel);
     };
   }, [driverId, queryClient]);
@@ -383,8 +396,10 @@ export function useFreightRealtimeSync(driverId: string | undefined) {
  */
 export function useExpenseRealtimeSync(driverId: string | undefined) {
   const queryClient = useQueryClient();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!driverId) return;
 
     const supabase = createClient();
@@ -399,6 +414,7 @@ export function useExpenseRealtimeSync(driverId: string | undefined) {
           filter: `driver_id=eq.${driverId}`,
         },
         () => {
+          if (!mountedRef.current) return;
           queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
           queryClient.invalidateQueries({ queryKey: ['cost-entries'] }); // Dashboard query key
         }
@@ -406,6 +422,7 @@ export function useExpenseRealtimeSync(driverId: string | undefined) {
       .subscribe();
 
     return () => {
+      mountedRef.current = false;
       supabase.removeChannel(channel);
     };
   }, [driverId, queryClient]);
@@ -416,8 +433,10 @@ export function useExpenseRealtimeSync(driverId: string | undefined) {
  */
 export function useVehicleAssignmentSubscription(userId: string | undefined) {
   const queryClient = useQueryClient();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!userId) return;
 
     const supabase = createClient();
@@ -433,9 +452,8 @@ export function useVehicleAssignmentSubscription(userId: string | undefined) {
           filter: `driver_id=eq.${userId}`,
         },
         () => {
+          if (!mountedRef.current) return;
           console.log('Vehicle assignment changed, invalidating queries...');
-          // Only invalidate the vehicle query — dependent queries will
-          // automatically refetch when vehicle data changes (new query keys).
           queryClient.invalidateQueries({ queryKey: ['assigned-vehicle'] });
           queryClient.invalidateQueries({ queryKey: ['driver-assigned-vehicle'] });
           queryClient.invalidateQueries({ queryKey: ['assigned-vehicles'] });
@@ -445,6 +463,7 @@ export function useVehicleAssignmentSubscription(userId: string | undefined) {
       .subscribe();
 
     return () => {
+      mountedRef.current = false;
       supabase.removeChannel(channel);
     };
   }, [userId, queryClient]);
@@ -455,8 +474,10 @@ export function useVehicleAssignmentSubscription(userId: string | undefined) {
  */
 export function useLoadAssignmentSubscription(vehicleId: string | undefined) {
   const queryClient = useQueryClient();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!vehicleId) return;
 
     const supabase = createClient();
@@ -471,12 +492,14 @@ export function useLoadAssignmentSubscription(vehicleId: string | undefined) {
           filter: `assigned_vehicle_id=eq.${vehicleId}`,
         },
         () => {
+          if (!mountedRef.current) return;
           queryClient.invalidateQueries({ queryKey: ['assigned-loads'] });
         }
       )
       .subscribe();
 
     return () => {
+      mountedRef.current = false;
       supabase.removeChannel(channel);
     };
   }, [vehicleId, queryClient]);

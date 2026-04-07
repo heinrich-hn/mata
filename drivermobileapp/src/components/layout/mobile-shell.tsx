@@ -1,9 +1,6 @@
 import { useAuth } from "@/contexts/auth-context";
-import { useInactivityTimeout } from "@/hooks/use-inactivity-timeout";
 import { cn } from "@/lib/utils";
 import { AlertCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
 import { BottomNav } from "./bottom-nav";
 
 interface MobileShellProps {
@@ -17,18 +14,7 @@ export function MobileShell({
   className,
   showNav = true,
 }: MobileShellProps) {
-  const { isLoading, error, user } = useAuth();
-  const navigate = useNavigate();
-
-  // Auto sign-out after 5 minutes of inactivity
-  useInactivityTimeout();
-
-  // Redirect to login if not authenticated after loading completes
-  useEffect(() => {
-    if (!isLoading && !user && !error) {
-      navigate("/login", { replace: true });
-    }
-  }, [isLoading, user, error, navigate]);
+  const { isLoading, error } = useAuth();
 
   // Show error state if auth failed to initialize
   if (error) {

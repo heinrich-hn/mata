@@ -100,6 +100,9 @@ export default function ProfilePage() {
     staleTime: 10 * 60 * 1000,
   });
 
+  // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID),
+  // NOT drivers.id. Use user.id for assignment queries.
+
   // Fetch all active driver assignments (assigned by admin from dashboard)
   const { data: vehicleAssignments, isLoading: assignmentLoading } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
     queryKey: ["driver-assignment", user?.id],

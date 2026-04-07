@@ -38,6 +38,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   isLoading: boolean;
+  isSigningOut: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -67,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -206,59 +208,95 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fetchVersion = fetchVersionRef;
     const initialFetchVersion = fetchVersion.current;
 
-    // Subscribe to auth changes
+    // Subscribe to auth changes — this is the PRIMARY source of truth.
+    // onAuthStateChange fires INITIAL_SESSION with the cached/refreshed session
+    // before getUser() even resolves, so it handles most cases.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!mountedRef.current) return;
 
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-
-      // On sign-out or token revocation, clear all query cache immediately
-      // so the next login starts from a clean slate.
-      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED" && !newSession) {
+      // On sign-out or failed token refresh, clear everything
+      if (event === "SIGNED_OUT" || (event === "TOKEN_REFRESHED" && !newSession)) {
+        setSession(null);
+        setUser(null);
+        setProfile(null);
         queryClient.clear();
+        finishInit();
+        return;
       }
 
-      // Stop loading NOW — user/session are set, profile can load in background.
-      // This prevents the safety timeout from firing while fetchProfile is slow.
-      finishInit();
+      // For all other events (INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED),
+      // update state from the new session
+      if (newSession?.user) {
+        setSession(newSession);
+        setUser(newSession.user);
+        // Mark init as done — we have a valid session from the SDK
+        finishInit();
 
-      if (newSession?.user?.email) {
-        const p = await fetchProfile(newSession.user.email, newSession.user);
-        if (mountedRef.current) setProfile(p);
-      } else {
-        setProfile(null);
+        if (newSession.user.email) {
+          const p = await fetchProfile(newSession.user.email, newSession.user);
+          if (mountedRef.current) setProfile(p);
+        }
+      } else if (event === "INITIAL_SESSION") {
+        // INITIAL_SESSION with no session means no stored session exists at all.
+        // This is a genuine "not logged in" state — show login screen.
+        finishInit();
       }
     });
 
-    // Validate session server-side with getUser() — getSession() only reads the
-    // cached JWT from storage and will happily return an expired token.
-    // getUser() hits Supabase's /auth/v1/user endpoint to verify + refresh.
+    // Secondary validation: getUser() verifies the JWT server-side.
+    // This catches edge cases where the stored JWT is invalid/revoked but
+    // onAuthStateChange still loaded it from cache.
+    // IMPORTANT: Only clear state if onAuthStateChange hasn't already set a user.
     supabase.auth.getUser()
       .then(async ({ data: { user: verifiedUser }, error: userError }) => {
-        if (!mountedRef.current || initComplete) return;
+        if (!mountedRef.current) return;
 
         if (userError || !verifiedUser) {
-          // Token expired / invalid — clear stale state so UI shows login
-          console.warn("Session invalid or expired:", userError?.message);
+          // getUser() says the token is invalid. But if onAuthStateChange already
+          // set a valid session (e.g. it refreshed the token), don't override it.
+          if (initComplete) {
+            // Init already done by onAuthStateChange — don't wipe state.
+            // If the session is truly invalid, TOKEN_REFRESHED with null session
+            // or SIGNED_OUT will fire from the SDK and handle cleanup.
+            console.warn("getUser() failed after init already complete — deferring to SDK:", userError?.message);
+            return;
+          }
+
+          // Check if getSession() has a cached session (from onAuthStateChange
+          // processing that hasn't set initComplete yet due to async timing)
+          const { data: { session: cachedSession } } = await supabase.auth.getSession();
+          if (cachedSession?.user) {
+            console.warn("getUser() failed but cached session exists — keeping session:", userError?.message);
+            setSession(cachedSession);
+            setUser(cachedSession.user);
+            finishInit();
+            if (cachedSession.user.email) {
+              const p = await fetchProfile(cachedSession.user.email, cachedSession.user);
+              if (mountedRef.current) setProfile(p);
+            }
+            return;
+          }
+
+          // No cached session either — truly not authenticated
+          console.warn("No valid session found:", userError?.message);
           setSession(null);
           setUser(null);
           setProfile(null);
-          // Clear all cached query data so re-login starts fresh
           queryClient.clear();
           finishInit();
           return;
         }
+
+        // getUser() succeeded — if init already done by onAuthStateChange, skip
+        if (initComplete) return;
 
         // Token is valid — now read the (refreshed) session for the JWT
         const { data: { session: freshSession } } = await supabase.auth.getSession();
 
         setSession(freshSession);
         setUser(verifiedUser);
-
-        // Stop loading before the profile network call
         finishInit();
 
         if (verifiedUser.email) {
@@ -266,14 +304,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mountedRef.current) setProfile(p);
         }
       })
-      .catch((err) => {
+      .catch(async (err) => {
         console.error("Auth initialization error:", err);
-        if (mountedRef.current) {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          finishInit();
+        if (!mountedRef.current) return;
+
+        // Network error — don't wipe state if onAuthStateChange already set a session
+        if (initComplete) {
+          console.warn("getUser() network error after init complete — ignoring");
+          return;
         }
+
+        // Try cached session as last resort
+        try {
+          const { data: { session: cachedSession } } = await supabase.auth.getSession();
+          if (cachedSession?.user) {
+            console.warn("Auth init failed but cached session exists — keeping session");
+            setSession(cachedSession);
+            setUser(cachedSession.user);
+            finishInit();
+            if (cachedSession.user.email) {
+              const p = await fetchProfile(cachedSession.user.email, cachedSession.user);
+              if (mountedRef.current) setProfile(p);
+            }
+            return;
+          }
+        } catch {
+          // getSession also failed — truly broken
+        }
+
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        finishInit();
       });
 
     return () => {
@@ -294,6 +356,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) return { error: new Error("Authentication service not available") };
 
     fetchVersionRef.current++;
+    setIsSigningOut(false);
+
+    // Clear any stale cache from previous session
+    queryClient.clear();
 
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -318,10 +384,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Sign in exception:", err);
       return { error: err as Error };
     }
-  }, [supabase, fetchProfile]);
+  }, [supabase, fetchProfile, queryClient]);
 
   const signOut = useCallback(async () => {
     fetchVersionRef.current++;
+    setIsSigningOut(true);
 
     if (!supabase) {
       setUser(null);
@@ -354,11 +421,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     profile,
     isLoading,
+    isSigningOut,
     error,
     signIn,
     signOut,
     refreshProfile,
-  }), [user, session, profile, isLoading, error, signIn, signOut, refreshProfile]);
+  }), [user, session, profile, isLoading, isSigningOut, error, signIn, signOut, refreshProfile]);
 
   return (
     <AuthContext.Provider value={value}>

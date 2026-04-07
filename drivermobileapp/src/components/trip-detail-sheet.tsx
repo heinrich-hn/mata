@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Trash2,
   X,
+  Pencil,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CycleTrackerForm } from "@/components/cycle-tracker-form";
@@ -135,6 +136,8 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
   const [receiptPreviews, setReceiptPreviews] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<CostEntry | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Handle file selection (camera or gallery)
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -378,6 +381,41 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
     }
   };
 
+  // ─── Start Edit Handler ─────────────────────────────────────────────
+
+  const startEdit = useCallback((entry: CostEntry) => {
+    // Extract original ZAR amount from notes if present
+    let amount = entry.amount.toString();
+    let currency = entry.currency || 'USD';
+    const zarMatch = entry.notes?.match(/\[Original: ZAR ([\d.]+),/);
+    if (zarMatch) {
+      amount = zarMatch[1];
+      currency = 'ZAR';
+    }
+
+    // Strip the driver metadata suffix from notes for editing
+    let cleanNotes = entry.notes || '';
+    cleanNotes = cleanNotes.replace(/\s*\[Original: ZAR [\d.]+, Rate: [\d.]+\]/, '');
+    cleanNotes = cleanNotes.replace(/\s*\[Driver: [^\]]+\]/, '');
+    cleanNotes = cleanNotes.replace(/\s*\[Submitted by: [^\]]+\]/, '');
+    cleanNotes = cleanNotes.trim();
+
+    setEditingEntry(entry);
+    setFormData({
+      category: entry.category,
+      sub_category: entry.sub_category || '',
+      amount,
+      currency,
+      reference_number: entry.reference_number || '',
+      date: entry.date,
+      notes: cleanNotes,
+      is_flagged: entry.is_flagged,
+      flag_reason: entry.flag_reason || '',
+    });
+    setErrors({});
+    setShowExpenseForm(true);
+  }, []);
+
   // ─── Expense Mutation ──────────────────────────────────────────────
 
   const addExpenseMutation = useMutation({
@@ -441,6 +479,85 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
     },
   });
 
+  // ─── Edit Mutation ─────────────────────────────────────────────────
+
+  const editMutation = useMutation({
+    mutationFn: async (data: ExpenseFormData) => {
+      if (!user?.id) throw new Error("Auth required");
+      if (!editingEntry) throw new Error("No entry selected");
+
+      const isHighRisk = HIGH_RISK_CATEGORIES.includes(data.category as (typeof HIGH_RISK_CATEGORIES)[number]);
+      const shouldFlag = data.is_flagged || isHighRisk;
+      let flagReason = "";
+      if (data.is_flagged && data.flag_reason.trim()) {
+        flagReason = data.flag_reason.trim();
+      } else if (isHighRisk) {
+        flagReason = `High-risk category: ${data.category} - ${data.sub_category}`;
+      }
+
+      const rawAmount = parseFloat(data.amount);
+      const usdAmount = data.currency === "ZAR" ? rawAmount / ZAR_TO_USD_RATE : rawAmount;
+      const zarNote = data.currency === "ZAR" ? ` [Original: ZAR ${rawAmount.toFixed(2)}, Rate: ${ZAR_TO_USD_RATE}]` : "";
+
+      const { error } = await supabase.from("cost_entries").update({
+        category: data.category,
+        sub_category: data.sub_category,
+        amount: parseFloat(usdAmount.toFixed(2)),
+        currency: "USD",
+        reference_number: data.reference_number.trim() || null,
+        date: data.date,
+        notes: `${data.notes.trim()}${zarNote} [Driver: ${profile?.name || user.email || "Driver"}]`.trim(),
+        is_flagged: shouldFlag,
+        flag_reason: flagReason || null,
+      } as never).eq("id", editingEntry.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trip-expenses", trip.id] });
+      queryClient.invalidateQueries({ queryKey: ["cost-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["expense-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["trip-expense-attachments", trip.id] });
+      setFormData(INITIAL_EXPENSE_FORM);
+      setErrors({});
+      setEditingEntry(null);
+      setShowExpenseForm(false);
+      toast({ title: "Updated", description: "Expense updated successfully" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message || "Failed to update expense", variant: "destructive" });
+    },
+  });
+
+  // ─── Delete Mutation ───────────────────────────────────────────────
+
+  const deleteMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      if (!user?.id) throw new Error("Auth required");
+
+      // Delete attachments first
+      await supabase.from("cost_attachments").delete().eq("cost_id", entryId);
+
+      const { error } = await supabase.from("cost_entries").delete().eq("id", entryId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trip-expenses", trip.id] });
+      queryClient.invalidateQueries({ queryKey: ["cost-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["expense-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["trip-expense-attachments", trip.id] });
+      setFormData(INITIAL_EXPENSE_FORM);
+      setEditingEntry(null);
+      setShowExpenseForm(false);
+      setShowDeleteConfirm(false);
+      toast({ title: "Deleted", description: "Expense has been deleted" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message || "Failed to delete expense", variant: "destructive" });
+      setShowDeleteConfirm(false);
+    },
+  });
+
   // ─── Expense Form Handlers ────────────────────────────────────────
 
   const handleInputChange = useCallback(
@@ -465,7 +582,23 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
     if (!formData.date.trim()) newErrors.date = "Required";
     if (formData.is_flagged && !formData.flag_reason.trim()) newErrors.flag_reason = "Required";
     setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) addExpenseMutation.mutate(formData);
+    if (Object.keys(newErrors).length === 0) {
+      if (editingEntry) {
+        editMutation.mutate(formData);
+      } else {
+        addExpenseMutation.mutate(formData);
+      }
+    }
+  };
+
+  const cancelForm = () => {
+    setShowExpenseForm(false);
+    setFormData(INITIAL_EXPENSE_FORM);
+    setErrors({});
+    setEditingEntry(null);
+    receiptPreviews.forEach((url) => url && URL.revokeObjectURL(url));
+    setReceiptFiles([]);
+    setReceiptPreviews([]);
   };
 
   // ─── Render ────────────────────────────────────────────────────────
@@ -669,7 +802,7 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
                   )}
                   <div className="space-y-2">
                     {tripExpenses.map((entry: CostEntry) => (
-                      <ExpenseRow key={entry.id} entry={entry} attachmentCount={attachmentCounts[entry.id] || 0} />
+                      <ExpenseRow key={entry.id} entry={entry} attachmentCount={attachmentCounts[entry.id] || 0} onTap={() => startEdit(entry)} />
                     ))}
                   </div>
                 </div>
@@ -679,16 +812,12 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
               {showExpenseForm && (
                 <div className="card-glass p-4 space-y-3 border border-primary/20">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold">New Expense</p>
+                    <p className="text-sm font-semibold">{editingEntry ? "Edit Expense" : "New Expense"}</p>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-9 w-9 rounded-full"
-                      onClick={() => {
-                        setShowExpenseForm(false);
-                        setFormData(INITIAL_EXPENSE_FORM);
-                        setErrors({});
-                      }}
+                      onClick={cancelForm}
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -931,19 +1060,58 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
                     </div>
                   )}
 
-                  {/* Submit */}
-                  <Button
-                    onClick={validateAndSubmit}
-                    disabled={addExpenseMutation.isPending || isUploading}
-                    className="w-full h-10 text-sm font-semibold"
-                  >
-                    {addExpenseMutation.isPending || isUploading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                  {/* Delete confirmation */}
+                  {editingEntry && showDeleteConfirm && (
+                    <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 space-y-2">
+                      <p className="text-xs text-destructive font-medium">Delete this expense? This cannot be undone.</p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="flex-1 h-9 text-xs"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => deleteMutation.mutate(editingEntry.id)}
+                        >
+                          {deleteMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}
+                          Delete
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 h-9 text-xs"
+                          onClick={() => setShowDeleteConfirm(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Delete + Submit */}
+                  <div className="flex gap-2">
+                    {editingEntry && !showDeleteConfirm && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowDeleteConfirm(true)}
+                        disabled={editMutation.isPending || deleteMutation.isPending}
+                        className="h-10 px-3 text-destructive border-destructive/30 hover:bg-destructive/5"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     )}
-                    {isUploading ? "Uploading receipts..." : addExpenseMutation.isPending ? "Saving..." : receiptFiles.length > 0 ? `Save with ${receiptFiles.length} receipt${receiptFiles.length > 1 ? "s" : ""}` : "Save Expense"}
-                  </Button>
+                    <Button
+                      onClick={validateAndSubmit}
+                      disabled={addExpenseMutation.isPending || editMutation.isPending || isUploading}
+                      className="flex-1 h-10 text-sm font-semibold"
+                    >
+                      {addExpenseMutation.isPending || editMutation.isPending || isUploading ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                      )}
+                      {isUploading ? "Uploading receipts..." : (addExpenseMutation.isPending || editMutation.isPending) ? "Saving..." : editingEntry ? "Update Expense" : receiptFiles.length > 0 ? `Save with ${receiptFiles.length} receipt${receiptFiles.length > 1 ? "s" : ""}` : "Save Expense"}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -963,9 +1131,16 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
 
 // ─── Expense Row Sub-component ───────────────────────────────────────
 
-function ExpenseRow({ entry, attachmentCount = 0, isSystem = false }: { entry: CostEntry; attachmentCount?: number; isSystem?: boolean }) {
+function ExpenseRow({ entry, attachmentCount = 0, isSystem = false, onTap }: { entry: CostEntry; attachmentCount?: number; isSystem?: boolean; onTap?: () => void }) {
   return (
-    <div className={cn("card-glass p-3 space-y-1.5", isSystem && "border border-dashed border-muted-foreground/20")}>
+    <div
+      className={cn(
+        "card-glass p-3 space-y-1.5",
+        isSystem && "border border-dashed border-muted-foreground/20",
+        onTap && "cursor-pointer active:scale-[0.98] transition-transform"
+      )}
+      onClick={onTap}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <Badge
@@ -987,6 +1162,9 @@ function ExpenseRow({ entry, attachmentCount = 0, isSystem = false }: { entry: C
               <Paperclip className="w-3 h-3" />
               {attachmentCount}
             </span>
+          )}
+          {onTap && (
+            <Pencil className="w-3 h-3 text-muted-foreground/50" />
           )}
         </div>
         <span className="text-sm font-bold tabular-nums shrink-0">

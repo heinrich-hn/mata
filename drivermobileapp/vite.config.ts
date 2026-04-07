@@ -97,11 +97,16 @@ export default defineConfig({
             workbox: {
                 globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
                 navigateFallback: "/index.html",
-                navigateFallbackDenylist: [/^\/api/, /^\/auth/],
-                // Ensure Supabase API calls are NEVER intercepted by the SW.
-                // NavigateFallback only applies to navigation requests, but
-                // fetch requests to external origins must also be excluded.
-                navigateFallbackAllowlist: [/^\/$/, /^\/[a-z]/],
+                navigateFallbackDenylist: [
+                    /^\/api/,
+                    /^\/auth/,
+                    // Never serve index.html for static assets — this prevents
+                    // MIME type errors when a new deployment changes hashed filenames
+                    // and the old SW tries to serve the fallback for missing assets.
+                    /\.(?:js|css|json|png|jpg|svg|ico|woff2?|map|webmanifest)$/,
+                ],
+                // Only apply navigateFallback to SPA navigation routes (no file extension)
+                navigateFallbackAllowlist: [/^(?!\/__(.*)).*$/],
                 runtimeCaching: [
                     {
                         // Supabase REST / Auth / Realtime — always go to network

@@ -10,6 +10,9 @@ const LAST_EMAIL_KEY = "mata_last_email";
  * Saves the last email to localStorage so the login form can pre-fill it.
  *
  * Activity = touchstart | pointerdown | keydown | scroll | visibilitychange (visible)
+ *
+ * Designed to be called ONCE from App.tsx (stable mount) rather than per-page
+ * MobileShell, which unmounts/remounts on navigation and caused timer thrashing.
  */
 export function useInactivityTimeout() {
     const { user, signOut } = useAuth();
@@ -17,36 +20,47 @@ export function useInactivityTimeout() {
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const signingOutRef = useRef(false);
 
+    // Use refs for values used in the timeout callback so we don't
+    // need to recreate the timer on every auth state change.
+    const userRef = useRef(user);
+    const signOutRef = useRef(signOut);
+    const navigateRef = useRef(navigate);
+    userRef.current = user;
+    signOutRef.current = signOut;
+    navigateRef.current = navigate;
+
     const performSignOut = useCallback(async () => {
-        if (signingOutRef.current || !user) return;
+        if (signingOutRef.current || !userRef.current) return;
         signingOutRef.current = true;
 
         // Persist email for quick re-login
-        if (user.email) {
+        if (userRef.current.email) {
             try {
-                localStorage.setItem(LAST_EMAIL_KEY, user.email);
+                localStorage.setItem(LAST_EMAIL_KEY, userRef.current.email);
             } catch {
                 // storage full / blocked — non-critical
             }
         }
 
         try {
-            await signOut();
+            await signOutRef.current();
         } catch {
             // continue regardless
         }
 
-        navigate("/login", { replace: true });
-    }, [user, signOut, navigate]);
+        navigateRef.current("/login", { replace: true });
+    }, []); // stable — reads from refs
 
     const resetTimer = useCallback(() => {
         if (signingOutRef.current) return;
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(performSignOut, INACTIVITY_TIMEOUT_MS);
-    }, [performSignOut]);
+    }, [performSignOut]); // stable — performSignOut never changes
+
+    const isAuthenticated = !!user;
 
     useEffect(() => {
-        if (!user) return; // only when authenticated
+        if (!isAuthenticated) return; // only when authenticated
         signingOutRef.current = false;
 
         // Start the first timer
@@ -79,5 +93,5 @@ export function useInactivityTimeout() {
             );
             document.removeEventListener("visibilitychange", onVisibility);
         };
-    }, [user, resetTimer]);
+    }, [isAuthenticated, resetTimer]); // Only re-run when user presence changes (not on every object ref change)
 }
