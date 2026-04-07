@@ -386,6 +386,7 @@ export default function ThirdPartyLoadsPage() {
         driver_id: data.driverId || null,
         time_window: JSON.stringify(timeData),
         notes: data.notes,
+        client_id: customer.id,
       },
       {
         onSuccess: () => {

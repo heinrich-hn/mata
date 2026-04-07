@@ -13,11 +13,13 @@ import { ACTION_ITEM_PRIORITIES, ACTION_ITEM_STATUSES, ADMIN_USERS, RESPONSIBLE_
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOperations } from '@/contexts/OperationsContext';
-import { ActionItem, ActionItemComment } from '@/types/operations';
+import { ActionItem, ActionItemComment, ActionItemProgressLine } from '@/types/operations';
+import { downloadBulkICS } from '@/utils/icsExport';
 import { formatDate } from 'date-fns';
 import jsPDF from 'jspdf';
 import {
   Calendar,
+  CalendarPlus,
   CheckCircle,
   ClipboardList,
   Clock,
@@ -25,6 +27,7 @@ import {
   Eye,
   FileSpreadsheet,
   FileText,
+  ListChecks,
   Plus,
   Save,
   Trash2,
@@ -269,6 +272,35 @@ const ActionLog = () => {
     }
   };
 
+  // Handle update progress lines
+  const handleUpdateProgressLines = async (item: ActionItem, lines: ActionItemProgressLine[]) => {
+    try {
+      // Set created_by on new lines to the current user
+      const linesWithUser = lines.map(l =>
+        l.created_by === 'Current User' ? { ...l, created_by: userName || 'Unknown User' } : l
+      );
+
+      const { isOverdue: _isOverdue, overdueBy: _overdueBy, ...cleanItem } = item as unknown as Record<string, unknown>;
+      await updateActionItem({
+        ...cleanItem,
+        progress_lines: linesWithUser
+      } as ActionItem);
+
+      // Refresh selected item if details modal is open
+      if (selectedItem?.id === item.id) {
+        setSelectedItem({
+          ...item,
+          progress_lines: linesWithUser
+        });
+      }
+
+      toast.success('Progress lines updated');
+    } catch (error) {
+      toast.error('Failed to update progress lines');
+      console.error(error);
+    }
+  };
+
   // Handle reassign to admin user
   const handleReassign = async (item: ActionItem & { isOverdue?: boolean; overdueBy?: number }, newUser: string) => {
     try {
@@ -350,11 +382,14 @@ const ActionLog = () => {
       'Created At',
       'Overdue',
       'Days Overdue',
-      'Comments Count'
+      'Comments Count',
+      'Progress Lines',
+      'Progress Completed'
     ].join('\t');
 
     const rows = sortedItems.map(item => {
       const enhancedItem = enhancedActionItems.find(e => e.id === item.id);
+      const lines = item.progress_lines || [];
       return [
         item.title,
         (item.description || '').replace(/[\t\n\r]/g, ' '),
@@ -368,7 +403,9 @@ const ActionLog = () => {
         item.created_at ? formatDate(new Date(item.created_at), 'yyyy-MM-dd HH:mm') : '',
         enhancedItem?.isOverdue ? 'Yes' : 'No',
         enhancedItem?.overdueBy || 0,
-        (item.comments || []).length
+        (item.comments || []).length,
+        lines.length,
+        lines.filter(l => l.completed).length
       ].join('\t');
     });
 
@@ -585,6 +622,41 @@ const ActionLog = () => {
           yPos += 2;
         }
 
+        // Progress Lines
+        const pLines = item.progress_lines || [];
+        if (pLines.length > 0) {
+          if (yPos + 10 > pageHeight - 30) {
+            doc.addPage();
+            yPos = 15;
+          }
+
+          const plCompleted = pLines.filter(l => l.completed).length;
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(34, 197, 94);
+          doc.text(`Progress Lines (${plCompleted}/${pLines.length})`, margin + 3, yPos);
+          doc.setTextColor(0, 0, 0);
+          yPos += 4;
+
+          pLines.forEach(line => {
+            if (yPos > pageHeight - 25) {
+              doc.addPage();
+              yPos = 15;
+            }
+
+            doc.setFontSize(7);
+            const marker = line.completed ? '✓' : '○';
+            doc.setFont('helvetica', 'normal');
+            if (line.completed) doc.setTextColor(34, 197, 94);
+            else doc.setTextColor(0, 0, 0);
+            const dateStr = line.target_date ? ` [${line.target_date}]` : '';
+            doc.text(`  ${marker} ${line.note}${dateStr}`, margin + 3, yPos);
+            doc.setTextColor(0, 0, 0);
+            yPos += 3.5;
+          });
+          yPos += 2;
+        }
+
         // Comments
         const comments = item.comments || [];
         if (comments.length > 0) {
@@ -662,6 +734,13 @@ const ActionLog = () => {
                 <DropdownMenuItem onClick={exportToPdf}>
                   <FileText className="w-4 h-4 mr-2" />
                   Export to PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  downloadBulkICS(sortedItems);
+                  toast.success(`Exported ${sortedItems.length} items to Outlook (.ics)`);
+                }}>
+                  <CalendarPlus className="w-4 h-4 mr-2" />
+                  Export to Outlook
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -791,6 +870,12 @@ const ActionLog = () => {
                           {item.isOverdue && (
                             <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-destructive/10 text-destructive">
                               Overdue by {item.overdueBy} days
+                            </span>
+                          )}
+                          {(item.progress_lines?.length ?? 0) > 0 && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground">
+                              <ListChecks className="w-3 h-3 mr-1" />
+                              {item.progress_lines!.filter(l => l.completed).length}/{item.progress_lines!.length}
                             </span>
                           )}
                         </div>
@@ -1032,6 +1117,7 @@ const ActionLog = () => {
           actionItem={selectedItem}
           onStatusChange={handleStatusChange}
           onAddComment={handleAddComment}
+          onUpdateProgressLines={handleUpdateProgressLines}
         />
       )}
     </Layout>

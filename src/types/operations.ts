@@ -237,6 +237,7 @@ export interface ActionItem {
   related_entity_type?: string;
   related_entity_id?: string;
   comments?: ActionItemComment[];
+  progress_lines?: ActionItemProgressLine[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -246,6 +247,16 @@ export interface ActionItemComment {
   id: string;
   action_item_id: string;
   comment: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ActionItemProgressLine {
+  id: string;
+  action_item_id: string;
+  note: string;
+  target_date?: string;
+  completed: boolean;
   created_by: string;
   created_at: string;
 }

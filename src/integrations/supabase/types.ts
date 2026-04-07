@@ -41,6 +41,7 @@ export type Database = {
           due_date: string | null
           id: string
           priority: string | null
+          progress_lines: Json | null
           related_entity_id: string | null
           related_entity_type: string | null
           status: string | null
@@ -58,6 +59,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           priority?: string | null
+          progress_lines?: Json | null
           related_entity_id?: string | null
           related_entity_type?: string | null
           status?: string | null
@@ -75,6 +77,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           priority?: string | null
+          progress_lines?: Json | null
           related_entity_id?: string | null
           related_entity_type?: string | null
           status?: string | null

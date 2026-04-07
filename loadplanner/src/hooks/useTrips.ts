@@ -161,6 +161,8 @@ export function useCreateLoad() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loads'] });
+      queryClient.invalidateQueries({ queryKey: ['client-loads'] });
+      queryClient.invalidateQueries({ queryKey: ['client-active-loads'] });
       toast({ title: 'Load created successfully' });
     },
     onError: (error) => {
@@ -213,6 +215,8 @@ export function useUpdateLoad() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['loads'] });
+      queryClient.invalidateQueries({ queryKey: ['client-loads'] });
+      queryClient.invalidateQueries({ queryKey: ['client-active-loads'] });
       toast({ title: 'Load updated successfully' });
 
       // Trigger Google Sheets sync when time-related fields changed

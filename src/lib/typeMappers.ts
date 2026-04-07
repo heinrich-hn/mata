@@ -107,12 +107,14 @@ export const mapDbToActionItem = (db: DbActionItem): ActionItem => ({
   ...db,
   priority: (db.priority as ActionItem['priority']) || 'medium',
   status: (db.status as ActionItem['status']) || 'open',
-  comments: parseJsonArray(db.comments)
+  comments: parseJsonArray(db.comments),
+  progress_lines: parseJsonArray(db.progress_lines)
 });
 
 export const mapActionItemToDb = (item: ActionItem): Partial<DbActionInsert> => ({
   ...item,
-  comments: toJsonArray(item.comments)
+  comments: toJsonArray(item.comments),
+  progress_lines: toJsonArray(item.progress_lines)
 } as Partial<DbActionInsert>);
 
 // CAR Report mappers

@@ -769,7 +769,11 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
 
   // Action item operations
   const addActionItem = async (itemData: Omit<ActionItem, 'id' | 'created_at' | 'updated_at'>) => {
-    const insertData = { ...itemData, comments: itemData.comments as unknown as Json };
+    const insertData = {
+      ...itemData,
+      comments: itemData.comments as unknown as Json,
+      progress_lines: itemData.progress_lines as unknown as Json
+    };
     const { data, error } = await supabase.from('action_items').insert([insertData]).select().single();
     if (error) throw error;
     toast.success('Action item created');
@@ -777,7 +781,11 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateActionItem = async (item: ActionItem) => {
-    const updateData = { ...item, comments: item.comments as unknown as Json };
+    const updateData = {
+      ...item,
+      comments: item.comments as unknown as Json,
+      progress_lines: item.progress_lines as unknown as Json
+    };
     const { error } = await supabase.from('action_items').update(updateData).eq('id', item.id);
     if (error) throw error;
     toast.success('Action item updated');

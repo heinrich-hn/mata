@@ -288,6 +288,7 @@ export function EditThirdPartyLoadDialog({
         driver_id: newDriverId,
         time_window: JSON.stringify(timeData) as unknown as Json,
         notes: data.notes,
+        client_id: customer.id,
       },
       {
         onSuccess: () => {

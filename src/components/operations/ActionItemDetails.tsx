@@ -1,14 +1,21 @@
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import Modal from '@/components/ui/modal';
 import { Textarea } from '@/components/ui/textarea';
-import { ActionItem } from '@/types/operations';
+import { ActionItem, ActionItemProgressLine } from '@/types/operations';
+import { downloadSingleICS } from '@/utils/icsExport';
 import { formatDate } from 'date-fns';
 import {
     Calendar,
+    CalendarPlus,
     CheckCircle,
+    Circle,
     Clock,
+    ListChecks,
     MessageSquare,
+    Plus,
     Send,
+    Trash2,
     User,
     X
 } from 'lucide-react';
@@ -20,6 +27,7 @@ interface ActionItemDetailsProps {
   actionItem: ActionItem;
   onStatusChange: (item: ActionItem, newStatus: ActionItem['status']) => void;
   onAddComment: (item: ActionItem, comment: string) => void;
+  onUpdateProgressLines: (item: ActionItem, lines: ActionItemProgressLine[]) => void;
 }
 
 const ActionItemDetails = ({
@@ -27,9 +35,13 @@ const ActionItemDetails = ({
   onClose,
   actionItem,
   onStatusChange,
-  onAddComment
+  onAddComment,
+  onUpdateProgressLines
 }: ActionItemDetailsProps) => {
   const [comment, setComment] = useState('');
+  const [newLineNote, setNewLineNote] = useState('');
+  const [newLineDate, setNewLineDate] = useState('');
+  const [showAddLine, setShowAddLine] = useState(false);
 
   // Calculate overdue status
   const today = new Date();
@@ -37,10 +49,42 @@ const ActionItemDetails = ({
   const isOverdue = dueDate && today > dueDate && actionItem.status !== 'completed';
   const overdueBy = isOverdue && dueDate ? Math.floor((today.getTime() - dueDate.getTime()) / (86400000)) : 0;
 
+  const progressLines = actionItem.progress_lines || [];
+  const completedLines = progressLines.filter(l => l.completed).length;
+
   const handleAddComment = () => {
     if (!comment.trim()) return;
     onAddComment(actionItem, comment.trim());
     setComment('');
+  };
+
+  const handleAddProgressLine = () => {
+    if (!newLineNote.trim()) return;
+    const newLine: ActionItemProgressLine = {
+      id: crypto.randomUUID(),
+      action_item_id: actionItem.id,
+      note: newLineNote.trim(),
+      target_date: newLineDate || undefined,
+      completed: false,
+      created_by: 'Current User',
+      created_at: new Date().toISOString()
+    };
+    onUpdateProgressLines(actionItem, [...progressLines, newLine]);
+    setNewLineNote('');
+    setNewLineDate('');
+    setShowAddLine(false);
+  };
+
+  const handleToggleLine = (lineId: string) => {
+    const updated = progressLines.map(l =>
+      l.id === lineId ? { ...l, completed: !l.completed } : l
+    );
+    onUpdateProgressLines(actionItem, updated);
+  };
+
+  const handleDeleteLine = (lineId: string) => {
+    const updated = progressLines.filter(l => l.id !== lineId);
+    onUpdateProgressLines(actionItem, updated);
   };
 
   const getStatusColor = () => {
@@ -83,7 +127,7 @@ const ActionItemDetails = ({
           <div className="flex justify-between items-start">
             <div className="flex-1">
               <h3 className="text-lg font-semibold">{actionItem.title}</h3>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${getStatusColor()}`}>
                   {getStatusLabel()}
                 </span>
@@ -95,30 +139,48 @@ const ActionItemDetails = ({
                     Overdue by {overdueBy} days
                   </span>
                 )}
+                {progressLines.length > 0 && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground">
+                    <ListChecks className="w-3 h-3 mr-1" />
+                    {completedLines}/{progressLines.length} lines
+                  </span>
+                )}
               </div>
             </div>
 
-            {actionItem.status !== 'completed' && actionItem.status !== 'cancelled' && (
+            <div className="flex gap-2">
               <Button
                 size="sm"
-                onClick={() => onStatusChange(
-                  actionItem,
-                  actionItem.status === 'open' ? 'in_progress' : 'completed'
-                )}
+                variant="outline"
+                onClick={() => downloadSingleICS(actionItem)}
+                title="Export to Outlook"
               >
-                {actionItem.status === 'open' ? (
-                  <>
-                    <Clock className="w-3 h-3 mr-1" />
-                    Start
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Complete
-                  </>
-                )}
+                <CalendarPlus className="w-3 h-3 mr-1" />
+                Outlook
               </Button>
-            )}
+
+              {actionItem.status !== 'completed' && actionItem.status !== 'cancelled' && (
+                <Button
+                  size="sm"
+                  onClick={() => onStatusChange(
+                    actionItem,
+                    actionItem.status === 'open' ? 'in_progress' : 'completed'
+                  )}
+                >
+                  {actionItem.status === 'open' ? (
+                    <>
+                      <Clock className="w-3 h-3 mr-1" />
+                      Start
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Complete
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -181,6 +243,121 @@ const ActionItemDetails = ({
           </div>
         </div>
 
+        {/* Progress Lines */}
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-medium flex items-center gap-2">
+              <ListChecks className="w-4 h-4" />
+              Progress Lines ({completedLines}/{progressLines.length})
+            </h4>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowAddLine(!showAddLine)}
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Add Line
+            </Button>
+          </div>
+
+          {/* Progress bar */}
+          {progressLines.length > 0 && (
+            <div className="w-full bg-muted rounded-full h-2 mb-4">
+              <div
+                className="bg-success h-2 rounded-full transition-all"
+                style={{ width: `${(completedLines / progressLines.length) * 100}%` }}
+              />
+            </div>
+          )}
+
+          {/* Add new line form */}
+          {showAddLine && (
+            <div className="flex gap-2 mb-4 items-end p-3 bg-muted/50 rounded-md">
+              <div className="flex-1">
+                <label className="text-xs text-muted-foreground mb-1 block">Note *</label>
+                <Input
+                  value={newLineNote}
+                  onChange={(e) => setNewLineNote(e.target.value)}
+                  placeholder="What needs to be tracked..."
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddProgressLine(); }}
+                />
+              </div>
+              <div className="w-40">
+                <label className="text-xs text-muted-foreground mb-1 block">Target Date</label>
+                <Input
+                  type="date"
+                  value={newLineDate}
+                  onChange={(e) => setNewLineDate(e.target.value)}
+                />
+              </div>
+              <Button onClick={handleAddProgressLine} disabled={!newLineNote.trim()} size="sm">
+                <Plus className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { setShowAddLine(false); setNewLineNote(''); setNewLineDate(''); }}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+
+          {/* Lines list */}
+          {progressLines.length > 0 ? (
+            <div className="space-y-2">
+              {progressLines.map((line) => {
+                const lineTargetDate = line.target_date ? new Date(line.target_date) : null;
+                const lineOverdue = lineTargetDate && new Date() > lineTargetDate && !line.completed;
+                return (
+                  <div
+                    key={line.id}
+                    className={`flex items-start gap-3 p-2 rounded-md group hover:bg-muted/50 transition-colors ${line.completed ? 'opacity-60' : ''} ${lineOverdue ? 'bg-destructive/5' : ''}`}
+                  >
+                    <button
+                      onClick={() => handleToggleLine(line.id)}
+                      className="mt-0.5 shrink-0"
+                      title={line.completed ? 'Mark incomplete' : 'Mark complete'}
+                    >
+                      {line.completed ? (
+                        <CheckCircle className="w-5 h-5 text-success" />
+                      ) : (
+                        <Circle className="w-5 h-5 text-muted-foreground hover:text-primary" />
+                      )}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${line.completed ? 'line-through text-muted-foreground' : ''}`}>
+                        {line.note}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        {line.target_date && (
+                          <span className={`flex items-center gap-1 ${lineOverdue ? 'text-destructive font-medium' : ''}`}>
+                            <Calendar className="w-3 h-3" />
+                            {formatDate(new Date(line.target_date), 'PP')}
+                            {lineOverdue && ' (overdue)'}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {line.created_by}
+                        </span>
+                        <span>{formatDate(new Date(line.created_at), 'PP')}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteLine(line.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Remove line"
+                    >
+                      <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No progress lines yet. Add lines to track specific tasks or milestones.
+            </p>
+          )}
+        </div>
+
         {/* Comments */}
         <div>
           <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
@@ -190,14 +367,14 @@ const ActionItemDetails = ({
 
           {actionItem.comments && actionItem.comments.length > 0 ? (
             <div className="space-y-3 max-h-60 overflow-y-auto mb-4">
-              {actionItem.comments.map((comment) => (
-                <div key={comment.id} className="p-3 bg-muted rounded-md">
-                  <p className="text-sm">{comment.comment}</p>
+              {actionItem.comments.map((c) => (
+                <div key={c.id} className="p-3 bg-muted rounded-md">
+                  <p className="text-sm">{c.comment}</p>
                   <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                     <User className="w-3 h-3" />
-                    <span>{comment.created_by}</span>
+                    <span>{c.created_by}</span>
                     <span>•</span>
-                    <span>{formatDate(new Date(comment.created_at), 'PPp')}</span>
+                    <span>{formatDate(new Date(c.created_at), 'PPp')}</span>
                   </div>
                 </div>
               ))}
@@ -227,7 +404,15 @@ const ActionItemDetails = ({
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t">
+        <div className="flex justify-between items-center pt-4 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadSingleICS(actionItem)}
+          >
+            <CalendarPlus className="w-4 h-4 mr-1" />
+            Export to Outlook
+          </Button>
           <Button variant="outline" onClick={onClose}>
             <X className="w-4 h-4 mr-1" />
             Close
