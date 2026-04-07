@@ -11,6 +11,7 @@ import {
   Flag,
   Hash,
   Loader2,
+  Pencil,
   Plus,
   Receipt,
 } from "lucide-react";
@@ -39,7 +40,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cn, formatDate } from "@/lib/utils";
 
 // Types
-type ViewMode = "list" | "add";
+type ViewMode = "list" | "add" | "edit";
 
 interface Trip {
   id: string;
@@ -140,11 +141,11 @@ const SuccessAnimation = (): JSX.Element => (
 );
 
 // Expense Card Component
-const ExpenseCard = ({ entry }: { entry: CostEntry }): JSX.Element => {
+const ExpenseCard = ({ entry, onEdit }: { entry: CostEntry; onEdit: (entry: CostEntry) => void }): JSX.Element => {
   const tripInfo = getTripInfo(entry);
 
   return (
-    <Card className="overflow-hidden hover:shadow-md transition-shadow">
+    <Card className="overflow-hidden hover:shadow-md transition-shadow active:scale-[0.98] cursor-pointer" onClick={() => onEdit(entry)}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
@@ -189,7 +190,7 @@ const ExpenseCard = ({ entry }: { entry: CostEntry }): JSX.Element => {
             )}
           </div>
 
-          <div className="text-right shrink-0">
+          <div className="flex flex-col items-end gap-2 shrink-0">
             <div className={cn(
               "inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm",
               entry.is_flagged
@@ -198,6 +199,10 @@ const ExpenseCard = ({ entry }: { entry: CostEntry }): JSX.Element => {
             )}>
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span className="font-medium">Recorded</span>
+            </div>
+            <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs text-muted-foreground bg-muted/50">
+              <Pencil className="w-3 h-3" />
+              <span>Edit</span>
             </div>
           </div>
         </div>
@@ -255,6 +260,7 @@ export default function ExpensesPage(): JSX.Element {
   // State
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showSuccess, setShowSuccess] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<CostEntry | null>(null);
 
   // Context & Hooks
   const { user, profile } = useAuth();
@@ -460,6 +466,40 @@ export default function ExpensesPage(): JSX.Element {
     [availableSubCategories]
   );
 
+  // Start editing an entry
+  const startEdit = useCallback((entry: CostEntry): void => {
+    // Extract original ZAR amount from notes if present
+    let amount = entry.amount.toString();
+    let currency = entry.currency || 'USD';
+    const zarMatch = entry.notes?.match(/\[Original: ZAR ([\d.]+),/);
+    if (zarMatch) {
+      amount = zarMatch[1];
+      currency = 'ZAR';
+    }
+
+    // Strip the driver metadata suffix from notes for editing
+    let cleanNotes = entry.notes || '';
+    cleanNotes = cleanNotes.replace(/\s*\[Original: ZAR [\d.]+, Rate: [\d.]+\]/, '');
+    cleanNotes = cleanNotes.replace(/\s*\[Submitted by: [^\]]+\]/, '');
+    cleanNotes = cleanNotes.trim();
+
+    setEditingEntry(entry);
+    setFormData({
+      trip_id: entry.trip_id || '',
+      category: entry.category,
+      sub_category: entry.sub_category || '',
+      amount,
+      currency,
+      reference_number: entry.reference_number || '',
+      date: entry.date,
+      notes: cleanNotes,
+      is_flagged: entry.is_flagged,
+      flag_reason: entry.flag_reason || '',
+    });
+    setErrors({});
+    setViewMode('edit');
+  }, []);
+
   // Mutations
   const addMutation = useMutation({
     mutationFn: async (data: ExpenseFormData) => {
@@ -534,6 +574,83 @@ export default function ExpensesPage(): JSX.Element {
     },
   });
 
+  // Edit mutation
+  const editMutation = useMutation({
+    mutationFn: async (data: ExpenseFormData) => {
+      if (!user?.id) throw new Error("Authentication required");
+      if (!editingEntry) throw new Error("No entry selected");
+
+      const isHighRisk = HIGH_RISK_CATEGORIES.includes(
+        data.category as typeof HIGH_RISK_CATEGORIES[number]
+      );
+      const shouldFlag = data.is_flagged || isHighRisk;
+
+      let flagReason = "";
+      if (data.is_flagged && data.flag_reason.trim()) {
+        flagReason = data.flag_reason.trim();
+      } else if (isHighRisk) {
+        flagReason = `High-risk category: ${data.category} - ${data.sub_category} requires review`;
+      }
+
+      const rawAmount = parseFloat(data.amount);
+      const usdAmount = data.currency === 'ZAR' ? rawAmount / 18.6 : rawAmount;
+      const zarNote = data.currency === 'ZAR' ? ` [Original: ZAR ${rawAmount.toFixed(2)}, Rate: 18.6]` : '';
+
+      const costData = {
+        trip_id: data.trip_id || null,
+        category: data.category,
+        sub_category: data.sub_category,
+        amount: parseFloat(usdAmount.toFixed(2)),
+        currency: 'USD',
+        reference_number: data.reference_number.trim() || null,
+        date: data.date,
+        notes: `${data.notes.trim()}${zarNote} [Submitted by: ${profile?.name || user.email || 'Driver'}]`.trim(),
+        is_flagged: shouldFlag,
+        flag_reason: flagReason || null,
+      };
+
+      const { data: result, error } = await supabase
+        .from("cost_entries")
+        .update(costData as never)
+        .eq("id", editingEntry.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expense-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["cost-entries"] });
+      if (formData.trip_id) {
+        queryClient.invalidateQueries({ queryKey: ["trip-expenses", formData.trip_id] });
+      }
+      if (editingEntry?.trip_id && editingEntry.trip_id !== formData.trip_id) {
+        queryClient.invalidateQueries({ queryKey: ["trip-expenses", editingEntry.trip_id] });
+      }
+
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        resetForm();
+        setEditingEntry(null);
+        setViewMode("list");
+      }, 2000);
+
+      toast({
+        title: "Updated",
+        description: "Expense has been updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update expense",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Handlers
   const resetForm = useCallback((): void => {
     setFormData({
@@ -590,7 +707,11 @@ export default function ExpensesPage(): JSX.Element {
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
     if (!validateForm()) return;
-    addMutation.mutate(formData);
+    if (viewMode === 'edit') {
+      editMutation.mutate(formData);
+    } else {
+      addMutation.mutate(formData);
+    }
   };
 
   const handleCategoryChange = (value: string): void => {
@@ -615,8 +736,11 @@ export default function ExpensesPage(): JSX.Element {
     return <SuccessAnimation />;
   }
 
-  // Add Expense View
-  if (viewMode === "add") {
+  const isEditing = viewMode === 'edit';
+  const isMutating = addMutation.isPending || editMutation.isPending;
+
+  // Add/Edit Expense View
+  if (viewMode === "add" || viewMode === "edit") {
     return (
       <MobileShell>
         <div className="p-5 space-y-5 pb-28">
@@ -628,6 +752,7 @@ export default function ExpensesPage(): JSX.Element {
               className="h-10 w-10 rounded-full"
               onClick={() => {
                 resetForm();
+                setEditingEntry(null);
                 setViewMode("list");
               }}
               aria-label="Go back"
@@ -635,8 +760,8 @@ export default function ExpensesPage(): JSX.Element {
               <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
             </Button>
             <div className="flex-1">
-              <h1 className="text-xl font-bold">New Expense</h1>
-              <p className="text-xs text-muted-foreground">Record a trip cost or expense</p>
+              <h1 className="text-xl font-bold">{isEditing ? 'Edit Expense' : 'New Expense'}</h1>
+              <p className="text-xs text-muted-foreground">{isEditing ? 'Update this expense entry' : 'Record a trip cost or expense'}</p>
             </div>
             <Badge variant="outline" className="text-xs">
               {profile?.name || "Driver"}
@@ -891,17 +1016,17 @@ export default function ExpensesPage(): JSX.Element {
               type="submit"
               size="lg"
               className="w-full h-14 text-base font-semibold"
-              disabled={addMutation.isPending}
+              disabled={isMutating}
             >
-              {addMutation.isPending ? (
+              {isMutating ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Saving...
+                  {isEditing ? 'Updating...' : 'Saving...'}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-5 h-5 mr-2" />
-                  Save Expense
+                  {isEditing ? 'Update Expense' : 'Save Expense'}
                 </>
               )}
             </Button>
@@ -997,7 +1122,7 @@ export default function ExpensesPage(): JSX.Element {
           ) : (
             <div className="space-y-3">
               {entries.map((entry: CostEntry) => (
-                <ExpenseCard key={entry.id} entry={entry} />
+                <ExpenseCard key={entry.id} entry={entry} onEdit={startEdit} />
               ))}
             </div>
           )}
