@@ -7,25 +7,35 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import SurfsightEventMedia from "@/components/driver/SurfsightEventMedia";
 import { useToast } from "@/hooks/use-toast";
 import { useDriverCoaching } from "@/hooks/useDriverCoaching";
+import { useSurfsightDevices, resolveEventMedia, isSurfsightUrl } from "@/hooks/useSurfsight";
+import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { generateDriverCoachingPDF } from "@/lib/driverBehaviorExport";
+import { generateDriverCoachingPDF, fetchAllSnapshotsBase64 } from "@/lib/driverBehaviorExport";
 import { format } from "date-fns";
-import
-  {
-    AlertTriangle,
-    Calendar,
-    CheckCircle,
-    Clock,
-    FileText,
-    MapPin,
-    PenTool,
-    Save,
-    User,
-  } from "lucide-react";
-import { useState } from "react";
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle,
+  Clock,
+  FileText,
+  Loader2,
+  PenTool,
+  Save,
+  User,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 type DriverEvent = Database["public"]["Tables"]["driver_behavior_events"]["Row"];
 type CoachingInsert = Database["public"]["Tables"]["driver_behavior_events"]["Update"];
@@ -45,14 +55,70 @@ export default function DriverCoachingModal({
 }: DriverCoachingModalProps) {
   const { toast } = useToast();
   const { saveCoachingSession, isLoading } = useDriverCoaching();
+  const { data: devices } = useSurfsightDevices();
+  const [exporting, setExporting] = useState(false);
+
+  const { data: inspectors } = useQuery({
+    queryKey: ["inspector_profiles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("inspector_profiles")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const [conductedBy, setConductedBy] = useState("");
   const [coachingNotes, setCoachingNotes] = useState("");
   const [actionPlan, setActionPlan] = useState("");
   const [driverAcknowledged, setDriverAcknowledged] = useState(false);
-  const [driverSignature, setDriverSignature] = useState("");
+  const [driverSignature, setDriverSignature] = useState(event.driver_name || "");
   const [debrieferSignature, setDebrieferSignature] = useState("");
   const [witnessSignature, setWitnessSignature] = useState("");
+
+  // Sync debriefer signature when conductedBy changes
+  useEffect(() => {
+    if (conductedBy) setDebrieferSignature(conductedBy);
+  }, [conductedBy]);
+
+  const fetchMediaForPdf = async () => {
+    let snapshots: { front: string | null; cabin: string | null } | null = null;
+    if (event.location && isSurfsightUrl(event.location)) {
+      const resolved = resolveEventMedia(event.location, event.fleet_number, devices);
+      if (resolved) {
+        setExporting(true);
+        try {
+          snapshots = await fetchAllSnapshotsBase64(
+            (name, opts) => supabase.functions.invoke(name, opts),
+            resolved,
+          );
+        } catch {
+          // PDF still generates without snapshots
+        } finally {
+          setExporting(false);
+        }
+      }
+    }
+    return snapshots;
+  };
+
+  const handleExportOnly = async () => {
+    const merged = {
+      ...event,
+      ...(conductedBy ? { debrief_conducted_by: conductedBy } : {}),
+      ...(coachingNotes ? { debrief_notes: coachingNotes } : {}),
+      ...(actionPlan ? { coaching_action_plan: actionPlan } : {}),
+      ...(driverSignature ? { driver_signature: driverSignature } : {}),
+      ...(debrieferSignature ? { debriefer_signature: debrieferSignature } : {}),
+      ...(witnessSignature ? { witness_signature: witnessSignature } : {}),
+      driver_acknowledged: driverAcknowledged,
+    };
+    const snapshots = await fetchMediaForPdf();
+    generateDriverCoachingPDF(merged, snapshots);
+  };
 
   const handleSave = async (exportPdf = false) => {
     if (!conductedBy.trim()) {
@@ -87,7 +153,8 @@ export default function DriverCoachingModal({
 
       if (exportPdf) {
         const updated = { ...event, ...coachingData };
-        generateDriverCoachingPDF(updated);
+        const snapshots = await fetchMediaForPdf();
+        generateDriverCoachingPDF(updated, snapshots);
       }
 
       onComplete();
@@ -147,12 +214,7 @@ export default function DriverCoachingModal({
                     {event.event_time}
                   </div>
                 )}
-                {event.location && (
-                  <div className="flex items-center gap-2 md:col-span-2">
-                    <MapPin className="w-4 h-4 text-gray-500" />
-                    {event.location}
-                  </div>
-                )}
+
               </div>
 
               <div className="bg-white/70 rounded-lg p-3 space-y-2 backdrop-blur-sm">
@@ -167,19 +229,48 @@ export default function DriverCoachingModal({
             </div>
           </div>
 
+          {/* Dashcam Evidence */}
+          {event.location && isSurfsightUrl(event.location) && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-5">
+              <SurfsightEventMedia
+                location={event.location}
+                fleetNumber={event.fleet_number}
+                driverName={event.driver_name}
+                eventType={event.event_type}
+              />
+            </div>
+          )}
+
           {/* Coaching Form */}
           <div className="space-y-5">
             <div>
-              <Label htmlFor="conductedBy" className="text-base font-medium text-gray-800">
+              <Label className="text-base font-medium text-gray-800">
                 Conducted By <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="conductedBy"
-                placeholder="Enter name of coach/debriefer"
-                value={conductedBy}
-                onChange={(e) => setConductedBy(e.target.value)}
-                className="mt-1.5 h-11 text-base"
-              />
+              {inspectors && inspectors.length > 0 ? (
+                <Select
+                  value={conductedBy}
+                  onValueChange={setConductedBy}
+                >
+                  <SelectTrigger className="mt-1.5 h-11 text-base">
+                    <SelectValue placeholder="Select debriefer / inspector" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {inspectors.map((i) => (
+                      <SelectItem key={i.id} value={i.name}>
+                        {i.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  placeholder="Enter name of coach/debriefer"
+                  value={conductedBy}
+                  onChange={(e) => setConductedBy(e.target.value)}
+                  className="mt-1.5 h-11 text-base"
+                />
+              )}
             </div>
 
             <div>
@@ -253,41 +344,83 @@ export default function DriverCoachingModal({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="debrieferSig" className="text-sm font-medium text-gray-700">
+                <Label className="text-sm font-medium text-gray-700">
                   Debriefer Signature
                 </Label>
-                <div className="relative">
-                  <PenTool className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input
-                    id="debrieferSig"
-                    placeholder="Type full name"
-                    value={debrieferSignature}
-                    onChange={(e) => setDebrieferSignature(e.target.value)}
-                    className="pl-10 h-11"
-                  />
-                </div>
+                {inspectors && inspectors.length > 0 ? (
+                  <Select value={debrieferSignature} onValueChange={setDebrieferSignature}>
+                    <SelectTrigger className="h-11">
+                      <SelectValue placeholder="Select debriefer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inspectors.map((i) => (
+                        <SelectItem key={i.id} value={i.name}>{i.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="relative">
+                    <PenTool className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Type full name"
+                      value={debrieferSignature}
+                      onChange={(e) => setDebrieferSignature(e.target.value)}
+                      className="pl-10 h-11"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="witnessSig" className="text-sm font-medium text-gray-700">
+                <Label className="text-sm font-medium text-gray-700">
                   Witness (Optional)
                 </Label>
-                <div className="relative">
-                  <PenTool className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input
-                    id="witnessSig"
-                    placeholder="Type full name"
-                    value={witnessSignature}
-                    onChange={(e) => setWitnessSignature(e.target.value)}
-                    className="pl-10 h-11"
-                  />
-                </div>
+                {inspectors && inspectors.length > 0 ? (
+                  <Select value={witnessSignature} onValueChange={setWitnessSignature}>
+                    <SelectTrigger className="h-11">
+                      <SelectValue placeholder="Select witness" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inspectors.map((i) => (
+                        <SelectItem key={i.id} value={i.name}>{i.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="relative">
+                    <PenTool className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Type full name"
+                      value={witnessSignature}
+                      onChange={(e) => setWitnessSignature(e.target.value)}
+                      className="pl-10 h-11"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-6 border-t">
+          <div className="flex flex-wrap gap-3 pt-6 border-t">
+            <Button
+              onClick={handleExportOnly}
+              disabled={exporting}
+              variant="outline"
+              className="flex-1 h-12 text-base font-medium border-gray-300 hover:bg-gray-50"
+            >
+              {exporting ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-5 h-5 mr-2" />
+                  Export PDF
+                </>
+              )}
+            </Button>
             <Button
               onClick={() => handleSave(false)}
               disabled={isLoading}
@@ -299,7 +432,7 @@ export default function DriverCoachingModal({
             </Button>
             <Button
               onClick={() => handleSave(true)}
-              disabled={isLoading}
+              disabled={isLoading || exporting}
               className="flex-1 h-12 text-base font-medium bg-blue-600 hover:bg-blue-700"
             >
               <FileText className="w-5 h-5 mr-2" />

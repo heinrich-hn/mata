@@ -22,9 +22,11 @@ import { useBulkDeleteDriverBehaviorEvents, useDeleteDriverBehaviorEvent, useDri
 import { useDriverCoaching } from "@/hooks/useDriverCoaching";
 import { useRealtimeDriverBehaviorEvents } from "@/hooks/useRealtimeDriverBehaviorEvents";
 import type { Database } from "@/integrations/supabase/types";
-import { generateDriverCoachingPDF, generateDriverBehaviorExcel, generateDriverBehaviorPDF } from "@/lib/driverBehaviorExport";
+import { generateDriverCoachingPDF, generateDriverBehaviorExcel, generateDriverBehaviorPDF, fetchAllSnapshotsBase64, fetchSnapshotBlobs } from "@/lib/driverBehaviorExport";
+import type { SnapshotMedia } from "@/lib/driverBehaviorExport";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Car, CheckCircle, Clock, Download, Edit2, Eye, FileSpreadsheet, FileText, List, MessageSquare, Search, Share2, Trash2, User, Video } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Camera, Car, CheckCircle, ChevronDown, Clock, Download, Edit2, Eye, FileSpreadsheet, FileText, List, Loader2, MessageSquare, Search, Share2, Trash2, User, Video } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useCallback, useMemo, useState } from "react";
@@ -33,6 +35,9 @@ import DriverBehaviorDetailsDialog from "./DriverBehaviorDetailsDialog";
 import DriverBehaviorEditModal from "./DriverBehaviorEditModal";
 import DriverCoachingModal from "./DriverCoachingModal";
 import DriverPerformanceSummary from "./DriverPerformanceSummary";
+import SurfsightMediaViewer from "./SurfsightMediaViewer";
+import { isSurfsightUrl, parseSurfsightUrl, useSurfsightDevices, resolveEventMedia } from "@/hooks/useSurfsight";
+import { supabase } from "@/integrations/supabase/client";
 
 type Event = Database["public"]["Tables"]["driver_behavior_events"]["Row"];
 type SortOption = "date-desc" | "date-asc" | "severity" | "driver";
@@ -48,11 +53,11 @@ function formatWhatsAppMessage(event: Event): string {
     `*Severity:* ${(event.severity ?? 'N/A').toUpperCase()}`,
     `*Fleet:* ${event.fleet_number ?? 'N/A'}`,
   ];
-  if (event.location && event.location !== 'View on Map') {
-    lines.push(`*Location:* ${event.location}`);
-  }
   if (event.description) {
     lines.push(``, `*Details:* ${event.description}`);
+  }
+  if (event.location && /^https?:\/\//i.test(event.location)) {
+    lines.push(``, `🎥 *Event Video:* ${event.location}`);
   }
   if (event.debriefed_at) {
     lines.push(``, `✅ *Debriefed:* ${format(new Date(event.debriefed_at), "dd MMM yyyy")}`);
@@ -69,6 +74,7 @@ export default function DriverBehaviorGrid() {
   const { saveCoachingSession } = useDriverCoaching();
   const { toast } = useToast();
   useRealtimeDriverBehaviorEvents();
+  const { data: surfsightDevices } = useSurfsightDevices();
 
   const [selected, setSelected] = useState<Event | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -77,10 +83,14 @@ export default function DriverBehaviorGrid() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
+  const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
+  const [mediaViewerData, setMediaViewerData] = useState<{ imei: string; fileId: string; driverName: string; eventType: string } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [debounced] = useDebounce(search, 300);
   const [sort, setSort] = useState<SortOption>("date-desc");
+  const [sharingEventId, setSharingEventId] = useState<string | null>(null);
+  const [exportingEventId, setExportingEventId] = useState<string | null>(null);
 
   // Bulk selection handlers
   const toggleSelection = (id: string) => {
@@ -126,13 +136,103 @@ export default function DriverBehaviorGrid() {
   const openDelete = (e: Event) => { setEventToDelete(e); setDeleteDialogOpen(true); };
   const closeAll = () => { setDetailsOpen(false); setCoachingOpen(false); setEditOpen(false); setSelected(null); };
   const startDebrief = () => { setDetailsOpen(false); openCoaching(selected!); };
-  const exportPDF = () => selected && generateDriverCoachingPDF(selected);
-  const exportEventPDF = (e: Event) => generateDriverCoachingPDF(e);
+
+  // PDF export with Surfsight snapshots (front + cabin)
+  const exportEventPDFWithMedia = async (e: Event) => {
+    setExportingEventId(e.id);
+    let snapshots: SnapshotMedia | null = null;
+    const mediaInfo = resolveEventMedia(e.location || "", e.fleet_number, surfsightDevices);
+    if (mediaInfo) {
+      try {
+        snapshots = await fetchAllSnapshotsBase64(
+          (name, opts) => supabase.functions.invoke(name, opts),
+          mediaInfo,
+        );
+      } catch {
+        // Non-critical — export without snapshots
+      }
+    }
+    generateDriverCoachingPDF(e, snapshots);
+    setExportingEventId(null);
+    toast({ title: "PDF Exported", description: `${snapshots?.front || snapshots?.cabin ? "Includes dashcam snapshots." : "No dashcam media available for this event."}` });
+  };
+
+  const exportPDF = () => { if (selected) exportEventPDFWithMedia(selected); };
+  const exportEventPDF = (e: Event) => exportEventPDFWithMedia(e);
+
+  const openMediaViewer = (event: Event) => {
+    const resolved = resolveEventMedia(event.location || "", event.fleet_number, surfsightDevices);
+    if (resolved) {
+      setMediaViewerData({ ...resolved, driverName: event.driver_name, eventType: event.event_type });
+      setMediaViewerOpen(true);
+    } else if (event.location && isSurfsightUrl(event.location)) {
+      // Fallback: try parsing the URL directly for fileId and prompt
+      const parsed = parseSurfsightUrl(event.location);
+      if (parsed) {
+        // Try to find device by any means
+        const device = surfsightDevices?.find(d =>
+          d.name === (event.fleet_number || "").replace(/^#/, "").trim()
+        );
+        if (device) {
+          setMediaViewerData({ imei: device.imei, fileId: parsed.fileId, driverName: event.driver_name, eventType: event.event_type });
+          setMediaViewerOpen(true);
+          return;
+        }
+      }
+      toast({ title: "Cannot load media", description: "Could not match fleet number to a Surfsight device.", variant: "destructive" });
+    } else {
+      toast({ title: "No media available", description: "This event does not have a Surfsight video link.", variant: "destructive" });
+    }
+  };
+
+  const canViewMedia = (event: Event): boolean => {
+    if (!event.location || !surfsightDevices) return false;
+    return isSurfsightUrl(event.location) && !!resolveEventMedia(event.location, event.fleet_number, surfsightDevices);
+  };
 
   const handleShareWhatsApp = async (event: Event) => {
-    const message = formatWhatsAppMessage(event);
-    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    setSharingEventId(event.id);
+
+    // Fetch actual snapshot image files for sharing
+    const mediaInfo = resolveEventMedia(event.location || "", event.fleet_number, surfsightDevices);
+    let sharedViaWebShare = false;
+
+    if (mediaInfo) {
+      try {
+        const blobs = await fetchSnapshotBlobs(
+          (name, opts) => supabase.functions.invoke(name, opts),
+          mediaInfo,
+        );
+
+        const files: File[] = [];
+        if (blobs.front) files.push(new File([blobs.front], `${event.driver_name}_${event.event_type}_front.jpg`, { type: 'image/jpeg' }));
+        if (blobs.cabin) files.push(new File([blobs.cabin], `${event.driver_name}_${event.event_type}_cabin.jpg`, { type: 'image/jpeg' }));
+
+        // Use Web Share API if available (shares actual images via WhatsApp)
+        if (files.length > 0 && navigator.canShare?.({ files })) {
+          const message = formatWhatsAppMessage(event);
+          await navigator.share({
+            text: message,
+            files,
+          });
+          sharedViaWebShare = true;
+        }
+      } catch (err) {
+        // User cancelled share or Web Share not supported — fall through to text link
+        if (err instanceof Error && err.name === 'AbortError') {
+          setSharingEventId(null);
+          return; // User cancelled
+        }
+      }
+    }
+
+    // Fallback: text-only WhatsApp share with video link
+    if (!sharedViaWebShare) {
+      const message = formatWhatsAppMessage(event);
+      const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+    setSharingEventId(null);
 
     // Mark as debriefed if not already
     if (!event.debriefed_at) {
@@ -201,6 +301,20 @@ export default function DriverBehaviorGrid() {
 
   const filteredPending = useMemo(() => filterAndSort(pendingEvents), [filterAndSort, pendingEvents]);
   const filteredDebriefed = useMemo(() => filterAndSort(debriefedEvents), [filterAndSort, debriefedEvents]);
+
+  // Group events by driver name
+  const groupByDriver = useCallback((eventList: Event[]) => {
+    const groups: Record<string, Event[]> = {};
+    for (const event of eventList) {
+      const name = event.driver_name ?? "Unknown";
+      if (!groups[name]) groups[name] = [];
+      groups[name].push(event);
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, []);
+
+  const groupedPending = useMemo(() => groupByDriver(filteredPending), [groupByDriver, filteredPending]);
+  const groupedDebriefed = useMemo(() => groupByDriver(filteredDebriefed), [groupByDriver, filteredDebriefed]);
 
   if (isLoading) {
     return (
@@ -362,8 +476,8 @@ export default function DriverBehaviorGrid() {
             </div>
           </div>
 
-          {/* List */}
-          <div className="space-y-4">
+          {/* List grouped by driver */}
+          <div className="space-y-3">
             {filteredPending.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground border rounded-md">
                 <CheckCircle className="mx-auto h-12 w-12 mb-4 text-green-500" />
@@ -371,136 +485,181 @@ export default function DriverBehaviorGrid() {
                 <p>No pending events. All driver behavior events have been debriefed.</p>
               </div>
             ) : (
-              filteredPending.map((event) => (
-                <div
-                  key={event.id}
-                  className={`bg-white border rounded-lg p-4 hover:shadow-md transition-shadow ${selectedIds.has(event.id) ? 'ring-2 ring-blue-500 bg-blue-50/30' : ''}`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={selectedIds.has(event.id)}
-                        onCheckedChange={() => toggleSelection(event.id)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1 space-y-2">
+              groupedPending.map(([driverName, driverEvents]) => {
+                const severityCounts = { critical: 0, high: 0, medium: 0, low: 0 };
+                for (const e of driverEvents) {
+                  const sev = (e.severity ?? 'low') as keyof typeof severityCounts;
+                  if (sev in severityCounts) severityCounts[sev]++;
+                }
+                return (
+                  <Collapsible key={driverName}>
+                    <div className="border rounded-lg overflow-hidden">
+                      <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors group">
                         <div className="flex items-center gap-3">
-                          <div className="bg-gray-100 rounded-full p-2">
-                            <User className="w-5 h-5 text-muted-foreground" />
+                          <div className="bg-gray-200 rounded-full p-2">
+                            <User className="w-4 h-4 text-gray-600" />
                           </div>
-                          <div>
-                            <h3 className="font-bold text-lg text-foreground">{event.driver_name}</h3>
-                            <p className="text-sm text-muted-foreground">Fleet #{event.fleet_number}</p>
-                          </div>
+                          <span className="font-semibold text-foreground">{driverName}</span>
+                          <Badge variant="secondary">{driverEvents.length} event{driverEvents.length !== 1 ? 's' : ''}</Badge>
+                          {severityCounts.critical > 0 && <Badge variant="destructive">{severityCounts.critical} critical</Badge>}
+                          {severityCounts.high > 0 && <Badge className="bg-orange-500 text-white hover:bg-orange-600">{severityCounts.high} high</Badge>}
+                          {severityCounts.medium > 0 && <Badge className="bg-yellow-500 text-white hover:bg-yellow-600">{severityCounts.medium} medium</Badge>}
+                          {severityCounts.low > 0 && <Badge variant="outline">{severityCounts.low} low</Badge>}
                         </div>
+                        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="divide-y">
+                          {driverEvents.map((event) => (
+                            <div
+                              key={event.id}
+                              className={`p-4 hover:bg-gray-50/50 transition-colors ${selectedIds.has(event.id) ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/30' : ''}`}
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start gap-3">
+                                  <Checkbox
+                                    checked={selectedIds.has(event.id)}
+                                    onCheckedChange={() => toggleSelection(event.id)}
+                                    className="mt-1"
+                                  />
+                                  <div className="flex-1 space-y-2">
+                                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                                      <Badge variant="outline">{event.event_type}</Badge>
+                                      <Badge variant={event.status === 'resolved' ? 'default' : 'destructive'}>
+                                        {event.status}
+                                      </Badge>
+                                      <Badge variant="secondary">{event.severity}</Badge>
+                                      {event.fleet_number && (
+                                        <span className="text-xs text-muted-foreground">Fleet #{event.fleet_number}</span>
+                                      )}
+                                    </div>
 
-                        <div className="flex flex-wrap items-center gap-3 text-sm">
-                          <Badge variant="outline">{event.event_type}</Badge>
-                          <Badge variant={event.status === 'resolved' ? 'default' : 'destructive'}>
-                            {event.status}
-                          </Badge>
-                          <Badge variant="secondary">{event.severity}</Badge>
-                        </div>
+                                    <p className="text-sm text-muted-foreground line-clamp-2">
+                                      {event.description}
+                                    </p>
 
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {event.description}
-                        </p>
+                                    <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                                      <div className="flex items-center gap-1">
+                                        <Calendar className="w-3 h-3" />
+                                        {format(new Date(event.event_date), "MMM dd, yyyy")}
+                                      </div>
+                                      {event.event_time && (
+                                        <div className="flex items-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          {event.event_time}
+                                        </div>
+                                      )}
+                                      {event.location && /^https?:\/\//i.test(event.location) && (
+                                        <div className="flex items-center gap-1">
+                                          <Video className="w-3 h-3" />
+                                          <a
+                                            href={event.location}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-800 underline"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            Event Video
+                                          </a>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
 
-                        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {format(new Date(event.event_date), "MMM dd, yyyy")}
-                          </div>
-                          {event.event_time && (
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {event.event_time}
+                                <div className="flex flex-wrap gap-2">
+                                  {event.location && /^https?:\/\//i.test(event.location) ? (
+                                    <a
+                                      href={event.location}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                        type="button"
+                                      >
+                                        <Video className="w-4 h-4 mr-1" />
+                                        Video
+                                      </Button>
+                                    </a>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openEdit(event)}
+                                      title="Add event video URL"
+                                      className="text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                                    >
+                                      <Video className="w-4 h-4 mr-1" />
+                                      Add Video
+                                    </Button>
+                                  )}
+                                  {canViewMedia(event) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openMediaViewer(event)}
+                                      className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                      title="View snapshot or video from Surfsight"
+                                    >
+                                      <Camera className="w-4 h-4 mr-1" />
+                                      View Media
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openDetails(event)}
+                                  >
+                                    <Eye className="w-4 h-4 mr-1" />
+                                    Details
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openEdit(event)}
+                                  >
+                                    <Edit2 className="w-4 h-4 mr-1" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => openCoaching(event)}
+                                  >
+                                    <MessageSquare className="w-4 h-4 mr-1" />
+                                    Debrief
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleShareWhatsApp(event)}
+                                    disabled={sharingEventId === event.id}
+                                    title="Share via WhatsApp (includes snapshot)"
+                                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  >
+                                    {sharingEventId === event.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => openDelete(event)}
+                                    title="Delete Event"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
-                          )}
-                          {event.location && /^https?:\/\//i.test(event.location) && (
-                            <div className="flex items-center gap-1">
-                              <Video className="w-3 h-3" />
-                              <button
-                                type="button"
-                                className="text-blue-600 hover:text-blue-800 underline"
-                                onClick={(e) => { e.stopPropagation(); window.open(event.location!, '_blank', 'noopener,noreferrer'); }}
-                              >
-                                Event Video
-                              </button>
-                            </div>
-                          )}
+                          ))}
                         </div>
-                      </div>
+                      </CollapsibleContent>
                     </div>
-
-                    <div className="flex gap-2">
-                      {event.location && /^https?:\/\//i.test(event.location) ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(event.location!, '_blank', 'noopener,noreferrer')}
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        >
-                          <Video className="w-4 h-4 mr-1" />
-                          Video
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEdit(event)}
-                          title="Add event video URL"
-                          className="text-gray-400 hover:text-blue-600 hover:bg-blue-50"
-                        >
-                          <Video className="w-4 h-4 mr-1" />
-                          Add Video
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openDetails(event)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Details
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEdit(event)}
-                      >
-                        <Edit2 className="w-4 h-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => openCoaching(event)}
-                      >
-                        <MessageSquare className="w-4 h-4 mr-1" />
-                        Debrief
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleShareWhatsApp(event)}
-                        title="Share via WhatsApp"
-                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDelete(event)}
-                        title="Delete Event"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
+                  </Collapsible>
+                );
+              })
             )}
           </div>
         </TabsContent>
@@ -565,8 +724,8 @@ export default function DriverBehaviorGrid() {
             </div>
           </div>
 
-          {/* Debriefed List */}
-          <div className="space-y-4">
+          {/* Debriefed List grouped by driver */}
+          <div className="space-y-3">
             {filteredDebriefed.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground border rounded-md">
                 <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
@@ -574,122 +733,160 @@ export default function DriverBehaviorGrid() {
                 <p>Complete debriefs will appear here.</p>
               </div>
             ) : (
-              filteredDebriefed.map((event) => (
-                <div
-                  key={event.id}
-                  className="bg-white border border-green-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-2">
+              groupedDebriefed.map(([driverName, driverEvents]) => (
+                <Collapsible key={driverName}>
+                  <div className="border border-green-200 rounded-lg overflow-hidden">
+                    <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 bg-green-50 hover:bg-green-100 transition-colors group">
                       <div className="flex items-center gap-3">
-                        <div className="bg-green-100 rounded-full p-2">
-                          <User className="w-5 h-5 text-green-600" />
+                        <div className="bg-green-200 rounded-full p-2">
+                          <User className="w-4 h-4 text-green-700" />
                         </div>
-                        <div>
-                          <h3 className="font-bold text-lg text-foreground">{event.driver_name}</h3>
-                          <p className="text-sm text-muted-foreground">Fleet #{event.fleet_number}</p>
-                        </div>
+                        <span className="font-semibold text-foreground">{driverName}</span>
                         <Badge variant="outline" className="text-green-600 border-green-600">
                           <CheckCircle className="w-3 h-3 mr-1" />
-                          Debriefed {format(new Date(event.debriefed_at!), "MMM dd")}
+                          {driverEvents.length} debriefed
                         </Badge>
                       </div>
+                      <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="divide-y divide-green-100">
+                        {driverEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            className="p-4 hover:bg-green-50/30 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 space-y-2">
+                                <div className="flex flex-wrap items-center gap-3 text-sm">
+                                  <Badge variant="outline">{event.event_type}</Badge>
+                                  <Badge variant="secondary">{event.severity}</Badge>
+                                  <Badge variant="outline" className="text-green-600 border-green-600">
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Debriefed {format(new Date(event.debriefed_at!), "MMM dd")}
+                                  </Badge>
+                                  {event.fleet_number && (
+                                    <span className="text-xs text-muted-foreground">Fleet #{event.fleet_number}</span>
+                                  )}
+                                </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-sm">
-                        <Badge variant="outline">{event.event_type}</Badge>
-                        <Badge variant="secondary">{event.severity}</Badge>
-                      </div>
+                                <p className="text-sm text-muted-foreground line-clamp-2">
+                                  {event.description}
+                                </p>
 
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {event.description}
-                      </p>
+                                <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    {format(new Date(event.event_date), "MMM dd, yyyy")}
+                                  </div>
+                                  {event.event_time && (
+                                    <div className="flex items-center gap-1">
+                                      <Clock className="w-3 h-3" />
+                                      {event.event_time}
+                                    </div>
+                                  )}
+                                  {event.location && /^https?:\/\//i.test(event.location) && (
+                                    <div className="flex items-center gap-1">
+                                      <Video className="w-3 h-3" />
+                                      <a
+                                        href={event.location}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 underline"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        Event Video
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
 
-                      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {format(new Date(event.event_date), "MMM dd, yyyy")}
-                        </div>
-                        {event.event_time && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {event.event_time}
+                              <div className="flex flex-wrap gap-2">
+                                {event.location && /^https?:\/\//i.test(event.location) ? (
+                                  <a
+                                    href={event.location}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      type="button"
+                                    >
+                                      <Video className="w-4 h-4 mr-1" />
+                                      Video
+                                    </Button>
+                                  </a>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openEdit(event)}
+                                    title="Add event video URL"
+                                    className="text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                                  >
+                                    <Video className="w-4 h-4 mr-1" />
+                                    Add Video
+                                  </Button>
+                                )}
+                                {canViewMedia(event) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openMediaViewer(event)}
+                                    className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                    title="View snapshot or video from Surfsight"
+                                  >
+                                    <Camera className="w-4 h-4 mr-1" />
+                                    View Media
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openDetails(event)}
+                                >
+                                  <Eye className="w-4 h-4 mr-1" />
+                                  Details
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => exportEventPDF(event)}
+                                  disabled={exportingEventId === event.id}
+                                >
+                                  {exportingEventId === event.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FileText className="w-4 h-4 mr-1" />}
+                                  Export
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleShareWhatsApp(event)}
+                                  disabled={sharingEventId === event.id}
+                                  title="Share via WhatsApp (includes snapshot)"
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                >
+                                  {sharingEventId === event.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openDelete(event)}
+                                  title="Delete Event"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        {event.location && /^https?:\/\//i.test(event.location) && (
-                          <div className="flex items-center gap-1">
-                            <Video className="w-3 h-3" />
-                            <button
-                              type="button"
-                              className="text-blue-600 hover:text-blue-800 underline"
-                              onClick={(e) => { e.stopPropagation(); window.open(event.location!, '_blank', 'noopener,noreferrer'); }}
-                            >
-                              Event Video
-                            </button>
-                          </div>
-                        )}
+                        ))}
                       </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      {event.location && /^https?:\/\//i.test(event.location) ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(event.location!, '_blank', 'noopener,noreferrer')}
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        >
-                          <Video className="w-4 h-4 mr-1" />
-                          Video
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEdit(event)}
-                          title="Add event video URL"
-                          className="text-gray-400 hover:text-blue-600 hover:bg-blue-50"
-                        >
-                          <Video className="w-4 h-4 mr-1" />
-                          Add Video
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openDetails(event)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Details
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => exportEventPDF(event)}
-                      >
-                        <FileText className="w-4 h-4 mr-1" />
-                        Export
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleShareWhatsApp(event)}
-                        title="Share via WhatsApp"
-                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDelete(event)}
-                        title="Delete Event"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    </CollapsibleContent>
                   </div>
-                </div>
+                </Collapsible>
               ))
             )}
           </div>
@@ -780,6 +977,21 @@ export default function DriverBehaviorGrid() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Surfsight Media Viewer */}
+      {mediaViewerData && (
+        <SurfsightMediaViewer
+          open={mediaViewerOpen}
+          onOpenChange={(open) => {
+            setMediaViewerOpen(open);
+            if (!open) setMediaViewerData(null);
+          }}
+          imei={mediaViewerData.imei}
+          fileId={mediaViewerData.fileId}
+          driverName={mediaViewerData.driverName}
+          eventType={mediaViewerData.eventType}
+        />
+      )}
     </div>
   );
 }

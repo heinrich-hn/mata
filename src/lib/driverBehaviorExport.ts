@@ -10,7 +10,120 @@ type DriverBehaviorEventExtended = Record<string, any> & {
   id: string;
 };
 
-export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// Surfsight media helpers for exports
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface EventMediaInfo {
+  imei: string;
+  fileId: string;
+}
+
+/**
+ * Fetch a Surfsight presigned S3 URL for an event snapshot via the edge function.
+ * Returns the URL string or null on failure.
+ */
+export async function fetchSnapshotUrl(
+  supabaseInvoke: (name: string, options: { body: Record<string, unknown> }) => Promise<{ data: unknown; error: unknown }>,
+  mediaInfo: EventMediaInfo,
+  cameraId: number = 1,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabaseInvoke("surfsight-proxy", {
+      body: {
+        action: "event-media-link",
+        imei: mediaInfo.imei,
+        fileId: mediaInfo.fileId,
+        cameraId: String(cameraId),
+        fileType: "snapshot",
+      },
+    });
+    if (error || !data) return null;
+    const result = data as { data?: { url?: string } };
+    return result.data?.url || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch an image URL and convert to base64 data URL for embedding in PDFs.
+ * Uses a canvas to avoid CORS issues with direct fetch.
+ * Returns base64 data URL string or null on failure.
+ */
+export async function imageUrlToBase64(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch Surfsight presigned S3 URLs for BOTH cameras (front + cabin) as base64.
+ * Returns { front, cabin } with base64 data URLs or null per camera.
+ */
+export async function fetchAllSnapshotsBase64(
+  supabaseInvoke: (name: string, options: { body: Record<string, unknown> }) => Promise<{ data: unknown; error: unknown }>,
+  mediaInfo: EventMediaInfo,
+): Promise<{ front: string | null; cabin: string | null }> {
+  const [frontUrl, cabinUrl] = await Promise.all([
+    fetchSnapshotUrl(supabaseInvoke, mediaInfo, 1),
+    fetchSnapshotUrl(supabaseInvoke, mediaInfo, 2),
+  ]);
+  const [front, cabin] = await Promise.all([
+    frontUrl ? imageUrlToBase64(frontUrl) : Promise.resolve(null),
+    cabinUrl ? imageUrlToBase64(cabinUrl) : Promise.resolve(null),
+  ]);
+  return { front, cabin };
+}
+
+/**
+ * Fetch snapshot images as Blob files for native sharing (Web Share API).
+ * Returns { front, cabin, frontUrl, cabinUrl } with Blob files and original URLs.
+ */
+export async function fetchSnapshotBlobs(
+  supabaseInvoke: (name: string, options: { body: Record<string, unknown> }) => Promise<{ data: unknown; error: unknown }>,
+  mediaInfo: EventMediaInfo,
+): Promise<{ front: File | null; cabin: File | null; frontUrl: string | null; cabinUrl: string | null }> {
+  const [frontUrl, cabinUrl] = await Promise.all([
+    fetchSnapshotUrl(supabaseInvoke, mediaInfo, 1),
+    fetchSnapshotUrl(supabaseInvoke, mediaInfo, 2),
+  ]);
+
+  async function urlToFile(url: string | null, label: string): Promise<File | null> {
+    if (!url) return null;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return new File([blob], `${label}.jpg`, { type: 'image/jpeg' });
+    } catch {
+      return null;
+    }
+  }
+
+  const [front, cabin] = await Promise.all([
+    urlToFile(frontUrl, 'front-camera'),
+    urlToFile(cabinUrl, 'cabin-camera'),
+  ]);
+  return { front, cabin, frontUrl, cabinUrl };
+}
+
+export interface SnapshotMedia {
+  front: string | null;
+  cabin: string | null;
+}
+
+export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, snapshots?: SnapshotMedia | null) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -56,7 +169,8 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended) =>
   doc.text(`Event Type: ${event.event_type}`, margin + 5, detailsY + 14);
   doc.text(`Severity: ${event.severity || "medium"}`, pageWidth / 2 + 10, detailsY + 14);
 
-  doc.text(`Location: ${event.location || "N/A"}`, margin + 5, detailsY + 21);
+  const locationDisplay = event.location && /^https?:\/\//i.test(event.location) ? "See snapshots below" : (event.location || "N/A");
+  doc.text(`Location: ${locationDisplay}`, margin + 5, detailsY + 21);
   if (event.points) {
     doc.text(`Points: ${event.points}`, pageWidth / 2 + 10, detailsY + 21);
   }
@@ -73,6 +187,68 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended) =>
   doc.setFont("helvetica", "normal");
   yPos = addWrappedText(event.description, margin, yPos, contentWidth);
   yPos += 10;
+
+  // Event Snapshots (front + cabin cameras)
+  const hasFront = snapshots?.front;
+  const hasCabin = snapshots?.cabin;
+  if (hasFront || hasCabin) {
+    // Helper to embed one image
+    const addSnapshot = (label: string, base64: string) => {
+      if (yPos > 140) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text(label, margin, yPos);
+      yPos += 6;
+
+      try {
+        const imgWidth = contentWidth;
+        const imgHeight = imgWidth * 0.56; // ~16:9 aspect ratio
+        doc.addImage(base64, "JPEG", margin, yPos, imgWidth, imgHeight);
+        yPos += imgHeight + 3;
+
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(128, 128, 128);
+        doc.text("Surfsight dashcam — captured at time of event", margin, yPos);
+        doc.setTextColor(0, 0, 0);
+        yPos += 8;
+      } catch {
+        doc.setFontSize(9);
+        doc.setTextColor(128, 128, 128);
+        doc.text("Snapshot could not be embedded.", margin, yPos);
+        doc.setTextColor(0, 0, 0);
+        yPos += 8;
+      }
+    };
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("EVENT SNAPSHOTS", margin, yPos);
+    yPos += 8;
+
+    if (hasFront) addSnapshot("📷 Front Camera (Road View)", hasFront);
+    if (hasCabin) addSnapshot("📷 Cabin Camera (In-Cab View)", hasCabin);
+  }
+
+  // Video/Media Link (if present)
+  if (event.location && /^https?:\/\//i.test(event.location)) {
+    if (yPos > 260) {
+      doc.addPage();
+      yPos = 20;
+    }
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("EVENT VIDEO LINK:", margin, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(37, 99, 235);
+    doc.textWithLink(event.location.substring(0, 80) + (event.location.length > 80 ? "..." : ""), margin, yPos + 6, { url: event.location });
+    doc.setTextColor(0, 0, 0);
+    yPos += 16;
+  }
 
   // Check if we need a new page
   if (yPos > 240) {
@@ -364,10 +540,10 @@ export const generateDriverBehaviorExcel = async (
   // ── Data sheets ───────────────────────────────────────────────────────
   const headers = [
     'Date', 'Time', 'Driver', 'Fleet Number', 'Event Type', 'Description',
-    'Location', 'Severity', 'Points', 'Status',
+    'Video/Media Link', 'Severity', 'Points', 'Status',
     'Debriefed On', 'Debriefed By', 'Coaching Notes', 'Action Plan',
   ];
-  const colWidths = [13, 10, 20, 14, 20, 35, 22, 12, 10, 12, 13, 18, 35, 35];
+  const colWidths = [13, 10, 20, 14, 20, 35, 30, 12, 10, 12, 13, 18, 35, 35];
 
   const addDataSheet = (name: string, sheetEvents: DriverBehaviorEventExtended[], statusColor: string) => {
     if (sheetEvents.length === 0) return;
@@ -408,6 +584,7 @@ export const generateDriverBehaviorExcel = async (
 
     sorted.forEach((ev, idx) => {
       const sev = (ev.severity || 'medium').toLowerCase();
+      const videoLink = ev.location && /^https?:\/\//i.test(ev.location) ? ev.location : '';
       const row = ws2.addRow([
         format(new Date(ev.event_date), 'MMM dd, yyyy'),
         ev.event_time || '',
@@ -415,7 +592,7 @@ export const generateDriverBehaviorExcel = async (
         ev.fleet_number || '',
         ev.event_type,
         (ev.description || '').substring(0, 200),
-        ev.location || '',
+        videoLink ? 'View Video' : '',
         (sev).charAt(0).toUpperCase() + sev.slice(1),
         ev.points ?? 0,
         ev.status || 'open',
@@ -426,10 +603,17 @@ export const generateDriverBehaviorExcel = async (
       ]);
       row.height = 20;
 
+      // Make video link clickable
+      if (videoLink) {
+        const linkCell = row.getCell(7);
+        linkCell.value = { text: 'View Video', hyperlink: videoLink };
+        linkCell.font = { name: 'Calibri', size: 9, color: { argb: XC.blue }, underline: true };
+      }
+
       for (let c = 1; c <= headers.length; c++) {
         const cell = row.getCell(c);
         xlBorder(cell);
-        xlFont(cell, false, 9, XC.darkText);
+        if (c !== 7 || !videoLink) xlFont(cell, false, 9, XC.darkText);
         cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: c === 6 || c === 13 || c === 14 };
 
         if (idx % 2 === 1) xlFill(cell, XC.altRow);
@@ -554,10 +738,10 @@ export const generateDriverBehaviorPDF = (
 
   // Auto table for events
   const tableHeaders = type === 'debriefed'
-    ? ['Date', 'Driver', 'Fleet', 'Event Type', 'Severity', 'Pts', 'Debriefed On', 'By', 'Coaching Notes', 'Action Plan']
+    ? ['Date', 'Driver', 'Fleet', 'Event Type', 'Severity', 'Pts', 'Media', 'Debriefed On', 'By', 'Coaching Notes']
     : type === 'pending'
-      ? ['Date', 'Driver', 'Fleet', 'Event Type', 'Description', 'Location', 'Severity', 'Pts', 'Status']
-      : ['Date', 'Driver', 'Fleet', 'Event Type', 'Severity', 'Pts', 'Status', 'Debriefed On', 'Notes'];
+      ? ['Date', 'Driver', 'Fleet', 'Event Type', 'Description', 'Severity', 'Pts', 'Media', 'Status']
+      : ['Date', 'Driver', 'Fleet', 'Event Type', 'Severity', 'Pts', 'Media', 'Status', 'Debriefed On'];
 
   const sorted = [...events].sort((a, b) =>
     (severityOrder[a.severity ?? 'low'] ?? 3) - (severityOrder[b.severity ?? 'low'] ?? 3)
@@ -567,28 +751,28 @@ export const generateDriverBehaviorPDF = (
   const tableData = sorted.map(ev => {
     const sev = (ev.severity || 'medium').charAt(0).toUpperCase() + (ev.severity || 'medium').slice(1);
     const dateStr = format(new Date(ev.event_date), 'MMM dd');
+    const hasMedia = ev.location && /^https?:\/\//i.test(ev.location) ? '📹 Yes' : '';
 
     if (type === 'debriefed') {
       return [
         dateStr, ev.driver_name, ev.fleet_number || '', ev.event_type, sev,
         ev.points ?? 0,
+        hasMedia,
         ev.debriefed_at ? format(new Date(ev.debriefed_at), 'MMM dd') : '',
         ev.debrief_conducted_by || '',
         (ev.debrief_notes || '').substring(0, 60),
-        (ev.coaching_action_plan || '').substring(0, 60),
       ];
     } else if (type === 'pending') {
       return [
         dateStr, ev.driver_name, ev.fleet_number || '', ev.event_type,
-        (ev.description || '').substring(0, 50), ev.location || '',
-        sev, ev.points ?? 0, ev.status || 'open',
+        (ev.description || '').substring(0, 50),
+        sev, ev.points ?? 0, hasMedia, ev.status || 'open',
       ];
     }
     return [
       dateStr, ev.driver_name, ev.fleet_number || '', ev.event_type, sev,
-      ev.points ?? 0, ev.status || 'open',
+      ev.points ?? 0, hasMedia, ev.status || 'open',
       ev.debriefed_at ? format(new Date(ev.debriefed_at), 'MMM dd') : '',
-      (ev.debrief_notes || '').substring(0, 50),
     ];
   });
 
@@ -607,7 +791,7 @@ export const generateDriverBehaviorPDF = (
     didParseCell: (data) => {
       if (data.section !== 'body') return;
       // Severity column colour
-      const sevColIdx = type === 'pending' ? 6 : 4;
+      const sevColIdx = type === 'pending' ? 5 : 4;
       if (data.column.index === sevColIdx) {
         const val = (data.cell.raw as string || '').toLowerCase();
         if (val === 'critical') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }

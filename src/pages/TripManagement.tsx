@@ -8,6 +8,7 @@ import CompletedTrips from "@/components/trips/CompletedTrips";
 import EditTripDialog from "@/components/trips/EditTripDialog";
 import InvoicingDashboard from "@/components/trips/InvoicingDashboard";
 import LoadImportModal from "@/components/trips/LoadImportModal";
+import OperationalCostsTab from "@/components/trips/OperationalCostsTab";
 import TripDetailsModal from "@/components/trips/TripDetailsModal";
 import TripExpensesSection from "@/components/trips/TripExpensesSection";
 import TripReportsSection from "@/components/trips/TripReportsSection";
@@ -46,7 +47,7 @@ const TripManagement = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   // Track pending refetch to debounce real-time updates during dialog animations
-  const pendingRefetchRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingRefetchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     missedLoads,
     addMissedLoad,
@@ -306,6 +307,9 @@ const TripManagement = () => {
               <TabsTrigger value="missed-loads" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
                 Missed Loads
               </TabsTrigger>
+              <TabsTrigger value="operational-costs" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
+                Operational Costs
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -363,6 +367,10 @@ const TripManagement = () => {
               onUpdateMissedLoad={updateMissedLoad}
               onDeleteMissedLoad={deleteMissedLoad}
             />
+          </TabsContent>
+
+          <TabsContent value="operational-costs">
+            <OperationalCostsTab />
           </TabsContent>
         </Tabs>
 

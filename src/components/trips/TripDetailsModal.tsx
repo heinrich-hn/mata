@@ -1,22 +1,28 @@
-import SystemCostGenerator from '@/components/costs/SystemCostGeneratorV2';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import {
+  calculateSystemCosts,
+  generateAndInsertSystemCosts,
+  useEffectiveRates,
+} from '@/hooks/useSystemCostRates';
 import { supabase } from '@/integrations/supabase/client';
 import { CostEntry } from '@/types/operations';
 import {
-AlertTriangle,
-Calendar,
-CheckCircle,
-DollarSign,
-Edit,
-Gauge,
-MapPin,
-Truck,
-User
+  AlertTriangle,
+  Calendar,
+  Calculator,
+  CheckCircle,
+  DollarSign,
+  Edit,
+  Gauge,
+  MapPin,
+  RefreshCw,
+  Truck,
+  User
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import EditTripDialog from './EditTripDialog';
@@ -54,6 +60,141 @@ interface TripDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRefresh?: () => void;
+}
+
+// ─── Inline System Costs Tab (DB-driven rates) ───
+const formatUSD = (n: number) =>
+  `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function SystemCostsTab({ trip, onGenerated }: { trip: Trip; onGenerated: () => void }) {
+  const { effectiveRates, isLoading } = useEffectiveRates(trip.departure_date || undefined);
+  const { toast } = useToast();
+  const [generating, setGenerating] = useState(false);
+
+  const previewCosts = calculateSystemCosts(
+    {
+      id: trip.id,
+      departure_date: trip.departure_date,
+      arrival_date: trip.arrival_date,
+      distance_km: trip.distance_km,
+    },
+    effectiveRates
+  );
+
+  const totalCosts = previewCosts.reduce((sum, c) => sum + c.amount, 0);
+
+  const tripDays = (() => {
+    if (!trip.departure_date || !trip.arrival_date) return 1;
+    const days = Math.ceil(
+      (new Date(trip.arrival_date).getTime() - new Date(trip.departure_date).getTime()) /
+      (1000 * 60 * 60 * 24)
+    ) + 1;
+    return Math.max(1, days);
+  })();
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const result = await generateAndInsertSystemCosts(
+        {
+          id: trip.id,
+          departure_date: trip.departure_date,
+          arrival_date: trip.arrival_date,
+          distance_km: trip.distance_km,
+        },
+        effectiveRates
+      );
+
+      if (result.skipped) {
+        toast({
+          title: 'Already Generated',
+          description: 'System costs already exist for this trip.',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: `${result.inserted} system cost${result.inserted !== 1 ? 's' : ''} generated.`,
+        });
+      }
+      onGenerated();
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate system costs',
+        variant: 'destructive',
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (isLoading) return <div className="text-sm text-muted-foreground p-4">Loading rates...</div>;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Calculator className="w-5 h-5" />
+                System Cost Generator
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Auto-calculated from DB-managed rates
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Trip info */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
+              <span className="text-sm font-medium">Trip Duration</span>
+              <span className="font-bold">{tripDays} day{tripDays !== 1 ? 's' : ''}</span>
+            </div>
+            {(trip.distance_km ?? 0) > 0 && (
+              <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
+                <span className="text-sm font-medium">Trip Distance</span>
+                <span className="font-bold">{trip.distance_km?.toLocaleString()} km</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center p-3 bg-primary/10 rounded">
+              <span className="font-semibold">Total System Costs</span>
+              <span className="text-xl font-bold text-primary">{formatUSD(totalCosts)}</span>
+            </div>
+          </div>
+
+          {/* Cost breakdown */}
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm">Cost Breakdown</h4>
+            <div className="max-h-60 overflow-y-auto space-y-1">
+              {previewCosts.map((cost, i) => (
+                <div key={i} className="flex justify-between text-sm p-2 hover:bg-muted rounded">
+                  <span className="text-muted-foreground">{cost.sub_category}</span>
+                  <span className="font-medium font-mono">{formatUSD(cost.amount)}</span>
+                </div>
+              ))}
+              {previewCosts.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No costs to generate. Ensure trip has dates and/or distance.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <Button
+            onClick={handleGenerate}
+            className="w-full"
+            disabled={previewCosts.length === 0 || generating}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+            {generating ? 'Generating...' : `Generate ${previewCosts.length} System Cost${previewCosts.length !== 1 ? 's' : ''}`}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModalProps) => {
@@ -102,67 +243,6 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
       });
     }
   }, [trip, toast]);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleGenerateSystemCosts = async (generatedCosts: any) => {
-    try {
-      // Map to ensure all required fields are present
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const costsToInsert = generatedCosts.map((cost: any) => ({
-        trip_id: cost.trip_id,
-        category: cost.category,
-        sub_category: cost.sub_category,
-        amount: cost.amount,
-        currency: cost.currency,
-        reference_number: cost.reference_number,
-        date: cost.date,
-        notes: cost.notes,
-        is_flagged: cost.is_flagged !== undefined ? cost.is_flagged : false,
-        is_system_generated: cost.is_system_generated !== undefined ? cost.is_system_generated : true,
-      }));
-
-      // Insert all system-generated costs
-      const { error } = await supabase
-        .from('cost_entries')
-        .insert(costsToInsert);
-
-      if (error) throw error;
-
-      // Auto-resolve any active "no costs" alert for this trip
-      if (trip?.id) {
-        supabase
-          .from('alerts')
-          .update({
-            status: 'resolved',
-            resolved_at: new Date().toISOString(),
-            resolution_comment: 'System costs generated',
-          })
-          .eq('source_type', 'trip')
-          .eq('source_id', trip.id)
-          .eq('category', 'fuel_anomaly')
-          .eq('status', 'active')
-          .filter('metadata->>issue_type', 'eq', 'no_costs')
-          .then(({ error: resolveErr }) => {
-            if (resolveErr) console.error('Error auto-resolving no_costs alert:', resolveErr);
-          });
-      }
-
-      toast({
-        title: 'Success',
-        description: `${generatedCosts.length} system costs added successfully`,
-      });
-
-      // Refresh costs
-      fetchCosts();
-    } catch (error) {
-      console.error('Error generating system costs:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate system costs',
-        variant: 'destructive',
-      });
-    }
-  };
 
   useEffect(() => {
     if (trip && isOpen) {
@@ -451,17 +531,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
             </TabsContent>
 
             <TabsContent value="system-costs" className="space-y-4">
-              <SystemCostGenerator
-                trip={{
-                  id: trip.id,
-                  distanceKm: trip.distance_km,
-                  startDate: trip.departure_date || '',
-                  endDate: trip.arrival_date || '',
-                  revenueAmount: trip.base_revenue,
-                  revenueCurrency: trip.revenue_currency || 'ZAR',
-                }}
-                onGenerateSystemCosts={handleGenerateSystemCosts}
-              />
+              <SystemCostsTab trip={trip} onGenerated={fetchCosts} />
             </TabsContent>
 
             <TabsContent value="cycle-tracker" className="space-y-4">

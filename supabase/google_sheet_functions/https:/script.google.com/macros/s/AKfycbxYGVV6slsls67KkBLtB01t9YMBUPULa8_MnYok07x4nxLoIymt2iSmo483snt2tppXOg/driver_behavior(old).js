@@ -43,7 +43,7 @@ function postDriverBehaviorToSupabase() {
     const lock = LockService.getScriptLock();
     try { lock.waitLock(30000); } catch (_) {
         Logger.log('⚠️ Could not obtain lock.');
-        SpreadsheetApp.getUi().alert('Another sync is already running. Please wait.');
+        safeAlert('Another sync is already running. Please wait.');
         return;
     }
 
@@ -56,7 +56,7 @@ function postDriverBehaviorToSupabase() {
 
         const totalRows = sheet.getLastRow();
         if (totalRows <= 1) {
-            SpreadsheetApp.getUi().alert('No data found in sheet.');
+            safeAlert('No data found in sheet.');
             return;
         }
 
@@ -185,7 +185,7 @@ function postDriverBehaviorToSupabase() {
                 '❓ Unknown ignored: ' + stats.unknown + '\n' +
                 '🙈 No driver: ' + stats.noDriver + '\n' +
                 '❌ Errors: ' + stats.errors;
-            SpreadsheetApp.getUi().alert(msg);
+            safeAlert(msg);
             return;
         }
 
@@ -209,7 +209,7 @@ function postDriverBehaviorToSupabase() {
 
         // ── 5. Report ────────────────────────────────────────────────────
         var elapsed = Math.round((new Date() - t0) / 1000);
-        SpreadsheetApp.getUi().alert(
+        safeAlert(
             (fail === 0 ? '🎉 Sync Successful!' : '⚠️ Partial Sync') + '\n\n' +
             '✅ Sent: ' + ok + '\n' +
             (fail > 0 ? '❌ Failed: ' + fail + '\n' : '') +
@@ -222,13 +222,23 @@ function postDriverBehaviorToSupabase() {
 
     } catch (error) {
         Logger.log('❌ CRITICAL: ' + error.message + '\n' + error.stack);
-        SpreadsheetApp.getUi().alert('❌ Error: ' + error.message);
+        safeAlert('❌ Error: ' + error.message);
     } finally {
         lock.releaseLock();
     }
 }
 
 // ── HELPERS ──────────────────────────────────────────────────────────
+
+/** Safe alert — falls back to Logger.log when not in a UI context (e.g. time triggers) */
+function safeAlert(message) {
+    Logger.log(message);
+    try {
+        SpreadsheetApp.getUi().alert(message);
+    } catch (_) {
+        // Not in UI context (trigger, API call, etc.) — already logged above
+    }
+}
 
 /** Extract actual URLs from HYPERLINK formulas in Column F */
 function getLocationHyperlinks(sheet, rowsToProcess) {

@@ -1,6 +1,3 @@
-// src/pages/DriverManagement.tsx
-'use client';
-
 import DriverBehaviorGrid from "@/components/driver/DriverBehaviorGrid";
 import DriverManagementSection from "@/components/driver/DriverManagementSection";
 import DriverRecruitmentSection from "@/components/driver/DriverRecruitmentSection";

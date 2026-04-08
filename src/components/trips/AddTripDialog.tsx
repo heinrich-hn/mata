@@ -13,6 +13,7 @@ import { CARGO_TYPES } from '@/constants/cargoTypes';
 import { TOLL_COST_CATEGORY, TOLL_COST_SUBCATEGORY } from '@/constants/routeTollCosts';
 import { useOperations } from '@/contexts/OperationsContext';
 import { useToast } from '@/hooks/use-toast';
+import { generateAndInsertSystemCosts, useEffectiveRates } from '@/hooks/useSystemCostRates';
 import type { RouteExpenseItem } from '@/hooks/useRoutePredefinedExpenses';
 import { useWialonVehicles } from '@/hooks/useWialonVehicles';
 import type { CostEntry, Trip } from '@/types/operations';
@@ -70,6 +71,7 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
   const { addTrip, addCostEntry } = useOperations();
   const { toast } = useToast();
   const { data: vehicles, isLoading: vehiclesLoading } = useWialonVehicles();
+  const { effectiveRates } = useEffectiveRates();
 
   // State for tracking selected route toll cost
   const [selectedTollCost, setSelectedTollCost] = useState<{ amount: number; currency: string } | null>(null);
@@ -255,6 +257,23 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
         } catch {
           costsFailedCount++;
           console.error('Failed to add cost entry:', cost.category);
+        }
+      }
+
+      // Auto-generate system operational costs
+      if (tripId) {
+        try {
+          await generateAndInsertSystemCosts(
+            {
+              id: tripId,
+              departure_date: data.departure_date || null,
+              arrival_date: data.arrival_date || null,
+              distance_km: data.distance_km ? parseFloat(data.distance_km) : null,
+            },
+            effectiveRates
+          );
+        } catch (err) {
+          console.error('Failed to generate system costs:', err);
         }
       }
 
