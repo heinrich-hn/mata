@@ -19,7 +19,8 @@
 function postDriverBehaviorToSupabase() {
     // ── CONFIGURATION ──────────────────────────────────────────────────
     const SUPABASE_URL = 'https://wxvhkljrbcpcgpgdqhsp.supabase.co/functions/v1/import-driver-behavior';
-    const SUPABASE_API_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_ANON_KEY') || '';
+    const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4dmhrbGpyYmNwY2dwZ2RxaHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjYzMTEsImV4cCI6MjA3NDIwMjMxMX0.8VTE9TMQYAu2kMLpHX8EzBlCspBWddNW-FYOnDZSkHU';
+
 
     const SHEET_NAME = 'DriverBehaviour';
 
@@ -236,15 +237,35 @@ function getLocationHyperlinks(sheet, rowsToProcess) {
         var range = sheet.getRange(2, 6, rowsToProcess, 1); // Column F
         var formulas = range.getFormulas();
         var values = range.getValues();
+        var richTexts = null;
+        try { richTexts = range.getRichTextValues(); } catch (_) { }
 
         for (var i = 0; i < rowsToProcess; i++) {
             var f = formulas[i][0];
             var v = values[i][0];
+            // 1. Try HYPERLINK formula
             if (f && f.indexOf('HYPERLINK') !== -1) {
                 var m = f.match(/HYPERLINK\("([^"]+)"/);
                 if (m && m[1]) { links[i] = m[1]; continue; }
             }
-            if (v) links[i] = String(v).trim();
+            // 2. Try RichText link (handles cells with display text like "Video Link" that have an embedded URL)
+            if (richTexts && richTexts[i] && richTexts[i][0]) {
+                var rt = richTexts[i][0];
+                var linkUrl = rt.getLinkUrl();
+                if (linkUrl) { links[i] = linkUrl; continue; }
+                // Check runs for partial links
+                var runs = rt.getRuns();
+                for (var r = 0; r < runs.length; r++) {
+                    var runLink = runs[r].getLinkUrl();
+                    if (runLink) { links[i] = runLink; break; }
+                }
+                if (links[i]) continue;
+            }
+            // 3. Fallback: only use cell value if it looks like a URL
+            if (v) {
+                var str = String(v).trim();
+                if (/^https?:\/\//i.test(str)) { links[i] = str; }
+            }
         }
     } catch (e) {
         Logger.log('⚠️ Hyperlink read error: ' + e.message);

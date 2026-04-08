@@ -258,7 +258,8 @@ serve(async (req) => {
         // --- 5. Build DB record ---
         const fleetNumber = (record['Vehicle ID'] || record.vehicleId || record.fleetNumber || '').trim() || null;
         const locationUrl = record['Location URL'] || record.locationUrl || record.location || null;
-        const location = (locationUrl && locationUrl !== 'View on Map') ? locationUrl : null;
+        // Only store location if it's an actual URL (filter out display text like "Video Link", "View on Map", etc.)
+        const location = (locationUrl && /^https?:\/\//i.test(locationUrl)) ? locationUrl : null;
         const description = record.description
           || `${normalizedEventType} by ${driverName} on ${eventDate}`;
 

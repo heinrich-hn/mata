@@ -24,7 +24,7 @@ import { useRealtimeDriverBehaviorEvents } from "@/hooks/useRealtimeDriverBehavi
 import type { Database } from "@/integrations/supabase/types";
 import { generateDriverCoachingPDF, generateDriverBehaviorExcel, generateDriverBehaviorPDF } from "@/lib/driverBehaviorExport";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Car, CheckCircle, Clock, Download, Edit2, Eye, FileSpreadsheet, FileText, List, MapPin, MessageSquare, Search, Share2, Trash2, User } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Car, CheckCircle, Clock, Download, Edit2, Eye, FileSpreadsheet, FileText, List, MessageSquare, Search, Share2, Trash2, User, Video } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useCallback, useMemo, useState } from "react";
@@ -417,10 +417,16 @@ export default function DriverBehaviorGrid() {
                               {event.event_time}
                             </div>
                           )}
-                          {event.location && (
+                          {event.location && /^https?:\/\//i.test(event.location) && (
                             <div className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {event.location}
+                              <Video className="w-3 h-3" />
+                              <button
+                                type="button"
+                                className="text-blue-600 hover:text-blue-800 underline"
+                                onClick={(e) => { e.stopPropagation(); window.open(event.location!, '_blank', 'noopener,noreferrer'); }}
+                              >
+                                Event Video
+                              </button>
                             </div>
                           )}
                         </div>
@@ -428,6 +434,28 @@ export default function DriverBehaviorGrid() {
                     </div>
 
                     <div className="flex gap-2">
+                      {event.location && /^https?:\/\//i.test(event.location) ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(event.location!, '_blank', 'noopener,noreferrer')}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          <Video className="w-4 h-4 mr-1" />
+                          Video
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEdit(event)}
+                          title="Add event video URL"
+                          className="text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                        >
+                          <Video className="w-4 h-4 mr-1" />
+                          Add Video
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -587,16 +615,44 @@ export default function DriverBehaviorGrid() {
                             {event.event_time}
                           </div>
                         )}
-                        {event.location && (
+                        {event.location && /^https?:\/\//i.test(event.location) && (
                           <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            {event.location}
+                            <Video className="w-3 h-3" />
+                            <button
+                              type="button"
+                              className="text-blue-600 hover:text-blue-800 underline"
+                              onClick={(e) => { e.stopPropagation(); window.open(event.location!, '_blank', 'noopener,noreferrer'); }}
+                            >
+                              Event Video
+                            </button>
                           </div>
                         )}
                       </div>
                     </div>
 
                     <div className="flex gap-2">
+                      {event.location && /^https?:\/\//i.test(event.location) ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(event.location!, '_blank', 'noopener,noreferrer')}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          <Video className="w-4 h-4 mr-1" />
+                          Video
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEdit(event)}
+                          title="Add event video URL"
+                          className="text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                        >
+                          <Video className="w-4 h-4 mr-1" />
+                          Add Video
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"

@@ -3,32 +3,30 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-  } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import type { Database } from "@/integrations/supabase/types";
 import { format } from "date-fns";
-import
-  {
-    AlertCircle,
-    AlertTriangle,
-    Calendar,
-    Car,
-    CheckCircle,
-    Clock,
-    FileText,
-    MapPin,
-    MessageSquare,
-    Shield,
-    User,
-  } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  Calendar,
+  Car,
+  CheckCircle,
+  Clock,
+  FileText,
+  MessageSquare,
+  Shield,
+  User,
+  Video,
+} from "lucide-react";
 
 type DriverEvent = Database["public"]["Tables"]["driver_behavior_events"]["Row"];
 
@@ -118,12 +116,24 @@ const DriverBehaviorDetailsDialog = ({
                   <span className="font-medium text-gray-700">{event.event_time}</span>
                 </div>
               )}
-              {event.location && (
+              {event.location && /^https?:\/\//i.test(event.location) && (
                 <div className="flex items-center gap-2 md:col-span-3">
-                  <MapPin className="w-4 h-4 text-gray-500" />
-                  <span className="font-medium text-gray-700">{event.location}</span>
+                  <Video className="w-4 h-4 text-blue-500" />
+                  <button
+                    type="button"
+                    className="font-medium text-blue-600 hover:text-blue-800 underline"
+                    onClick={() => window.open(event.location!, '_blank', 'noopener,noreferrer')}
+                  >
+                    Event Video
+                  </button>
                 </div>
               )}
+              {!event.location || !/^https?:\/\//i.test(event.location) ? (
+                <div className="flex items-center gap-2 md:col-span-3 text-sm text-muted-foreground">
+                  <Video className="w-4 h-4" />
+                  <span>No event video URL — add one via Edit</span>
+                </div>
+              ) : null}
             </div>
           </div>
 

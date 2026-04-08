@@ -17,6 +17,27 @@ export interface Profile {
 import { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+const PROFILE_CACHE_KEY = "mata-driver-profile";
+
+/** Persist profile in localStorage so it survives page refreshes */
+function cacheProfile(p: Profile | null) {
+  try {
+    if (p) {
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(p));
+    } else {
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+    }
+  } catch { /* storage full / blocked */ }
+}
+
+function loadCachedProfile(): Profile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (raw) return JSON.parse(raw) as Profile;
+  } catch { /* corrupted / blocked */ }
+  return null;
+}
+
 // Define the shape of the user data returned from Supabase
 interface UserData {
   user_id: number;
@@ -66,11 +87,17 @@ function buildFallbackProfile(userEmail: string, authUser: User): Profile {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfileState] = useState<Profile | null>(loadCachedProfile);
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Wrapper that also persists profile to localStorage
+  const setProfile = useCallback((p: Profile | null) => {
+    setProfileState(p);
+    cacheProfile(p);
+  }, []);
 
   // Refs for mounted state and fetch versioning
   const mountedRef = useRef(true);
@@ -176,7 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const p = await fetchProfile(user.email, user);
       if (mountedRef.current) setProfile(p);
     }
-  }, [user, fetchProfile]);
+  }, [user, fetchProfile, setProfile]);
 
   // Single initialisation effect
   useEffect(() => {
@@ -216,12 +243,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!mountedRef.current) return;
 
-      // On sign-out or failed token refresh, clear everything
-      if (event === "SIGNED_OUT" || (event === "TOKEN_REFRESHED" && !newSession)) {
+      // On explicit sign-out, clear everything.
+      // For TOKEN_REFRESHED with no session, only clear if sign-out was intentional.
+      // Transient refresh failures should NOT wipe the cache — the SDK will retry
+      // or fire SIGNED_OUT if the refresh is truly dead.
+      if (event === "SIGNED_OUT") {
         setSession(null);
         setUser(null);
         setProfile(null);
         queryClient.clear();
+        finishInit();
+        return;
+      }
+
+      if (event === "TOKEN_REFRESHED" && !newSession) {
+        // Token refresh returned empty — this is often transient on mobile.
+        // Don't wipe state; wait for the SDK to fire SIGNED_OUT if it's terminal.
+        console.warn("TOKEN_REFRESHED with no session — ignoring (waiting for SIGNED_OUT if terminal)");
         finishInit();
         return;
       }
@@ -350,7 +388,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fetchVersion.current++;
       }
     };
-  }, [supabase, fetchProfile, queryClient]); // Keep these dependencies
+  }, [supabase, fetchProfile, queryClient, setProfile]); // Keep these dependencies
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!supabase) return { error: new Error("Authentication service not available") };
@@ -384,7 +422,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Sign in exception:", err);
       return { error: err as Error };
     }
-  }, [supabase, fetchProfile, queryClient]);
+  }, [supabase, fetchProfile, queryClient, setProfile]);
 
   const signOut = useCallback(async () => {
     fetchVersionRef.current++;
@@ -414,7 +452,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Clear stale query cache so re-login fetches fresh data
       queryClient.clear();
     }
-  }, [supabase, queryClient]);
+  }, [supabase, queryClient, setProfile]);
 
   const value = useMemo<AuthContextType>(() => ({
     user,

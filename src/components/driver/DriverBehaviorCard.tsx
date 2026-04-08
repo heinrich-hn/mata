@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, Clock, AlertTriangle, FileText, Eye, MessageSquare, CheckCircle, Car } from "lucide-react";
+import { Calendar, Clock, AlertTriangle, FileText, Eye, MessageSquare, CheckCircle, Car, Video } from "lucide-react";
 import { format } from "date-fns";
 
 interface DriverBehaviorCardProps {
@@ -148,10 +148,16 @@ const DriverBehaviorCard = ({ event, onViewDetails, onStartDebrief, onExportPDF 
             )}
           </div>
 
-          {event.location && (
+          {event.location && /^https?:\/\//i.test(event.location) && (
             <div className="flex items-center gap-2 text-muted-foreground">
-              <MapPin className="w-4 h-4" />
-              <span className="truncate max-w-[180px]">{event.location}</span>
+              <Video className="w-4 h-4" />
+              <button
+                type="button"
+                className="truncate max-w-[180px] text-blue-600 hover:text-blue-800 underline text-sm"
+                onClick={(e) => { e.stopPropagation(); window.open(event.location!, '_blank', 'noopener,noreferrer'); }}
+              >
+                Event Video
+              </button>
             </div>
           )}
 

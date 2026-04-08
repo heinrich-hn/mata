@@ -6,6 +6,30 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let client: ReturnType<typeof createSupabaseClient<Database>> | null = null;
 
+/**
+ * Simple in-memory lock to serialise auth token refreshes.
+ *
+ * navigator.locks is disabled because this is a single-tab mobile PWA and
+ * the default lock causes 5 s timeouts on mobile browsers.  However, a
+ * no-op lock allows *concurrent* refreshes that race each other: one succeeds
+ * while the other may emit TOKEN_REFRESHED with a null session or even
+ * SIGNED_OUT, which wipes all cached query data.
+ *
+ * This in-memory mutex serialises the calls so only one runs at a time.
+ */
+let lockPromise: Promise<unknown> = Promise.resolve();
+
+function inMemoryLock<T>(
+  _name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const current = lockPromise.then(fn, fn);
+  // Keep the chain going; swallow errors so the next caller isn't blocked.
+  lockPromise = current.catch(() => { });
+  return current;
+}
+
 export function createClient() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error(
@@ -27,16 +51,11 @@ export function createClient() {
       storage: globalThis.localStorage,
       autoRefreshToken: true,
       detectSessionInUrl: false,
-      // Disable navigator.locks — this is a single-tab mobile PWA so cross-tab
-      // lock coordination is unnecessary. The default navigatorLock causes 5s
-      // timeouts ("lock not released within 5000ms") on mobile browsers when
-      // auth operations race during fast navigation or PWA resume, which blocks
-      // session recovery and causes data to disappear.
+      // Use an in-memory mutex instead of navigator.locks to avoid 5 s
+      // timeouts on mobile, while still serialising concurrent refreshes
+      // so they don't race and produce spurious SIGNED_OUT events.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      lock: (async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
-        return await fn();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      }) as any,
+      lock: inMemoryLock as any,
     },
   });
 

@@ -14,9 +14,10 @@ const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
             staleTime: 5 * 60 * 1000,
-            gcTime: 15 * 60 * 1000,
-            refetchOnWindowFocus: false,
+            gcTime: 30 * 60 * 1000,
+            refetchOnWindowFocus: "always",
             refetchOnReconnect: true,
+            refetchOnMount: true,
             retry: (failureCount, error) => {
                 const msg = (error as Error)?.message?.toLowerCase() ?? "";
                 if (
@@ -27,7 +28,7 @@ const queryClient = new QueryClient({
                 ) {
                     return false;
                 }
-                return failureCount < 1;
+                return failureCount < 2;
             },
         },
     },

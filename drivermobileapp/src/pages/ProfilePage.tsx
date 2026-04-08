@@ -58,7 +58,7 @@ export default function ProfilePage() {
   const { user, profile, signOut: _signOut } = useAuth();
   const { toast } = useToast();
   const supabase = createClient();
-  const queryClient = useQueryClient();
+  const _queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -157,7 +157,7 @@ export default function ProfilePage() {
     const lastEmail = user?.email;
 
     try {
-      queryClient.clear();
+      // signOut() handles clearing queryClient internally
       await _signOut();
     } catch (err) {
       console.error("Sign out error:", err);
@@ -259,7 +259,9 @@ export default function ProfilePage() {
               {getInitials(profile?.full_name)}
             </AvatarFallback>
           </Avatar>
-          <h1 className="text-xl font-semibold">{profile?.full_name || "Driver"}</h1>
+          <h1 className="text-xl font-semibold">
+            {driver ? `${driver.first_name} ${driver.last_name}` : profile?.full_name || user?.email?.split("@")[0] || "Driver"}
+          </h1>
           <Badge variant="secondary" className="mt-2">
             <Shield className="w-3 h-3 mr-1" strokeWidth={1.5} />
             {profile?.role || "Driver"}

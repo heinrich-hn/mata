@@ -254,12 +254,12 @@ export default function DriverBehaviorEditModal({
             </div>
 
             <div>
-              <Label htmlFor="location">Location</Label>
+              <Label htmlFor="location">Event Video URL</Label>
               <Input
                 id="location"
                 value={edited.location ?? event.location ?? ""}
                 onChange={(e) => setEdited({ ...edited, location: e.target.value || null })}
-                placeholder="Enter location"
+                placeholder="Enter event video URL"
               />
             </div>
 

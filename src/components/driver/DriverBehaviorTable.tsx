@@ -1,14 +1,13 @@
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,7 +17,7 @@ import { useRealtimeDriverBehaviorEvents } from "@/hooks/useRealtimeDriverBehavi
 import type { Database } from "@/integrations/supabase/types";
 import { generateDriverCoachingPDF } from "@/lib/driverBehaviorExport";
 import { formatDate } from "@/lib/formatters";
-import { BarChart3, CheckCircle, Eye, FileText, List, Loader2, MessageSquare, Trash2 } from "lucide-react";
+import { BarChart3, CheckCircle, Eye, FileText, List, Loader2, MessageSquare, Trash2, Video } from "lucide-react";
 import { useMemo, useState } from "react";
 import DriverBehaviorDetailsDialog from "./DriverBehaviorDetailsDialog";
 import DriverCoachingModal from "./DriverCoachingModal";
@@ -163,7 +162,7 @@ const DriverBehaviorTable = () => {
                     <TableHead>Driver</TableHead>
                     <TableHead>Fleet Number</TableHead>
                     <TableHead>Event Type</TableHead>
-                    <TableHead>Location</TableHead>
+                    <TableHead>Event Video</TableHead>
                     <TableHead>Severity</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Points</TableHead>
@@ -178,7 +177,20 @@ const DriverBehaviorTable = () => {
                       <TableCell className="font-medium">{event.driver_name}</TableCell>
                       <TableCell>{event.fleet_number || "N/A"}</TableCell>
                       <TableCell>{event.event_type}</TableCell>
-                      <TableCell>{event.location || "N/A"}</TableCell>
+                      <TableCell>
+                        {event.location && /^https?:\/\//i.test(event.location) ? (
+                          <button
+                            type="button"
+                            className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                            onClick={() => window.open(event.location!, '_blank', 'noopener,noreferrer')}
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            Event Video
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">No video</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={getSeverityVariant(event.severity || "medium")}>
                           {event.severity || "medium"}
@@ -242,7 +254,7 @@ const DriverBehaviorTable = () => {
                     <TableHead>Driver</TableHead>
                     <TableHead>Fleet Number</TableHead>
                     <TableHead>Event Type</TableHead>
-                    <TableHead>Location</TableHead>
+                    <TableHead>Event Video</TableHead>
                     <TableHead>Severity</TableHead>
                     <TableHead>Debriefed On</TableHead>
                     <TableHead className="text-right">Points</TableHead>
@@ -257,7 +269,20 @@ const DriverBehaviorTable = () => {
                       <TableCell className="font-medium">{event.driver_name}</TableCell>
                       <TableCell>{event.fleet_number || "N/A"}</TableCell>
                       <TableCell>{event.event_type}</TableCell>
-                      <TableCell>{event.location || "N/A"}</TableCell>
+                      <TableCell>
+                        {event.location && /^https?:\/\//i.test(event.location) ? (
+                          <button
+                            type="button"
+                            className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                            onClick={() => window.open(event.location!, '_blank', 'noopener,noreferrer')}
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            Event Video
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">No video</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={getSeverityVariant(event.severity || "medium")}>
                           {event.severity || "medium"}
