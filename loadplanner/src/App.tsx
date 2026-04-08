@@ -23,13 +23,14 @@ import LoadConsignmentsPage from "./pages/load-consignments";
 import BreakdownsPage from "./pages/BreakdownsPage";
 import ClientDashboardPage from "./pages/client-dashboard/ClientDashboardPage";
 import { MainLayout } from "./components/layout/MainLayout"; // Add this import if you have it
+import { lazyRetry } from "./lib/lazyRetry";
 
 // Lazy-loaded heavy pages (maps, charts, calendar)
-const CalendarPage = React.lazy(() => import("./pages/CalendarPage"));
-const DeliveriesDashboardPage = React.lazy(() => import("./pages/DeliveriesDashboardPage"));
-const LiveTrackingPage = React.lazy(() => import("./pages/LiveTrackingPage"));
-const ReportsPage = React.lazy(() => import("./pages/ReportsPage"));
-const ShareableTrackingPage = React.lazy(() => import("./pages/ShareableTrackingPage"));
+const CalendarPage = React.lazy(lazyRetry(() => import("./pages/CalendarPage")));
+const DeliveriesDashboardPage = React.lazy(lazyRetry(() => import("./pages/DeliveriesDashboardPage")));
+const LiveTrackingPage = React.lazy(lazyRetry(() => import("./pages/LiveTrackingPage")));
+const ReportsPage = React.lazy(lazyRetry(() => import("./pages/ReportsPage")));
+const ShareableTrackingPage = React.lazy(lazyRetry(() => import("./pages/ShareableTrackingPage")));
 
 const queryClient = new QueryClient({
   defaultOptions: {
