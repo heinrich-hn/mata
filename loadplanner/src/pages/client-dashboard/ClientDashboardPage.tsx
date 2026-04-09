@@ -2,7 +2,6 @@ import { ClientDashboardLayout } from '@/components/clients/ClientDashboardLayou
 import { useParams, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import ClientOverviewPage from './ClientOverviewPage';
 import ClientLiveMapPage from './ClientLiveMapPage';
-import ClientLoadsPage from './ClientLoadsPage';
 import ClientDeliveriesPage from './ClientDeliveriesPage';
 import ClientServiceHistoryPage from './ClientServiceHistoryPage';
 import ClientDocumentsPage from './ClientDocumentsPage';
@@ -32,7 +31,7 @@ export default function ClientDashboardPage() {
       <Routes>
         <Route index element={<ClientOverviewPage key={clientId} />} />
         <Route path="live-map" element={<ClientLiveMapPage key={clientId} />} />
-        <Route path="loads" element={<ClientLoadsPage key={clientId} />} />
+        <Route path="loads" element={<ClientDeliveriesPage key={clientId} />} />
         <Route path="deliveries" element={<ClientDeliveriesPage key={clientId} />} />
         <Route path="past-deliveries" element={<ClientServiceHistoryPage key={clientId} />} />
         <Route path="documents" element={<ClientDocumentsPage key={clientId} />} />

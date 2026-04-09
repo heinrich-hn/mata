@@ -387,75 +387,6 @@ export default function DeliveriesDashboardPage() {
     });
   }, [activeLoads, fleetVehicles, drivers, loads]);
 
-  // Group trucks by date category: Today, Upcoming, Past
-  const groupedTrucks = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const todayTrucks: TruckWithLoads[] = [];
-    const upcomingTrucks: TruckWithLoads[] = [];
-    const pastTrucks: TruckWithLoads[] = [];
-
-    for (const truck of trucksWithLoads) {
-      // Any truck with an in-transit load always goes to "Today"
-      const hasInTransit = truck.loads.some((l) => l.status === "in-transit");
-      if (hasInTransit) {
-        todayTrucks.push(truck);
-        continue;
-      }
-
-      // Check if any load falls on today
-      const hasTodayLoad = truck.loads.some((l) => {
-        const d = parseISO(l.loading_date);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime() === today.getTime();
-      });
-      if (hasTodayLoad) {
-        todayTrucks.push(truck);
-        continue;
-      }
-
-      // Check if any load is upcoming (future)
-      const hasUpcomingLoad = truck.loads.some((l) => {
-        const d = parseISO(l.loading_date);
-        d.setHours(0, 0, 0, 0);
-        return d >= tomorrow;
-      });
-      if (hasUpcomingLoad) {
-        upcomingTrucks.push(truck);
-        continue;
-      }
-
-      // All loads are in the past
-      pastTrucks.push(truck);
-    }
-
-    // Sort each group numerically by vehicle number (small to big)
-    const sortByVehicleNumber = (a: TruckWithLoads, b: TruckWithLoads) => {
-      if (a.vehicleId === "unassigned") return 1;
-      if (b.vehicleId === "unassigned") return -1;
-      const aNum = extractVehicleNumber(a.vehicleId);
-      const bNum = extractVehicleNumber(b.vehicleId);
-      if (aNum !== bNum) return aNum - bNum;
-      return a.vehicleId.localeCompare(b.vehicleId);
-    };
-    todayTrucks.sort(sortByVehicleNumber);
-    upcomingTrucks.sort(sortByVehicleNumber);
-
-    // Keep only the 3 most recent past trucks, then sort numerically
-    pastTrucks.sort((a, b) => {
-      const latestA = Math.max(...a.loads.map((l) => parseISO(l.loading_date).getTime()));
-      const latestB = Math.max(...b.loads.map((l) => parseISO(l.loading_date).getTime()));
-      return latestB - latestA;
-    });
-    const recentPastTrucks = pastTrucks.slice(0, 3);
-    recentPastTrucks.sort(sortByVehicleNumber);
-
-    return { todayTrucks, upcomingTrucks, pastTrucks: recentPastTrucks };
-  }, [trucksWithLoads]);
-
   if (loadsLoading) {
     return (
       <div className="p-6 space-y-6">
@@ -507,61 +438,19 @@ export default function DeliveriesDashboardPage() {
               </CardContent>
             </Card>
           ) : (
-            <>
-              {/* Today */}
-              {groupedTrucks.todayTrucks.length > 0 && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                    <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">
-                      Today — {format(new Date(), "dd MMM yyyy")}
-                    </h2>
-                    <Badge variant="secondary" className="text-[10px] px-2 py-0.5 rounded-full">
-                      {groupedTrucks.todayTrucks.length} {groupedTrucks.todayTrucks.length === 1 ? "truck" : "trucks"}
-                    </Badge>
-                  </div>
-                  {groupedTrucks.todayTrucks.map((truck) => (
-                    <TruckRow key={truck.vehicleId} truck={truck} />
-                  ))}
-                </div>
-              )}
-
-              {/* Upcoming */}
-              {groupedTrucks.upcomingTrucks.length > 0 && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-amber-500" />
-                    <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">
-                      Upcoming
-                    </h2>
-                    <Badge variant="secondary" className="text-[10px] px-2 py-0.5 rounded-full">
-                      {groupedTrucks.upcomingTrucks.length} {groupedTrucks.upcomingTrucks.length === 1 ? "truck" : "trucks"}
-                    </Badge>
-                  </div>
-                  {groupedTrucks.upcomingTrucks.map((truck) => (
-                    <TruckRow key={truck.vehicleId} truck={truck} />
-                  ))}
-                </div>
-              )}
-
-              {/* Past Deliveries */}
-              {groupedTrucks.pastTrucks.length > 0 && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-                    <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide">
-                      Recent Past Deliveries
-                    </h2>
-                    <Badge variant="secondary" className="text-[10px] px-2 py-0.5 rounded-full">
-                      {groupedTrucks.pastTrucks.length} {groupedTrucks.pastTrucks.length === 1 ? "truck" : "trucks"}
-                    </Badge>
-                  </div>
-                  {groupedTrucks.pastTrucks.map((truck) => (
-                    <TruckRow key={truck.vehicleId} truck={truck} />
-                  ))}
-                </div>
-              )}
-            </>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-foreground uppercase tracking-wide">
+                  Fleet Deliveries — {format(new Date(), "dd MMM yyyy")}
+                </h2>
+                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 rounded-full">
+                  {trucksWithLoads.length} {trucksWithLoads.length === 1 ? "truck" : "trucks"}
+                </Badge>
+              </div>
+              {trucksWithLoads.map((truck) => (
+                <TruckRow key={truck.vehicleId} truck={truck} />
+              ))}
+            </div>
           )}
         </div>
       </div>

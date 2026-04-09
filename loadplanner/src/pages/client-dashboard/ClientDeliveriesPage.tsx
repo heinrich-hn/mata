@@ -1,10 +1,27 @@
-// ClientDeliveriesPage.tsx — Professional list-based delivery tracking
+// ClientDeliveriesPage.tsx — Consolidated delivery tracking & load history
 import { FeedbackWidget } from '@/components/clients/FeedbackWidget';
 import { StatusBadge } from '@/components/trips/StatusBadge';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import type { ClientFeedback } from '@/hooks/useClientFeedback';
 import { useClientFeedback } from '@/hooks/useClientFeedback';
 import { useClientActiveLoads, useClientLoads } from '@/hooks/useClientLoads';
@@ -26,21 +43,25 @@ import {
 } from '@/lib/telematicsGuru';
 import { parseTimeWindow, timeToSASTMinutes } from '@/lib/timeWindow';
 import { cn, getLocationDisplayName, safeFormatDate } from '@/lib/utils';
+import { parseISO } from 'date-fns';
 import {
   ArrowRight,
   Box,
   Calendar,
   CheckCircle2,
   Clock,
+  Filter,
   Gauge,
   LogIn,
   LogOut,
   MapPin,
   Package,
+  Search,
   Truck,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 
 /* ——— Types ——— */
 
@@ -263,12 +284,66 @@ export default function ClientDeliveriesPage() {
     });
   }, [activeLoads, telematicsAssets, extraDepots]);
 
-  const recentDeliveries = useMemo(() => {
-    return allLoads
-      .filter((l) => l.status === 'delivered')
-      .sort((a, b) => new Date(b.offloading_date).getTime() - new Date(a.offloading_date).getTime())
-      .slice(0, 10);
-  }, [allLoads]);
+  // ── Loads table filtering (merged from Loads tab) ──
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchQuery = searchParams.get('q') || '';
+  const statusFilter = (searchParams.get('status') || 'all') as 'all' | 'scheduled' | 'in-transit' | 'delivered' | 'pending';
+  const dateFilter = (searchParams.get('date') || 'all') as 'all' | 'today' | 'week' | 'month';
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
+  const ITEMS_PER_PAGE = 20;
+
+  const updateParam = (key: string, value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === '' || value === 'all' || (key === 'page' && value === '1')) {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      if (key !== 'page') next.delete('page');
+      return next;
+    });
+  };
+
+  const filteredLoads = useMemo(() => {
+    let result = [...allLoads];
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((load) => {
+        const origin = getLocationDisplayName(load.origin).toLowerCase();
+        const destination = getLocationDisplayName(load.destination).toLowerCase();
+        return (
+          load.load_id.toLowerCase().includes(query) ||
+          origin.includes(query) ||
+          destination.includes(query) ||
+          load.fleet_vehicle?.vehicle_id?.toLowerCase().includes(query) ||
+          load.driver?.name?.toLowerCase().includes(query)
+        );
+      });
+    }
+    if (statusFilter !== 'all') {
+      result = result.filter((load) => load.status === statusFilter);
+    }
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      result = result.filter((load) => {
+        try {
+          const loadDate = parseISO(load.loading_date);
+          if (dateFilter === 'today') return loadDate >= today;
+          if (dateFilter === 'week') return loadDate >= weekAgo;
+          if (dateFilter === 'month') return loadDate >= monthAgo;
+        } catch { return false; }
+        return true;
+      });
+    }
+    return result;
+  }, [allLoads, searchQuery, statusFilter, dateFilter]);
+
+  const clearFilters = () => { setSearchParams({}); };
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || dateFilter !== 'all';
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -373,43 +448,148 @@ export default function ClientDeliveriesPage() {
         </CardContent>
       </Card>
 
-      {/* Recent Deliveries — Modern Card */}
+      {/* All Shipments — Searchable & Filterable */}
       <Card className="border-border/40 shadow-sm overflow-hidden">
         <CardHeader className="px-6 py-5 border-b border-border/40 bg-card">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-success/10 text-success">
-              <CheckCircle2 className="h-5 w-5" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-muted text-foreground">
+                <Package className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold tracking-tight">All Shipments</CardTitle>
+                <CardDescription className="mt-0.5">Search and filter your shipment history</CardDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle className="text-base font-semibold tracking-tight">Recent Deliveries</CardTitle>
-              <p className="text-sm text-muted-foreground mt-0.5">Last 10 completed shipments</p>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs">
+                <X className="h-3.5 w-3.5 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 mt-4">
+            <div className="flex-1 min-w-0 sm:min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by load ID, origin, destination..."
+                  className="pl-9"
+                  value={searchQuery}
+                  onChange={(e) => updateParam('q', e.target.value)}
+                />
+              </div>
             </div>
+            <Select value={statusFilter} onValueChange={(value) => updateParam('status', value)}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
+                <SelectItem value="in-transit">In Transit</SelectItem>
+                <SelectItem value="delivered">Delivered</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={dateFilter} onValueChange={(value) => updateParam('date', value)}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Date Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">Last 7 Days</SelectItem>
+                <SelectItem value="month">Last 30 Days</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {allLoading ? (
-            <div className="p-6 space-y-4">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            <div className="p-6 space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : recentDeliveries.length === 0 ? (
+          ) : filteredLoads.length === 0 ? (
             <EmptyState
-              icon={Box}
-              title="No completed deliveries yet"
-              description="Completed shipments will appear here"
+              icon={hasActiveFilters ? Filter : Box}
+              title={hasActiveFilters ? 'No loads match your filters' : 'No shipments yet'}
+              description={hasActiveFilters ? 'Try adjusting your search or filters' : 'Your shipments will appear here'}
             />
           ) : (
-            <div className="divide-y divide-border/40">
-              {recentDeliveries.map((load) => (
-                <RecentRow
-                  key={load.id}
-                  load={load}
-                  clientId={clientId!}
-                  feedback={feedbackByLoadId.get(load.id) ?? null}
-                />
-              ))}
-            </div>
+            <>
+              {/* Pagination header */}
+              {filteredLoads.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-between px-6 py-3 border-b border-border/40 text-sm text-muted-foreground">
+                  <span>
+                    Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredLoads.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredLoads.length)} of {filteredLoads.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => updateParam('page', String(currentPage - 1))}>
+                      Previous
+                    </Button>
+                    <span className="text-xs font-medium">
+                      Page {currentPage} of {Math.ceil(filteredLoads.length / ITEMS_PER_PAGE)}
+                    </span>
+                    <Button variant="outline" size="sm" disabled={currentPage * ITEMS_PER_PAGE >= filteredLoads.length} onClick={() => updateParam('page', String(currentPage + 1))}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Load ID</TableHead>
+                      <TableHead>Route</TableHead>
+                      <TableHead>Loading Date</TableHead>
+                      <TableHead>Delivery Date</TableHead>
+                      <TableHead>Vehicle</TableHead>
+                      <TableHead>Driver</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Feedback</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLoads
+                      .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+                      .map((load) => (
+                        <LoadRow key={load.id} load={load} clientId={clientId!} feedback={feedbackByLoadId.get(load.id) ?? null} />
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card List */}
+              <div className="md:hidden divide-y divide-border/40">
+                {filteredLoads
+                  .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+                  .map((load) => (
+                    <MobileLoadCard key={load.id} load={load} clientId={clientId!} feedback={feedbackByLoadId.get(load.id) ?? null} />
+                  ))}
+              </div>
+
+              {/* Bottom pagination */}
+              {filteredLoads.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-end gap-2 px-6 py-3 border-t border-border/40">
+                  <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => updateParam('page', String(currentPage - 1))}>
+                    Previous
+                  </Button>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Page {currentPage} of {Math.ceil(filteredLoads.length / ITEMS_PER_PAGE)}
+                  </span>
+                  <Button variant="outline" size="sm" disabled={currentPage * ITEMS_PER_PAGE >= filteredLoads.length} onClick={() => updateParam('page', String(currentPage + 1))}>
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -679,48 +859,104 @@ function DeliveryRow({ load }: { load: LoadWithETA }) {
   );
 }
 
-/** Recent delivery row with feedback — Clean modern design */
-function RecentRow({
-  load,
-  clientId,
-  feedback,
-}: {
-  load: Load;
-  clientId: string;
-  feedback: ClientFeedback | null;
-}) {
-  return (
-    <div className="px-6 py-4 hover:bg-muted/30 transition-colors">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="p-2 rounded-full bg-success/10 text-success flex-shrink-0">
-            <CheckCircle2 className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="font-mono text-sm font-medium text-foreground">{load.load_id}</p>
-              {feedback?.rating === 'unhappy' && (
-                <Badge variant="destructive" className="text-[10px] px-2 py-0.5 font-medium rounded-full">
-                  Issue Reported
-                </Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground truncate mt-1">
-              {getLocationDisplayName(load.origin)} → {getLocationDisplayName(load.destination)}
-            </p>
-          </div>
-        </div>
+/** Desktop table row for all-shipments table */
+function LoadRow({ load, clientId, feedback }: { load: Load; clientId: string; feedback: ClientFeedback | null }) {
+  const origin = getLocationDisplayName(load.origin);
+  const destination = getLocationDisplayName(load.destination);
 
-        <div className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
-          <div className="text-right">
-            <p className="text-xs font-medium text-success">Delivered</p>
-            <p className="text-xs text-muted-foreground">{safeFormatDate(load.offloading_date, 'dd MMM yyyy')}</p>
-          </div>
-          <div className="w-36">
-            <FeedbackWidget loadId={load.id} clientId={clientId} existingFeedback={feedback} />
-          </div>
+  return (
+    <TableRow className="hover:bg-muted/30">
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <Package className="h-4 w-4 text-primary" />
+          <span className="font-semibold">{load.load_id}</span>
         </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1 text-sm">
+          <span>{origin}</span>
+          <span className="text-muted-foreground">→</span>
+          <span>{destination}</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1.5 text-sm">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+          {safeFormatDate(load.loading_date, 'dd MMM yyyy')}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1.5 text-sm">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+          {safeFormatDate(load.offloading_date, 'dd MMM yyyy')}
+        </div>
+      </TableCell>
+      <TableCell>
+        {load.fleet_vehicle ? (
+          <div className="flex items-center gap-1.5">
+            <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+            <span>{load.fleet_vehicle.vehicle_id}</span>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </TableCell>
+      <TableCell>
+        {load.driver ? <span>{load.driver.name}</span> : <span className="text-muted-foreground">—</span>}
+      </TableCell>
+      <TableCell>
+        <StatusBadge status={load.status} />
+      </TableCell>
+      <TableCell className="text-right">
+        {load.status === 'delivered' ? (
+          <FeedbackWidget loadId={load.id} clientId={clientId} existingFeedback={feedback} compact />
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/** Mobile card for all-shipments list */
+function MobileLoadCard({ load, clientId, feedback }: { load: Load; clientId: string; feedback: ClientFeedback | null }) {
+  const origin = getLocationDisplayName(load.origin);
+  const destination = getLocationDisplayName(load.destination);
+
+  return (
+    <div className="px-6 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Package className="h-4 w-4 text-primary" />
+          <span className="font-semibold text-sm">{load.load_id}</span>
+        </div>
+        <StatusBadge status={load.status} />
       </div>
+      <div className="text-sm text-muted-foreground truncate">
+        {origin} → {destination}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <Calendar className="h-3 w-3" />
+          Load: {safeFormatDate(load.loading_date, 'dd MMM')}
+        </div>
+        <div className="flex items-center gap-1">
+          <Calendar className="h-3 w-3" />
+          Del: {safeFormatDate(load.offloading_date, 'dd MMM')}
+        </div>
+        {load.fleet_vehicle && (
+          <div className="flex items-center gap-1">
+            <Truck className="h-3 w-3" />
+            {load.fleet_vehicle.vehicle_id}
+          </div>
+        )}
+        {load.driver && <span>{load.driver.name}</span>}
+      </div>
+      {load.status === 'delivered' && (
+        <div className="pt-2 border-t border-border/40">
+          <FeedbackWidget loadId={load.id} clientId={clientId} existingFeedback={feedback} compact />
+        </div>
+      )}
     </div>
   );
 }

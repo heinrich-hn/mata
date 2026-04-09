@@ -525,8 +525,8 @@ function PastDeliveryRow({
             <StatusBadge status={load.status} size="sm" />
           </div>
 
-          <div className="w-36 flex-shrink-0">
-            <FeedbackWidget loadId={load.id} clientId={clientId} existingFeedback={feedback} />
+          <div className="w-32 flex-shrink-0">
+            <FeedbackWidget loadId={load.id} clientId={clientId} existingFeedback={feedback} compact />
           </div>
         </div>
 
@@ -589,7 +589,7 @@ function PastDeliveryRow({
           )}
         </div>
         <div className="pt-1">
-          <FeedbackWidget loadId={load.id} clientId={clientId} existingFeedback={feedback} />
+          <FeedbackWidget loadId={load.id} clientId={clientId} existingFeedback={feedback} compact />
         </div>
 
         <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40 text-xs">

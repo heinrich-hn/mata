@@ -14,7 +14,6 @@ interface ClientDashboardLayoutProps {
 const navItems = [
   { title: 'Overview', path: '' },
   { title: 'Live Map', path: 'live-map' },
-  { title: 'Loads', path: 'loads' },
   { title: 'Deliveries', path: 'deliveries' },
   { title: 'Past Deliveries', path: 'past-deliveries' },
   { title: 'Documents', path: 'documents' },

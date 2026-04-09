@@ -1,6 +1,39 @@
 {
   "rewrites": [
     {
+      "source": "/track",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(WhatsApp|facebookexternalhit|Facebot|Twitterbot|Slackbot|LinkedInBot|Discordbot|TelegramBot|Googlebot|bingbot|Pinterestbot|redditbot|Embedly|Quora|Showyoubot|outbrain|vkShare|W3C_Validator).*"
+        }
+      ],
+      "destination": "/api/og?type=track"
+    },
+    {
+      "source": "/portal/:clientId",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(WhatsApp|facebookexternalhit|Facebot|Twitterbot|Slackbot|LinkedInBot|Discordbot|TelegramBot|Googlebot|bingbot|Pinterestbot|redditbot|Embedly|Quora|Showyoubot|outbrain|vkShare|W3C_Validator).*"
+        }
+      ],
+      "destination": "/api/og?type=portal&clientId=:clientId"
+    },
+    {
+      "source": "/portal/:clientId/:path*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(WhatsApp|facebookexternalhit|Facebot|Twitterbot|Slackbot|LinkedInBot|Discordbot|TelegramBot|Googlebot|bingbot|Pinterestbot|redditbot|Embedly|Quora|Showyoubot|outbrain|vkShare|W3C_Validator).*"
+        }
+      ],
+      "destination": "/api/og?type=portal&clientId=:clientId"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

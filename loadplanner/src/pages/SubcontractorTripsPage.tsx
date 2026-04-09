@@ -243,9 +243,19 @@ export default function SubcontractorTripsPage() {
     const _updateLoad = useUpdateLoad();
     const _deleteLoad = useDeleteLoad();
 
-    // Filter for subcontractor loads only (SC- prefix)
+    // Filter for subcontractor loads: SC- prefix OR has subcontractor info in time_window
     const subcontractorLoads = useMemo(
-        () => loads.filter((load) => load.load_id.startsWith("SC-")),
+        () => loads.filter((load) => {
+            if (load.load_id.startsWith("SC-")) return true;
+            try {
+                const raw = typeof load.time_window === "string"
+                    ? JSON.parse(load.time_window || "{}")
+                    : (load.time_window ?? {});
+                return !!raw.subcontractor?.supplierId;
+            } catch {
+                return false;
+            }
+        }),
         [loads],
     );
 

@@ -175,6 +175,17 @@ const BatchDebriefModal = ({
     setSelectedRecords(newSelected);
   };
 
+  // Auto-populate signed_by from the driver name of selected records
+  useEffect(() => {
+    if (selectedRecords.size > 0) {
+      const firstSelectedId = Array.from(selectedRecords)[0];
+      const record = fleetRecords.find(r => r.id === firstSelectedId);
+      if (record?.driver_name) {
+        setFormData(prev => ({ ...prev, debrief_signed_by: record.driver_name! }));
+      }
+    }
+  }, [selectedRecords, fleetRecords]);
+
   const validate = (requireSignature: boolean = true) => {
     const newErrors: Record<string, string> = {};
 
@@ -304,10 +315,20 @@ const BatchDebriefModal = ({
   };
 
   /**
-   * Share selected records via WhatsApp AND mark them as debriefed
+   * Share selected records via WhatsApp AND mark them as debriefed.
+   * Sending to WhatsApp automatically counts as debriefed — driver name is auto-filled.
    */
   const handleBatchWhatsappShare = async () => {
-    if (!validate(true)) return;
+    // Auto-resolve signed_by from driver name if not manually set
+    const selectedRecordsData = fleetRecords.filter(r => Array.from(selectedRecords).includes(r.id));
+    const autoSignedBy = formData.debrief_signed_by
+      || selectedRecordsData.find(r => r.driver_name)?.driver_name
+      || 'Driver';
+
+    if (selectedRecords.size === 0) {
+      setErrors({ records: 'Please select at least one record to process' });
+      return;
+    }
 
     // Validate phone number
     if (!formData.whatsapp_phone) {
@@ -321,13 +342,12 @@ const BatchDebriefModal = ({
 
     try {
       const recordIds = Array.from(selectedRecords);
-      const selectedRecordsData = fleetRecords.filter(r => recordIds.includes(r.id));
 
-      // Create the batch debrief data
+      // Create the batch debrief data — auto debriefed when shared via WhatsApp
       const batchData: BatchDebriefData = {
         recordIds,
         debrief_notes: formData.debrief_notes,
-        debrief_signed_by: formData.debrief_signed_by,
+        debrief_signed_by: autoSignedBy,
         debrief_signed_at: new Date().toISOString(),
         debrief_date: new Date().toISOString().split('T')[0],
         whatsapp_shared: true, // Mark as shared via WhatsApp
@@ -577,13 +597,12 @@ const BatchDebriefModal = ({
 
           <div className="grid grid-cols-2 gap-2">
             <Input
-              label="Signed By"
+              label="Signed By (Driver)"
               value={formData.debrief_signed_by}
               onChange={(e) => setFormData({ ...formData, debrief_signed_by: e.target.value })}
               error={errors.debrief_signed_by}
               disabled={isProcessing || isSharing}
-              placeholder="Your name"
-              required
+              placeholder="Auto-filled from driver"
               className="text-sm"
             />
 
@@ -619,7 +638,7 @@ const BatchDebriefModal = ({
         <Alert className="py-2">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="text-xs">
-            This will mark {selectedRecords.size} record(s) as completed.
+            This will mark {selectedRecords.size} record(s) as debriefed. Sending via WhatsApp automatically completes the debrief.
           </AlertDescription>
         </Alert>
 
