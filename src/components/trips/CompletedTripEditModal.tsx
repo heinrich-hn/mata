@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWialonVehicles } from '@/hooks/useWialonVehicles';
+import { ADDITIONAL_REVENUE_REASONS } from '@/constants/additionalRevenueReasons';
 import { EditHistoryRecord } from '@/types/forms';
 import { AlertTriangle, History, Save, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -36,6 +37,8 @@ interface Trip {
   distance_km?: number;
   description?: string;
   zero_revenue_comment?: string;
+  additional_revenue?: number;
+  additional_revenue_reason?: string;
   edit_history?: EditHistoryRecord[];
   vehicles?: { id: string; fleet_number: string | null; registration: string | null } | null;
   wialon_vehicles?: { id: string; fleet_number: string | null; name: string | null } | null;
@@ -82,6 +85,8 @@ const CompletedTripEditModal = ({
     ending_km: trip.ending_km?.toString() || '0',
     description: trip.description || '',
     zero_revenue_comment: trip.zero_revenue_comment || '',
+    additional_revenue: trip.additional_revenue?.toString() || '',
+    additional_revenue_reason: trip.additional_revenue_reason || '',
   });
 
   const [editReason, setEditReason] = useState('');
@@ -107,6 +112,8 @@ const CompletedTripEditModal = ({
         ending_km: trip.ending_km?.toString() || '0',
         description: trip.description || '',
         zero_revenue_comment: trip.zero_revenue_comment || '',
+        additional_revenue: trip.additional_revenue?.toString() || '',
+        additional_revenue_reason: trip.additional_revenue_reason || '',
       });
       setEditReason('');
       setCustomReason('');
@@ -218,6 +225,8 @@ const CompletedTripEditModal = ({
       distance_km: calculatedDistance,
       description: formData.description,
       zero_revenue_comment: formData.zero_revenue_comment || undefined,
+      additional_revenue: formData.additional_revenue ? Number(formData.additional_revenue) : undefined,
+      additional_revenue_reason: formData.additional_revenue_reason || undefined,
     };
 
     // Resolve missing revenue alert if we're adding a zero revenue comment
@@ -518,6 +527,40 @@ const CompletedTripEditModal = ({
                 </p>
               </div>
             )}
+
+            {/* Additional Revenue */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Additional Revenue</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.additional_revenue}
+                  onChange={(e) => handleChange('additional_revenue', e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground">Extra revenue beyond the base amount</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Reason</Label>
+                <Select
+                  value={formData.additional_revenue_reason || undefined}
+                  onValueChange={(value) => handleChange('additional_revenue_reason', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ADDITIONAL_REVENUE_REASONS.map((reason) => (
+                      <SelectItem key={reason.value} value={reason.value}>
+                        {reason.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
 
           {/* Kilometer Tracking Section */}

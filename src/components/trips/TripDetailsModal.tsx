@@ -30,6 +30,8 @@ import FlagResolutionModal from './FlagResolutionModal';
 import TripCostManager from './TripCostManager';
 import TripCycleTrackerView from './TripCycleTrackerView';
 import { evaluateKmSchedules, updateVehicleOdometer } from '@/lib/maintenanceKmTracking';
+import { useTripKmValidation } from '@/hooks/useTripKmValidation';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface Trip {
   id: string;
@@ -45,6 +47,8 @@ interface Trip {
   status?: string;
   payment_status?: string;
   base_revenue?: number;
+  additional_revenue?: number;
+  additional_revenue_reason?: string;
   revenue_currency?: string;
   starting_km?: number;
   ending_km?: number;
@@ -204,6 +208,14 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
   const [showEditDialog, setShowEditDialog] = useState(false);
   const { toast } = useToast();
 
+  // KM mismatch validation
+  const kmValidation = useTripKmValidation(
+    trip?.id,
+    trip?.fleet_vehicle_id,
+    trip?.starting_km,
+    trip?.departure_date,
+  );
+
   const fetchCosts = useCallback(async () => {
     if (!trip) return;
 
@@ -250,6 +262,16 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
     }
   }, [trip, isOpen, fetchCosts]); const handleCompleteTrip = async () => {
     if (!trip) return;
+
+    // Check for KM mismatch
+    if (kmValidation.hasMismatch) {
+      toast({
+        title: 'Cannot Complete Trip — KM Mismatch',
+        description: kmValidation.message || 'Starting KM does not match previous trip ending KM for this vehicle.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     // Check for unresolved flags
     const unresolvedFlags = costs.filter(c => c.is_flagged && c.investigation_status !== 'resolved');
@@ -324,7 +346,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
   const unresolvedFlags = flaggedCosts.filter(c => c.investigation_status !== 'resolved');
   const totalCostsZAR = costs.filter(c => (c.currency || 'ZAR') === 'ZAR').reduce((sum, c) => sum + c.amount, 0);
   const totalCostsUSD = costs.filter(c => c.currency === 'USD').reduce((sum, c) => sum + c.amount, 0);
-  const canComplete = trip.status === 'active' && unresolvedFlags.length === 0;
+  const canComplete = trip.status === 'active' && unresolvedFlags.length === 0 && !kmValidation.hasMismatch;
 
   return (
     <>
@@ -393,6 +415,18 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
                 </Card>
               )}
 
+              {/* KM Mismatch Warning */}
+              {kmValidation.hasMismatch && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Kilometer Mismatch — Cannot Complete Trip</AlertTitle>
+                  <AlertDescription>
+                    {kmValidation.message}
+                    {' '}Please correct the starting KM before completing this trip.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Trip Information */}
               <Card>
                 <CardHeader>
@@ -442,8 +476,14 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
                       <div>
                         <p className="text-sm text-muted-foreground">Revenue</p>
                         <p className="font-medium text-green-600">
-                          {formatCurrency(trip.base_revenue || 0, trip.revenue_currency)}
+                          {formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}
                         </p>
+                        {trip.additional_revenue && trip.additional_revenue > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Base: {formatCurrency(trip.base_revenue || 0, trip.revenue_currency)} + Additional: {formatCurrency(trip.additional_revenue, trip.revenue_currency)}
+                            {trip.additional_revenue_reason && ` (${trip.additional_revenue_reason.replace(/_/g, ' ')})`}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -515,7 +555,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
                   </div>
                 </CardContent>
               </Card>
-            </TabsContent>
+            </TabsContent >
 
             <TabsContent value="costs" className="space-y-4">
               <TripCostManager
@@ -537,9 +577,9 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
             <TabsContent value="cycle-tracker" className="space-y-4">
               <TripCycleTrackerView tripId={trip.id} tripNumber={trip.trip_number} route={trip.route} />
             </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
+          </Tabs >
+        </DialogContent >
+      </Dialog >
 
       <EditTripDialog
         isOpen={showEditDialog}

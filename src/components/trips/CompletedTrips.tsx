@@ -88,6 +88,8 @@ interface Trip {
   vehicle_id?: string;
   fleet_number?: string;
   base_revenue?: number;
+  additional_revenue?: number;
+  additional_revenue_reason?: string;
   revenue_currency?: string;
   revenue_type?: 'per_load' | 'per_km';
   rate_per_km?: number;
@@ -263,7 +265,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
 
   // Stats calculation
   const stats = useMemo(() => {
-    const totalRevenue = filteredTrips.reduce((sum, t) => sum + (t.base_revenue || 0), 0);
+    const totalRevenue = filteredTrips.reduce((sum, t) => sum + (t.base_revenue || 0) + (t.additional_revenue || 0), 0);
     const totalExpenses = filteredTrips.reduce((sum, t) => {
       const tripExpenses = [...(t.costs || []), ...(t.additional_costs || [])].reduce((s, c) => s + (c.amount || 0), 0);
       return sum + tripExpenses;
@@ -404,7 +406,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
   };
 
   const calculateProfit = (trip: Trip): { amount: number; currency: string } | null => {
-    const revenue = trip.base_revenue || 0;
+    const revenue = (trip.base_revenue || 0) + (trip.additional_revenue || 0);
     const expenses = [...(trip.costs || []), ...(trip.additional_costs || [])].reduce((sum, c) => sum + (c.amount || 0), 0);
     const currency = trip.revenue_currency || 'USD';
     return { amount: revenue - expenses, currency };
@@ -768,7 +770,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                 : formatWeekRange(weekKey);
 
               // Calculate week totals
-              const weekRevenue = weekTrips.reduce((sum, t) => sum + (t.base_revenue || 0), 0);
+              const weekRevenue = weekTrips.reduce((sum, t) => sum + (t.base_revenue || 0) + (t.additional_revenue || 0), 0);
               const weekExpenses = weekTrips.reduce((sum, t) => {
                 return sum + [...(t.costs || []), ...(t.additional_costs || [])].reduce((s, c) => s + (c.amount || 0), 0);
               }, 0);
@@ -866,7 +868,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                                       </Badge>
                                     </div>
                                     <span className="text-sm font-medium text-emerald-600">
-                                      {formatCurrency(fleetTrips.reduce((sum, t) => sum + (t.base_revenue || 0), 0))}
+                                      {formatCurrency(fleetTrips.reduce((sum, t) => sum + (t.base_revenue || 0) + (t.additional_revenue || 0), 0))}
                                     </span>
                                   </div>
                                 </CollapsibleTrigger>
@@ -1033,7 +1035,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                                                     </TooltipContent>
                                                   </Tooltip>
                                                 ) : (
-                                                  <span className="text-emerald-600">{formatCurrency(trip.base_revenue || 0, trip.revenue_currency)}</span>
+                                                  <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
                                                 )}
                                               </td>
                                               <td className="py-2.5 px-3 text-right tabular-nums font-medium text-rose-600">
@@ -1226,7 +1228,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                               </TooltipContent>
                             </Tooltip>
                           ) : (
-                            <span className="text-emerald-600">{formatCurrency(trip.base_revenue || 0, trip.revenue_currency)}</span>
+                            <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
                           )}
                         </td>
                         <td className="py-2.5 px-3 text-right tabular-nums font-medium text-rose-600">

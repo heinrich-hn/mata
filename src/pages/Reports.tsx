@@ -89,6 +89,7 @@ type Trip = {
     id: string;
     trip_number?: string;
     fleet_vehicle_id?: string;
+    fleet_number?: string;
     driver_name?: string;
     origin?: string;
     destination?: string;
@@ -98,6 +99,7 @@ type Trip = {
     arrival_date?: string;
     planned_arrival_date?: string;
     base_revenue?: number;
+    additional_revenue?: number;
     distance_km?: number;
     rate_per_km?: number;
     final_invoice_amount?: number;
@@ -278,13 +280,16 @@ const Reports = () => {
         return cards.map((c: JobCard) => ({ ...c, vehicles: c.vehicle_id ? vehicleMap.get(c.vehicle_id) || null : null }));
     };
 
-    const fetchTrips = async (): Promise<Trip[]> => {
+    const fetchTripsWithFleet = async (): Promise<Trip[]> => {
         const { data, error } = await supabase
             .from("trips")
-            .select("*")
-            .order("created_at", { ascending: false });
+            .select("*, vehicles:fleet_vehicle_id(fleet_number)")
+            .order("departure_date", { ascending: true });
         if (error) throw error;
-        return (data || []) as Trip[];
+        return (data || []).map((t: Record<string, unknown>) => ({
+            ...t,
+            fleet_number: (t.vehicles as { fleet_number?: string } | null)?.fleet_number || null,
+        })) as Trip[];
     };
 
     const fetchDrivers = async (): Promise<Driver[]> => {
@@ -782,18 +787,48 @@ const Reports = () => {
                     description: "Complete trip register with route, driver, revenue, and status",
                     formats: ["excel", "pdf"],
                     onExport: async (fmt) => {
-                        const trips = await fetchTrips();
-                        const headers = ["Trip #", "Fleet", "Driver", "Origin", "Destination", "Status", "Start Date", "End Date", "Base Revenue", "Actual Cost"];
+                        const trips = await fetchTripsWithFleet();
+
+                        // Sort by fleet then departure for gap calculation
+                        const sortedByFleet = [...trips].sort((a, b) => {
+                            const fa = a.fleet_number || '';
+                            const fb = b.fleet_number || '';
+                            if (fa !== fb) return fa.localeCompare(fb);
+                            const da = new Date(a.departure_date || a.planned_departure_date || '').getTime() || 0;
+                            const db = new Date(b.departure_date || b.planned_departure_date || '').getTime() || 0;
+                            return da - db;
+                        });
+
+                        // Build a map of tripId → gap days from previous trip on same fleet
+                        const gapMap = new Map<string, number>();
+                        const prevArrivalByFleet = new Map<string, Date>();
+                        for (const t of sortedByFleet) {
+                            const fn = t.fleet_number;
+                            const dep = t.departure_date || t.planned_departure_date;
+                            const arr = t.arrival_date || t.planned_arrival_date;
+                            if (fn && dep) {
+                                const prev = prevArrivalByFleet.get(fn);
+                                if (prev) {
+                                    const gap = Math.max(0, Math.floor((new Date(dep).getTime() - prev.getTime()) / 86400000));
+                                    gapMap.set(t.id, gap);
+                                }
+                            }
+                            if (fn && arr) prevArrivalByFleet.set(fn, new Date(arr));
+                        }
+
+                        const headers = ["Trip #", "Fleet", "Driver", "Origin", "Destination", "Status", "Start Date", "End Date", "Revenue", "Additional Revenue", "Gap Days", "Actual Cost"];
                         const rows = trips.map((t: Trip) => [
                             t.trip_number || t.id?.slice(0, 8),
-                            t.fleet_vehicle_id?.slice(0, 8) || "-",
+                            t.fleet_number || "-",
                             t.driver_name || "-",
                             t.origin || "-",
                             t.destination || "-",
                             t.status || "-",
                             (t.departure_date || t.planned_departure_date) ? new Date((t.departure_date || t.planned_departure_date)!).toLocaleDateString() : "-",
                             (t.arrival_date || t.planned_arrival_date) ? new Date((t.arrival_date || t.planned_arrival_date)!).toLocaleDateString() : "-",
-                            t.base_revenue != null ? Number(t.base_revenue).toFixed(2) : "0.00",
+                            Number((Number(t.base_revenue) || 0) + (Number(t.additional_revenue) || 0)).toFixed(2),
+                            t.additional_revenue ? Number(t.additional_revenue).toFixed(2) : "0.00",
+                            gapMap.has(t.id) ? gapMap.get(t.id)! : "-",
                             t.distance_km != null && t.rate_per_km != null ? Number(Number(t.distance_km) * Number(t.rate_per_km)).toFixed(2) : "-",
                         ]);
                         if (fmt === "excel") {
@@ -803,7 +838,7 @@ const Reports = () => {
                                 headers, rows,
                                 cellStyler: (row, col) => col === 6 ? statusColours[String(row[5]).toLowerCase()] : undefined,
                             });
-                            const totalRevenue = trips.reduce((s, t) => s + (Number(t.base_revenue) || 0), 0);
+                            const totalRevenue = trips.reduce((s, t) => s + (Number(t.base_revenue) || 0) + (Number(t.additional_revenue) || 0), 0);
                             const totalCost = trips.reduce((s, t) => s + (Number(t.final_invoice_amount) || 0), 0);
                             addSummarySheet(wb, "Summary", {
                                 title: "TRIPS SUMMARY",
@@ -819,6 +854,137 @@ const Reports = () => {
                             await exportGenericPdf("ALL TRIPS REPORT", headers, rows.map(r => r.map(String)),
                                 `Trips_${new Date().toISOString().split("T")[0]}.pdf`);
                         }
+                    },
+                },
+                {
+                    id: "trips-fleet-gap-days",
+                    label: "Fleet Gap Days",
+                    description: "Days between last offloading and next loading per fleet — weekly & monthly",
+                    formats: ["excel"],
+                    onExport: async () => {
+                        const trips = await fetchTripsWithFleet();
+
+                        // Only trips with fleet_number and at least one date
+                        const dated = trips.filter(
+                            (t) => t.fleet_number && (t.departure_date || t.planned_departure_date) && (t.arrival_date || t.planned_arrival_date),
+                        );
+
+                        // Group by fleet_number, sorted by departure date
+                        const byFleet = new Map<string, Trip[]>();
+                        for (const t of dated) {
+                            const fn = t.fleet_number!;
+                            if (!byFleet.has(fn)) byFleet.set(fn, []);
+                            byFleet.get(fn)!.push(t);
+                        }
+                        for (const arr of byFleet.values()) {
+                            arr.sort((a, b) => {
+                                const da = new Date(a.departure_date || a.planned_departure_date!).getTime();
+                                const db = new Date(b.departure_date || b.planned_departure_date!).getTime();
+                                return da - db;
+                            });
+                        }
+
+                        // Compute per-trip gap: days between previous trip's arrival and this trip's departure
+                        type GapRow = { fleet: string; tripNumber: string; prevTripNumber: string; prevArrival: string; nextDeparture: string; gapDays: number };
+                        const gapRows: GapRow[] = [];
+                        for (const [fleet, fleetTrips] of byFleet.entries()) {
+                            for (let i = 1; i < fleetTrips.length; i++) {
+                                const prev = fleetTrips[i - 1];
+                                const curr = fleetTrips[i];
+                                const prevEnd = new Date(prev.arrival_date || prev.planned_arrival_date!);
+                                const currStart = new Date(curr.departure_date || curr.planned_departure_date!);
+                                const gap = Math.max(0, Math.floor((currStart.getTime() - prevEnd.getTime()) / 86400000));
+                                gapRows.push({
+                                    fleet,
+                                    tripNumber: curr.trip_number || curr.id.slice(0, 8),
+                                    prevTripNumber: prev.trip_number || prev.id.slice(0, 8),
+                                    prevArrival: prevEnd.toLocaleDateString(),
+                                    nextDeparture: currStart.toLocaleDateString(),
+                                    gapDays: gap,
+                                });
+                            }
+                        }
+
+                        // --- Weekly summary per fleet ---
+                        const weekKey = (d: Date) => {
+                            const jan1 = new Date(d.getFullYear(), 0, 1);
+                            const weekNum = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
+                            return `${d.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+                        };
+                        const weeklyMap = new Map<string, { totalGap: number; count: number }>();
+                        for (const r of gapRows) {
+                            const dep = new Date(r.nextDeparture);
+                            const key = `${r.fleet}||${weekKey(dep)}`;
+                            const entry = weeklyMap.get(key) || { totalGap: 0, count: 0 };
+                            entry.totalGap += r.gapDays;
+                            entry.count += 1;
+                            weeklyMap.set(key, entry);
+                        }
+                        const weeklyRows = [...weeklyMap.entries()]
+                            .map(([key, v]) => {
+                                const [fleet, week] = key.split("||");
+                                return [fleet, week, v.count, v.totalGap, v.count > 0 ? (v.totalGap / v.count).toFixed(1) : "0"];
+                            })
+                            .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
+
+                        // --- Monthly summary per fleet ---
+                        const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                        const monthlyMap = new Map<string, { totalGap: number; count: number }>();
+                        for (const r of gapRows) {
+                            const dep = new Date(r.nextDeparture);
+                            const key = `${r.fleet}||${monthKey(dep)}`;
+                            const entry = monthlyMap.get(key) || { totalGap: 0, count: 0 };
+                            entry.totalGap += r.gapDays;
+                            entry.count += 1;
+                            monthlyMap.set(key, entry);
+                        }
+                        const monthlyRows = [...monthlyMap.entries()]
+                            .map(([key, v]) => {
+                                const [fleet, month] = key.split("||");
+                                return [fleet, month, v.count, v.totalGap, v.count > 0 ? (v.totalGap / v.count).toFixed(1) : "0"];
+                            })
+                            .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
+
+                        // Build Excel workbook
+                        const wb = createWorkbook();
+
+                        // Tab 1: Detail
+                        addStyledSheet(wb, "Gap Details", {
+                            title: "FLEET GAP DAYS — DETAIL",
+                            subtitle: "Days between last offloading (arrival) and next loading (departure) per fleet",
+                            headers: ["Fleet", "Prev Trip #", "Prev Arrival", "Next Trip #", "Next Departure", "Gap Days"],
+                            rows: gapRows.map((r) => [r.fleet, r.prevTripNumber, r.prevArrival, r.tripNumber, r.nextDeparture, r.gapDays]),
+                        });
+
+                        // Tab 2: Weekly
+                        addStyledSheet(wb, "Weekly", {
+                            title: "FLEET GAP DAYS — WEEKLY",
+                            headers: ["Fleet", "Week", "Gaps", "Total Gap Days", "Avg Gap Days"],
+                            rows: weeklyRows,
+                        });
+
+                        // Tab 3: Monthly
+                        addStyledSheet(wb, "Monthly", {
+                            title: "FLEET GAP DAYS — MONTHLY",
+                            headers: ["Fleet", "Month", "Gaps", "Total Gap Days", "Avg Gap Days"],
+                            rows: monthlyRows,
+                        });
+
+                        // Tab 4: Summary
+                        const totalGapDays = gapRows.reduce((s, r) => s + r.gapDays, 0);
+                        const fleetsWithGaps = new Set(gapRows.filter((r) => r.gapDays > 0).map((r) => r.fleet)).size;
+                        addSummarySheet(wb, "Summary", {
+                            title: "FLEET GAP DAYS SUMMARY",
+                            rows: [
+                                ["Fleets Analysed", byFleet.size],
+                                ["Total Gaps Measured", gapRows.length],
+                                ["Total Gap Days", totalGapDays],
+                                ["Average Gap (days)", gapRows.length > 0 ? (totalGapDays / gapRows.length).toFixed(1) : "0"],
+                                ["Fleets with Gaps > 0", fleetsWithGaps],
+                            ],
+                        });
+
+                        await saveWorkbook(wb, `Fleet_Gap_Days_${new Date().toISOString().split("T")[0]}.xlsx`);
                     },
                 },
             ],

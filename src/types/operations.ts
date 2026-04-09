@@ -27,6 +27,8 @@ export interface Trip {
   revenue_currency?: 'ZAR' | 'USD';
   revenue_type?: 'per_load' | 'per_km';
   rate_per_km?: number;
+  additional_revenue?: number;
+  additional_revenue_reason?: string;
   status: 'active' | 'completed' | 'cancelled' | 'paid';
   payment_status: 'unpaid' | 'partial' | 'paid';
   payment_amount?: number;

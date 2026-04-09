@@ -8604,6 +8604,8 @@ export type Database = {
           actual_arrival_date: string | null
           actual_departure_date: string | null
           additional_costs: Json | null
+          additional_revenue: number | null
+          additional_revenue_reason: string | null
           arrival_date: string | null
           auto_completed_at: string | null
           auto_completed_reason: string | null
@@ -8676,6 +8678,8 @@ export type Database = {
           actual_arrival_date?: string | null
           actual_departure_date?: string | null
           additional_costs?: Json | null
+          additional_revenue?: number | null
+          additional_revenue_reason?: string | null
           arrival_date?: string | null
           auto_completed_at?: string | null
           auto_completed_reason?: string | null
@@ -8748,6 +8752,8 @@ export type Database = {
           actual_arrival_date?: string | null
           actual_departure_date?: string | null
           additional_costs?: Json | null
+          additional_revenue?: number | null
+          additional_revenue_reason?: string | null
           arrival_date?: string | null
           auto_completed_at?: string | null
           auto_completed_reason?: string | null

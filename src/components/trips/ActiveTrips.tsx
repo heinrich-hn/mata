@@ -41,6 +41,8 @@ import {
   X
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import TripExportDialog from './TripExportDialog';
 
 // Helper function to get week key (Monday of the week)
@@ -86,7 +88,10 @@ interface Trip {
   client_name?: string;
   vehicle_id?: string;
   fleet_number?: string;
+  fleet_vehicle_id?: string;
   base_revenue?: number;
+  additional_revenue?: number;
+  additional_revenue_reason?: string;
   revenue_currency?: string;
   distance_km?: number;
   empty_km?: number;
@@ -130,7 +135,58 @@ const ActiveTrips = ({
   isLoading = false
 }: ActiveTripsProps) => {
   const { userName } = useAuth();
-  
+
+  // Compute KM mismatches: for each trip, check if starting_km matches previous trip's ending_km on same vehicle
+  const vehicleIds = useMemo(() => [...new Set(trips.map(t => t.fleet_vehicle_id || t.vehicle_id).filter(Boolean))] as string[], [trips]);
+
+  const { data: previousEndingKmMap } = useQuery({
+    queryKey: ['previous-ending-km', vehicleIds.join(',')],
+    queryFn: async () => {
+      if (vehicleIds.length === 0) return new Map<string, { ending_km: number; trip_number: string }[]>();
+      // For each vehicle, get all trips with ending_km ordered by departure_date
+      const { data, error } = await supabase
+        .from('trips')
+        .select('id, fleet_vehicle_id, trip_number, ending_km, departure_date')
+        .in('fleet_vehicle_id', vehicleIds)
+        .not('ending_km', 'is', null)
+        .order('departure_date', { ascending: false });
+
+      if (error) return new Map<string, { ending_km: number; trip_number: string }[]>();
+
+      const map = new Map<string, { ending_km: number; trip_number: string }[]>();
+      for (const row of data || []) {
+        const vid = row.fleet_vehicle_id as string;
+        if (!map.has(vid)) map.set(vid, []);
+        map.get(vid)!.push({ ending_km: row.ending_km as number, trip_number: row.trip_number as string });
+      }
+      return map;
+    },
+    enabled: vehicleIds.length > 0,
+    staleTime: 30_000,
+  });
+
+  // Map tripId → km mismatch info
+  const kmMismatches = useMemo(() => {
+    const result = new Map<string, { gap: number; previousEndingKm: number; previousTripNumber: string }>();
+    if (!previousEndingKmMap) return result;
+
+    for (const trip of trips) {
+      if (!trip.starting_km || !trip.fleet_vehicle_id) continue;
+      const vehicleTrips = previousEndingKmMap.get(trip.fleet_vehicle_id);
+      if (!vehicleTrips) continue;
+
+      // Find the first trip that isn't this one (already sorted by departure desc, so first non-self is the previous)
+      const prev = vehicleTrips.find(vt => vt.trip_number !== trip.trip_number);
+      if (!prev) continue;
+
+      const gap = trip.starting_km - prev.ending_km;
+      if (gap !== 0) {
+        result.set(trip.id, { gap, previousEndingKm: prev.ending_km, previousTripNumber: prev.trip_number });
+      }
+    }
+    return result;
+  }, [trips, previousEndingKmMap]);
+
   // Filter state
   const [fleetFilter, setFleetFilter] = useState<string>('all');
   const [driverFilter, setDriverFilter] = useState<string>('all');
@@ -284,10 +340,10 @@ const ActiveTrips = ({
   const handleEdit = async (trip: Trip) => {
     // Check if this trip has missing revenue and no comment yet
     const hasMissingRevenue = (!trip.base_revenue || trip.base_revenue === 0) && !trip.zero_revenue_comment;
-    
+
     if (hasMissingRevenue) {
       setIsResolvingAlert(prev => ({ ...prev, [trip.id]: true }));
-      
+
       // Resolve the missing revenue alert before opening edit modal
       await resolveMissingRevenueAlert(
         trip.id,
@@ -295,10 +351,10 @@ const ActiveTrips = ({
         'Opening edit modal to add reason',
         userName || 'System'
       );
-      
+
       setIsResolvingAlert(prev => ({ ...prev, [trip.id]: false }));
     }
-    
+
     onEdit(trip);
   };
 
@@ -320,7 +376,7 @@ const ActiveTrips = ({
   };
 
   const calculateProfit = (trip: Trip): { amount: number; currency: string } | null => {
-    const revenue = trip.base_revenue || 0;
+    const revenue = (trip.base_revenue || 0) + (trip.additional_revenue || 0);
     const expenses = [...(trip.costs || []), ...(trip.additional_costs || [])].reduce((sum, c) => sum + (c.amount || 0), 0);
     const currency = trip.revenue_currency || 'ZAR';
     return { amount: revenue - expenses, currency };
@@ -328,7 +384,7 @@ const ActiveTrips = ({
 
   // Stats calculation
   const stats = useMemo(() => {
-    const totalRevenue = filteredTrips.reduce((sum, t) => sum + (t.base_revenue || 0), 0);
+    const totalRevenue = filteredTrips.reduce((sum, t) => sum + (t.base_revenue || 0) + (t.additional_revenue || 0), 0);
     const totalExpenses = filteredTrips.reduce((sum, t) => {
       const tripExpenses = [...(t.costs || []), ...(t.additional_costs || [])].reduce((s, c) => s + (c.amount || 0), 0);
       return sum + tripExpenses;
@@ -736,7 +792,7 @@ const ActiveTrips = ({
                 : formatWeekRange(weekKey);
 
               // Calculate week totals
-              const weekRevenue = weekTrips.reduce((sum, t) => sum + (t.base_revenue || 0), 0);
+              const weekRevenue = weekTrips.reduce((sum, t) => sum + (t.base_revenue || 0) + (t.additional_revenue || 0), 0);
               const weekExpenses = weekTrips.reduce((sum, t) => {
                 return sum + [...(t.costs || []), ...(t.additional_costs || [])].reduce((s, c) => s + (c.amount || 0), 0);
               }, 0);
@@ -835,7 +891,7 @@ const ActiveTrips = ({
                                       </Badge>
                                     </div>
                                     <span className="text-sm font-medium text-emerald-600">
-                                      {formatCurrency(fleetTrips.reduce((sum, t) => sum + (t.base_revenue || 0), 0))}
+                                      {formatCurrency(fleetTrips.reduce((sum, t) => sum + (t.base_revenue || 0) + (t.additional_revenue || 0), 0))}
                                     </span>
                                   </div>
                                 </CollapsibleTrigger>
@@ -964,7 +1020,20 @@ const ActiveTrips = ({
                                                 )}
                                               </td>
                                               <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
-                                                {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
+                                                <div className="flex items-center justify-end gap-1">
+                                                  {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
+                                                  {kmMismatches.has(trip.id) && (
+                                                    <Tooltip>
+                                                      <TooltipTrigger>
+                                                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                                      </TooltipTrigger>
+                                                      <TooltipContent side="left" className="max-w-xs">
+                                                        <p className="font-medium">KM Mismatch</p>
+                                                        <p className="text-xs">Previous trip {kmMismatches.get(trip.id)!.previousTripNumber} ended at {kmMismatches.get(trip.id)!.previousEndingKm.toLocaleString()} km. Gap: {kmMismatches.get(trip.id)!.gap > 0 ? '+' : ''}{kmMismatches.get(trip.id)!.gap.toLocaleString()} km</p>
+                                                      </TooltipContent>
+                                                    </Tooltip>
+                                                  )}
+                                                </div>
                                               </td>
                                               <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
                                                 {trip.ending_km ? trip.ending_km.toLocaleString() : '—'}
@@ -996,7 +1065,7 @@ const ActiveTrips = ({
                                                     </TooltipContent>
                                                   </Tooltip>
                                                 ) : (
-                                                  <span className="text-emerald-600">{formatCurrency(trip.base_revenue || 0, trip.revenue_currency)}</span>
+                                                  <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
                                                 )}
                                               </td>
                                               <td className="py-2.5 px-3 text-right tabular-nums font-medium text-rose-600">
@@ -1017,12 +1086,12 @@ const ActiveTrips = ({
                                                     <DropdownMenuItem onClick={() => onView(trip)} className="gap-2 text-xs">
                                                       <Eye className="h-3.5 w-3.5" /> View Details
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem 
-                                                      onClick={() => handleEdit(trip)} 
+                                                    <DropdownMenuItem
+                                                      onClick={() => handleEdit(trip)}
                                                       className="gap-2 text-xs"
                                                       disabled={isResolvingAlert[trip.id]}
                                                     >
-                                                      <Edit className="h-3.5 w-3.5" /> 
+                                                      <Edit className="h-3.5 w-3.5" />
                                                       {isResolvingAlert[trip.id] ? 'Resolving Alert...' : 'Edit Trip'}
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
@@ -1149,7 +1218,20 @@ const ActiveTrips = ({
                           {trip.departure_date ? format(parseISO(trip.departure_date), 'dd MMM') : '—'}
                         </td>
                         <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
-                          {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
+                          <div className="flex items-center justify-end gap-1">
+                            {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
+                            {kmMismatches.has(trip.id) && (
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="max-w-xs">
+                                  <p className="font-medium">KM Mismatch</p>
+                                  <p className="text-xs">Previous trip {kmMismatches.get(trip.id)!.previousTripNumber} ended at {kmMismatches.get(trip.id)!.previousEndingKm.toLocaleString()} km. Gap: {kmMismatches.get(trip.id)!.gap > 0 ? '+' : ''}{kmMismatches.get(trip.id)!.gap.toLocaleString()} km</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
                           {trip.ending_km ? trip.ending_km.toLocaleString() : '—'}
@@ -1181,7 +1263,7 @@ const ActiveTrips = ({
                               </TooltipContent>
                             </Tooltip>
                           ) : (
-                            <span className="text-emerald-600">{formatCurrency(trip.base_revenue || 0, trip.revenue_currency)}</span>
+                            <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
                           )}
                         </td>
                         <td className="py-2.5 px-3 text-right tabular-nums font-medium text-rose-600">
@@ -1202,12 +1284,12 @@ const ActiveTrips = ({
                               <DropdownMenuItem onClick={() => onView(trip)} className="gap-2 text-xs">
                                 <Eye className="h-3.5 w-3.5" /> View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleEdit(trip)} 
+                              <DropdownMenuItem
+                                onClick={() => handleEdit(trip)}
                                 className="gap-2 text-xs"
                                 disabled={isResolvingAlert[trip.id]}
                               >
-                                <Edit className="h-3.5 w-3.5" /> 
+                                <Edit className="h-3.5 w-3.5" />
                                 {isResolvingAlert[trip.id] ? 'Resolving Alert...' : 'Edit Trip'}
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />

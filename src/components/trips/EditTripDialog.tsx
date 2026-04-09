@@ -9,9 +9,11 @@ import { Input } from '@/components/ui/input';
 import { RouteSelect } from '@/components/ui/route-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { ADDITIONAL_REVENUE_REASONS } from '@/constants/additionalRevenueReasons';
 import { CARGO_TYPES } from '@/constants/cargoTypes';
 import { useOperations } from '@/contexts/OperationsContext';
 import { useToast } from '@/hooks/use-toast';
+import { useEffectiveRates } from '@/hooks/useSystemCostRates';
 import type { RouteExpenseItem } from '@/hooks/useRoutePredefinedExpenses';
 import { useWialonVehicles } from '@/hooks/useWialonVehicles';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,7 +23,9 @@ import { format } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import SystemCostPreviewDialog from './SystemCostPreviewDialog';
 import TripCostSection, { TripCostEntry } from './TripCostSection';
+import { checkTripKmMismatch } from '@/hooks/useTripKmValidation';
 
 const tripSchema = z.object({
   trip_number: z.string().min(1, 'Trip number is required').max(50),
@@ -43,6 +47,8 @@ const tripSchema = z.object({
   distance_km: z.string().optional(),
   empty_km: z.string().optional(),
   empty_km_reason: z.string().optional(),
+  additional_revenue: z.string().optional(),
+  additional_revenue_reason: z.string().optional(),
   zero_revenue_comment: z.string().optional(),
   status: z.string().optional(),
 }).refine(
@@ -72,6 +78,7 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
   const { toast } = useToast();
   const { addCostEntry } = useOperations();
   const { data: vehicles, isLoading: vehiclesLoading } = useWialonVehicles();
+  const { effectiveRates } = useEffectiveRates();
 
   // State for new costs to be added when editing
   const [tripCosts, setTripCosts] = useState<TripCostEntry[]>([]);
@@ -81,6 +88,15 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
 
   // Track if route was changed to add new expenses
   const [routeChanged, setRouteChanged] = useState(false);
+
+  // State for system cost preview dialog
+  const [systemCostPreview, setSystemCostPreview] = useState<{
+    tripId: string;
+    departureDate: string | null;
+    arrivalDate: string | null;
+    distanceKm: number | null;
+    replaceExisting: boolean;
+  } | null>(null);
 
   const form = useForm<TripFormData>({
     resolver: zodResolver(tripSchema),
@@ -104,6 +120,8 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
       distance_km: '',
       empty_km: '',
       empty_km_reason: '',
+      additional_revenue: '',
+      additional_revenue_reason: '',
       zero_revenue_comment: '',
       status: 'active',
     },
@@ -176,6 +194,8 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
         distance_km: trip.distance_km?.toString() || '',
         empty_km: trip.empty_km?.toString() || '',
         empty_km_reason: trip.empty_km_reason || '',
+        additional_revenue: trip.additional_revenue?.toString() || '',
+        additional_revenue_reason: trip.additional_revenue_reason || '',
         zero_revenue_comment: trip.zero_revenue_comment || '',
         status: trip.status || 'active',
       });
@@ -190,6 +210,23 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
     if (!trip) return;
 
     try {
+      // Block completion if there's a km mismatch
+      if (data.status === 'completed' && trip.status !== 'completed') {
+        const startingKm = data.starting_km ? parseFloat(data.starting_km) : null;
+        const fleetVehicleId = trip.fleet_vehicle_id;
+        if (startingKm != null && fleetVehicleId) {
+          const kmCheck = await checkTripKmMismatch(trip.id, fleetVehicleId, startingKm, data.departure_date || null);
+          if (kmCheck.hasMismatch) {
+            toast({
+              title: 'Cannot Complete Trip — KM Mismatch',
+              description: kmCheck.message || 'Starting KM does not match previous trip ending KM.',
+              variant: 'destructive',
+            });
+            return;
+          }
+        }
+      }
+
       const { error } = await supabase
         .from('trips')
         .update({
@@ -215,6 +252,8 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
           distance_km: data.distance_km ? parseFloat(data.distance_km) : null,
           empty_km: data.empty_km ? parseFloat(data.empty_km) : null,
           empty_km_reason: data.empty_km_reason || null,
+          additional_revenue: data.additional_revenue ? parseFloat(data.additional_revenue) : null,
+          additional_revenue_reason: data.additional_revenue_reason || null,
           zero_revenue_comment: data.zero_revenue_comment || null,
           status: data.status || 'active',
           updated_at: new Date().toISOString(),
@@ -291,6 +330,24 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
 
       if (onRefresh) onRefresh();
       onClose();
+
+      // Show system cost preview if dates or distance changed
+      const datesChanged =
+        (data.departure_date || null) !== (trip.departure_date || null) ||
+        (data.arrival_date || null) !== (trip.arrival_date || null);
+      const distanceChanged =
+        (data.distance_km ? parseFloat(data.distance_km) : null) !== (trip.distance_km || null);
+      const hasDates = !!(data.departure_date || data.arrival_date);
+
+      if (hasDates && (datesChanged || distanceChanged)) {
+        setSystemCostPreview({
+          tripId: trip.id,
+          departureDate: data.departure_date || null,
+          arrivalDate: data.arrival_date || null,
+          distanceKm: data.distance_km ? parseFloat(data.distance_km) : null,
+          replaceExisting: true,
+        });
+      }
     } catch (error) {
       console.error('Error updating trip:', error);
       toast({
@@ -302,299 +359,65 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit Trip</DialogTitle>
-          <DialogDescription>
-            Update trip details - {trip?.trip_number}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Trip</DialogTitle>
+            <DialogDescription>
+              Update trip details - {trip?.trip_number}
+            </DialogDescription>
+          </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="trip_number"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Trip Number *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="T001" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="vehicle_id"
+                name="trip_number"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Vehicle</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={vehiclesLoading ? "Loading..." : "Select vehicle"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {vehicles?.map((vehicle) => {
-                          // Extract fleet number from name if fleet_number column is not populated
-                          // Name format is often "21H Init Sim..." - extract the fleet code (e.g., "21H", "4H", "UD")
-                          const extractedFleet = vehicle.fleet_number ||
-                            vehicle.name?.match(/^(\d+[A-Z]+|[A-Z]+\d*)/i)?.[1] || null;
-
-                          // Display fleet_number with registration
-                          const displayName = extractedFleet && vehicle.registration
-                            ? `${extractedFleet} (${vehicle.registration})`
-                            : extractedFleet || vehicle.registration || 'Unknown';
-
-                          return (
-                            <SelectItem key={vehicle.id} value={vehicle.id}>
-                              {displayName}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="driver_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Driver</FormLabel>
+                    <FormLabel>Trip Number *</FormLabel>
                     <FormControl>
-                      <DriverSelect
-                        value={field.value || ''}
-                        onValueChange={field.onChange}
-                        placeholder="Select driver"
-                        allowCreate={true}
-                      />
+                      <Input placeholder="T001" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="client_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Client</FormLabel>
-                    <FormControl>
-                      <ClientSelect
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        placeholder="Select or create client"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="load_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Load Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select load type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {CARGO_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="origin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Origin (From)</FormLabel>
-                    <FormControl>
-                      <GeofenceSelect
-                        value={field.value || ''}
-                        onValueChange={field.onChange}
-                        placeholder="Select origin"
-                        allowCreate={true}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="destination"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Destination (To)</FormLabel>
-                    <FormControl>
-                      <GeofenceSelect
-                        value={field.value || ''}
-                        onValueChange={field.onChange}
-                        placeholder="Select destination"
-                        allowCreate={true}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="route"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Route</FormLabel>
-                  <FormControl>
-                    <RouteSelect
-                      value={field.value || ''}
-                      onValueChange={(value, _tollCost, expenses) => {
-                        field.onChange(value);
-                        // Track if route was changed from original
-                        if (value !== trip?.route) {
-                          setRouteChanged(true);
-                          setSelectedRouteExpenses(expenses || []);
-                        } else {
-                          setRouteChanged(false);
-                          setSelectedRouteExpenses([]);
-                        }
-                      }}
-                      placeholder="Select route"
-                      showTollFee={true}
-                      allowCreate={true}
-                      allowEdit={true}
-                    />
-                  </FormControl>
-                  <FormDesc className="text-xs">
-                    {routeChanged && selectedRouteExpenses.filter(e => e.is_required).length > 0
-                      ? `${selectedRouteExpenses.filter(e => e.is_required).length} expense(s) will be auto-added: ${selectedRouteExpenses.filter(e => e.is_required).map(e => `${e.sub_category} (${e.currency === 'USD' ? '$' : 'R'}${e.amount})`).join(', ')}`
-                      : 'Select a route with predefined expenses or add costs below'}
-                  </FormDesc>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="departure_date"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Departure Date</FormLabel>
-                    <FormControl>
-                      <DatePicker
-                        value={field.value || undefined}
-                        onChange={(date) => {
-                          if (date) {
-                            // Format as YYYY-MM-DD in local time to avoid timezone shifts
-                            const year = date.getFullYear();
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const day = String(date.getDate()).padStart(2, '0');
-                            field.onChange(`${year}-${month}-${day}`);
-                          } else {
-                            field.onChange('');
-                          }
-                        }}
-                        placeholder="Pick departure date"
-                        dateFormat="dd MMM yyyy"
-                        className="w-full"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="arrival_date"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Arrival Date</FormLabel>
-                    <FormControl>
-                      <DatePicker
-                        value={field.value || undefined}
-                        onChange={(date) => {
-                          if (date) {
-                            // Format as YYYY-MM-DD in local time to avoid timezone shifts
-                            const year = date.getFullYear();
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const day = String(date.getDate()).padStart(2, '0');
-                            field.onChange(`${year}-${month}-${day}`);
-                          } else {
-                            field.onChange('');
-                          }
-                        }}
-                        placeholder="Pick arrival date"
-                        dateFormat="dd MMM yyyy"
-                        className="w-full"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Revenue Section */}
-            <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
-              <h4 className="font-medium text-sm">Revenue</h4>
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="revenue_type"
+                  name="vehicle_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Revenue Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <FormLabel>Vehicle</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select revenue type" />
+                            <SelectValue placeholder={vehiclesLoading ? "Loading..." : "Select vehicle"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="per_load">Per Load (Fixed Amount)</SelectItem>
-                          <SelectItem value="per_km">Per Kilometer (Rate × Distance)</SelectItem>
+                          {vehicles?.map((vehicle) => {
+                            // Extract fleet number from name if fleet_number column is not populated
+                            // Name format is often "21H Init Sim..." - extract the fleet code (e.g., "21H", "4H", "UD")
+                            const extractedFleet = vehicle.fleet_number ||
+                              vehicle.name?.match(/^(\d+[A-Z]+|[A-Z]+\d*)/i)?.[1] || null;
+
+                            // Display fleet_number with registration
+                            const displayName = extractedFleet && vehicle.registration
+                              ? `${extractedFleet} (${vehicle.registration})`
+                              : extractedFleet || vehicle.registration || 'Unknown';
+
+                            return (
+                              <SelectItem key={vehicle.id} value={vehicle.id}>
+                                {displayName}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
-                      <FormDesc className="text-xs">
-                        {revenueType === 'per_km'
-                          ? 'Revenue will be calculated: Rate × Distance'
-                          : 'Enter the total revenue for this load'}
-                      </FormDesc>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -602,23 +425,61 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
 
                 <FormField
                   control={form.control}
-                  name="revenue_currency"
+                  name="driver_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Currency</FormLabel>
+                      <FormLabel>Driver</FormLabel>
+                      <FormControl>
+                        <DriverSelect
+                          value={field.value || ''}
+                          onValueChange={field.onChange}
+                          placeholder="Select driver"
+                          allowCreate={true}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="client_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Client</FormLabel>
+                      <FormControl>
+                        <ClientSelect
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          placeholder="Select or create client"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="load_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Load Type</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select currency" />
+                            <SelectValue placeholder="Select load type" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="ZAR">ZAR (South African Rand)</SelectItem>
-                          <SelectItem value="USD">USD (US Dollar)</SelectItem>
-                          <SelectItem value="EUR">EUR (Euro)</SelectItem>
-                          <SelectItem value="GBP">GBP (British Pound)</SelectItem>
-                          <SelectItem value="BWP">BWP (Botswana Pula)</SelectItem>
-                          <SelectItem value="ZMW">ZMW (Zambian Kwacha)</SelectItem>
+                          {CARGO_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -627,33 +488,171 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
                 />
               </div>
 
-              {revenueType === 'per_load' ? (
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="base_revenue"
+                  name="origin"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Base Revenue</FormLabel>
+                      <FormLabel>Origin (From)</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        <GeofenceSelect
+                          value={field.value || ''}
+                          onValueChange={field.onChange}
+                          placeholder="Select origin"
+                          allowCreate={true}
+                        />
                       </FormControl>
-                      <FormDesc className="text-xs">Total revenue for this load</FormDesc>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              ) : (
+
+                <FormField
+                  control={form.control}
+                  name="destination"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Destination (To)</FormLabel>
+                      <FormControl>
+                        <GeofenceSelect
+                          value={field.value || ''}
+                          onValueChange={field.onChange}
+                          placeholder="Select destination"
+                          allowCreate={true}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="route"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Route</FormLabel>
+                    <FormControl>
+                      <RouteSelect
+                        value={field.value || ''}
+                        onValueChange={(value, _tollCost, expenses) => {
+                          field.onChange(value);
+                          // Track if route was changed from original
+                          if (value !== trip?.route) {
+                            setRouteChanged(true);
+                            setSelectedRouteExpenses(expenses || []);
+                          } else {
+                            setRouteChanged(false);
+                            setSelectedRouteExpenses([]);
+                          }
+                        }}
+                        placeholder="Select route"
+                        showTollFee={true}
+                        allowCreate={true}
+                        allowEdit={true}
+                      />
+                    </FormControl>
+                    <FormDesc className="text-xs">
+                      {routeChanged && selectedRouteExpenses.filter(e => e.is_required).length > 0
+                        ? `${selectedRouteExpenses.filter(e => e.is_required).length} expense(s) will be auto-added: ${selectedRouteExpenses.filter(e => e.is_required).map(e => `${e.sub_category} (${e.currency === 'USD' ? '$' : 'R'}${e.amount})`).join(', ')}`
+                        : 'Select a route with predefined expenses or add costs below'}
+                    </FormDesc>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="departure_date"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Departure Date</FormLabel>
+                      <FormControl>
+                        <DatePicker
+                          value={field.value || undefined}
+                          onChange={(date) => {
+                            if (date) {
+                              // Format as YYYY-MM-DD in local time to avoid timezone shifts
+                              const year = date.getFullYear();
+                              const month = String(date.getMonth() + 1).padStart(2, '0');
+                              const day = String(date.getDate()).padStart(2, '0');
+                              field.onChange(`${year}-${month}-${day}`);
+                            } else {
+                              field.onChange('');
+                            }
+                          }}
+                          placeholder="Pick departure date"
+                          dateFormat="dd MMM yyyy"
+                          className="w-full"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="arrival_date"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Arrival Date</FormLabel>
+                      <FormControl>
+                        <DatePicker
+                          value={field.value || undefined}
+                          onChange={(date) => {
+                            if (date) {
+                              // Format as YYYY-MM-DD in local time to avoid timezone shifts
+                              const year = date.getFullYear();
+                              const month = String(date.getMonth() + 1).padStart(2, '0');
+                              const day = String(date.getDate()).padStart(2, '0');
+                              field.onChange(`${year}-${month}-${day}`);
+                            } else {
+                              field.onChange('');
+                            }
+                          }}
+                          placeholder="Pick arrival date"
+                          dateFormat="dd MMM yyyy"
+                          className="w-full"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Revenue Section */}
+              <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+                <h4 className="font-medium text-sm">Revenue</h4>
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="rate_per_km"
+                    name="revenue_type"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Rate per Kilometer</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                        </FormControl>
-                        <FormDesc className="text-xs">Rate charged per km</FormDesc>
+                        <FormLabel>Revenue Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select revenue type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="per_load">Per Load (Fixed Amount)</SelectItem>
+                            <SelectItem value="per_km">Per Kilometer (Rate × Distance)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDesc className="text-xs">
+                          {revenueType === 'per_km'
+                            ? 'Revenue will be calculated: Rate × Distance'
+                            : 'Enter the total revenue for this load'}
+                        </FormDesc>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -661,196 +660,313 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
 
                   <FormField
                     control={form.control}
+                    name="revenue_currency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Currency</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || undefined}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="ZAR">ZAR (South African Rand)</SelectItem>
+                            <SelectItem value="USD">USD (US Dollar)</SelectItem>
+                            <SelectItem value="EUR">EUR (Euro)</SelectItem>
+                            <SelectItem value="GBP">GBP (British Pound)</SelectItem>
+                            <SelectItem value="BWP">BWP (Botswana Pula)</SelectItem>
+                            <SelectItem value="ZMW">ZMW (Zambian Kwacha)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {revenueType === 'per_load' ? (
+                  <FormField
+                    control={form.control}
                     name="base_revenue"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Calculated Revenue</FormLabel>
+                        <FormLabel>Base Revenue</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        </FormControl>
+                        <FormDesc className="text-xs">Total revenue for this load</FormDesc>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="rate_per_km"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rate per Kilometer</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                          </FormControl>
+                          <FormDesc className="text-xs">Rate charged per km</FormDesc>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="base_revenue"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Calculated Revenue</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              {...field}
+                              readOnly={calculatedRevenue !== null}
+                              className={calculatedRevenue !== null ? 'bg-muted font-semibold' : ''}
+                            />
+                          </FormControl>
+                          <FormDesc className="text-xs">
+                            {calculatedRevenue !== null
+                              ? `${ratePerKm || 0} × ${distanceKm || 0} km = ${calculatedRevenue.toFixed(2)}`
+                              : 'Enter rate and distance to calculate'}
+                          </FormDesc>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
+                {/* Zero Revenue Comment - shown when base revenue is 0 or empty */}
+                {(!baseRevenue || baseRevenue === '0' || baseRevenue === '0.00') && (
+                  <FormField
+                    control={form.control}
+                    name="zero_revenue_comment"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Zero Revenue Comment</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Explain why this trip has no revenue (e.g., repositioning, internal transfer, warranty trip)"
+                            className="resize-none"
+                            rows={2}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDesc className="text-xs text-amber-600">
+                          Adding a comment will modify the missing revenue alert for this trip
+                        </FormDesc>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* Additional Revenue */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="additional_revenue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Additional Revenue</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        </FormControl>
+                        <FormDesc className="text-xs">Extra revenue beyond the base amount</FormDesc>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="additional_revenue_reason"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Reason</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || undefined}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select reason" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {ADDITIONAL_REVENUE_REASONS.map((reason) => (
+                              <SelectItem key={reason.value} value={reason.value}>
+                                {reason.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Kilometer Tracking Section */}
+              <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+                <h4 className="font-medium text-sm">Kilometer Tracking</h4>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="starting_km"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Starting KM</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" placeholder="0" {...field} />
+                        </FormControl>
+                        <FormDesc className="text-xs">Odometer at trip start</FormDesc>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="ending_km"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ending KM</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" placeholder="0" {...field} />
+                        </FormControl>
+                        <FormDesc className="text-xs">Odometer at trip end</FormDesc>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="distance_km"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Distance (km)</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            step="0.01"
-                            placeholder="0.00"
+                            step="0.1"
+                            placeholder="0"
                             {...field}
-                            readOnly={calculatedRevenue !== null}
-                            className={calculatedRevenue !== null ? 'bg-muted font-semibold' : ''}
+                            readOnly={calculatedDistance !== null}
+                            className={calculatedDistance !== null ? 'bg-muted' : ''}
                           />
                         </FormControl>
                         <FormDesc className="text-xs">
-                          {calculatedRevenue !== null
-                            ? `${ratePerKm || 0} × ${distanceKm || 0} km = ${calculatedRevenue.toFixed(2)}`
-                            : 'Enter rate and distance to calculate'}
+                          {calculatedDistance !== null ? 'Auto-calculated' : 'Enter manually or use odometer readings'}
                         </FormDesc>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-              )}
 
-              {/* Zero Revenue Comment - shown when base revenue is 0 or empty */}
-              {(!baseRevenue || baseRevenue === '0' || baseRevenue === '0.00') && (
-                <FormField
-                  control={form.control}
-                  name="zero_revenue_comment"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Zero Revenue Comment</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Explain why this trip has no revenue (e.g., repositioning, internal transfer, warranty trip)"
-                          className="resize-none"
-                          rows={2}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDesc className="text-xs text-amber-600">
-                        Adding a comment will modify the missing revenue alert for this trip
-                      </FormDesc>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="empty_km"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Empty Kilometers</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" placeholder="0" {...field} />
+                        </FormControl>
+                        <FormDesc className="text-xs">Kilometers traveled without load</FormDesc>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-            {/* Kilometer Tracking Section */}
-            <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
-              <h4 className="font-medium text-sm">Kilometer Tracking</h4>
-
-              <div className="grid grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="starting_km"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Starting KM</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.1" placeholder="0" {...field} />
-                      </FormControl>
-                      <FormDesc className="text-xs">Odometer at trip start</FormDesc>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="ending_km"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Ending KM</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.1" placeholder="0" {...field} />
-                      </FormControl>
-                      <FormDesc className="text-xs">Odometer at trip end</FormDesc>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="distance_km"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Distance (km)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          placeholder="0"
-                          {...field}
-                          readOnly={calculatedDistance !== null}
-                          className={calculatedDistance !== null ? 'bg-muted' : ''}
-                        />
-                      </FormControl>
-                      <FormDesc className="text-xs">
-                        {calculatedDistance !== null ? 'Auto-calculated' : 'Enter manually or use odometer readings'}
-                      </FormDesc>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="empty_km_reason"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Empty KM Reason {emptyKm && parseFloat(emptyKm) > 0 && <span className="text-destructive">*</span>}
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Reason for empty kilometers (required if empty km > 0)"
+                            className="resize-none"
+                            rows={2}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="empty_km"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Empty Kilometers</FormLabel>
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
                       <FormControl>
-                        <Input type="number" step="0.1" placeholder="0" {...field} />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormDesc className="text-xs">Kilometers traveled without load</FormDesc>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="empty_km_reason"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Empty KM Reason {emptyKm && parseFloat(emptyKm) > 0 && <span className="text-destructive">*</span>}
-                      </FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Reason for empty kilometers (required if empty km > 0)"
-                          className="resize-none"
-                          rows={2}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              {/* Trip Costs Section - Add new costs while editing */}
+              <TripCostSection
+                costs={tripCosts}
+                onCostsChange={setTripCosts}
+                departureDate={form.watch('departure_date')}
+              />
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button type="submit">Save Changes</Button>
               </div>
-            </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || undefined}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Trip Costs Section - Add new costs while editing */}
-            <TripCostSection
-              costs={tripCosts}
-              onCostsChange={setTripCosts}
-              departureDate={form.watch('departure_date')}
-            />
-
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit">Save Changes</Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+      <SystemCostPreviewDialog
+        isOpen={!!systemCostPreview}
+        onClose={() => {
+          setSystemCostPreview(null);
+          if (onRefresh) onRefresh();
+        }}
+        tripId={systemCostPreview?.tripId || ''}
+        departureDate={systemCostPreview?.departureDate || null}
+        arrivalDate={systemCostPreview?.arrivalDate || null}
+        distanceKm={systemCostPreview?.distanceKm || null}
+        effectiveRates={effectiveRates}
+        replaceExisting={systemCostPreview?.replaceExisting}
+      />
+    </>
   );
 };
 
