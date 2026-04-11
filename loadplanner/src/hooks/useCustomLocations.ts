@@ -106,7 +106,7 @@ export function useUpdateCustomLocation() {
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CustomLocation> & { id: string }) => {
       // Remove any fields that don't exist or shouldn't be updated
-      const { created_at, updated_at, ...updateFields } = updates;
+      const { created_at: _created_at, updated_at: _updated_at, ...updateFields } = updates;
       
       const { data, error } = await supabase
         .from('custom_locations')

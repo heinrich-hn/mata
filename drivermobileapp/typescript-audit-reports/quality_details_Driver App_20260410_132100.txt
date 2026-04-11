@@ -1,0 +1,17 @@
+=== Driver App Code Quality Details ===
+Generated: Fri Apr 10 13:21:09 UTC 2026
+Target: /workspaces/mata/drivermobileapp/src
+
+--- any types (6) ---
+/workspaces/mata/drivermobileapp/src/components/trip-link-form.tsx:111:        const { error } = await (supabase as any)
+/workspaces/mata/drivermobileapp/src/components/trip-link-form.tsx:127:        const { error } = await (supabase as any).from("freight_details").insert({
+/workspaces/mata/drivermobileapp/src/components/trip-link-form.tsx:165:      const { error } = await (supabase as any)
+/workspaces/mata/drivermobileapp/src/lib/supabase/client.ts:58:      lock: inMemoryLock as any,
+/workspaces/mata/drivermobileapp/src/hooks/use-realtime.ts:92:        const rows = assignments as any[];
+/workspaces/mata/drivermobileapp/src/hooks/use-realtime.ts:125:        const vehicleData = vehicle as any;
+
+--- @ts-ignore (0) ---
+
+--- @ts-nocheck (0) ---
+
+--- TODO/FIXME (0) ---

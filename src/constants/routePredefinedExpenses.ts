@@ -8,7 +8,7 @@ export interface RouteExpense {
   category: string;
   sub_category: string;
   amount: number;
-  currency: 'USD' | 'ZAR';
+  currency: string;
   description?: string;
   is_required: boolean; // Required expenses are auto-added, optional ones are suggestions
 }

@@ -68,18 +68,19 @@ export interface WialonSession {
   getCurrUser: () => WialonUser | null;
 
   // Data management
+  loadLibrary: (name: string, callback: (code: number) => void) => void;
   updateDataFlags: (
     spec: Array<{ type: string; data: string; flags: number; mode: number }>,
     callback: (code: number) => void
   ) => void;
-  getItems: (type: string) => WialonUnit[];
-  getItem: (id: number) => WialonUnit | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getItems: (type: string) => any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getItem: (id: number) => any | null;
 
   // Event listeners
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  addListener: (event: string, callback: (data: any) => void, context?: any) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  removeListener: (event: string, callback: (data: any) => void, context?: any) => void;
+  addListener: (event: string, callback: (data: unknown) => void, context?: unknown) => void;
+  removeListener: (event: string, callback: (data: unknown) => void, context?: unknown) => void;
 }
 
 /**
@@ -100,8 +101,28 @@ export interface WialonSDK {
         base: number;
         customFields: number;
         customProps: number;
+        accessFlag: {
+          editZones: number;
+          [key: string]: number;
+        };
+      };
+      Resource: {
+        dataFlag: {
+          zones: number;
+          [key: string]: number;
+        };
         billingProps: number;
         image: number;
+      };
+      accessFlag: {
+        editZones: number;
+        [key: string]: number;
+      };
+    };
+    Resource: {
+      dataFlag: {
+        zones: number;
+        [key: string]: number;
       };
     };
     Unit: {
@@ -124,6 +145,7 @@ export interface WialonSDK {
 declare global {
   interface Window {
     wialon?: WialonSDK;
+    L?: typeof import('leaflet');
   }
 }
 

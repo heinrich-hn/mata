@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { AlertTriangle, ArrowRight, CheckCircle2, Package, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type TyreWithVehicle = Database["public"]["Tables"]["tyres"]["Row"] & {
   vehicles?: {
@@ -32,6 +33,7 @@ interface RemoveTyreDialogProps {
 
 const RemoveTyreDialog = ({ open, onOpenChange, tyre, onRemovalComplete }: RemoveTyreDialogProps) => {
   const { toast } = useToast();
+  const { userName, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -230,7 +232,7 @@ const RemoveTyreDialog = ({ open, onOpenChange, tyre, onRemovalComplete }: Remov
           to_position: formData.nextDestination === "return-warehouse" ? "WAREHOUSE" : "SCRAP",
           km_reading: removalReading,
           performed_at: formData.removalDate,
-          performed_by: "current_user", // TODO: Get from auth context
+          performed_by: userName || user?.email || "unknown",
           notes: `Reason: ${formData.removalReason}. ${formData.notes || ""}`,
         });
 
@@ -264,8 +266,7 @@ const RemoveTyreDialog = ({ open, onOpenChange, tyre, onRemovalComplete }: Remov
             error?: string;
           };
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (supabase.rpc as any)(
+          const result = await supabase.rpc(
             "increment_inventory",
             {
               p_inventory_id: tyre.inventory_id,

@@ -631,7 +631,6 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="ZAR">ZAR</SelectItem>
                             <SelectItem value="USD">USD</SelectItem>
                           </SelectContent>
                         </Select>

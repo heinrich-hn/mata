@@ -136,8 +136,7 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onSuccess }: 
     try {
       const isOdometerBased = data.odometer_based as boolean;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: Record<string, any> = {
+      const updateData: Record<string, unknown> = {
         title: data.title,
         description: data.description,
         schedule_type: data.schedule_type,

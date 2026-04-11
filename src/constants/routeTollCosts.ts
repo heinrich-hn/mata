@@ -4,7 +4,7 @@
 export interface RouteTollCost {
   route: string;
   toll_fee: number;
-  currency: 'USD' | 'ZAR';
+  currency: string;
   description?: string;
 }
 

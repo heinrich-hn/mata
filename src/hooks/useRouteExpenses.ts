@@ -24,7 +24,7 @@ interface DbRouteExpenseItem {
   category: string;
   sub_category: string;
   amount: number;
-  currency: 'USD' | 'ZAR';
+  currency: string;
   description: string | null;
   is_required: boolean;
   display_order: number;
@@ -64,8 +64,7 @@ export const useRouteExpenseConfigs = () => {
     queryKey: ['route-expense-configs'],
     queryFn: async (): Promise<RoutePredefinedExpenses[]> => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from('route_expense_configs')
           .select(`
             *,
@@ -101,8 +100,7 @@ export const useRouteExpenses = (route: string | undefined | null) => {
       if (!route) return null;
 
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from('route_expense_configs')
           .select(`
             *,
@@ -140,8 +138,7 @@ export const useAddRouteExpenseConfig = () => {
   return useMutation({
     mutationFn: async (config: Omit<RoutePredefinedExpenses, 'id' | 'created_at' | 'updated_at'>) => {
       // Insert the config
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: configData, error: configError } = await (supabase as any)
+      const { data: configData, error: configError } = await supabase
         .from('route_expense_configs')
         .insert({
           route: config.route.toUpperCase(),
@@ -166,8 +163,7 @@ export const useAddRouteExpenseConfig = () => {
           display_order: index,
         }));
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: itemsError } = await (supabase as any)
+        const { error: itemsError } = await supabase
           .from('route_expense_items')
           .insert(expenseItems);
 
@@ -207,8 +203,7 @@ export const useUpdateRouteExpenseConfig = () => {
       updates: Partial<Omit<RoutePredefinedExpenses, 'id' | 'created_at' | 'updated_at'>>;
     }) => {
       // Update config
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: configError } = await (supabase as any)
+      const { error: configError } = await supabase
         .from('route_expense_configs')
         .update({
           description: updates.description,
@@ -250,8 +245,7 @@ export const useAddExpenseItem = () => {
       routeConfigId: string;
       expense: Omit<RouteExpense, 'id'>;
     }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('route_expense_items')
         .insert({
           route_config_id: routeConfigId,
@@ -299,8 +293,7 @@ export const useUpdateExpenseItem = () => {
       id: string;
       updates: Partial<Omit<RouteExpense, 'id'>>;
     }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('route_expense_items')
         .update({
           amount: updates.amount,
@@ -338,8 +331,7 @@ export const useDeleteExpenseItem = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any).from('route_expense_items').delete().eq('id', id);
+      const { error } = await supabase.from('route_expense_items').delete().eq('id', id);
       if (error) throw error;
       return { id };
     },

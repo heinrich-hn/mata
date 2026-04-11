@@ -19,9 +19,7 @@ export const useFuelStations = (onlyActive = true) => {
     queryKey: ['fuel_stations', onlyActive],
     queryFn: async (): Promise<FuelStation[]> => {
       try {
-        // Use type assertion since table may not exist in generated types yet
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let query = (supabase as any)
+        let query = supabase
           .from('fuel_stations')
           .select('*')
           .order('name');
@@ -74,8 +72,7 @@ export const useAddFuelStation = () => {
 
   return useMutation({
     mutationFn: async (station: Omit<FuelStation, 'id' | 'created_at'>) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('fuel_stations')
         .insert([station])
         .select()
@@ -100,8 +97,7 @@ export const useUpdateFuelStation = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<FuelStation> & { id: string }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('fuel_stations')
         .update(updates)
         .eq('id', id)
@@ -127,8 +123,7 @@ export const useDeleteFuelStation = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('fuel_stations')
         .update({ is_active: false })
         .eq('id', id);

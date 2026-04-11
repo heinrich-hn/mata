@@ -1,6 +1,3 @@
-// src/components/driver/DriverBehaviorGrid.tsx
-'use client';
-
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +19,7 @@ import { useBulkDeleteDriverBehaviorEvents, useDeleteDriverBehaviorEvent, useDri
 import { useDriverCoaching } from "@/hooks/useDriverCoaching";
 import { useRealtimeDriverBehaviorEvents } from "@/hooks/useRealtimeDriverBehaviorEvents";
 import type { Database } from "@/integrations/supabase/types";
-import { generateDriverCoachingPDF, generateDriverBehaviorExcel, generateDriverBehaviorPDF, fetchAllSnapshotsBase64, fetchSnapshotBlobs } from "@/lib/driverBehaviorExport";
+import { generateDriverCoachingPDF, generateDriverBehaviorExcel, generateDriverBehaviorPDF, generateWeeklyDriverDebriefsPDF, fetchAllSnapshotsBase64, fetchSnapshotBlobs } from "@/lib/driverBehaviorExport";
 import type { SnapshotMedia } from "@/lib/driverBehaviorExport";
 import { format } from "date-fns";
 import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Camera, Car, CheckCircle, ChevronDown, Clock, Download, Edit2, Eye, FileSpreadsheet, FileText, List, Loader2, MessageSquare, Search, Share2, Trash2, User, Video } from "lucide-react";
@@ -701,6 +698,10 @@ export default function DriverBehaviorGrid() {
                   <DropdownMenuItem onClick={() => generateDriverBehaviorPDF(debriefedEvents, 'debriefed')}>
                     <FileText className="w-4 h-4 mr-2" />
                     PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => generateWeeklyDriverDebriefsPDF(debriefedEvents)}>
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Weekly Debriefs PDF
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

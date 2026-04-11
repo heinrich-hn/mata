@@ -82,7 +82,7 @@ export const CostList = ({ costs, onEdit, onDelete }: CostListProps) => {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-lg">
-                          {formatCurrency(cost.amount, cost.currency as 'ZAR' | 'USD')}
+                          {formatCurrency(cost.amount, cost.currency as string)}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {new Date(cost.date).toLocaleDateString()}
@@ -160,7 +160,7 @@ export const CostList = ({ costs, onEdit, onDelete }: CostListProps) => {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-lg">
-                          {formatCurrency(cost.amount, cost.currency as 'ZAR' | 'USD')}
+                          {formatCurrency(cost.amount, cost.currency as string)}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {new Date(cost.date).toLocaleDateString()}

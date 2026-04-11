@@ -149,7 +149,7 @@ const TripManagement = () => {
           fleet_number: displayFleetNumber,
           payment_status: trip.payment_status || 'unpaid',
           status: trip.status || 'active',
-          revenue_currency: trip.revenue_currency || 'ZAR',
+          revenue_currency: trip.revenue_currency || 'USD',
           // Warning/validation computed fields
           hasFlaggedCosts: flaggedCosts.length > 0,
           flaggedCostCount: flaggedCosts.length,

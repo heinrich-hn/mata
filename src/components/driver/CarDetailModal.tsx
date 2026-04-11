@@ -1,6 +1,3 @@
-// src/components/driver/CarDetailModal.tsx
-'use client';
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";

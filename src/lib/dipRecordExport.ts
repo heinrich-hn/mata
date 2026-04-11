@@ -3,6 +3,9 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
+/** jsPDF instance with autoTable plugin properties */
+type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
+
 import type { DailyDipRecord, DipRecordEditEntry, FuelBunker } from "@/hooks/useFuelBunkers";
 
 export interface DipRecordExportData {
@@ -271,8 +274,7 @@ export function generateDipRecordsPDF(data: DipRecordExportData): void {
           margin: { left: margin, right: margin },
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        yPos = (doc as any).lastAutoTable.finalY + 10;
+        yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
 
         if (yPos > doc.internal.pageSize.getHeight() - 40) {
           doc.addPage();

@@ -7,7 +7,7 @@ export interface DbRouteTollCost {
   id: string;
   route: string;
   toll_fee: number;
-  currency: 'USD' | 'ZAR';
+  currency: string;
   description: string | null;
   is_active: boolean;
   created_at: string;

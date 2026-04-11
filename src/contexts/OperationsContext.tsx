@@ -385,7 +385,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
               operating_hours: trailer.operating_hours,
               litres_per_hour: trailer.litres_per_hour,
               driver_name: enrichedData.driver_name,
-              currency: enrichedData.currency || 'ZAR',
+              currency: enrichedData.currency || 'USD',
               linked_diesel_record_id: data.id,
               notes: `Linked to ${enrichedData.fleet_number} diesel record`,
             });
@@ -461,7 +461,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
               operating_hours: trailer.operating_hours,
               litres_per_hour: trailer.litres_per_hour,
               driver_name: enrichedRecord.driver_name,
-              currency: enrichedRecord.currency || 'ZAR',
+              currency: enrichedRecord.currency || 'USD',
               linked_diesel_record_id: record.id,
               notes: `Linked to ${enrichedRecord.fleet_number} diesel record`,
             });
@@ -534,7 +534,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         category: 'Fuel',
         sub_category: 'Diesel - Horse',
         amount: vehicleCost,
-        currency: dieselRecord.currency || 'ZAR',
+        currency: dieselRecord.currency || 'USD',
         date: dieselRecord.date,
         reference_number: `DSL-${dieselRecord.id.substring(0, 8)}`,
         notes: `Diesel for ${dieselRecord.fleet_number} at ${dieselRecord.fuel_station}`,
@@ -542,6 +542,9 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         vehicle_identifier: dieselRecord.fleet_number,
         is_flagged: false,
         is_system_generated: true,
+        investigation_status: 'resolved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: 'system-diesel-link',
       };
 
       const horseCostId = await addCostEntry(horseCostEntry);
@@ -555,7 +558,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
             category: 'Fuel',
             sub_category: 'Diesel - Trailer',
             amount: trailerData.fuel_cost,
-            currency: dieselRecord.currency || 'ZAR',
+            currency: dieselRecord.currency || 'USD',
             date: dieselRecord.date,
             reference_number: `DSL-${dieselRecord.id.substring(0, 8)}-${trailerData.trailer_id}`,
             notes: `Diesel for trailer ${trailerData.trailer_id}: ${trailerData.operating_hours}hrs @ ${trailerData.litres_per_hour}L/hr`,
@@ -563,6 +566,9 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
             vehicle_identifier: trailerData.trailer_id,
             is_flagged: false,
             is_system_generated: true,
+            investigation_status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolved_by: 'system-diesel-link',
           };
 
           const trailerCostId = await addCostEntry(trailerCostEntry);
@@ -582,14 +588,17 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
             category: 'Fuel',
             sub_category: 'Diesel - Reefer',
             amount: reefer.total_cost,
-            currency: reefer.currency || 'ZAR',
+            currency: reefer.currency || 'USD',
             date: reefer.date,
             reference_number: `RFR-${reefer.id.substring(0, 8)}`,
             notes: `Reefer diesel for ${reefer.reefer_unit} at ${reefer.fuel_station}`,
-            diesel_record_id: reefer.id,
+            diesel_record_id: dieselRecord.id,
             vehicle_identifier: reefer.reefer_unit,
             is_flagged: false,
             is_system_generated: true,
+            investigation_status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolved_by: 'system-diesel-link',
           };
           const reeferCostId = await addCostEntry(reeferCostEntry);
           costEntryIds.push(reeferCostId);

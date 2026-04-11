@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +15,24 @@ import { useToast } from "@/hooks/use-toast";
 import { useWialonContext } from "@/integrations/wialon";
 import { Circle, MapPin, Plus, Save, Trash2, X, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import type L from "leaflet";
+
+/** Minimal Wialon SDK types (global window.wialon) */
+interface WialonZone {
+  n: string;
+  t: number;
+  w?: number;
+  c: number;
+}
+
+interface WialonResource {
+  getId(): number;
+  getName(): string;
+  getZones(): WialonZone[];
+  getUserAccess(): number;
+  addZone(zone: Record<string, unknown>, cb: (code: number) => void): void;
+  removeZone(index: number, cb: (code: number) => void): void;
+}
 
 interface Resource {
   id: number;
@@ -40,7 +57,7 @@ interface CircleGeofence {
 }
 
 interface GeofenceManagementProps {
-  map?: any;
+  map?: L.Map;
 }
 
 export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
@@ -61,7 +78,7 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
     name: "",
     color: "#FF0000",
   });
-  const [circleOverlay, setCircleOverlay] = useState<any>(null);
+  const [circleOverlay, setCircleOverlay] = useState<L.Circle | null>(null);
 
   const [availableCreateResources, setAvailableCreateResources] = useState<Resource[]>([]);
   const [targetResourceId, setTargetResourceId] = useState<number | null>(null);
@@ -69,18 +86,20 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
   // Auto-connect
   useEffect(() => {
     if (!isConnected && !wialonError) {
-      connect().catch(() => {});
+      connect().catch(() => { });
     }
   }, [isConnected, wialonError, connect]);
 
   // Load resources
   useEffect(() => {
-    if (!isConnected || typeof window === "undefined" || !(window as any).wialon) return;
+     
+    if (!isConnected || typeof window === "undefined" || !window.wialon) return;
 
     const loadResources = async () => {
       setIsLoadingResources(true);
       try {
-        const wialon = (window as any).wialon;
+         
+        const wialon = window.wialon;
         const session = wialon.core.Session.getInstance();
 
         // Load library – we continue regardless of code (library may already be loaded)
@@ -110,7 +129,7 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
         const resourceList: Resource[] = [];
         const createResourceList: Resource[] = [];
 
-        resourceItems.forEach((res: any) => {
+        resourceItems.forEach((res: WialonResource) => {
           const zones = res.getZones();
           const zoneCount = zones ? zones.length : 0;
           const resource: Resource = {
@@ -147,11 +166,13 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
   }, [isConnected, connect, toast]);
 
   const loadGeofences = async (resourceId: number) => {
-    if (!isConnected || typeof window === "undefined" || !(window as any).wialon) return;
+     
+    if (!isConnected || typeof window === "undefined" || !window.wialon) return;
 
     setIsLoadingGeofences(true);
     try {
-      const wialon = (window as any).wialon;
+       
+      const wialon = window.wialon;
       const session = wialon.core.Session.getInstance();
       const resource = session.getItem(resourceId);
       if (!resource) throw new Error("Resource not found");
@@ -160,7 +181,7 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
       const geofenceList: Geofence[] = [];
 
       if (zones && zones.length > 0) {
-        zones.forEach((zone: any, index: number) => {
+        zones.forEach((zone: WialonZone, index: number) => {
           let calculatedArea: number | undefined;
           if (zone.t === 3 && zone.w) {
             calculatedArea = Math.PI * Math.pow(zone.w, 2);
@@ -201,9 +222,10 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
     if (!window.confirm(`Delete geofence "${geofenceName}"?`)) return;
 
     try {
-      const wialon = (window as any).wialon;
+       
+      const wialon = window.wialon;
       const session = wialon.core.Session.getInstance();
-      const resource = session.getItem(selectedResourceId);
+      const resource = session.getItem(targetResourceId) as WialonResource | null;
       if (!resource) throw new Error("Resource not found");
 
       await new Promise<void>((resolve, reject) => {
@@ -247,15 +269,15 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
       description: "Click the map to set center",
     });
 
-    const handleMapClick = (e: any) => {
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
       const latlng = e.latlng;
       setCircleData((prev) => ({ ...prev, center: { lat: latlng.lat, lng: latlng.lng } }));
 
       if (circleOverlay) map.removeLayer(circleOverlay);
 
-      const L = (window as any).L;
-      if (L) {
-        const circle = L.circle([latlng.lat, latlng.lng], {
+      const leafletLib = window.L;
+      if (leafletLib) {
+        const circle = leafletLib.circle([latlng.lat, latlng.lng], {
           color: circleData.color,
           fillColor: circleData.color,
           fillOpacity: 0.2,
@@ -266,7 +288,8 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
     };
 
     map.on("click", handleMapClick);
-    (map as any)._circleClickHandler = handleMapClick;
+    // Store handler reference for cleanup
+    (map as L.Map & { _circleClickHandler?: L.LeafletMouseEventHandlerFn })._circleClickHandler = handleMapClick;
   };
 
   const updateCircleRadius = (radius: number) => {
@@ -286,9 +309,10 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
       map.removeLayer(circleOverlay);
       setCircleOverlay(null);
     }
-    if (map && (map as any)._circleClickHandler) {
-      map.off("click", (map as any)._circleClickHandler);
-      delete (map as any)._circleClickHandler;
+    const mapRef = map as L.Map & { _circleClickHandler?: L.LeafletMouseEventHandlerFn } | undefined;
+    if (mapRef?._circleClickHandler) {
+      mapRef.off("click", mapRef._circleClickHandler);
+      delete mapRef._circleClickHandler;
     }
     toast({ title: "Cancelled", description: "Circle creation cancelled" });
   };
@@ -304,9 +328,10 @@ export const GeofenceManagement = ({ map }: GeofenceManagementProps) => {
     }
 
     try {
-      const wialon = (window as any).wialon;
+       
+      const wialon = window.wialon;
       const session = wialon.core.Session.getInstance();
-      const resource = session.getItem(targetResourceId);
+      const resource = session.getItem(targetResourceId) as WialonResource | null;
       if (!resource) throw new Error("Resource not found");
 
       const hexToArgb = (hex: string): number => {

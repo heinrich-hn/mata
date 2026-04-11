@@ -17,8 +17,7 @@ import type {
 export const getRecurringSchedules = async (
   activeOnly = false
 ): Promise<RecurringSchedule[]> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
+  let query = supabase
     .from('recurring_schedules')
     .select('*')
     .order('name');
@@ -51,8 +50,7 @@ export const createRecurringSchedule = async (
     destination_lng: input.destination_lng ?? destination?.lng,
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from('recurring_schedules')
     .insert([scheduleData])
     .select()
@@ -69,8 +67,7 @@ export const updateRecurringSchedule = async (
   id: string,
   updates: Partial<CreateRecurringScheduleInput>
 ): Promise<RecurringSchedule> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from('recurring_schedules')
     .update(updates)
     .eq('id', id)
@@ -85,8 +82,7 @@ export const updateRecurringSchedule = async (
  * Delete a recurring schedule
  */
 export const deleteRecurringSchedule = async (id: string): Promise<void> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from('recurring_schedules')
     .delete()
     .eq('id', id);
@@ -112,8 +108,7 @@ export const generateLoadsFromSchedule = async (
   startDate?: string,
   endDate?: string
 ): Promise<GenerateLoadsResult> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any).rpc('generate_loads_from_schedule', {
+  const { data, error } = await supabase.rpc('generate_loads_from_schedule', {
     p_schedule_id: scheduleId,
     p_start_date: startDate || new Date().toISOString().split('T')[0],
     p_end_date: endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -155,24 +150,17 @@ export const generateLoadsFromAllSchedules = async (
  * Get schedule statistics
  */
 export const getScheduleStats = async () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from('recurring_schedules')
-    .select('id, is_active, total_loads_generated');
+    .select('id, is_active');
 
   if (error) throw error;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedData = data as any[];
-
   const stats = {
-    total: typedData?.length || 0,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    active: typedData?.filter((s: any) => s.is_active).length || 0,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    inactive: typedData?.filter((s: any) => !s.is_active).length || 0,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    totalLoadsGenerated: typedData?.reduce((sum: number, s: any) => sum + (s.total_loads_generated || 0), 0) || 0,
+    total: data?.length || 0,
+    active: data?.filter((s) => s.is_active).length || 0,
+    inactive: data?.filter((s) => !s.is_active).length || 0,
+    totalLoadsGenerated: 0,
   };
 
   return stats;

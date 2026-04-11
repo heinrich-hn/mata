@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -79,8 +80,7 @@ const statusColors: Record<string, string> = {
     cancelled: "bg-gray-50 text-gray-500 border-gray-200",
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const parseComments = (raw: any): FollowUpComment[] | null => {
+const parseComments = (raw: unknown): FollowUpComment[] | null => {
     if (!raw) return null;
     if (Array.isArray(raw)) return raw as FollowUpComment[];
     return null;
@@ -110,8 +110,7 @@ const JobCardFollowUpsTab = () => {
 
             // Fetch job card info for each follow-up
             const entityIds = [...new Set((data || []).map((d) => d.related_entity_id).filter(Boolean))];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let jobCardsMap: Record<string, any> = {};
+            let jobCardsMap: Record<string, Record<string, unknown>> = {};
 
             if (entityIds.length > 0) {
                 const { data: jobCards } = await supabase
@@ -122,8 +121,7 @@ const JobCardFollowUpsTab = () => {
                 if (jobCards) {
                     // Fetch vehicles for job cards that have vehicle_id
                     const vehicleIds = [...new Set(jobCards.map((jc) => jc.vehicle_id).filter(Boolean) as string[])];
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    let vehiclesMap: Record<string, any> = {};
+                    let vehiclesMap: Record<string, Record<string, unknown>> = {};
                     if (vehicleIds.length > 0) {
                         const { data: vehicles } = await supabase
                             .from("vehicles")
@@ -230,8 +228,7 @@ const JobCardFollowUpsTab = () => {
 
         const { error } = await supabase
             .from("action_items")
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .update({ comments: updatedComments as any })
+            .update({ comments: updatedComments as unknown as Json[] })
             .eq("id", followUpId);
 
         if (error) {

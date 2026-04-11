@@ -2,6 +2,9 @@ import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+/** jsPDF instance with autoTable plugin properties */
+type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
+
 export interface OocReportExportData {
     id: string;
     vehicle_id_or_license: string;
@@ -182,8 +185,7 @@ export function generateOocReportPDF(data: OocReportExportData): void {
             margin: { left: margin, right: margin },
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        yPos = (doc as any).lastAutoTable.finalY + 10;
+        yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
 
     // =====================
@@ -240,8 +242,7 @@ export function generateOocReportPDF(data: OocReportExportData): void {
             },
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        yPos = (doc as any).lastAutoTable.finalY + 10;
+        yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
 
     // =====================
@@ -307,8 +308,7 @@ export function generateOocReportPDF(data: OocReportExportData): void {
             },
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        yPos = (doc as any).lastAutoTable.finalY + 10;
+        yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
 
     // =====================

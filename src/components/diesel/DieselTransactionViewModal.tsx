@@ -64,13 +64,11 @@ const DieselTransactionViewModal = ({
   // Access reefer-specific fields (carried through from reefer_diesel_records mapping)
   const reeferData = useMemo(() => {
     if (!isReefer || !record) return null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rec = record as any;
     return {
-      operatingHours: rec.operating_hours as number | null,
-      previousOperatingHours: rec.previous_operating_hours as number | null,
-      hoursOperated: rec.hours_operated as number | null,
-      litresPerHour: rec.litres_per_hour as number | null,
+      operatingHours: record.operating_hours ?? null,
+      previousOperatingHours: record.previous_operating_hours ?? null,
+      hoursOperated: record.hours_operated ?? null,
+      litresPerHour: record.litres_per_hour ?? null,
     };
   }, [isReefer, record]);
 
@@ -142,7 +140,7 @@ const DieselTransactionViewModal = ({
             </div>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold">{formatCurrency(record.total_cost, (record.currency || 'ZAR') as 'ZAR' | 'USD')}</p>
+            <p className="text-2xl font-bold">{formatCurrency(record.total_cost, (record.currency || 'USD') as string)}</p>
             <p className="text-sm text-muted-foreground">{formatNumber(record.litres_filled)} L filled</p>
           </div>
         </div>
@@ -209,7 +207,7 @@ const DieselTransactionViewModal = ({
                   <p className="text-muted-foreground">Cost per Litre</p>
                   <p className="font-medium">
                     {record.cost_per_litre
-                      ? formatCurrency(record.cost_per_litre, (record.currency || 'ZAR') as 'ZAR' | 'USD')
+                      ? formatCurrency(record.cost_per_litre, (record.currency || 'USD') as string)
                       : 'N/A'}
                   </p>
                 </div>

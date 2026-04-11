@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,14 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Circle as CircleIcon, MapPin, Route, RefreshCw, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import type L from "leaflet";
+
+interface GeofenceCoord {
+  lat?: number;
+  lng?: number;
+  0?: number;
+  1?: number;
+}
 
 interface Geofence {
   id: string;
@@ -23,7 +30,7 @@ interface Geofence {
 }
 
 interface GeofenceDisplayProps {
-  map?: any;
+  map?: L.Map;
 }
 
 export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
@@ -31,7 +38,7 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
   const [allGeofences, setAllGeofences] = useState<Geofence[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [geofenceLayers, setGeofenceLayers] = useState<any[]>([]);
+  const [geofenceLayers, setGeofenceLayers] = useState<L.Layer[]>([]);
   const { toast } = useToast();
 
   const loadGeofences = useCallback(async (showLoading = true) => {
@@ -39,22 +46,21 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
     setRefreshing(true);
 
     try {
-      // Load all geofences
       const { data: allData, error: allError } = await supabase
-        .from('geofences' as any)
+        .from('geofences')
         .select('*')
-        .eq('is_active', true) as any;
+        .eq('is_active', true) as { data: Geofence[] | null; error: { message: string } | null };
 
       if (allError) throw allError;
       setAllGeofences((allData as Geofence[]) || []);
 
       // Load geofences with coordinates
       const { data, error } = await supabase
-        .from('geofences' as any)
+        .from('geofences')
         .select('*')
         .eq('is_active', true)
         .not('center_lat', 'is', null)
-        .not('center_lng', 'is', null) as any;
+        .not('center_lng', 'is', null) as { data: Geofence[] | null; error: { message: string } | null };
 
       if (error) throw error;
 
@@ -62,7 +68,7 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
       setGeofences(withCoords);
 
       console.log(`📍 Loaded ${withCoords.length} geofences with coordinates (${allData?.length || 0} total)`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to load geofences:', error);
       toast({
         title: "Error",
@@ -103,8 +109,8 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
   useEffect(() => {
     if (!map || !geofences.length || typeof window === 'undefined') return;
 
-    const L = (window as any).L;
-    if (!L) {
+    const leafletLib = window.L;
+    if (!leafletLib) {
       console.warn('Leaflet not available');
       return;
     }
@@ -120,7 +126,7 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
       }
     });
 
-    const newLayers: any[] = [];
+    const newLayers: L.Layer[] = [];
 
     geofences.forEach(geofence => {
       const color = geofence.color || '#3B82F6';
@@ -130,7 +136,7 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
         if (geofence.type === 'circle' && geofence.center_lat && geofence.center_lng) {
           const radius = geofence.radius || 500;
 
-          layer = L.circle([geofence.center_lat, geofence.center_lng], {
+          layer = leafletLib.circle([geofence.center_lat, geofence.center_lng], {
             radius: radius,
             color: color,
             fillColor: color,
@@ -153,11 +159,11 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
 
         else if (geofence.type === 'polygon' && geofence.coordinates) {
           const positions = Array.isArray(geofence.coordinates)
-            ? geofence.coordinates.map((coord: any) => [coord.lat || coord[1], coord.lng || coord[0]])
+            ? geofence.coordinates.map((coord: GeofenceCoord) => [coord.lat || coord[1], coord.lng || coord[0]] as [number, number])
             : [];
 
           if (positions.length > 0) {
-            layer = L.polygon(positions, {
+            layer = leafletLib.polygon(positions, {
               color: color,
               weight: 3,
               fillColor: color,
@@ -179,11 +185,11 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
 
         else if (geofence.type === 'line' && geofence.coordinates) {
           const positions = Array.isArray(geofence.coordinates)
-            ? geofence.coordinates.map((coord: any) => [coord.lat || coord[1], coord.lng || coord[0]])
+            ? geofence.coordinates.map((coord: GeofenceCoord) => [coord.lat || coord[1], coord.lng || coord[0]] as [number, number])
             : [];
 
           if (positions.length > 0) {
-            layer = L.polyline(positions, {
+            layer = leafletLib.polyline(positions, {
               color: color,
               weight: 4,
               opacity: 0.7
@@ -204,7 +210,7 @@ export default function GeofenceDisplay({ map }: GeofenceDisplayProps) {
 
         // Fallback: marker
         else if (geofence.center_lat && geofence.center_lng) {
-          layer = L.marker([geofence.center_lat, geofence.center_lng]);
+          layer = leafletLib.marker([geofence.center_lat, geofence.center_lng]);
 
           layer.bindPopup(`
             <div style="padding: 8px;">

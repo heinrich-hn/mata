@@ -180,8 +180,7 @@ export const TrackVisualization = ({ map, defaultColor = "#3B82F6" }: TrackVisua
 
       // Add to map
       const layerId = `track-${selectedUnitId}-${Date.now()}`;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (map && typeof (window as any).L !== 'undefined') {
+      if (map && typeof L !== 'undefined') {
         addDebugInfo(`🗺️ Adding track to map: ${trackPoints.length} points`);
         // Polyline
         const line = L.polyline(
@@ -286,8 +285,7 @@ export const TrackVisualization = ({ map, defaultColor = "#3B82F6" }: TrackVisua
   };
 
   const removeTrack = useCallback((track: TrackInfo) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (map && typeof (window as any).L !== 'undefined') {
+    if (map && typeof L !== 'undefined') {
       map.eachLayer((layer: L.Layer & { _trackId?: string }) => {
         if (layer._trackId === track.layerId) map.removeLayer(layer);
       });
@@ -303,8 +301,7 @@ export const TrackVisualization = ({ map, defaultColor = "#3B82F6" }: TrackVisua
   }, [map]);
 
   const clearAllTracks = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (map && typeof (window as any).L !== 'undefined') {
+    if (map && typeof L !== 'undefined') {
       map.eachLayer((layer: L.Layer & { _trackId?: string }) => {
         if (layer._trackId) map.removeLayer(layer);
       });

@@ -4,8 +4,40 @@ import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import { formatCurrency, formatNumber } from "./formatters";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const generateDieselDebriefPDF = (record: any, norm?: any) => {
+export interface DieselDebriefRecord {
+  id: string;
+  fleet_number?: string;
+  date?: string;
+  driver_name?: string | null;
+  fuel_station?: string;
+  litres_filled?: number | null;
+  cost_per_litre?: number | null;
+  total_cost?: number | null;
+  currency?: string;
+  km_per_litre?: number | null;
+  distance_travelled?: number | null;
+  trip_id?: string | null;
+  trip_number?: string | null;
+  linked_trailers?: string[] | null;
+  requires_debrief?: boolean;
+  debrief_trigger_reason?: string | null;
+  debrief_notes?: string | null;
+  debrief_signed?: boolean;
+  debrief_signed_at?: string | null;
+  debrief_signed_by?: string | null;
+  probe_reading?: number | null;
+  probe_discrepancy?: number | null;
+  probe_verified?: boolean;
+  probe_action_taken?: string | null;
+}
+
+export interface DieselNorm {
+  expected_km_per_litre?: number | null;
+  min_acceptable?: number | null;
+  max_acceptable?: number | null;
+}
+
+export const generateDieselDebriefPDF = (record: DieselDebriefRecord, norm?: DieselNorm) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -49,7 +81,7 @@ export const generateDieselDebriefPDF = (record: any, norm?: any) => {
   doc.text(`Station: ${record.fuel_station}`, pageWidth / 2 + 10, detailsY + 7);
 
   doc.text(`Litres Filled: ${formatNumber(record.litres_filled)} L`, margin + 5, detailsY + 14);
-  doc.text(`Total Cost: ${formatCurrency(record.total_cost, record.currency || "ZAR")}`, pageWidth / 2 + 10, detailsY + 14);
+  doc.text(`Total Cost: ${formatCurrency(record.total_cost, record.currency || "USD")}`, pageWidth / 2 + 10, detailsY + 14);
 
   if (record.distance_travelled) {
     doc.text(`Distance: ${formatNumber(record.distance_travelled)} km`, margin + 5, detailsY + 21);
@@ -235,8 +267,7 @@ export const generateDieselDebriefPDF = (record: any, norm?: any) => {
  * Same as generateDieselDebriefPDF but returns the PDF as a Uint8Array instead of
  * triggering a browser download. Used for programmatic sharing (e.g. WhatsApp).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const generateDieselDebriefPDFBlob = (record: any, norm?: any): { blob: Blob; fileName: string } => {
+export const generateDieselDebriefPDFBlob = (record: DieselDebriefRecord, norm?: DieselNorm): { blob: Blob; fileName: string } => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -264,7 +295,7 @@ export const generateDieselDebriefPDFBlob = (record: any, norm?: any): { blob: B
   doc.text(`Driver: ${record.driver_name || "N/A"}`, margin + 5, dy + 7);
   doc.text(`Station: ${record.fuel_station}`, pageWidth / 2 + 10, dy + 7);
   doc.text(`Litres Filled: ${formatNumber(record.litres_filled)} L`, margin + 5, dy + 14);
-  doc.text(`Total Cost: ${formatCurrency(record.total_cost, record.currency || "ZAR")}`, pageWidth / 2 + 10, dy + 14);
+  doc.text(`Total Cost: ${formatCurrency(record.total_cost, record.currency || "USD")}`, pageWidth / 2 + 10, dy + 14);
   if (record.distance_travelled) doc.text(`Distance: ${formatNumber(record.distance_travelled)} km`, margin + 5, dy + 21);
   if (record.km_per_litre) doc.text(`Efficiency: ${formatNumber(record.km_per_litre, 2)} km/L`, pageWidth / 2 + 10, dy + 21);
   yPos += 55;
@@ -737,8 +768,7 @@ export const generateSelectedTransactionsPDF = (
         xPos += colWidths[4];
 
         // Cost
-        const currency = record.currency === "USD" ? "$" : "R";
-        doc.text(`${currency}${formatNumber(record.total_cost || 0)}`, xPos, yPos);
+        doc.text(`$${formatNumber(record.total_cost || 0)}`, xPos, yPos);
         xPos += colWidths[5];
 
         // Status
@@ -1030,7 +1060,7 @@ export const generateDebriefExcel = async (
         rec.fuel_station || '',
         rec.litres_filled?.toFixed(2) || '',
         rec.total_cost?.toFixed(2) || '',
-        rec.currency || 'ZAR',
+        rec.currency || 'USD',
         rec.distance_travelled || '',
         rec.km_per_litre?.toFixed(2) || '',
         rec.expected_km_per_litre?.toFixed(2) || '',
@@ -1412,5 +1442,403 @@ export const generateDebriefPDF = (
   // Save
   const typeFile = type === 'pending' ? 'pending' : type === 'completed' ? 'completed' : 'all';
   const fileName = `diesel_debriefs_${typeFile}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+  doc.save(fileName);
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Weekly Debrief Export — Last 7 days per vehicle with signature & acceptance
+// ──────────────────────────────────────────────────────────────────────────────
+
+export interface WeeklyDebriefRecord {
+  id: string;
+  fleet_number: string;
+  date: string;
+  driver_name?: string;
+  fuel_station?: string;
+  litres_filled?: number;
+  total_cost?: number;
+  currency?: string;
+  km_per_litre?: number;
+  distance_travelled?: number;
+  debrief_signed?: boolean;
+  debrief_signed_by?: string;
+  debrief_signed_at?: string;
+  debrief_notes?: string;
+  requires_debrief?: boolean;
+  debrief_trigger_reason?: string;
+  probe_discrepancy?: number;
+  vehicle_litres_only?: number;
+  trailer_litres_total?: number;
+  linked_trailers?: string[];
+}
+
+export interface WeeklyDebriefNorm {
+  fleet_number: string;
+  expected_km_per_litre: number;
+  min_acceptable: number;
+  max_acceptable: number;
+}
+
+export interface WeeklyDebriefExportOptions {
+  /** All diesel records (will be filtered to last 7 days internally). */
+  records: WeeklyDebriefRecord[];
+  /** Norms lookup — used to show expected vs actual efficiency. */
+  norms: WeeklyDebriefNorm[];
+  /** Optional: restrict to a single fleet number. If omitted all fleets are included. */
+  fleetNumber?: string;
+  /** Optional: restrict to a single driver name. */
+  driverName?: string;
+  /** If true, returns a Blob instead of triggering a download. */
+  returnBlob?: boolean;
+}
+
+/**
+ * Generate a PDF containing the last 7 days of diesel debriefs grouped by
+ * vehicle, with a signature & acceptance section on each vehicle page.
+ */
+export const generateWeeklyDebriefsPDF = (options: WeeklyDebriefExportOptions): Blob | void => {
+  const { records, norms, fleetNumber, driverName, returnBlob } = options;
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - 2 * margin;
+
+  // ── Date range: last 7 days ──
+  const now = new Date();
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const rangeStart = format(sevenDaysAgo, 'yyyy-MM-dd');
+  const rangeEnd = format(now, 'yyyy-MM-dd');
+
+  // Filter records to the window + optional fleet/driver filter
+  let filtered = records.filter(r => r.date >= rangeStart && r.date <= rangeEnd);
+  if (fleetNumber) filtered = filtered.filter(r => r.fleet_number === fleetNumber);
+  if (driverName) filtered = filtered.filter(r => r.driver_name === driverName);
+
+  // Group by fleet
+  const byFleet: Record<string, WeeklyDebriefRecord[]> = {};
+  for (const r of filtered) {
+    if (!byFleet[r.fleet_number]) byFleet[r.fleet_number] = [];
+    byFleet[r.fleet_number].push(r);
+  }
+  // Sort each group by date ascending
+  for (const fleet of Object.keys(byFleet)) {
+    byFleet[fleet].sort((a, b) => a.date.localeCompare(b.date));
+  }
+  const fleetNumbers = Object.keys(byFleet).sort();
+
+  if (fleetNumbers.length === 0) {
+    // Nothing to export — produce a single page notice
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('No debrief records found for the last 7 days.', pageWidth / 2, 40, { align: 'center' });
+    if (returnBlob) return doc.output('blob');
+    doc.save(`weekly-debriefs-${format(now, 'yyyy-MM-dd')}.pdf`);
+    return;
+  }
+
+  const getNorm = (fleet: string) => norms.find(n => n.fleet_number === fleet);
+
+  // Helpers
+  let yPos = 0;
+
+  const checkPageBreak = (space: number) => {
+    if (yPos + space > pageHeight - 30) {
+      doc.addPage();
+      yPos = 20;
+      return true;
+    }
+    return false;
+  };
+
+  const addFooter = () => {
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
+    doc.text(
+      `Generated: ${format(now, 'MMM dd, yyyy HH:mm')} | Weekly Debrief Report`,
+      pageWidth / 2,
+      pageHeight - 10,
+      { align: 'center' },
+    );
+    doc.setTextColor(0, 0, 0);
+  };
+
+  // ──────────────────────────────────────────────
+  // Iterate each fleet — new page per vehicle
+  // ──────────────────────────────────────────────
+  fleetNumbers.forEach((fleet, fleetIdx) => {
+    if (fleetIdx > 0) doc.addPage();
+    yPos = 20;
+
+    const fleetRecords = byFleet[fleet];
+    const norm = getNorm(fleet);
+
+    // ── Title ──
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('WEEKLY DIESEL DEBRIEF REPORT', pageWidth / 2, yPos, { align: 'center' });
+    yPos += 9;
+
+    doc.setFontSize(11);
+    doc.text(`Vehicle: ${fleet}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 7;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `Period: ${format(sevenDaysAgo, 'dd MMM yyyy')} – ${format(now, 'dd MMM yyyy')}`,
+      pageWidth / 2,
+      yPos,
+      { align: 'center' },
+    );
+    yPos += 5;
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Generated: ${format(now, 'dd MMM yyyy HH:mm')}`, pageWidth / 2, yPos, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    yPos += 10;
+
+    // ── Norm info box ──
+    if (norm) {
+      doc.setFillColor(240, 245, 255);
+      doc.roundedRect(margin, yPos, contentWidth, 14, 2, 2, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Fleet Norm:', margin + 4, yPos + 5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        `Expected ${formatNumber(norm.expected_km_per_litre, 2)} km/L  |  Acceptable range: ${formatNumber(norm.min_acceptable, 2)} – ${formatNumber(norm.max_acceptable, 2)} km/L`,
+        margin + 30,
+        yPos + 5,
+      );
+      // Totals
+      const totalLitres = fleetRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
+      const totalCost = fleetRecords.reduce((s, r) => s + (r.total_cost || 0), 0);
+      const curr = (fleetRecords[0]?.currency || 'USD') as string;
+      doc.setFontSize(8);
+      doc.text(
+        `Transactions: ${fleetRecords.length}  |  Total: ${formatNumber(totalLitres, 1)} L  |  ${formatCurrency(totalCost, curr)}`,
+        margin + 4,
+        yPos + 11,
+      );
+      yPos += 18;
+    } else {
+      yPos += 2;
+    }
+
+    // ── Table header ──
+    const colWidths = [22, 30, 30, 20, 22, 20, 46];
+    const headers = ['Date', 'Driver', 'Station', 'Litres', 'Cost', 'km/L', 'Debrief Status'];
+
+    doc.setFillColor(30, 41, 59); // slate-800
+    doc.rect(margin, yPos, contentWidth, 8, 'F');
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    let xPos = margin + 2;
+    headers.forEach((h, i) => {
+      doc.text(h, xPos, yPos + 5.5);
+      xPos += colWidths[i];
+    });
+    doc.setTextColor(0, 0, 0);
+    yPos += 10;
+
+    // ── Table rows ──
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+
+    fleetRecords.forEach((record, rowIdx) => {
+      checkPageBreak(14);
+
+      // Alternate row background
+      if (rowIdx % 2 === 0) {
+        doc.setFillColor(249, 250, 251);
+        doc.rect(margin, yPos - 3, contentWidth, 8, 'F');
+      }
+
+      xPos = margin + 2;
+
+      // Date
+      doc.text(format(new Date(record.date), 'dd MMM'), xPos, yPos);
+      xPos += colWidths[0];
+
+      // Driver
+      doc.text((record.driver_name || 'N/A').substring(0, 16), xPos, yPos);
+      xPos += colWidths[1];
+
+      // Station
+      doc.text((record.fuel_station || 'N/A').substring(0, 16), xPos, yPos);
+      xPos += colWidths[2];
+
+      // Litres
+      doc.text(formatNumber(record.litres_filled || 0, 1) + ' L', xPos, yPos);
+      xPos += colWidths[3];
+
+      // Cost
+      const curr = (record.currency || 'USD') as string;
+      doc.text(formatCurrency(record.total_cost || 0, curr), xPos, yPos);
+      xPos += colWidths[4];
+
+      // km/L (colour-coded)
+      if (record.km_per_litre) {
+        const belowNorm = norm && record.km_per_litre < norm.min_acceptable;
+        if (belowNorm) {
+          doc.setTextColor(220, 38, 38); // red
+        } else {
+          doc.setTextColor(22, 163, 74); // green
+        }
+        doc.text(formatNumber(record.km_per_litre, 2), xPos, yPos);
+        doc.setTextColor(0, 0, 0);
+      } else {
+        doc.text('N/A', xPos, yPos);
+      }
+      xPos += colWidths[5];
+
+      // Debrief status
+      if (record.debrief_signed) {
+        doc.setTextColor(22, 163, 74);
+        const signedText = `Signed: ${(record.debrief_signed_by || '').substring(0, 12)}`;
+        doc.text(signedText, xPos, yPos);
+        doc.setTextColor(0, 0, 0);
+      } else if (record.requires_debrief) {
+        doc.setTextColor(220, 38, 38);
+        doc.text('PENDING', xPos, yPos);
+        doc.setTextColor(0, 0, 0);
+      } else {
+        doc.setTextColor(120, 120, 120);
+        doc.text('Within norm', xPos, yPos);
+        doc.setTextColor(0, 0, 0);
+      }
+
+      yPos += 7;
+
+      // If there are debrief notes, show them in a sub-row
+      if (record.debrief_notes) {
+        checkPageBreak(8);
+        doc.setFontSize(6.5);
+        doc.setTextColor(100, 100, 100);
+        const noteText = `Notes: ${record.debrief_notes.substring(0, 90)}${record.debrief_notes.length > 90 ? '...' : ''}`;
+        doc.text(noteText, margin + 4, yPos);
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(7.5);
+        yPos += 5;
+      }
+
+      // Separator
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, yPos - 1, margin + contentWidth, yPos - 1);
+    });
+
+    yPos += 6;
+
+    // ── Summary totals ──
+    checkPageBreak(20);
+    const totalLitres = fleetRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
+    const totalCost = fleetRecords.reduce((s, r) => s + (r.total_cost || 0), 0);
+    const avgKmL = fleetRecords.filter(r => r.km_per_litre).reduce((s, r) => s + (r.km_per_litre || 0), 0) / (fleetRecords.filter(r => r.km_per_litre).length || 1);
+    const pending = fleetRecords.filter(r => r.requires_debrief && !r.debrief_signed).length;
+    const completed = fleetRecords.filter(r => r.debrief_signed).length;
+    const curr = (fleetRecords[0]?.currency || 'USD') as string;
+
+    doc.setFillColor(245, 245, 245);
+    doc.roundedRect(margin, yPos, contentWidth, 16, 2, 2, 'F');
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Weekly Totals:', margin + 4, yPos + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `${formatNumber(totalLitres, 1)} L  |  ${formatCurrency(totalCost, curr)}  |  Avg ${formatNumber(avgKmL, 2)} km/L  |  Debriefed: ${completed}  |  Pending: ${pending}`,
+      margin + 34,
+      yPos + 5,
+    );
+
+    yPos += 10;
+
+    // ── Issues summary (only if there are records requiring debrief) ──
+    const issueRecords = fleetRecords.filter(r => r.requires_debrief);
+    if (issueRecords.length > 0) {
+      checkPageBreak(16 + issueRecords.length * 5);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Issues Identified:', margin + 4, yPos + 5);
+      yPos += 9;
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      issueRecords.forEach(r => {
+        checkPageBreak(7);
+        const reason = r.debrief_trigger_reason || 'Below acceptable efficiency';
+        doc.text(
+          `• ${format(new Date(r.date), 'dd MMM')} — ${r.driver_name || 'N/A'}: ${reason.substring(0, 80)}`,
+          margin + 6,
+          yPos,
+        );
+        yPos += 5;
+      });
+      yPos += 4;
+    }
+
+    // ──────────────────────────────────────────────
+    // SIGNATURE & ACCEPTANCE SECTION
+    // ──────────────────────────────────────────────
+    checkPageBreak(75);
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SIGNATURE & ACCEPTANCE', margin, yPos + 2);
+    yPos += 8;
+
+    doc.setDrawColor(180, 180, 180);
+    doc.rect(margin, yPos, contentWidth, 64);
+
+    const sigStartY = yPos + 6;
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      'I have reviewed the above diesel consumption records for the stated period. All discrepancies',
+      margin + 4,
+      sigStartY,
+    );
+    doc.text(
+      'have been discussed and the corrective actions noted herein are understood and accepted.',
+      margin + 4,
+      sigStartY + 5,
+    );
+
+    const sig1Y = sigStartY + 18;
+    const sig2Y = sig1Y + 22;
+
+    // Fleet Manager / Debriefer
+    doc.setFont('helvetica', 'bold');
+    doc.text('Fleet Manager / Debriefer:', margin + 4, sig1Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Name:', margin + 4, sig1Y + 7);
+    doc.line(margin + 18, sig1Y + 8, margin + 80, sig1Y + 8);
+    doc.text('Signature:', margin + 85, sig1Y + 7);
+    doc.line(margin + 103, sig1Y + 8, margin + contentWidth - 4, sig1Y + 8);
+    doc.text('Date:', margin + 4, sig1Y + 14);
+    doc.line(margin + 16, sig1Y + 15, margin + 55, sig1Y + 15);
+
+    // Driver
+    doc.setFont('helvetica', 'bold');
+    doc.text('Driver:', margin + 4, sig2Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Name:', margin + 4, sig2Y + 7);
+    doc.line(margin + 18, sig2Y + 8, margin + 80, sig2Y + 8);
+    doc.text('Signature:', margin + 85, sig2Y + 7);
+    doc.line(margin + 103, sig2Y + 8, margin + contentWidth - 4, sig2Y + 8);
+    doc.text('Date:', margin + 4, sig2Y + 14);
+    doc.line(margin + 16, sig2Y + 15, margin + 55, sig2Y + 15);
+
+    // Footer
+    addFooter();
+  });
+
+  // Save or return blob
+  const driverSuffix = driverName ? `-${driverName.replace(/\s+/g, '_')}` : '';
+  const fleetSuffix = fleetNumber || 'all-vehicles';
+  const fileName = `weekly-debriefs-${fleetSuffix}${driverSuffix}-${format(now, 'yyyy-MM-dd')}.pdf`;
+  if (returnBlob) return doc.output('blob');
   doc.save(fileName);
 };

@@ -211,9 +211,7 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       devOptions: {
-        enabled: true,
-        type: 'module',
-        navigateFallback: 'index.html',
+        enabled: false,
       },
     }),
   ].filter(Boolean),
@@ -222,6 +220,8 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
       // Force Leaflet JS to use the production build (but not CSS)
       'leaflet$': path.resolve(__dirname, 'node_modules/leaflet/dist/leaflet.js'),
+      // Polyfill Node.js stream for xlsx-js-style browser compatibility
+      "stream": "stream-browserify",
     },
   },
   // 🔥 CRITICAL: Don't pre-bundle Leaflet and force proper React imports

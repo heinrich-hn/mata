@@ -502,18 +502,12 @@ export default function ExpensesPage(): JSX.Element {
 
   // Start editing an entry
   const startEdit = useCallback((entry: CostEntry): void => {
-    // Extract original ZAR amount from notes if present
-    let amount = entry.amount.toString();
-    let currency = entry.currency || 'USD';
-    const zarMatch = entry.notes?.match(/\[Original: ZAR ([\d.]+),/);
-    if (zarMatch) {
-      amount = zarMatch[1];
-      currency = 'ZAR';
-    }
+    
+    const amount = entry.amount.toString();
+    const currency = entry.currency || 'USD';
 
     // Strip the driver metadata suffix from notes for editing
     let cleanNotes = entry.notes || '';
-    cleanNotes = cleanNotes.replace(/\s*\[Original: ZAR [\d.]+, Rate: [\d.]+\]/, '');
     cleanNotes = cleanNotes.replace(/\s*\[Submitted by: [^\]]+\]/, '');
     cleanNotes = cleanNotes.trim();
 
@@ -553,8 +547,8 @@ export default function ExpensesPage(): JSX.Element {
 
       // Always convert to USD for trip cost association
       const rawAmount = parseFloat(data.amount);
-      const usdAmount = data.currency === 'ZAR' ? rawAmount / 18.6 : rawAmount;
-      const zarNote = data.currency === 'ZAR' ? ` [Original: ZAR ${rawAmount.toFixed(2)}, Rate: 18.6]` : '';
+      const usdAmount = data.currency === 'USD' ? rawAmount / 18.6 : rawAmount;
+      const zarNote = "";
 
       const costData = {
         trip_id: data.trip_id || null,
@@ -628,8 +622,8 @@ export default function ExpensesPage(): JSX.Element {
       }
 
       const rawAmount = parseFloat(data.amount);
-      const usdAmount = data.currency === 'ZAR' ? rawAmount / 18.6 : rawAmount;
-      const zarNote = data.currency === 'ZAR' ? ` [Original: ZAR ${rawAmount.toFixed(2)}, Rate: 18.6]` : '';
+      const usdAmount = data.currency === 'USD' ? rawAmount / 18.6 : rawAmount;
+      const zarNote = "";
 
       const costData = {
         trip_id: data.trip_id || null,
@@ -747,15 +741,6 @@ export default function ExpensesPage(): JSX.Element {
     setErrors({});
   }, []);
 
-  // ZAR to USD conversion rate
-  const ZAR_TO_USD_RATE = 18.6;
-
-  // Compute the USD equivalent when currency is ZAR
-  const usdEquivalent = useMemo((): string | null => {
-    const amt = parseFloat(formData.amount);
-    if (!amt || amt <= 0 || formData.currency !== 'ZAR') return null;
-    return (amt / ZAR_TO_USD_RATE).toFixed(2);
-  }, [formData.amount, formData.currency]);
 
   const validateForm = useCallback((): boolean => {
     const newErrors: Record<string, string> = {};
@@ -922,44 +907,12 @@ export default function ExpensesPage(): JSX.Element {
               </CardContent>
             </Card>
 
-            {/* Amount & Currency */}
+            {/* Amount */}
             <Card>
               <CardContent className="p-4 space-y-4">
                 <div>
                   <Label className="text-sm font-medium mb-2 block">
-                    Currency *
-                  </Label>
-                  <div className="flex rounded-lg border overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange("currency", "ZAR")}
-                      className={cn(
-                        "flex-1 py-3 text-sm font-semibold transition-colors",
-                        formData.currency === "ZAR"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
-                      )}
-                    >
-                      ZAR (R)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange("currency", "USD")}
-                      className={cn(
-                        "flex-1 py-3 text-sm font-semibold transition-colors",
-                        formData.currency === "USD"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
-                      )}
-                    >
-                      USD ($)
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">
-                    Amount ({formData.currency === 'ZAR' ? 'R' : '$'}) *
+                    Amount ($) *
                   </Label>
                   <Input
                     type="number"
@@ -975,21 +928,6 @@ export default function ExpensesPage(): JSX.Element {
                     <p className="text-sm text-destructive mt-2">{errors.amount}</p>
                   )}
                 </div>
-
-                {/* ZAR → USD conversion preview */}
-                {formData.currency === 'ZAR' && usdEquivalent && (
-                  <div className="bg-info/5 dark:bg-info/10 border border-info/20 dark:border-info/30 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-info">USD equivalent (÷ 18.6)</span>
-                      <span className="text-sm font-bold text-info tabular-nums">
-                        $ {usdEquivalent}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-info/70 mt-1">
-                      This USD value will be saved and linked to trip costs
-                    </p>
-                  </div>
-                )}
               </CardContent>
             </Card>
 

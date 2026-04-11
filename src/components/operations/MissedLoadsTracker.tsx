@@ -55,7 +55,7 @@ const MissedLoadsTracker = ({
     requested_delivery_date: '',
     route: '',
     estimated_revenue: '',
-    currency: 'ZAR',
+    currency: 'USD',
     reason: '',
     reason_description: '',
     resolution_status: 'pending',
@@ -167,7 +167,7 @@ const MissedLoadsTracker = ({
       requested_delivery_date: load.requested_delivery_date || '',
       route: load.route || '',
       estimated_revenue: load.estimated_revenue?.toString() || '',
-      currency: load.currency || 'ZAR',
+      currency: load.currency || 'USD',
       reason: load.reason,
       reason_description: load.reason_description || '',
       resolution_status: load.resolution_status || 'pending',
@@ -205,7 +205,7 @@ const MissedLoadsTracker = ({
       requested_delivery_date: '',
       route: '',
       estimated_revenue: '',
-      currency: 'ZAR',
+      currency: 'USD',
       reason: '',
       reason_description: '',
       resolution_status: 'pending',
@@ -217,8 +217,8 @@ const MissedLoadsTracker = ({
 
   // Calculate summary metrics
   const totalMissedLoads = missedLoads.length;
-  const revenueLostZAR = missedLoads
-    .filter(load => load.currency === 'ZAR' && load.resolution_status !== 'resolved')
+  const revenueLost = missedLoads
+    .filter(load => load.currency === 'USD' && load.resolution_status !== 'resolved')
     .reduce((sum, load) => sum + (load.estimated_revenue || 0), 0);
   const revenueLostUSD = missedLoads
     .filter(load => load.currency === 'USD' && load.resolution_status !== 'resolved')
@@ -273,7 +273,7 @@ const MissedLoadsTracker = ({
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-semibold">{formatCurrency(revenueLostZAR, 'ZAR')}</div>
+            <div className="text-2xl font-semibold">{formatCurrency(revenueLost)}</div>
             <p className="text-xs text-muted-foreground mt-1">{formatCurrency(revenueLostUSD, 'USD')}</p>
           </CardContent>
         </Card>
@@ -350,7 +350,7 @@ const MissedLoadsTracker = ({
                         <div>
                           <p className="text-sm text-muted-foreground">Estimated Revenue</p>
                           <p className="font-medium text-destructive">
-                            {formatCurrency(load.estimated_revenue || 0, (load.currency || 'ZAR') as 'ZAR' | 'USD')}
+                            {formatCurrency(load.estimated_revenue || 0, (load.currency || 'USD') as string)}
                           </p>
                         </div>
                         <div>
@@ -471,7 +471,6 @@ const MissedLoadsTracker = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ZAR">ZAR (R)</SelectItem>
                     <SelectItem value="USD">USD ($)</SelectItem>
                   </SelectContent>
                 </Select>
@@ -586,7 +585,7 @@ const MissedLoadsTracker = ({
               <div className="text-sm text-muted-foreground space-y-1">
                 <p><strong>Customer:</strong> {resolvingLoad.customer_name || resolvingLoad.client_name}</p>
                 <p><strong>Route:</strong> {resolvingLoad.route}</p>
-                <p><strong>Estimated Revenue:</strong> {formatCurrency(resolvingLoad.estimated_revenue || 0, (resolvingLoad.currency || 'ZAR') as 'ZAR' | 'USD')}</p>
+                <p><strong>Estimated Revenue:</strong> {formatCurrency(resolvingLoad.estimated_revenue || 0, (resolvingLoad.currency || 'USD') as string)}</p>
               </div>
             </div>
 

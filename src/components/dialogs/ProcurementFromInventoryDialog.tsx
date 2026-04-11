@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, FileUp, Package, ShoppingCart, X } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -209,8 +210,7 @@ const ProcurementFromInventoryDialog = ({
       const parsedQuantity = parseInt(quantity);
       const calculatedTotal = parsedUnitPrice * parsedQuantity;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const insertData: Record<string, any> = {
+      const insertData: Database['public']['Tables']['parts_requests']['Insert'] = {
         part_name: inventoryItem.name,
         part_number: partCode || inventoryItem.partNumber || null,
         quantity: parsedQuantity,
@@ -225,16 +225,13 @@ const ProcurementFromInventoryDialog = ({
         expected_delivery_date: expectedDeliveryDate || null,
         document_url: uploadedDocUrl,
         document_name: documentFile?.name || null,
+        ir_number: irNumber || undefined,
+        make_brand: makeBrand || undefined,
       };
-
-      // Add new fields (columns added via migration 20260202000001)
-      if (irNumber) insertData.ir_number = irNumber;
-      if (makeBrand) insertData.make_brand = makeBrand;
 
       const { error } = await supabase
         .from("parts_requests")
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .insert(insertData as any);
+        .insert(insertData);
 
       if (error) throw error;
 

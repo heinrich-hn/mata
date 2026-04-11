@@ -36,6 +36,7 @@ import
     X
   } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface IncidentChecklistDialogProps {
   incident: Incident | null;
@@ -49,6 +50,7 @@ const IncidentChecklistDialog = ({
   onOpenChange,
 }: IncidentChecklistDialogProps) => {
   const { toast } = useToast();
+  const { userName, user } = useAuth();
   const [responses, setResponses] = useState<ChecklistResponse[]>([]);
   const [notes, setNotes] = useState<Record<number, string>>({});
 
@@ -88,7 +90,7 @@ const IncidentChecklistDialog = ({
         response: value,
         notes: notes[itemId],
         completed_at: new Date().toISOString(),
-        completed_by: "Current User", // TODO: Get from auth context
+        completed_by: userName || user?.email || "Unknown User",
       };
 
       if (existing >= 0) {
@@ -111,7 +113,7 @@ const IncidentChecklistDialog = ({
       await saveChecklist.mutateAsync({
         incidentId: incident.id,
         responses: responsesWithNotes,
-        completedBy: "Current User", // TODO: Get from auth context
+        completedBy: userName || user?.email || "Unknown User",
       });
 
       toast({

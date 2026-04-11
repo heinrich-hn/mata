@@ -31,7 +31,7 @@ export class WialonService {
   private isInitialized = false;
   private scriptLoaded = false;
   private sessionId: string | null = null; // Store session ID from login
-  private tokenRefreshTimeout: NodeJS.Timeout | null = null;
+  private tokenRefreshTimeout: ReturnType<typeof setTimeout> | null = null;
   private updateListeners: Set<(locations: VehicleLocation[]) => void> = new Set();
   private retryCount = 0; // Track retry attempts to prevent infinite loops
   private maxRetries = 2; // Maximum retry attempts for expired sessions
@@ -433,7 +433,7 @@ export class WialonService {
   subscribeToUpdates(callback: (locations: VehicleLocation[]) => void): () => void {
     if (!this.session || !this.sdk) {
       console.log('ℹ️ Real-time updates not available (SDK disabled). Consider using manual refresh.');
-      return () => {};
+      return () => { };
     }
 
     // Add to listeners set

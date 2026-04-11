@@ -2,7 +2,6 @@ import DriverBehaviorGrid from "@/components/driver/DriverBehaviorGrid";
 import DriverManagementSection from "@/components/driver/DriverManagementSection";
 import DriverRecruitmentSection from "@/components/driver/DriverRecruitmentSection";
 import Layout from "@/components/Layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, UserPlus, Users } from "lucide-react";
 
@@ -33,31 +32,11 @@ export default function DriverManagement() {
 
           {/* HR Driver Recruitment */}
           <TabsContent value="recruitment">
-            <Card>
-              <CardHeader>
-                <CardTitle>HR Driver Recruitment</CardTitle>
-                <CardDescription>
-                  Manage potential driver candidates through a structured three-step evaluation process
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DriverRecruitmentSection />
-              </CardContent>
-            </Card>
+            <DriverRecruitmentSection />
           </TabsContent>
           {/* Behavior Events */}
           <TabsContent value="behavior">
-            <Card>
-              <CardHeader>
-                <CardTitle>Behavior Events</CardTitle>
-                <CardDescription>
-                  Real-time monitoring with search, sort, and coaching
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DriverBehaviorGrid />
-              </CardContent>
-            </Card>
+            <DriverBehaviorGrid />
           </TabsContent>
 
 

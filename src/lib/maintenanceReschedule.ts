@@ -32,8 +32,7 @@ export async function rescheduleAfterCompletion(
         return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updatePayload: Record<string, any> = {
+    const updatePayload: Record<string, unknown> = {
         last_completed_date: completedDate.toISOString().split("T")[0],
         updated_at: new Date().toISOString(),
     };

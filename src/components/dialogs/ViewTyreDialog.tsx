@@ -67,9 +67,9 @@ const ViewTyreDialog = ({ open, onOpenChange, tyre, onInstall, onEdit }: ViewTyr
     );
   };
 
-  const formatCurrency = (amount: number | null, currency: "ZAR" | "USD") => {
+  const formatCurrency = (amount: number | null, currency: string) => {
     if (amount === null || amount === undefined) return "-";
-    const symbol = currency === "ZAR" ? "R" : "$";
+    const symbol = currency === "USD" ? "R" : "$";
     return `${symbol}${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
@@ -209,13 +209,13 @@ const ViewTyreDialog = ({ open, onOpenChange, tyre, onInstall, onEdit }: ViewTyr
               <div>
                 <p className="text-sm text-muted-foreground">Unit Price</p>
                 <p className="font-mono font-medium text-lg">
-                  {tyre.unitPrice ? formatCurrency(tyre.unitPrice, "ZAR") : "-"}
+                  {tyre.unitPrice ? formatCurrency(tyre.unitPrice) : "-"}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Purchase Cost (ZAR)</p>
+                <p className="text-sm text-muted-foreground">Purchase Cost (USD)</p>
                 <p className="font-mono font-medium text-lg text-green-600 dark:text-green-400">
-                  {formatCurrency(tyre.purchaseCostZar, "ZAR")}
+                  {formatCurrency(tyre.purchaseCostZar)}
                 </p>
               </div>
               <div>
@@ -233,11 +233,11 @@ const ViewTyreDialog = ({ open, onOpenChange, tyre, onInstall, onEdit }: ViewTyr
                   <div>
                     <p className="text-sm text-muted-foreground">Total Stock Value</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {tyre.quantity} units × {formatCurrency(tyre.purchaseCostZar, "ZAR")}
+                      {tyre.quantity} units × {formatCurrency(tyre.purchaseCostZar)}
                     </p>
                   </div>
                   <p className="font-bold text-xl text-primary">
-                    {formatCurrency(tyre.purchaseCostZar * tyre.quantity, "ZAR")}
+                    {formatCurrency(tyre.purchaseCostZar * tyre.quantity)}
                   </p>
                 </div>
               </div>

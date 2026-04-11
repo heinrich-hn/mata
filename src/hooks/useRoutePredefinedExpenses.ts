@@ -11,7 +11,7 @@ export interface RouteExpenseItem {
   category: string;
   sub_category: string;
   amount: number;
-  currency: 'USD' | 'ZAR';
+  currency: string;
   description?: string;
   is_required: boolean;
   display_order?: number;
@@ -43,7 +43,7 @@ interface DbRouteExpenseItem {
   category: string;
   sub_category: string;
   amount: number;
-  currency: 'USD' | 'ZAR';
+  currency: string;
   description: string | null;
   is_required: boolean;
   display_order: number;

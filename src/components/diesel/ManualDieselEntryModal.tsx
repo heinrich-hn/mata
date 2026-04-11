@@ -69,7 +69,7 @@ const ManualDieselEntryModal = ({
     km_reading: '',
     driver_name: '',
     notes: '',
-    currency: 'ZAR',
+    currency: 'USD',
   });
 
   // Fuel source selection: 'station' or 'bunker'
@@ -211,7 +211,7 @@ const ManualDieselEntryModal = ({
         km_reading: editRecord.km_reading?.toString() || '',
         driver_name: editRecord.driver_name || '',
         notes: editRecord.notes || '',
-        currency: editRecord.currency || 'ZAR',
+        currency: editRecord.currency || 'USD',
       });
       // When editing, use the stored previous_km_reading
       setPreviousKmReading(editRecord.previous_km_reading || null);
@@ -230,7 +230,7 @@ const ManualDieselEntryModal = ({
         km_reading: '',
         driver_name: '',
         notes: '',
-        currency: 'ZAR',
+        currency: 'USD',
       });
       setPreviousKmReading(null);
       setPreviousKmDate(null);
@@ -390,7 +390,7 @@ const ManualDieselEntryModal = ({
     ...dynamicFleetOptions.filter(opt => !opt.value || !opt.value.toUpperCase().trim().endsWith('F'))
   ];
   const currencyOptions = [
-    { label: 'ZAR', value: 'ZAR' },
+    { label: 'USD', value: 'USD' },
     { label: 'USD', value: 'USD' },
   ];
 

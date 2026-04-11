@@ -85,7 +85,7 @@ const InvoiceManager = ({ onRefresh: _onRefresh }: InvoiceManagerProps) => {
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat('en-ZA', {
       style: 'currency',
-      currency: currency || 'ZAR',
+      currency: currency || 'USD',
     }).format(amount);
   };
 

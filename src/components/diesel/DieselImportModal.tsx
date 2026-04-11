@@ -59,7 +59,7 @@ const CSV_HEADERS = [
 const SAMPLE_DATA = [
   ['21H', '2025-12-04', 'Shell Harare', '350.5', '8750.00', '125000', 'John Doe', 'USD', '24.96', 'Regular fill-up'],
   ['22H', '2025-12-04', 'Engen Beitbridge', '420.0', '10500.00', '98500', 'Jane Smith', 'USD', '25.00', ''],
-  ['23H', '2025-12-03', 'Total SA Johannesburg', '380.25', '9125.50', '156200', 'Mike Johnson', 'ZAR', '24.00', 'Border crossing'],
+  ['23H', '2025-12-03', 'Total SA Johannesburg', '380.25', '9125.50', '156200', 'Mike Johnson', 'USD', '24.00', 'Border crossing'],
 ];
 
 const DieselImportModal = ({
@@ -424,7 +424,7 @@ const DieselImportModal = ({
             <p className="font-medium mb-1">Required columns:</p>
             <p className="text-xs">fleet_number, date, fuel_station, litres_filled, total_cost, km_reading</p>
             <p className="font-medium mt-2 mb-1">Optional columns:</p>
-            <p className="text-xs">driver_name, currency (USD/ZAR), cost_per_litre, notes</p>
+            <p className="text-xs">driver_name, currency, cost_per_litre, notes</p>
             <p className="text-xs text-muted-foreground mt-2 italic">
               📊 <strong>Distance is calculated automatically:</strong> The system uses the date to find the previous fill-up
               and calculates the distance travelled from the km readings. Consumption is then checked against fleet norms.

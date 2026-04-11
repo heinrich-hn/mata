@@ -45,7 +45,7 @@ export default function WialonMapView() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const autoRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const showToast = useCallback((
     title: string,
@@ -396,11 +396,10 @@ export default function WialonMapView() {
                 {filteredVehicles.map((vehicle) => (
                   <div
                     key={vehicle.vehicleId}
-                    className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-accent ${
-                      selectedVehicle?.vehicleId === vehicle.vehicleId
+                    className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-accent ${selectedVehicle?.vehicleId === vehicle.vehicleId
                         ? 'bg-accent border border-primary'
                         : 'border border-transparent'
-                    }`}
+                      }`}
                     onClick={() => handleVehicleClick(vehicle)}
                     role="button"
                     tabIndex={0}

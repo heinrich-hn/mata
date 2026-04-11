@@ -33,13 +33,11 @@ export interface FleetBreakdown {
     updated_at: string;
 }
 
-const db = supabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-
 export function useFleetBreakdowns() {
     return useQuery<FleetBreakdown[]>({
         queryKey: ["fleet-breakdowns"],
         queryFn: async () => {
-            const { data, error } = await db
+            const { data, error } = await supabase
                 .from("fleet_breakdowns")
                 .select("*")
                 .in("status", ["pending_review", "reported"])
@@ -67,7 +65,7 @@ export function useScheduleBreakdownForInspection() {
                     inspection_type: "breakdown",
                     inspector_name: "Workshop",
                     initiated_via: "breakdown",
-                    status: "pending" as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+                    status: "pending" as const,
                     vehicle_id: breakdown.vehicle_id,
                     vehicle_registration: breakdown.vehicle_registration,
                     vehicle_make: breakdown.vehicle_make,
@@ -80,7 +78,7 @@ export function useScheduleBreakdownForInspection() {
             if (inspError) throw inspError;
 
             // 2. Link the inspection back to the breakdown
-            const { data, error } = await db
+            const { data, error } = await supabase
                 .from("fleet_breakdowns")
                 .update({
                     status: "scheduled_for_inspection",
@@ -127,7 +125,7 @@ export function useCallOutBreakdown() {
 
     return useMutation({
         mutationFn: async (data: CallOutData) => {
-            const { data: result, error } = await db
+            const { data: result, error } = await supabase
                 .from("fleet_breakdowns")
                 .update({
                     status: "resolved",
@@ -168,7 +166,7 @@ export function useDismissBreakdown() {
 
     return useMutation({
         mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
-            const { data, error } = await db
+            const { data, error } = await supabase
                 .from("fleet_breakdowns")
                 .update({
                     status: "dismissed",

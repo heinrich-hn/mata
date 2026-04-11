@@ -55,7 +55,7 @@ const ReeferDieselEntryModal = ({
     operating_hours: '',
     driver_name: '',
     notes: '',
-    currency: 'ZAR',
+    currency: 'USD',
   });
 
   // Fuel source selection: 'station' or 'bunker'
@@ -93,8 +93,7 @@ const ReeferDieselEntryModal = ({
       let previousDate: string | null = null;
 
       // Try reefer_diesel_records first (new records)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: anyReeferData } = await (supabase as any)
+      const { data: anyReeferData } = await supabase
         .from('reefer_diesel_records')
         .select('operating_hours, date')
         .eq('reefer_unit', reeferUnit)
@@ -108,15 +107,15 @@ const ReeferDieselEntryModal = ({
         previousDate = anyReeferData.date;
       } else {
         // Try legacy table as fallback
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: anyLegacyData } = await (supabase as any)
+        // Legacy fallback: diesel_records may have had operating_hours/hours_operated in older schemas
+        const { data: anyLegacyData } = await supabase
           .from('diesel_records')
-          .select('operating_hours, hours_operated, date')
+          .select('date')
           .eq('fleet_number', reeferUnit)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1)
-          .maybeSingle();
+          .maybeSingle() as { data: { operating_hours?: number; hours_operated?: number; date?: string } | null };
 
         if (anyLegacyData) {
           const hoursValue = anyLegacyData.operating_hours ?? anyLegacyData.hours_operated;
@@ -165,7 +164,7 @@ const ReeferDieselEntryModal = ({
         operating_hours: editRecord.operating_hours?.toString() || '',
         driver_name: editRecord.driver_name || '',
         notes: editRecord.notes || '',
-        currency: editRecord.currency || 'ZAR',
+        currency: editRecord.currency || 'USD',
       });
       // When editing, use the stored previous_operating_hours
       setPreviousHourReading(editRecord.previous_operating_hours || null);
@@ -184,7 +183,7 @@ const ReeferDieselEntryModal = ({
         operating_hours: '',
         driver_name: '',
         notes: '',
-        currency: 'ZAR',
+        currency: 'USD',
       });
       setPreviousHourReading(null);
       setPreviousHourDate(null);
@@ -343,7 +342,7 @@ const ReeferDieselEntryModal = ({
   ];
 
   const currencyOptions = [
-    { label: 'ZAR', value: 'ZAR' },
+    { label: 'USD', value: 'USD' },
     { label: 'USD', value: 'USD' },
   ];
 

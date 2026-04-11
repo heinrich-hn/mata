@@ -9,15 +9,8 @@ import { useMap } from 'react-leaflet';
 /* eslint-disable @typescript-eslint/no-namespace */
 declare global {
   namespace L {
-    namespace Control {
-      interface ControlOptions {
-        measure?: never; // placeholder – actual options are defined below
-      }
-    }
-
-    // Properly type the measure control factory
-    interface Control {
-      measure: (options?: {
+    namespace control {
+      function measure(options?: {
         position?: 'topleft' | 'topright' | 'bottomleft' | 'bottomright';
         primaryLengthUnit?: 'meters' | 'kilometers' | 'feet' | 'miles';
         secondaryLengthUnit?: 'meters' | 'kilometers' | 'feet' | 'miles';
@@ -29,7 +22,7 @@ declare global {
           className?: string;
           autoPanPadding?: [number, number];
         };
-      }) => L.Control;
+      }): L.Control;
     }
   }
 }
@@ -39,8 +32,7 @@ export function MeasurementControl() {
 
   useEffect(() => {
     // Create measurement control
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const measureControl = (L.control as any).measure({
+    const measureControl = L.control.measure({
       position: 'topleft',
       primaryLengthUnit: 'kilometers',
       secondaryLengthUnit: 'meters',

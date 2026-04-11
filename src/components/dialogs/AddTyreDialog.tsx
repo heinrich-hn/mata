@@ -72,7 +72,7 @@ const AddTyreDialog = ({ open, onOpenChange, onAdd }: AddTyreDialogProps) => {
     if (!formData.pressure_rating) newErrors.pressure_rating = "Pressure rating is required";
     if (!formData.initial_tread_depth) newErrors.initial_tread_depth = "Initial tread depth is required";
     if (!formData.supplier) newErrors.supplier = "Supplier is required";
-    if (!formData.purchase_cost_zar) newErrors.purchase_cost_zar = "Purchase cost (ZAR) is required";
+    if (!formData.purchase_cost_zar) newErrors.purchase_cost_zar = "Purchase cost (USD) is required";
     if (!formData.location) newErrors.location = "Location is required";
     if (!formData.status) newErrors.status = "Status is required";
 
@@ -281,12 +281,12 @@ const AddTyreDialog = ({ open, onOpenChange, onAdd }: AddTyreDialogProps) => {
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="purchase_cost_zar">Purchase Cost (ZAR) *</Label>
+                <Label htmlFor="purchase_cost_zar">Purchase Cost (USD) *</Label>
                 <Input
                   id="purchase_cost_zar"
                   value={formData.purchase_cost_zar}
                   onChange={handleChange}
-                  placeholder="Enter cost in ZAR"
+                  placeholder="Enter cost in USD"
                   type="number"
                   step="0.01"
                   className={errors.purchase_cost_zar ? "border-destructive" : ""}

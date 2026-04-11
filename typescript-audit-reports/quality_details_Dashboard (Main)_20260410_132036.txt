@@ -1,0 +1,18 @@
+=== Dashboard (Main) Code Quality Details ===
+Generated: Fri Apr 10 13:20:47 UTC 2026
+Target: /workspaces/mata/src
+
+--- any types (3) ---
+/workspaces/mata/src/hooks/useFuelBunkers.ts:460:      const { data: result, error } = await (supabase.rpc as any)("edit_refill_transaction", {
+/workspaces/mata/src/hooks/useSupplierPrices.ts:9:const fromTable = (tableName: string) => (supabase as any).from(tableName);
+/workspaces/mata/src/hooks/useSupplierPrices.ts:11:const rpcCall = (fnName: string, params: Record<string, unknown>) => (supabase as any).rpc(fnName, params);
+
+--- @ts-ignore (0) ---
+
+--- @ts-nocheck (0) ---
+
+--- TODO/FIXME (4) ---
+/workspaces/mata/src/components/tyres/TyreManagementDialog.tsx:681:                    placeholder="DOT XXXX"
+/workspaces/mata/src/components/dialogs/CreateCARFromIncidentDialog.tsx:229:                placeholder="CAR-YYYYMM-XXX"
+/workspaces/mata/src/hooks/useDriverBehaviorEvents.ts:50:      // TODO: Save events to database when table schema is updated
+/workspaces/mata/src/utils/logger.ts:51:      // TODO: Send to monitoring service (e.g., Sentry, LogRocket)

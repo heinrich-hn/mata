@@ -641,6 +641,20 @@ export interface GeofenceEvent {
   vehicleRegistration?: string | null;
 }
 
+/** Raw DB row shape from geofence_events table */
+interface GeofenceEventRow {
+  id: string;
+  load_number: string | null;
+  telematics_asset_id: string | null;
+  geofence_name: string | null;
+  event_type: string;
+  event_time: string;
+  latitude: number | null;
+  longitude: number | null;
+  source: string | null;
+  vehicle_registration: string | null;
+}
+
 export interface AssetPosition {
   id: string;
   asset_id: number;
@@ -695,7 +709,7 @@ export async function getGeofenceEvents(loadNumber: string): Promise<GeofenceEve
       return [];
     }
 
-    return (data || []).map((event: any) => ({
+    return (data || []).map((event: GeofenceEventRow) => ({
       id: event.id,
       loadNumber: event.load_number,
       assetId: event.telematics_asset_id ? parseInt(event.telematics_asset_id) : null,
@@ -868,6 +882,7 @@ export async function getAssetGeofenceEvents(assetId: number): Promise<GeofenceE
   try {
     const { supabase } = await import('@/integrations/supabase/client');
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
       .from('geofence_events')
       .select('*')
@@ -879,7 +894,7 @@ export async function getAssetGeofenceEvents(assetId: number): Promise<GeofenceE
       return [];
     }
 
-    return (data || []).map((event: any) => ({
+    return (data || []).map((event: GeofenceEventRow) => ({
       id: event.id,
       loadNumber: event.load_number,
       assetId: event.telematics_asset_id ? parseInt(event.telematics_asset_id) : null,
@@ -908,6 +923,7 @@ export async function getAssetCurrentPosition(assetId: number): Promise<{
   try {
     const { supabase } = await import('@/integrations/supabase/client');
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
       .from('telematics_positions')
       .select('*')

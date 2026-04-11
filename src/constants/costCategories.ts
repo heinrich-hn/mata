@@ -56,7 +56,7 @@ export const ADDITIONAL_COST_TYPES = [
 ] as const;
 
 export interface SystemCostRates {
-  currency: 'USD' | 'ZAR';
+  currency: string;
   perKmCosts: {
     repairMaintenance: number;
     tyreCost: number;
@@ -76,7 +76,7 @@ export interface SystemCostRates {
   effectiveDate: string;
 }
 
-export const DEFAULT_SYSTEM_COST_RATES: Record<'USD' | 'ZAR', SystemCostRates> = {
+export const DEFAULT_SYSTEM_COST_RATES: Record<string, SystemCostRates> = {
   USD: {
     currency: 'USD',
     perKmCosts: {
@@ -96,25 +96,10 @@ export const DEFAULT_SYSTEM_COST_RATES: Record<'USD' | 'ZAR', SystemCostRates> =
     lastUpdated: new Date().toISOString(),
     updatedBy: 'System Default',
     effectiveDate: new Date().toISOString()
-  },
-  ZAR: {
-    currency: 'ZAR',
-    perKmCosts: {
-      repairMaintenance: 2.05,
-      tyreCost: 0.64
-    },
-    perDayCosts: {
-      gitInsurance: 134.82,
-      shortTermInsurance: 181.52,
-      trackingCost: 49.91,
-      fleetManagementSystem: 23.02,
-      licensing: 23.52,
-      vidRoadworthy: 11.89,
-      wages: 300.15,
-      depreciation: 634.45
-    },
-    lastUpdated: new Date().toISOString(),
-    updatedBy: 'System Default',
-    effectiveDate: new Date().toISOString()
   }
+};
+
+// Optional: Add helper function to get rates by currency
+export const getSystemCostRates = (currency: string): SystemCostRates => {
+  return DEFAULT_SYSTEM_COST_RATES[currency] || DEFAULT_SYSTEM_COST_RATES.USD;
 };

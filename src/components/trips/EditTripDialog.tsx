@@ -188,7 +188,7 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
         revenue_type: trip.revenue_type || 'per_load',
         base_revenue: trip.base_revenue?.toString() || '',
         rate_per_km: trip.rate_per_km?.toString() || '',
-        revenue_currency: trip.revenue_currency || 'ZAR',
+        revenue_currency: trip.revenue_currency || 'USD',
         starting_km: trip.starting_km?.toString() || '',
         ending_km: trip.ending_km?.toString() || '',
         distance_km: trip.distance_km?.toString() || '',
@@ -671,7 +671,6 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="ZAR">ZAR (South African Rand)</SelectItem>
                             <SelectItem value="USD">USD (US Dollar)</SelectItem>
                             <SelectItem value="EUR">EUR (Euro)</SelectItem>
                             <SelectItem value="GBP">GBP (British Pound)</SelectItem>

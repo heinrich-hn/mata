@@ -1,6 +1,3 @@
-// src/lib/alertResolution.ts
-// ✅ FULLY FIXED & COMPLETE (TS2339 + TS2352 gone)
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ResolveAlertOptions {

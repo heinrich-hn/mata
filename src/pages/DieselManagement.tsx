@@ -1,6 +1,4 @@
-import DieselDebriefModal from '@/components/diesel/DieselDebriefModal';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import DieselImportModal from '@/components/diesel/DieselImportModal';
+import DieselDebriefModal, { type DebriefData } from '@/components/diesel/DieselDebriefModal';
 import DieselNormsModal from '@/components/diesel/DieselNormsModal';
 import DieselTransactionViewModal from '@/components/diesel/DieselTransactionViewModal';
 import ManualDieselEntryModal from '@/components/diesel/ManualDieselEntryModal';
@@ -25,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOperations } from '@/contexts/OperationsContext';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useReeferConsumptionSummary, useReeferDieselRecords, type ReeferDieselRecordRow } from '@/hooks/useReeferDiesel';
-import { generateFleetDebriefSummaryPDF, generateSelectedTransactionsPDF, generateDebriefExcel, generateDebriefPDF, type DebriefExcelRecord } from '@/lib/dieselDebriefExport';
+import { generateFleetDebriefSummaryPDF, generateSelectedTransactionsPDF, generateDebriefExcel, generateDebriefPDF, generateWeeklyDebriefsPDF, type DebriefExcelRecord } from '@/lib/dieselDebriefExport';
 import {
   generateAllFleetsDieselExcel,
   generateAllFleetsDieselPDF,
@@ -39,16 +37,16 @@ import {
 } from '@/lib/dieselFleetExport';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/formatters';
 import type { DieselConsumptionRecord, DieselNorms } from '@/types/operations';
-import { AlertCircle, BarChart3, Calendar, CalendarRange, CheckCircle, ChevronDown, ChevronRight, DollarSign, Download, Edit, Eye, FileSpreadsheet, FileText, Filter, Fuel, Link, MessageCircle, Plus, Settings, Snowflake, Trash2, Truck, Upload, User } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertCircle, BarChart3, Calendar, CalendarRange, CheckCircle, ChevronDown, ChevronRight, DollarSign, Download, Edit, Eye, FileSpreadsheet, FileText, Filter, Fuel, Link, MessageCircle, Plus, Settings, Snowflake, Trash2, Truck, User } from 'lucide-react';
+import { type ComponentProps, useCallback, useEffect, useMemo, useState } from 'react';
 import BatchDebriefModal, { type BatchDebriefData } from '@/components/diesel/BatchDebriefModal';
 
 // Report data types
 interface DriverReport {
   driver: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
+
   totalDistance: number;
   avgKmPerLitre: number;
   fillCount: number;
@@ -58,8 +56,8 @@ interface DriverReport {
 interface ReeferDriverReport {
   driver: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
+
   fillCount: number;
   lastFillDate: string;
   fleets: string[];
@@ -70,8 +68,8 @@ interface ReeferDriverReport {
 interface FleetReport {
   fleet: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
+
   totalDistance: number;
   avgKmPerLitre: number;
   fillCount: number;
@@ -81,8 +79,8 @@ interface FleetReport {
 interface ReeferFleetReport {
   fleet: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
+
   fillCount: number;
   drivers: string[];
   avgLitresPerHour: number;
@@ -92,8 +90,8 @@ interface ReeferFleetReport {
 interface StationReport {
   station: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
+
   avgCostPerLitre: number;
   fillCount: number;
   fleetsServed: string[];
@@ -106,8 +104,8 @@ interface WeeklyFleetData {
   consumption: number | null; // km/L for trucks
   totalHours: number; // hours operated for reefers
   reeferConsumption: number | null; // L/hr for reefers
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
+
 }
 
 interface WeeklySectionData {
@@ -115,7 +113,7 @@ interface WeeklySectionData {
   fleets: string[];
   isReeferSection: boolean; // Reefers use L/H instead of km/L
   data: WeeklyFleetData[];
-  sectionTotal: { totalLitres: number; totalKm: number; consumption: number | null; totalHours: number; reeferConsumption: number | null; totalCostZAR: number; totalCostUSD: number };
+  sectionTotal: { totalLitres: number; totalKm: number; consumption: number | null; totalHours: number; reeferConsumption: number | null; totalCost: number; };
 }
 
 interface WeeklyReport {
@@ -124,7 +122,7 @@ interface WeeklyReport {
   weekStart: string;
   weekEnd: string;
   sections: WeeklySectionData[];
-  grandTotal: { totalLitres: number; totalKm: number; consumption: number | null; totalCostZAR: number; totalCostUSD: number };
+  grandTotal: { totalLitres: number; totalKm: number; consumption: number | null; totalCost: number; };
 }
 
 // Fleet category definitions
@@ -296,8 +294,6 @@ const DieselManagement = () => {
 
   // Modal states
   const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isTripLinkageOpen, setIsTripLinkageOpen] = useState(false);
   const [isProbeVerificationOpen, setIsProbeVerificationOpen] = useState(false);
   const [isDebriefOpen, setIsDebriefOpen] = useState(false);
@@ -412,11 +408,7 @@ const DieselManagement = () => {
   const totalLitres = truckRecords.reduce((sum, record) => sum + (record.litres_filled || 0), 0);
 
   // Calculate costs by currency
-  const _totalCostZAR = truckRecords
-    .filter(r => (r.currency || 'ZAR') === 'ZAR')
-    .reduce((sum, record) => sum + (record.total_cost || 0), 0);
-  const _totalCostUSD = truckRecords
-    .filter(r => r.currency === 'USD')
+  const _totalCost = truckRecords
     .reduce((sum, record) => sum + (record.total_cost || 0), 0);
 
   const totalDistance = truckRecords.reduce((sum, record) => sum + (record.distance_travelled || 0), 0);
@@ -427,8 +419,7 @@ const DieselManagement = () => {
   // Reefer summary statistics
   const _reeferTotalRecords = reeferRecords.length;
   const _reeferTotalLitres = reeferRecords.reduce((sum, record) => sum + (record.litres_filled || 0), 0);
-  const _reeferTotalCostZAR = reeferRecords
-    .filter(r => (r.currency || 'ZAR') === 'ZAR')
+  const _reeferTotalCost = reeferRecords
     .reduce((sum, record) => sum + (record.total_cost || 0), 0);
   const _reeferTotalCostUSD = reeferRecords
     .filter(r => r.currency === 'USD')
@@ -607,8 +598,7 @@ const DieselManagement = () => {
   ) => {
     const fleetRecords = Object.values(groupedRecords[fleet] || {}).flat();
     const totalLitres = fleetRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-    const totalCostZAR = fleetRecords.reduce((sum, r) => sum + ((r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0), 0);
-    const totalCostUSD = fleetRecords.reduce((sum, r) => sum + (r.currency === 'USD' ? (r.total_cost || 0) : 0), 0);
+    const totalCost = fleetRecords.reduce((sum, r) => sum + (r.total_cost || 0), 0);
     const totalDistance = fleetRecords.reduce((sum, r) => sum + (r.distance_travelled || 0), 0);
     const isReefer = isReeferFleet(fleet);
     const avgKmL = !isReefer && totalLitres > 0 ? totalDistance / totalLitres : 0;
@@ -620,14 +610,13 @@ const DieselManagement = () => {
       const norm = getNormForFleet(r.fleet_number);
       return isOutsideNorm(kmPerLitre, norm);
     }).length;
-    return { totalLitres, totalCostZAR, totalCostUSD, totalDistance, avgKmL, count: fleetRecords.length, pendingDebrief };
+    return { totalLitres, totalCost, totalDistance, avgKmL, count: fleetRecords.length, pendingDebrief };
   };
 
   // Calculate week totals for a fleet
   const getWeekTotals = (records: DieselConsumptionRecord[], isReefer = false) => {
     const totalLitres = records.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-    const totalCostZAR = records.reduce((sum, r) => sum + ((r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0), 0);
-    const totalCostUSD = records.reduce((sum, r) => sum + (r.currency === 'USD' ? (r.total_cost || 0) : 0), 0);
+    const totalCost = records.reduce((sum, r) => sum + (r.total_cost || 0), 0);
     const totalDistance = records.reduce((sum, r) => sum + (r.distance_travelled || 0), 0);
     const avgKmL = !isReefer && totalLitres > 0 ? totalDistance / totalLitres : 0;
     // Calculate pending debrief dynamically based on norms instead of using stored requires_debrief
@@ -638,7 +627,7 @@ const DieselManagement = () => {
       const norm = getNormForFleet(r.fleet_number);
       return isOutsideNorm(kmPerLitre, norm);
     }).length;
-    return { totalLitres, totalCostZAR, totalCostUSD, totalDistance, avgKmL, count: records.length, pendingDebrief };
+    return { totalLitres, totalCost, totalDistance, avgKmL, count: records.length, pendingDebrief };
   };
 
   // Generate reports by driver
@@ -651,8 +640,7 @@ const DieselManagement = () => {
 
       if (existing) {
         existing.totalLitres += record.litres_filled || 0;
-        existing.totalCostZAR += (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0;
-        existing.totalCostUSD += record.currency === 'USD' ? (record.total_cost || 0) : 0;
+        existing.totalCost += (record.total_cost || 0);
         existing.totalDistance += record.distance_travelled || 0;
         existing.fillCount += 1;
         if (record.date > existing.lastFillDate) existing.lastFillDate = record.date;
@@ -660,8 +648,8 @@ const DieselManagement = () => {
         driverMap.set(driver, {
           driver,
           totalLitres: record.litres_filled || 0,
-          totalCostZAR: (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0,
-          totalCostUSD: record.currency === 'USD' ? (record.total_cost || 0) : 0,
+          totalCost: (record.total_cost || 0),
+
           totalDistance: record.distance_travelled || 0,
           avgKmPerLitre: 0,
           fillCount: 1,
@@ -688,8 +676,7 @@ const DieselManagement = () => {
 
       if (existing) {
         existing.totalLitres += record.litres_filled || 0;
-        existing.totalCostZAR += (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0;
-        existing.totalCostUSD += record.currency === 'USD' ? (record.total_cost || 0) : 0;
+        existing.totalCost += (record.total_cost || 0);
         existing.fillCount += 1;
         if (record.date > existing.lastFillDate) existing.lastFillDate = record.date;
         if (fleet && !existing.fleets.includes(fleet)) existing.fleets.push(fleet);
@@ -697,8 +684,8 @@ const DieselManagement = () => {
         driverMap.set(driver, {
           driver,
           totalLitres: record.litres_filled || 0,
-          totalCostZAR: (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0,
-          totalCostUSD: record.currency === 'USD' ? (record.total_cost || 0) : 0,
+          totalCost: (record.total_cost || 0),
+
           fillCount: 1,
           lastFillDate: record.date,
           fleets: fleet ? [fleet] : [],
@@ -715,8 +702,8 @@ const DieselManagement = () => {
       report.fleets.forEach(fleet => {
         const fleetRecs = filteredReeferRecords.filter(r => r.fleet_number === fleet);
         fleetRecs.forEach(r => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const hrs = (r as any).hours_operated as number | null;
+
+          const hrs = r.hours_operated;
           if (hrs != null && hrs > 0) {
             totalHrs += hrs;
             totalLitresWithHours += r.litres_filled || 0;
@@ -758,8 +745,7 @@ const DieselManagement = () => {
 
       if (existing) {
         existing.totalLitres += record.litres_filled || 0;
-        existing.totalCostZAR += (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0;
-        existing.totalCostUSD += record.currency === 'USD' ? (record.total_cost || 0) : 0;
+        existing.totalCost += (record.total_cost || 0);
         existing.totalDistance += record.distance_travelled || 0;
         existing.fillCount += 1;
         if (!existing.drivers.includes(driver)) existing.drivers.push(driver);
@@ -767,8 +753,8 @@ const DieselManagement = () => {
         fleetMap.set(fleet, {
           fleet,
           totalLitres: record.litres_filled || 0,
-          totalCostZAR: (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0,
-          totalCostUSD: record.currency === 'USD' ? (record.total_cost || 0) : 0,
+          totalCost: (record.total_cost || 0),
+
           totalDistance: record.distance_travelled || 0,
           avgKmPerLitre: 0,
           fillCount: 1,
@@ -795,16 +781,15 @@ const DieselManagement = () => {
 
       if (existing) {
         existing.totalLitres += record.litres_filled || 0;
-        existing.totalCostZAR += (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0;
-        existing.totalCostUSD += record.currency === 'USD' ? (record.total_cost || 0) : 0;
+        existing.totalCost += (record.total_cost || 0);
         existing.fillCount += 1;
         if (!existing.drivers.includes(driver)) existing.drivers.push(driver);
       } else {
         fleetMap.set(fleet, {
           fleet,
           totalLitres: record.litres_filled || 0,
-          totalCostZAR: (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0,
-          totalCostUSD: record.currency === 'USD' ? (record.total_cost || 0) : 0,
+          totalCost: (record.total_cost || 0),
+
           fillCount: 1,
           drivers: [driver],
           avgLitresPerHour: 0,
@@ -817,11 +802,11 @@ const DieselManagement = () => {
     fleetMap.forEach((report) => {
       // Calculate from per-record hours_operated and litres
       const fleetRecs = filteredReeferRecords.filter(r => r.fleet_number === report.fleet);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const recsWithHours = fleetRecs.filter(r => (r as any).hours_operated != null && (r as any).hours_operated > 0);
+
+      const recsWithHours = fleetRecs.filter(r => r.hours_operated != null && r.hours_operated > 0);
       if (recsWithHours.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const totalHrs = recsWithHours.reduce((sum, r) => sum + ((r as any).hours_operated || 0), 0);
+
+        const totalHrs = recsWithHours.reduce((sum, r) => sum + (r.hours_operated || 0), 0);
         const totalLitresWithHours = recsWithHours.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
         report.totalHoursOperated = totalHrs;
         report.avgLitresPerHour = totalHrs > 0 ? totalLitresWithHours / totalHrs : 0;
@@ -849,16 +834,15 @@ const DieselManagement = () => {
 
       if (existing) {
         existing.totalLitres += record.litres_filled || 0;
-        existing.totalCostZAR += (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0;
-        existing.totalCostUSD += record.currency === 'USD' ? (record.total_cost || 0) : 0;
+        existing.totalCost += (record.total_cost || 0);
         existing.fillCount += 1;
         if (!existing.fleetsServed.includes(fleet)) existing.fleetsServed.push(fleet);
       } else {
         stationMap.set(station, {
           station,
           totalLitres: record.litres_filled || 0,
-          totalCostZAR: (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0,
-          totalCostUSD: record.currency === 'USD' ? (record.total_cost || 0) : 0,
+          totalCost: (record.total_cost || 0),
+
           avgCostPerLitre: 0,
           fillCount: 1,
           fleetsServed: [fleet],
@@ -868,8 +852,7 @@ const DieselManagement = () => {
 
     // Calculate averages
     stationMap.forEach(report => {
-      const totalCost = report.totalCostZAR + report.totalCostUSD;
-      report.avgCostPerLitre = report.totalLitres > 0 ? totalCost / report.totalLitres : 0;
+      report.avgCostPerLitre = report.totalLitres > 0 ? report.totalCost / report.totalLitres : 0;
     });
 
     return Array.from(stationMap.values()).sort((a, b) => b.totalLitres - a.totalLitres);
@@ -885,16 +868,15 @@ const DieselManagement = () => {
 
       if (existing) {
         existing.totalLitres += record.litres_filled || 0;
-        existing.totalCostZAR += (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0;
-        existing.totalCostUSD += record.currency === 'USD' ? (record.total_cost || 0) : 0;
+        existing.totalCost += (record.total_cost || 0);
         existing.fillCount += 1;
         if (!existing.fleetsServed.includes(fleet)) existing.fleetsServed.push(fleet);
       } else {
         stationMap.set(station, {
           station,
           totalLitres: record.litres_filled || 0,
-          totalCostZAR: (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0,
-          totalCostUSD: record.currency === 'USD' ? (record.total_cost || 0) : 0,
+          totalCost: (record.total_cost || 0),
+
           avgCostPerLitre: 0,
           fillCount: 1,
           fleetsServed: [fleet],
@@ -903,8 +885,7 @@ const DieselManagement = () => {
     });
 
     stationMap.forEach(report => {
-      const totalCost = report.totalCostZAR + report.totalCostUSD;
-      report.avgCostPerLitre = report.totalLitres > 0 ? totalCost / report.totalLitres : 0;
+      report.avgCostPerLitre = report.totalLitres > 0 ? report.totalCost / report.totalLitres : 0;
     });
 
     return Array.from(stationMap.values()).sort((a, b) => b.totalLitres - a.totalLitres);
@@ -994,8 +975,7 @@ const DieselManagement = () => {
       const sections: WeeklySectionData[] = [];
       let grandTotalLitres = 0;
       let grandTotalKm = 0;
-      let grandTotalCostZAR = 0;
-      let grandTotalCostUSD = 0;
+      let grandTotalCost = 0;
 
       for (const [sectionName, fleetList] of Object.entries(FLEET_CATEGORIES)) {
         const isReeferSection = sectionName === REEFER_SECTION_NAME;
@@ -1004,8 +984,7 @@ const DieselManagement = () => {
         let sectionTotalLitres = 0;
         let sectionTotalKm = 0;
         let sectionTotalHours = 0;
-        let sectionTotalCostZAR = 0;
-        let sectionTotalCostUSD = 0;
+        let sectionTotalCost = 0;
 
         if (isReeferSection) {
           // Use merged reefer records for the reefer section
@@ -1013,17 +992,15 @@ const DieselManagement = () => {
             const fleetRecords = weekReeferRecords.filter(r => r.fleet_number === fleet);
             if (fleetRecords.length > 0) {
               const totalLitres = fleetRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const totalHours = fleetRecords.reduce((sum, r) => sum + ((r as any).hours_operated || 0), 0);
-              const totalCostZAR = fleetRecords.reduce((sum, r) => sum + ((r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0), 0);
-              const totalCostUSD = fleetRecords.reduce((sum, r) => sum + (r.currency === 'USD' ? (r.total_cost || 0) : 0), 0);
+
+              const totalHours = fleetRecords.reduce((sum, r) => sum + (r.hours_operated || 0), 0);
+              const totalCost = fleetRecords.reduce((sum, r) => sum + (r.total_cost || 0), 0);
               const reeferConsumption = totalHours > 0 ? totalLitres / totalHours : null;
 
-              sectionData.push({ fleet, totalLitres, totalKm: 0, consumption: null, totalHours, reeferConsumption, totalCostZAR, totalCostUSD });
+              sectionData.push({ fleet, totalLitres, totalKm: 0, consumption: null, totalHours, reeferConsumption, totalCost });
               sectionTotalLitres += totalLitres;
               sectionTotalHours += totalHours;
-              sectionTotalCostZAR += totalCostZAR;
-              sectionTotalCostUSD += totalCostUSD;
+              sectionTotalCost += totalCost;
             }
           }
         } else {
@@ -1034,15 +1011,13 @@ const DieselManagement = () => {
             if (fleetRecords.length > 0) {
               const totalLitres = fleetRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
               const totalKm = fleetRecords.reduce((sum, r) => sum + (r.distance_travelled || 0), 0);
-              const totalCostZAR = fleetRecords.reduce((sum, r) => sum + ((r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0), 0);
-              const totalCostUSD = fleetRecords.reduce((sum, r) => sum + (r.currency === 'USD' ? (r.total_cost || 0) : 0), 0);
+              const totalCost = fleetRecords.reduce((sum, r) => sum + (r.total_cost || 0), 0);
               const consumption = totalLitres > 0 ? totalKm / totalLitres : null;
 
-              sectionData.push({ fleet, totalLitres, totalKm, consumption, totalHours: 0, reeferConsumption: null, totalCostZAR, totalCostUSD });
+              sectionData.push({ fleet, totalLitres, totalKm, consumption, totalHours: 0, reeferConsumption: null, totalCost });
               sectionTotalLitres += totalLitres;
               sectionTotalKm += totalKm;
-              sectionTotalCostZAR += totalCostZAR;
-              sectionTotalCostUSD += totalCostUSD;
+              sectionTotalCost += totalCost;
             }
           }
         }
@@ -1050,7 +1025,7 @@ const DieselManagement = () => {
         // Add fleets with 0 litres if they're in the category (to show all fleets)
         for (const fleet of sectionFleetList) {
           if (!sectionData.find(d => d.fleet === fleet)) {
-            sectionData.push({ fleet, totalLitres: 0, totalKm: 0, consumption: null, totalHours: 0, reeferConsumption: null, totalCostZAR: 0, totalCostUSD: 0 });
+            sectionData.push({ fleet, totalLitres: 0, totalKm: 0, consumption: null, totalHours: 0, reeferConsumption: null, totalCost: 0 });
           }
         }
 
@@ -1068,14 +1043,13 @@ const DieselManagement = () => {
           fleets: sectionFleetList,
           isReeferSection,
           data: sectionData,
-          sectionTotal: { totalLitres: sectionTotalLitres, totalKm: sectionTotalKm, consumption: sectionConsumption, totalHours: sectionTotalHours, reeferConsumption: sectionReeferConsumption, totalCostZAR: sectionTotalCostZAR, totalCostUSD: sectionTotalCostUSD },
+          sectionTotal: { totalLitres: sectionTotalLitres, totalKm: sectionTotalKm, consumption: sectionConsumption, totalHours: sectionTotalHours, reeferConsumption: sectionReeferConsumption, totalCost: sectionTotalCost },
         });
 
         if (!isReeferSection) {
           grandTotalLitres += sectionTotalLitres;
           grandTotalKm += sectionTotalKm;
-          grandTotalCostZAR += sectionTotalCostZAR;
-          grandTotalCostUSD += sectionTotalCostUSD;
+          grandTotalCost += sectionTotalCost;
         }
       }
 
@@ -1086,7 +1060,7 @@ const DieselManagement = () => {
         weekStart: weekStart.toISOString().split('T')[0],
         weekEnd: weekEnd.toISOString().split('T')[0],
         sections,
-        grandTotal: { totalLitres: grandTotalLitres, totalKm: grandTotalKm, consumption: grandConsumption, totalCostZAR: grandTotalCostZAR, totalCostUSD: grandTotalCostUSD },
+        grandTotal: { totalLitres: grandTotalLitres, totalKm: grandTotalKm, consumption: grandConsumption, totalCost: grandTotalCost },
       });
     }
 
@@ -1112,18 +1086,17 @@ const DieselManagement = () => {
         const ex = fm.get(fl);
         if (ex) {
           ex.totalLitres += r.litres_filled || 0;
-          ex.totalCostZAR += (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0;
-          ex.totalCostUSD += r.currency === 'USD' ? (r.total_cost || 0) : 0;
+          ex.totalCost += (r.total_cost || 0);
           ex.totalDistance += r.distance_travelled || 0;
           ex.fillCount += 1;
           if (!ex.drivers.includes(dr)) ex.drivers.push(dr);
         } else {
-          fm.set(fl, { fleet: fl, totalLitres: r.litres_filled || 0, totalCostZAR: (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0, totalCostUSD: r.currency === 'USD' ? (r.total_cost || 0) : 0, totalDistance: r.distance_travelled || 0, avgKmPerLitre: 0, fillCount: 1, drivers: [dr] });
+          fm.set(fl, { fleet: fl, totalLitres: r.litres_filled || 0, totalCost: (r.total_cost || 0), totalDistance: r.distance_travelled || 0, avgKmPerLitre: 0, fillCount: 1, drivers: [dr] });
         }
       });
       fm.forEach(rp => { rp.avgKmPerLitre = rp.totalLitres > 0 ? rp.totalDistance / rp.totalLitres : 0; });
       const data = Array.from(fm.values()).sort((a, b) => b.totalLitres - a.totalLitres);
-      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCostZAR: data.reduce((s, r) => s + r.totalCostZAR, 0), totalCostUSD: data.reduce((s, r) => s + r.totalCostUSD, 0), totalDistance: data.reduce((s, r) => s + r.totalDistance, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
+      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCost: data.reduce((s, r) => s + r.totalCost, 0), totalDistance: data.reduce((s, r) => s + r.totalDistance, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
     });
   }, [filteredTruckRecords]);
 
@@ -1144,18 +1117,17 @@ const DieselManagement = () => {
         const ex = dm.get(dr);
         if (ex) {
           ex.totalLitres += r.litres_filled || 0;
-          ex.totalCostZAR += (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0;
-          ex.totalCostUSD += r.currency === 'USD' ? (r.total_cost || 0) : 0;
+          ex.totalCost += (r.total_cost || 0);
           ex.totalDistance += r.distance_travelled || 0;
           ex.fillCount += 1;
           if (r.date > ex.lastFillDate) ex.lastFillDate = r.date;
         } else {
-          dm.set(dr, { driver: dr, totalLitres: r.litres_filled || 0, totalCostZAR: (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0, totalCostUSD: r.currency === 'USD' ? (r.total_cost || 0) : 0, totalDistance: r.distance_travelled || 0, avgKmPerLitre: 0, fillCount: 1, lastFillDate: r.date });
+          dm.set(dr, { driver: dr, totalLitres: r.litres_filled || 0, totalCost: (r.total_cost || 0), totalDistance: r.distance_travelled || 0, avgKmPerLitre: 0, fillCount: 1, lastFillDate: r.date });
         }
       });
       dm.forEach(rp => { rp.avgKmPerLitre = rp.totalLitres > 0 ? rp.totalDistance / rp.totalLitres : 0; });
       const data = Array.from(dm.values()).sort((a, b) => b.totalLitres - a.totalLitres);
-      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCostZAR: data.reduce((s, r) => s + r.totalCostZAR, 0), totalCostUSD: data.reduce((s, r) => s + r.totalCostUSD, 0), totalDistance: data.reduce((s, r) => s + r.totalDistance, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
+      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCost: data.reduce((s, r) => s + r.totalCost, 0), totalDistance: data.reduce((s, r) => s + r.totalDistance, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
     });
   }, [filteredTruckRecords]);
 
@@ -1176,17 +1148,16 @@ const DieselManagement = () => {
         const ex = sm.get(st);
         if (ex) {
           ex.totalLitres += r.litres_filled || 0;
-          ex.totalCostZAR += (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0;
-          ex.totalCostUSD += r.currency === 'USD' ? (r.total_cost || 0) : 0;
+          ex.totalCost += (r.total_cost || 0);
           ex.fillCount += 1;
           if (!ex.fleetsServed.includes(fl)) ex.fleetsServed.push(fl);
         } else {
-          sm.set(st, { station: st, totalLitres: r.litres_filled || 0, totalCostZAR: (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0, totalCostUSD: r.currency === 'USD' ? (r.total_cost || 0) : 0, avgCostPerLitre: 0, fillCount: 1, fleetsServed: [fl] });
+          sm.set(st, { station: st, totalLitres: r.litres_filled || 0, totalCost: (r.total_cost || 0), avgCostPerLitre: 0, fillCount: 1, fleetsServed: [fl] });
         }
       });
-      sm.forEach(rp => { rp.avgCostPerLitre = rp.totalLitres > 0 ? (rp.totalCostZAR + rp.totalCostUSD) / rp.totalLitres : 0; });
+      sm.forEach(rp => { rp.avgCostPerLitre = rp.totalLitres > 0 ? rp.totalCost / rp.totalLitres : 0; });
       const data = Array.from(sm.values()).sort((a, b) => b.totalLitres - a.totalLitres);
-      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCostZAR: data.reduce((s, r) => s + r.totalCostZAR, 0), totalCostUSD: data.reduce((s, r) => s + r.totalCostUSD, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
+      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCost: data.reduce((s, r) => s + r.totalCost, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
     });
   }, [filteredTruckRecords]);
 
@@ -1207,22 +1178,21 @@ const DieselManagement = () => {
         const ex = fm.get(fl);
         if (ex) {
           ex.totalLitres += r.litres_filled || 0;
-          ex.totalCostZAR += (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0;
-          ex.totalCostUSD += r.currency === 'USD' ? (r.total_cost || 0) : 0;
+          ex.totalCost += (r.total_cost || 0);
           ex.fillCount += 1;
           if (!ex.drivers.includes(dr)) ex.drivers.push(dr);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const hrs = (r as any).hours_operated as number | null;
+
+          const hrs = r.hours_operated;
           if (hrs && hrs > 0) ex.totalHoursOperated += hrs;
         } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const hrs = (r as any).hours_operated as number | null;
-          fm.set(fl, { fleet: fl, totalLitres: r.litres_filled || 0, totalCostZAR: (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0, totalCostUSD: r.currency === 'USD' ? (r.total_cost || 0) : 0, fillCount: 1, drivers: [dr], avgLitresPerHour: 0, totalHoursOperated: (hrs && hrs > 0) ? hrs : 0 });
+
+          const hrs = r.hours_operated;
+          fm.set(fl, { fleet: fl, totalLitres: r.litres_filled || 0, totalCost: (r.total_cost || 0), fillCount: 1, drivers: [dr], avgLitresPerHour: 0, totalHoursOperated: (hrs && hrs > 0) ? hrs : 0 });
         }
       });
       fm.forEach(rp => { rp.avgLitresPerHour = rp.totalHoursOperated > 0 ? rp.totalLitres / rp.totalHoursOperated : 0; });
       const data = Array.from(fm.values()).sort((a, b) => b.totalLitres - a.totalLitres);
-      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCostZAR: data.reduce((s, r) => s + r.totalCostZAR, 0), totalCostUSD: data.reduce((s, r) => s + r.totalCostUSD, 0), totalHoursOperated: data.reduce((s, r) => s + r.totalHoursOperated, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
+      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCost: data.reduce((s, r) => s + r.totalCost, 0), totalHoursOperated: data.reduce((s, r) => s + r.totalHoursOperated, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
     });
   }, [filteredReeferRecords]);
 
@@ -1243,23 +1213,22 @@ const DieselManagement = () => {
         const ex = dm.get(dr);
         if (ex) {
           ex.totalLitres += r.litres_filled || 0;
-          ex.totalCostZAR += (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0;
-          ex.totalCostUSD += r.currency === 'USD' ? (r.total_cost || 0) : 0;
+          ex.totalCost += (r.total_cost || 0);
           ex.fillCount += 1;
           if (r.date > ex.lastFillDate) ex.lastFillDate = r.date;
           if (fl && !ex.fleets.includes(fl)) ex.fleets.push(fl);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const hrs = (r as any).hours_operated as number | null;
+
+          const hrs = r.hours_operated;
           if (hrs && hrs > 0) ex.totalHoursOperated += hrs;
         } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const hrs = (r as any).hours_operated as number | null;
-          dm.set(dr, { driver: dr, totalLitres: r.litres_filled || 0, totalCostZAR: (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0, totalCostUSD: r.currency === 'USD' ? (r.total_cost || 0) : 0, fillCount: 1, lastFillDate: r.date, fleets: fl ? [fl] : [], avgLitresPerHour: 0, totalHoursOperated: (hrs && hrs > 0) ? hrs : 0 });
+
+          const hrs = r.hours_operated;
+          dm.set(dr, { driver: dr, totalLitres: r.litres_filled || 0, totalCost: (r.total_cost || 0), fillCount: 1, lastFillDate: r.date, fleets: fl ? [fl] : [], avgLitresPerHour: 0, totalHoursOperated: (hrs && hrs > 0) ? hrs : 0 });
         }
       });
       dm.forEach(rp => { rp.avgLitresPerHour = rp.totalHoursOperated > 0 ? rp.totalLitres / rp.totalHoursOperated : 0; });
       const data = Array.from(dm.values()).sort((a, b) => b.totalLitres - a.totalLitres);
-      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCostZAR: data.reduce((s, r) => s + r.totalCostZAR, 0), totalCostUSD: data.reduce((s, r) => s + r.totalCostUSD, 0), totalHoursOperated: data.reduce((s, r) => s + r.totalHoursOperated, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
+      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCost: data.reduce((s, r) => s + r.totalCost, 0), totalHoursOperated: data.reduce((s, r) => s + r.totalHoursOperated, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
     });
   }, [filteredReeferRecords]);
 
@@ -1280,17 +1249,16 @@ const DieselManagement = () => {
         const ex = sm.get(st);
         if (ex) {
           ex.totalLitres += r.litres_filled || 0;
-          ex.totalCostZAR += (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0;
-          ex.totalCostUSD += r.currency === 'USD' ? (r.total_cost || 0) : 0;
+          ex.totalCost += (r.total_cost || 0);
           ex.fillCount += 1;
           if (!ex.fleetsServed.includes(fl)) ex.fleetsServed.push(fl);
         } else {
-          sm.set(st, { station: st, totalLitres: r.litres_filled || 0, totalCostZAR: (r.currency || 'ZAR') === 'ZAR' ? (r.total_cost || 0) : 0, totalCostUSD: r.currency === 'USD' ? (r.total_cost || 0) : 0, avgCostPerLitre: 0, fillCount: 1, fleetsServed: [fl] });
+          sm.set(st, { station: st, totalLitres: r.litres_filled || 0, totalCost: (r.total_cost || 0), avgCostPerLitre: 0, fillCount: 1, fleetsServed: [fl] });
         }
       });
-      sm.forEach(rp => { rp.avgCostPerLitre = rp.totalLitres > 0 ? (rp.totalCostZAR + rp.totalCostUSD) / rp.totalLitres : 0; });
+      sm.forEach(rp => { rp.avgCostPerLitre = rp.totalLitres > 0 ? rp.totalCost / rp.totalLitres : 0; });
       const data = Array.from(sm.values()).sort((a, b) => b.totalLitres - a.totalLitres);
-      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCostZAR: data.reduce((s, r) => s + r.totalCostZAR, 0), totalCostUSD: data.reduce((s, r) => s + r.totalCostUSD, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
+      return { weekKey, weekNumber: _wkNumber(ws), weekLabel: _wkLabel(ws, we), weekStart: ws.toISOString().split('T')[0], weekEnd: we.toISOString().split('T')[0], data, totals: { totalLitres: data.reduce((s, r) => s + r.totalLitres, 0), totalCost: data.reduce((s, r) => s + r.totalCost, 0), fillCount: data.reduce((s, r) => s + r.fillCount, 0) } };
     });
   }, [filteredReeferRecords]);
 
@@ -1393,7 +1361,7 @@ const DieselManagement = () => {
         record.litres_filled?.toFixed(2) || '',
         record.cost_per_litre?.toFixed(2) || '',
         record.total_cost?.toFixed(2) || '',
-        record.currency || 'ZAR',
+        record.currency || 'USD',
         record.km_reading || '',
         record.previous_km_reading || '',
         record.distance_travelled || '',
@@ -1513,7 +1481,7 @@ const DieselManagement = () => {
       // Calculate totals
       const totalLitres = selectedRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
       const totalCost = selectedRecords.reduce((sum, r) => sum + (r.total_cost || 0), 0);
-      const currency = selectedRecords[0]?.currency || 'ZAR';
+      const currency = selectedRecords[0]?.currency || 'USD';
 
       // Build the WhatsApp message
       const fleetDisplay = selectedFleetForBatch || 'All Fleets';
@@ -1544,19 +1512,18 @@ const DieselManagement = () => {
   };
 
   // Handler functions
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleManualSave = async (record: any) => {
+  const handleManualSave = async (record: DieselConsumptionRecord | Omit<DieselConsumptionRecord, 'id' | 'created_at' | 'updated_at'>) => {
     if (isReeferFleet(record.fleet_number)) {
       // Reefer fleet selected in truck form - redirect to reefer save
       const reeferRecord: ReeferDieselRecord = {
-        id: record.id,
+        id: 'id' in record ? record.id : undefined as unknown as string,
         reefer_unit: record.fleet_number,
         date: record.date,
         fuel_station: record.fuel_station,
         litres_filled: record.litres_filled,
         cost_per_litre: record.cost_per_litre ?? null,
         total_cost: record.total_cost,
-        currency: record.currency || 'ZAR',
+        currency: record.currency || 'USD',
         operating_hours: null,
         previous_operating_hours: null,
         hours_operated: null,
@@ -1568,10 +1535,10 @@ const DieselManagement = () => {
       await handleReeferSave(reeferRecord);
       return;
     }
-    if (record.id) {
-      await updateDieselRecord(record as unknown as DieselConsumptionRecord);
+    if ('id' in record && record.id) {
+      await updateDieselRecord(record as DieselConsumptionRecord);
     } else {
-      await addDieselRecord(record as unknown as Omit<DieselConsumptionRecord, 'id' | 'created_at' | 'updated_at'>);
+      await addDieselRecord(record as Omit<DieselConsumptionRecord, 'id' | 'created_at' | 'updated_at'>);
     }
   };
 
@@ -1601,16 +1568,8 @@ const DieselManagement = () => {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-  const handleImport = async (records: any[]) => {
-    for (const record of records) {
-      await addDieselRecord(record as unknown as Omit<DieselConsumptionRecord, 'id' | 'created_at' | 'updated_at'>);
-    }
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleLinkToTrip = async (record: any, tripId: string) => {
-    await linkDieselToTrip(record as unknown as DieselConsumptionRecord, tripId);
+  const handleLinkToTrip = async (record: DieselConsumptionRecord, tripId: string) => {
+    await linkDieselToTrip(record, tripId);
   };
 
   const handleUnlinkFromTrip = async (recordId: string, tripId?: string) => {
@@ -1641,22 +1600,19 @@ const DieselManagement = () => {
     await unlinkFromVehicleAsync({ recordId: reeferRecordId });
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleProbeVerification = async (verificationData: any) => {
+  const handleProbeVerification = async (verificationData: Parameters<ComponentProps<typeof ProbeVerificationModal>['onVerify']>[0]) => {
     await updateDieselRecord(verificationData as unknown as DieselConsumptionRecord);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleDebrief = async (debriefData: any) => {
+  const handleDebrief = async (debriefData: DebriefData) => {
     await updateDieselRecord(debriefData as unknown as DieselConsumptionRecord);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleNormSave = async (norm: any) => {
+  const handleNormSave = async (norm: DieselNorms) => {
     if (norm.id) {
-      await updateDieselNorm(norm as unknown as DieselNorms);
+      await updateDieselNorm(norm);
     } else {
-      await addDieselNorm(norm as unknown as DieselNorms);
+      await addDieselNorm(norm);
     }
   };
 
@@ -1754,16 +1710,14 @@ const DieselManagement = () => {
     if (isReeferFleet(record.fleet_number)) {
       // Reefer fleet - open reefer modal with L/hr fields
       // Map diesel_records data to ReeferDieselRecord format
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rec = record as any;
       // For legacy records (diesel_records), km_reading was actually operating hours
-      const opHours = rec.operating_hours ?? record.km_reading ?? null;
-      const prevHours = rec.previous_operating_hours ?? record.previous_km_reading ?? null;
-      const hoursOp = rec.hours_operated ?? (
+      const opHours = record.operating_hours ?? record.km_reading ?? null;
+      const prevHours = record.previous_operating_hours ?? record.previous_km_reading ?? null;
+      const hoursOp = record.hours_operated ?? (
         (opHours != null && prevHours != null && opHours > prevHours)
           ? opHours - prevHours : (record.distance_travelled ?? null)
       );
-      const lph = rec.litres_per_hour ?? (
+      const lph = record.litres_per_hour ?? (
         (hoursOp && hoursOp > 0 && record.litres_filled > 0)
           ? record.litres_filled / hoursOp : null
       );
@@ -1775,7 +1729,7 @@ const DieselManagement = () => {
         litres_filled: record.litres_filled,
         cost_per_litre: record.cost_per_litre ?? null,
         total_cost: record.total_cost,
-        currency: record.currency || 'ZAR',
+        currency: record.currency || 'USD',
         operating_hours: opHours,
         previous_operating_hours: prevHours,
         hours_operated: hoursOp,
@@ -1824,41 +1778,17 @@ const DieselManagement = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-2">
-            {/* Import Data button hidden
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => setIsImportModalOpen(true)}
-            >
-              <Upload className="h-4 w-4" />
-              Import Data
-            </Button>
-            */}
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={exportAllTransactionsToExcel}
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              Export Excel
-            </Button>
-          </div>
-        </div>
-
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="debrief">Debrief</TabsTrigger>
             <TabsTrigger value="reports">Reports</TabsTrigger>
             <TabsTrigger value="norms">Norms</TabsTrigger>
-            <TabsTrigger value="import">Import Data</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
             {/* Action Buttons */}
-            <div className="flex gap-2 mb-6">
+            <div className="flex flex-wrap gap-2 mb-6">
               <Button
                 className="gap-2"
                 onClick={() => {
@@ -1879,16 +1809,14 @@ const DieselManagement = () => {
                 <Snowflake className="h-4 w-4" />
                 Add Reefer Entry
               </Button>
-              {/* Import CSV button hidden
               <Button
                 variant="outline"
                 className="gap-2"
-                onClick={() => setIsImportModalOpen(true)}
+                onClick={exportAllTransactionsToExcel}
               >
-                <Upload className="h-4 w-4" />
-                Import CSV
+                <FileSpreadsheet className="h-4 w-4" />
+                Export All to Excel
               </Button>
-              */}
             </div>
 
             {/* Pending Cost Alert Banner */}
@@ -1964,9 +1892,7 @@ const DieselManagement = () => {
                                 <div className="text-right">
                                   <p className="text-muted-foreground">Total Cost</p>
                                   <p className="font-semibold">
-                                    {fleetTotals.totalCostZAR > 0 && formatCurrency(fleetTotals.totalCostZAR, 'ZAR')}
-                                    {fleetTotals.totalCostZAR > 0 && fleetTotals.totalCostUSD > 0 && ' / '}
-                                    {fleetTotals.totalCostUSD > 0 && formatCurrency(fleetTotals.totalCostUSD, 'USD')}
+                                    {fleetTotals.totalCost > 0 && formatCurrency(fleetTotals.totalCost)}
                                   </p>
                                 </div>
                                 <div className="text-right">
@@ -2017,9 +1943,7 @@ const DieselManagement = () => {
                                           <div className="flex items-center gap-4 text-sm">
                                             <span>{formatNumber(weekTotals.totalLitres)} L</span>
                                             <span>
-                                              {weekTotals.totalCostZAR > 0 && formatCurrency(weekTotals.totalCostZAR, 'ZAR')}
-                                              {weekTotals.totalCostZAR > 0 && weekTotals.totalCostUSD > 0 && ' / '}
-                                              {weekTotals.totalCostUSD > 0 && formatCurrency(weekTotals.totalCostUSD, 'USD')}
+                                              {weekTotals.totalCost > 0 && formatCurrency(weekTotals.totalCost)}
                                             </span>
                                             <span className="font-medium">{formatNumber(weekTotals.avgKmL, 2)} km/L</span>
                                             {weekTotals.pendingDebrief > 0 && (
@@ -2092,7 +2016,7 @@ const DieselManagement = () => {
                                                           </span>
                                                         ) : (
                                                           <span className="font-semibold">
-                                                            {formatCurrency(record.total_cost, (record.currency || 'ZAR') as 'ZAR' | 'USD')}
+                                                            {formatCurrency(record.total_cost)}
                                                           </span>
                                                         )}
                                                       </td>
@@ -2289,9 +2213,7 @@ const DieselManagement = () => {
                                   <div className="text-right">
                                     <p className="text-muted-foreground">Total Cost</p>
                                     <p className="font-semibold">
-                                      {fleetTotals.totalCostZAR > 0 && formatCurrency(fleetTotals.totalCostZAR, 'ZAR')}
-                                      {fleetTotals.totalCostZAR > 0 && fleetTotals.totalCostUSD > 0 && ' / '}
-                                      {fleetTotals.totalCostUSD > 0 && formatCurrency(fleetTotals.totalCostUSD, 'USD')}
+                                      {fleetTotals.totalCost > 0 && formatCurrency(fleetTotals.totalCost)}
                                     </p>
                                   </div>
                                 </div>
@@ -2332,9 +2254,7 @@ const DieselManagement = () => {
                                             <div className="flex items-center gap-4 text-sm">
                                               <span>{formatNumber(weekTotals.totalLitres)} L</span>
                                               <span>
-                                                {weekTotals.totalCostZAR > 0 && formatCurrency(weekTotals.totalCostZAR, 'ZAR')}
-                                                {weekTotals.totalCostZAR > 0 && weekTotals.totalCostUSD > 0 && ' / '}
-                                                {weekTotals.totalCostUSD > 0 && formatCurrency(weekTotals.totalCostUSD, 'USD')}
+                                                {weekTotals.totalCost > 0 && formatCurrency(weekTotals.totalCost)}
                                               </span>
                                             </div>
                                           </div>
@@ -2359,8 +2279,8 @@ const DieselManagement = () => {
                                                 <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                                                   {weekRecords.map((record, idx) => {
                                                     // Look up L/hr: prefer per-record value, fall back to fleet average
-                                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                                    const recordLph = (record as any).litres_per_hour as number | null;
+
+                                                    const recordLph = record.litres_per_hour;
                                                     const fleetLhr = reeferLhrMap.get(record.fleet_number);
                                                     const reeferPendingCost = !record.cost_per_litre || record.cost_per_litre === 0;
                                                     return (
@@ -2398,7 +2318,7 @@ const DieselManagement = () => {
                                                             </span>
                                                           ) : (
                                                             <span className="font-semibold">
-                                                              {formatCurrency(record.total_cost, (record.currency || 'ZAR') as 'ZAR' | 'USD')}
+                                                              {formatCurrency(record.total_cost)}
                                                             </span>
                                                           )}
                                                         </td>
@@ -2532,6 +2452,19 @@ const DieselManagement = () => {
                             <AlertCircle className="h-4 w-4" />
                             Pending Only PDF
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => generateWeeklyDebriefsPDF({
+                              records: dieselRecords,
+                              norms: dieselNorms,
+                              fleetNumber: debriefFleetFilter,
+                            })}
+                            className="gap-2"
+                          >
+                            <Calendar className="h-4 w-4" />
+                            Weekly Debriefs PDF
+                          </Button>
                         </>
                       )}
                       <Button
@@ -2542,6 +2475,18 @@ const DieselManagement = () => {
                       >
                         <Download className="h-4 w-4" />
                         All Fleets PDF
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => generateWeeklyDebriefsPDF({
+                          records: dieselRecords,
+                          norms: dieselNorms,
+                        })}
+                        className="gap-2"
+                      >
+                        <Calendar className="h-4 w-4" />
+                        All Fleets Weekly PDF
                       </Button>
                     </div>
                   </div>
@@ -3021,7 +2966,7 @@ const DieselManagement = () => {
                                   </div>
                                   <div className="flex gap-6 text-sm text-muted-foreground">
                                     <span>{formatNumber(week.totals.totalLitres)} L</span>
-                                    <span>{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</span>
+                                    <span>{formatCurrency(week.totals.totalCost)}</span>
                                     <span>{week.totals.fillCount} fills</span>
                                   </div>
                                 </div>
@@ -3049,8 +2994,7 @@ const DieselManagement = () => {
                                             <td className="p-3 font-medium">{report.fleet}</td>
                                             <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                             <td className="p-3 text-right">
-                                              {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                              {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                              {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                             </td>
                                             <td className="p-3 text-right">{formatNumber(report.totalDistance)}</td>
                                             <td className={`p-3 text-right font-medium ${isLow ? 'text-destructive' : 'text-green-600 dark:text-green-400'}`}>
@@ -3071,7 +3015,7 @@ const DieselManagement = () => {
                                       <tr className="bg-muted/50 font-medium border-t-2">
                                         <td className="p-3">Week Total</td>
                                         <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
-                                        <td className="p-3 text-right">{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</td>
+                                        <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
                                         <td className="p-3 text-right">{formatNumber(week.totals.totalDistance)}</td>
                                         <td className="p-3 text-right">—</td>
                                         <td className="p-3 text-right">{week.totals.fillCount}</td>
@@ -3111,8 +3055,7 @@ const DieselManagement = () => {
                                   <td className="p-3 font-medium">{report.fleet}</td>
                                   <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                   <td className="p-3 text-right">
-                                    {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                    {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                    {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                   </td>
                                   <td className="p-3 text-right">{formatNumber(report.totalDistance)}</td>
                                   <td className={`p-3 text-right font-medium ${isLow ? 'text-destructive' : 'text-success'}`}>
@@ -3214,10 +3157,7 @@ const DieselManagement = () => {
                               <td className="p-3">Total</td>
                               <td className="p-3 text-right">{formatNumber(fleetReports.reduce((s, r) => s + r.totalLitres, 0))} L</td>
                               <td className="p-3 text-right">
-                                <div>{formatCurrency(fleetReports.reduce((s, r) => s + r.totalCostZAR, 0), 'ZAR')}</div>
-                                {fleetReports.reduce((s, r) => s + r.totalCostUSD, 0) > 0 && (
-                                  <div className="text-xs text-muted-foreground">{formatCurrency(fleetReports.reduce((s, r) => s + r.totalCostUSD, 0), 'USD')}</div>
-                                )}
+                                <div>{formatCurrency(fleetReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                               </td>
                               <td className="p-3 text-right">{formatNumber(fleetReports.reduce((s, r) => s + r.totalDistance, 0))}</td>
                               <td className="p-3 text-right">—</td>
@@ -3294,7 +3234,7 @@ const DieselManagement = () => {
                                   </div>
                                   <div className="flex gap-6 text-sm text-muted-foreground">
                                     <span>{formatNumber(week.totals.totalLitres)} L</span>
-                                    <span>{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</span>
+                                    <span>{formatCurrency(week.totals.totalCost)}</span>
                                     <span>{week.totals.fillCount} fills</span>
                                   </div>
                                 </div>
@@ -3319,8 +3259,7 @@ const DieselManagement = () => {
                                           <td className="p-3 font-medium">{report.driver}</td>
                                           <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                           <td className="p-3 text-right">
-                                            {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                            {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                            {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                           </td>
                                           <td className="p-3 text-right">{formatNumber(report.totalDistance)}</td>
                                           <td className="p-3 text-right font-medium">{report.avgKmPerLitre > 0 ? formatNumber(report.avgKmPerLitre, 2) : '—'}</td>
@@ -3333,7 +3272,7 @@ const DieselManagement = () => {
                                       <tr className="bg-muted/50 font-medium border-t-2">
                                         <td className="p-3">Week Total</td>
                                         <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
-                                        <td className="p-3 text-right">{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</td>
+                                        <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
                                         <td className="p-3 text-right">{formatNumber(week.totals.totalDistance)}</td>
                                         <td className="p-3 text-right">—</td>
                                         <td className="p-3 text-right">{week.totals.fillCount}</td>
@@ -3369,8 +3308,7 @@ const DieselManagement = () => {
                                 <td className="p-3 font-medium">{report.driver}</td>
                                 <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                 <td className="p-3 text-right">
-                                  {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                  {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                  {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                 </td>
                                 <td className="p-3 text-right">{formatNumber(report.totalDistance)}</td>
                                 <td className="p-3 text-right font-medium">
@@ -3386,10 +3324,7 @@ const DieselManagement = () => {
                               <td className="p-3">Total</td>
                               <td className="p-3 text-right">{formatNumber(driverReports.reduce((s, r) => s + r.totalLitres, 0))} L</td>
                               <td className="p-3 text-right">
-                                <div>{formatCurrency(driverReports.reduce((s, r) => s + r.totalCostZAR, 0), 'ZAR')}</div>
-                                {driverReports.reduce((s, r) => s + r.totalCostUSD, 0) > 0 && (
-                                  <div className="text-xs text-muted-foreground">{formatCurrency(driverReports.reduce((s, r) => s + r.totalCostUSD, 0), 'USD')}</div>
-                                )}
+                                <div>{formatCurrency(driverReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                               </td>
                               <td className="p-3 text-right">{formatNumber(driverReports.reduce((s, r) => s + r.totalDistance, 0))}</td>
                               <td className="p-3 text-right">—</td>
@@ -3465,7 +3400,7 @@ const DieselManagement = () => {
                                   </div>
                                   <div className="flex gap-6 text-sm text-muted-foreground">
                                     <span>{formatNumber(week.totals.totalLitres)} L</span>
-                                    <span>{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</span>
+                                    <span>{formatCurrency(week.totals.totalCost)}</span>
                                     <span>{week.totals.fillCount} fills</span>
                                   </div>
                                 </div>
@@ -3489,8 +3424,7 @@ const DieselManagement = () => {
                                           <td className="p-3 font-medium">{report.station}</td>
                                           <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                           <td className="p-3 text-right">
-                                            {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                            {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                            {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                           </td>
                                           <td className="p-3 text-right">{formatNumber(report.avgCostPerLitre, 2)}/L</td>
                                           <td className="p-3 text-right">{report.fillCount}</td>
@@ -3507,7 +3441,7 @@ const DieselManagement = () => {
                                       <tr className="bg-muted/50 font-medium border-t-2">
                                         <td className="p-3">Week Total</td>
                                         <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
-                                        <td className="p-3 text-right">{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</td>
+                                        <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
                                         <td className="p-3 text-right">—</td>
                                         <td className="p-3 text-right">{week.totals.fillCount}</td>
                                         <td className="p-3"></td>
@@ -3541,8 +3475,7 @@ const DieselManagement = () => {
                                 <td className="p-3 font-medium">{report.station}</td>
                                 <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                 <td className="p-3 text-right">
-                                  {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                  {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                  {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                 </td>
                                 <td className="p-3 text-right">
                                   {formatNumber(report.avgCostPerLitre, 2)}/L
@@ -3566,10 +3499,7 @@ const DieselManagement = () => {
                               <td className="p-3">Total</td>
                               <td className="p-3 text-right">{formatNumber(stationReports.reduce((s, r) => s + r.totalLitres, 0))} L</td>
                               <td className="p-3 text-right">
-                                <div>{formatCurrency(stationReports.reduce((s, r) => s + r.totalCostZAR, 0), 'ZAR')}</div>
-                                {stationReports.reduce((s, r) => s + r.totalCostUSD, 0) > 0 && (
-                                  <div className="text-xs text-muted-foreground">{formatCurrency(stationReports.reduce((s, r) => s + r.totalCostUSD, 0), 'USD')}</div>
-                                )}
+                                <div>{formatCurrency(stationReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                               </td>
                               <td className="p-3 text-right">—</td>
                               <td className="p-3 text-right">{stationReports.reduce((s, r) => s + r.fillCount, 0)}</td>
@@ -3658,7 +3588,7 @@ const DieselManagement = () => {
                                     </div>
                                     <div className="flex gap-6 text-sm text-muted-foreground">
                                       <span>{formatNumber(week.totals.totalLitres)} L</span>
-                                      <span>{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</span>
+                                      <span>{formatCurrency(week.totals.totalCost)}</span>
                                       <span>{week.totals.fillCount} fills</span>
                                     </div>
                                   </div>
@@ -3683,8 +3613,7 @@ const DieselManagement = () => {
                                             <td className="p-3 font-medium">{report.fleet}</td>
                                             <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                             <td className="p-3 text-right">
-                                              {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                              {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                              {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                             </td>
                                             <td className="p-3 text-right">
                                               {report.avgLitresPerHour > 0 ? <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">{formatNumber(report.avgLitresPerHour, 2)} L/hr</Badge> : <span className="text-muted-foreground">—</span>}
@@ -3704,7 +3633,7 @@ const DieselManagement = () => {
                                         <tr className="bg-muted/50 font-medium border-t-2">
                                           <td className="p-3">Week Total</td>
                                           <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
-                                          <td className="p-3 text-right">{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</td>
+                                          <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
                                           <td className="p-3 text-right">—</td>
                                           <td className="p-3 text-right">{formatNumber(week.totals.totalHoursOperated)} hrs</td>
                                           <td className="p-3 text-right">{week.totals.fillCount}</td>
@@ -3746,8 +3675,7 @@ const DieselManagement = () => {
                                   <td className="p-3 font-medium">{report.fleet}</td>
                                   <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                   <td className="p-3 text-right">
-                                    {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                    {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                    {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                   </td>
                                   <td className="p-3 text-right">
                                     {report.avgLitresPerHour > 0 ? (
@@ -3780,10 +3708,7 @@ const DieselManagement = () => {
                                 <td className="p-3">Total</td>
                                 <td className="p-3 text-right">{formatNumber(reeferFleetReports.reduce((s, r) => s + r.totalLitres, 0))} L</td>
                                 <td className="p-3 text-right">
-                                  <div>{formatCurrency(reeferFleetReports.reduce((s, r) => s + r.totalCostZAR, 0), 'ZAR')}</div>
-                                  {reeferFleetReports.reduce((s, r) => s + r.totalCostUSD, 0) > 0 && (
-                                    <div className="text-xs text-muted-foreground">{formatCurrency(reeferFleetReports.reduce((s, r) => s + r.totalCostUSD, 0), 'USD')}</div>
-                                  )}
+                                  <div>{formatCurrency(reeferFleetReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                                 </td>
                                 <td className="p-3 text-right">—</td>
                                 <td className="p-3 text-right">
@@ -3819,7 +3744,7 @@ const DieselManagement = () => {
                                     </div>
                                     <div className="flex gap-6 text-sm text-muted-foreground">
                                       <span>{formatNumber(week.totals.totalLitres)} L</span>
-                                      <span>{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</span>
+                                      <span>{formatCurrency(week.totals.totalCost)}</span>
                                       <span>{week.totals.fillCount} fills</span>
                                     </div>
                                   </div>
@@ -3844,8 +3769,7 @@ const DieselManagement = () => {
                                             <td className="p-3 font-medium">{report.driver}</td>
                                             <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                             <td className="p-3 text-right">
-                                              {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                              {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                              {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                             </td>
                                             <td className="p-3 text-right">
                                               {report.avgLitresPerHour > 0 ? <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">{formatNumber(report.avgLitresPerHour, 2)} L/hr</Badge> : <span className="text-muted-foreground">—</span>}
@@ -3865,7 +3789,7 @@ const DieselManagement = () => {
                                         <tr className="bg-muted/50 font-medium border-t-2">
                                           <td className="p-3">Week Total</td>
                                           <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
-                                          <td className="p-3 text-right">{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</td>
+                                          <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
                                           <td className="p-3 text-right">—</td>
                                           <td className="p-3 text-right">{week.totals.fillCount}</td>
                                           <td className="p-3"></td>
@@ -3907,8 +3831,7 @@ const DieselManagement = () => {
                                   <td className="p-3 font-medium">{report.driver}</td>
                                   <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                   <td className="p-3 text-right">
-                                    {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                    {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                    {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                   </td>
                                   <td className="p-3 text-right">
                                     {report.avgLitresPerHour > 0 ? (
@@ -3939,10 +3862,7 @@ const DieselManagement = () => {
                                 <td className="p-3">Total</td>
                                 <td className="p-3 text-right">{formatNumber(reeferDriverReports.reduce((s, r) => s + r.totalLitres, 0))} L</td>
                                 <td className="p-3 text-right">
-                                  <div>{formatCurrency(reeferDriverReports.reduce((s, r) => s + r.totalCostZAR, 0), 'ZAR')}</div>
-                                  {reeferDriverReports.reduce((s, r) => s + r.totalCostUSD, 0) > 0 && (
-                                    <div className="text-xs text-muted-foreground">{formatCurrency(reeferDriverReports.reduce((s, r) => s + r.totalCostUSD, 0), 'USD')}</div>
-                                  )}
+                                  <div>{formatCurrency(reeferDriverReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                                 </td>
                                 <td className="p-3 text-right">—</td>
                                 <td className="p-3 text-right">{reeferDriverReports.reduce((s, r) => s + r.fillCount, 0)}</td>
@@ -3976,7 +3896,7 @@ const DieselManagement = () => {
                                     </div>
                                     <div className="flex gap-6 text-sm text-muted-foreground">
                                       <span>{formatNumber(week.totals.totalLitres)} L</span>
-                                      <span>{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</span>
+                                      <span>{formatCurrency(week.totals.totalCost)}</span>
                                       <span>{week.totals.fillCount} fills</span>
                                     </div>
                                   </div>
@@ -4000,8 +3920,7 @@ const DieselManagement = () => {
                                             <td className="p-3 font-medium">{report.station}</td>
                                             <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                             <td className="p-3 text-right">
-                                              {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                              {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                              {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                             </td>
                                             <td className="p-3 text-right">{formatNumber(report.avgCostPerLitre, 2)}/L</td>
                                             <td className="p-3 text-right">{report.fillCount}</td>
@@ -4018,7 +3937,7 @@ const DieselManagement = () => {
                                         <tr className="bg-muted/50 font-medium border-t-2">
                                           <td className="p-3">Week Total</td>
                                           <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
-                                          <td className="p-3 text-right">{formatCurrency(week.totals.totalCostZAR, 'ZAR')}</td>
+                                          <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
                                           <td className="p-3 text-right">—</td>
                                           <td className="p-3 text-right">{week.totals.fillCount}</td>
                                           <td className="p-3"></td>
@@ -4058,8 +3977,7 @@ const DieselManagement = () => {
                                   <td className="p-3 font-medium">{report.station}</td>
                                   <td className="p-3 text-right">{formatNumber(report.totalLitres)} L</td>
                                   <td className="p-3 text-right">
-                                    {report.totalCostZAR > 0 && <div>{formatCurrency(report.totalCostZAR, 'ZAR')}</div>}
-                                    {report.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(report.totalCostUSD, 'USD')}</div>}
+                                    {report.totalCost > 0 && <div>{formatCurrency(report.totalCost)}</div>}
                                   </td>
                                   <td className="p-3 text-right">
                                     {formatNumber(report.avgCostPerLitre, 2)}/L
@@ -4083,10 +4001,7 @@ const DieselManagement = () => {
                                 <td className="p-3">Total</td>
                                 <td className="p-3 text-right">{formatNumber(reeferStationReports.reduce((s, r) => s + r.totalLitres, 0))} L</td>
                                 <td className="p-3 text-right">
-                                  <div>{formatCurrency(reeferStationReports.reduce((s, r) => s + r.totalCostZAR, 0), 'ZAR')}</div>
-                                  {reeferStationReports.reduce((s, r) => s + r.totalCostUSD, 0) > 0 && (
-                                    <div className="text-xs text-muted-foreground">{formatCurrency(reeferStationReports.reduce((s, r) => s + r.totalCostUSD, 0), 'USD')}</div>
-                                  )}
+                                  <div>{formatCurrency(reeferStationReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                                 </td>
                                 <td className="p-3 text-right">—</td>
                                 <td className="p-3 text-right">{reeferStationReports.reduce((s, r) => s + r.fillCount, 0)}</td>
@@ -4158,8 +4073,7 @@ const DieselManagement = () => {
                                       <CardDescription className="mt-1">
                                         {formatNumber(weekReport.grandTotal.totalLitres)} L | {formatNumber(weekReport.grandTotal.totalKm)} km |{' '}
                                         {weekReport.grandTotal.consumption !== null && <span className="font-medium">{formatNumber(weekReport.grandTotal.consumption, 2)} km/L</span>}
-                                        {weekReport.grandTotal.totalCostZAR > 0 && ` | ${formatCurrency(weekReport.grandTotal.totalCostZAR, 'ZAR')}`}
-                                        {weekReport.grandTotal.totalCostUSD > 0 && ` | ${formatCurrency(weekReport.grandTotal.totalCostUSD, 'USD')}`}
+                                        {weekReport.grandTotal.totalCost > 0 && ` | ${formatCurrency(weekReport.grandTotal.totalCost)}`}
                                       </CardDescription>
                                     </div>
                                   </div>
@@ -4241,11 +4155,8 @@ const DieselManagement = () => {
                                                   )}
                                                 </td>
                                                 <td className="p-2 text-right">
-                                                  {(fleetData.totalCostZAR > 0 || fleetData.totalCostUSD > 0) ? (
-                                                    <div>
-                                                      {fleetData.totalCostZAR > 0 && <div>{formatCurrency(fleetData.totalCostZAR, 'ZAR')}</div>}
-                                                      {fleetData.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(fleetData.totalCostUSD, 'USD')}</div>}
-                                                    </div>
+                                                  {fleetData.totalCost > 0 ? (
+                                                    <div>{formatCurrency(fleetData.totalCost)}</div>
                                                   ) : (
                                                     <span className="text-muted-foreground">—</span>
                                                   )}
@@ -4268,8 +4179,7 @@ const DieselManagement = () => {
                                                   : (section.sectionTotal.consumption !== null ? formatNumber(section.sectionTotal.consumption, 2) : '—')}
                                               </td>
                                               <td className="p-2 text-right">
-                                                {section.sectionTotal.totalCostZAR > 0 && <div>{formatCurrency(section.sectionTotal.totalCostZAR, 'ZAR')}</div>}
-                                                {section.sectionTotal.totalCostUSD > 0 && <div className="text-xs text-muted-foreground">{formatCurrency(section.sectionTotal.totalCostUSD, 'USD')}</div>}
+                                                {section.sectionTotal.totalCost > 0 && <div>{formatCurrency(section.sectionTotal.totalCost)}</div>}
                                               </td>
                                             </tr>
                                           </tfoot>
@@ -4381,35 +4291,10 @@ const DieselManagement = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
-          <TabsContent value="import">
-            <Card>
-              <CardHeader>
-                <CardTitle>Import Diesel Data</CardTitle>
-                <CardDescription>
-                  Bulk import diesel records from CSV
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">Import CSV File</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Upload a CSV file with your diesel consumption data
-                  </p>
-                  <Button onClick={() => setIsImportModalOpen(true)}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Select File
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </div>
 
       {/* Modals */}
-      {/* eslint-disable @typescript-eslint/no-explicit-any */}
       <ManualDieselEntryModal
         isOpen={isManualEntryOpen}
         onClose={() => {
@@ -4417,7 +4302,7 @@ const DieselManagement = () => {
           setSelectedRecord(null);
         }}
         onSave={handleManualSave}
-        editRecord={selectedRecord as unknown as any}
+        editRecord={selectedRecord as unknown as ComponentProps<typeof ManualDieselEntryModal>['editRecord']}
       />
 
       <ReeferDieselEntryModal
@@ -4430,21 +4315,13 @@ const DieselManagement = () => {
         editRecord={selectedReeferEditRecord}
       />
 
-      {/* DieselImportModal hidden
-      <DieselImportModal
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        onImport={handleImport}
-      />
-      */}
-
       <TripLinkageModal
         isOpen={isTripLinkageOpen}
         onClose={() => {
           setIsTripLinkageOpen(false);
           setSelectedRecord(null);
         }}
-        dieselRecord={selectedRecord as unknown as any}
+        dieselRecord={selectedRecord as unknown as ComponentProps<typeof TripLinkageModal>['dieselRecord']}
         trips={trips}
         onLinkToTrip={handleLinkToTrip}
         onUnlinkFromTrip={handleUnlinkFromTrip}
@@ -4480,7 +4357,7 @@ const DieselManagement = () => {
           setIsProbeVerificationOpen(false);
           setSelectedRecord(null);
         }}
-        dieselRecord={selectedRecord as unknown as any}
+        dieselRecord={selectedRecord as unknown as ComponentProps<typeof ProbeVerificationModal>['dieselRecord']}
         onVerify={handleProbeVerification}
       />
 
@@ -4490,9 +4367,11 @@ const DieselManagement = () => {
           setIsDebriefOpen(false);
           setSelectedRecord(null);
         }}
-        dieselRecord={selectedRecord as unknown as any}
+        dieselRecord={selectedRecord as unknown as ComponentProps<typeof DieselDebriefModal>['dieselRecord']}
         onDebrief={handleDebrief}
         onWhatsappShared={handleWhatsappShared}
+        allDieselRecords={dieselRecords}
+        dieselNorms={dieselNorms}
       />
 
       {/* Batch Debrief Modal */}
@@ -4518,7 +4397,7 @@ const DieselManagement = () => {
           setSelectedNorm(null);
         }}
         onSave={handleNormSave}
-        editNorm={selectedNorm as unknown as any}
+        editNorm={selectedNorm as unknown as ComponentProps<typeof DieselNormsModal>['editNorm']}
       />
 
       <DieselTransactionViewModal
@@ -4559,7 +4438,6 @@ const DieselManagement = () => {
           // Refetch reefer records will happen automatically via query invalidation
         }}
       />
-      {/* eslint-enable @typescript-eslint/no-explicit-any */}
 
       {/* ── Export Reports Dialog ──────────────────────────────────────── */}
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>

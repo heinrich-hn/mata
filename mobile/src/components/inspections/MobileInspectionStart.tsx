@@ -133,8 +133,7 @@ const MobileInspectionStart = () => {
 
       // If created from a breakdown, link the inspection back
       if (breakdownId) {
-        const dbAny = supabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-        await dbAny
+        await supabase
           .from("fleet_breakdowns")
           .update({
             status: "scheduled_for_inspection",

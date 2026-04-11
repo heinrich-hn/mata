@@ -46,7 +46,7 @@ export const AdditionalCostsForm = ({
   const [formData, setFormData] = useState({
     costType: '',
     amount: '',
-    currency: 'ZAR',
+    currency: 'USD',
     notes: ''
   });
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
@@ -139,7 +139,7 @@ export const AdditionalCostsForm = ({
       setFormData({
         costType: '',
         amount: '',
-        currency: 'ZAR',
+        currency: 'USD',
         notes: ''
       });
       setSelectedFiles(null);
@@ -207,7 +207,7 @@ export const AdditionalCostsForm = ({
       supabase.removeChannel(subscription);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripId]);  const handleChange = (field: string, value: string) => {
+  }, [tripId]); const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -226,7 +226,7 @@ export const AdditionalCostsForm = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const getTotalAdditionalCosts = (currency: 'USD' | 'ZAR') => {
+  const getTotalAdditionalCosts = (currency: string) => {
     return additionalCosts
       .filter(cost => cost.currency === currency)
       .reduce((sum, cost) => sum + cost.amount, 0);
@@ -259,20 +259,11 @@ export const AdditionalCostsForm = ({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="text-center p-4 bg-success/10 rounded-lg">
-              <p className="text-sm text-muted-foreground">ZAR Additional Costs</p>
+              <p className="text-sm text-muted-foreground">Additional Costs</p>
               <p className="text-xl font-bold text-success">
-                {formatCurrency(getTotalAdditionalCosts('ZAR'), 'ZAR')}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {additionalCosts.filter(c => c.currency === 'ZAR').length} entries
-              </p>
-            </div>
-            <div className="text-center p-4 bg-info/10 rounded-lg">
-              <p className="text-sm text-muted-foreground">USD Additional Costs</p>
-              <p className="text-xl font-bold text-info">
-                {formatCurrency(getTotalAdditionalCosts('USD'), 'USD')}
+                {formatCurrency(getTotalAdditionalCosts('USD'))}
               </p>
               <p className="text-xs text-muted-foreground">
                 {additionalCosts.filter(c => c.currency === 'USD').length} entries
@@ -329,7 +320,6 @@ export const AdditionalCostsForm = ({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ZAR">ZAR (R)</SelectItem>
                       <SelectItem value="USD">USD ($)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -399,7 +389,7 @@ export const AdditionalCostsForm = ({
                         </div>
                         <div className="text-right">
                           <p className="font-semibold text-lg">
-                            {formatCurrency(cost.amount, cost.currency as 'ZAR' | 'USD')}
+                            {formatCurrency(cost.amount, cost.currency as string)}
                           </p>
                         </div>
                       </div>

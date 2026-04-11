@@ -528,7 +528,7 @@ export function exportDieselDebriefs(records: DieselExportRow[], target: 'pdf' |
         date: format(new Date(r.date), 'dd MMM yyyy'),
         station: r.fuel_station || '',
         litres: r.litres_filled != null ? `${r.litres_filled.toFixed(1)} L` : '',
-        cost: r.total_cost != null ? `${r.currency || 'ZAR'} ${r.total_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '',
+        cost: r.total_cost != null ? `${r.currency || 'USD'} ${r.total_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '',
         distance: r.distance_travelled != null ? `${r.distance_travelled.toFixed(0)} km` : '',
         actual: r.km_per_litre != null ? r.km_per_litre.toFixed(2) : '',
         standard: r.expected_km_per_litre != null ? r.expected_km_per_litre.toFixed(2) : '',

@@ -47,8 +47,21 @@ const TyreInventoryImportModal = ({
     failed: number;
   } | null>(null);
 
+  // Format USD currency
+  const formatUSD = (amount: string | undefined): string => {
+    if (!amount || amount === "") return "-";
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount)) return "-";
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(numAmount);
+  };
+
   const downloadExcelTemplate = () => {
-    // Create sample data for the template
+    // Create sample data for the template (all prices in USD)
     const templateData = [
       {
         brand: "Michelin",
@@ -57,9 +70,9 @@ const TyreInventoryImportModal = ({
         type: "Steer",
         quantity: 20,
         min_quantity: 5,
-        unit_price: 4500.00,
-        purchase_cost_zar: 4200.00,
-        purchase_cost_usd: 250.00,
+        unit_price: 250.00, // USD
+        purchase_cost_zar: 4200.00, // Keep ZAR for reference
+        purchase_cost_usd: 250.00, // USD
         dot_code: "DOT3524",
         pressure_rating: 120,
         initial_tread_depth: 16,
@@ -76,9 +89,9 @@ const TyreInventoryImportModal = ({
         type: "Drive",
         quantity: 15,
         min_quantity: 5,
-        unit_price: 3800.00,
+        unit_price: 210.00, // USD
         purchase_cost_zar: 3500.00,
-        purchase_cost_usd: 210.00,
+        purchase_cost_usd: 210.00, // USD
         dot_code: "DOT3624",
         pressure_rating: 110,
         initial_tread_depth: 15,
@@ -95,9 +108,9 @@ const TyreInventoryImportModal = ({
         type: "Trailer",
         quantity: 25,
         min_quantity: 8,
-        unit_price: 3200.00,
+        unit_price: 180.00, // USD
         purchase_cost_zar: 3000.00,
-        purchase_cost_usd: 180.00,
+        purchase_cost_usd: 180.00, // USD
         dot_code: "DOT3724",
         pressure_rating: 100,
         initial_tread_depth: 14,
@@ -120,9 +133,9 @@ const TyreInventoryImportModal = ({
       { wch: 12 }, // type
       { wch: 10 }, // quantity
       { wch: 12 }, // min_quantity
-      { wch: 12 }, // unit_price
-      { wch: 18 }, // purchase_cost_zar
-      { wch: 18 }, // purchase_cost_usd
+      { wch: 12 }, // unit_price (USD)
+      { wch: 18 }, // purchase_cost_zar (ZAR)
+      { wch: 18 }, // purchase_cost_usd (USD)
       { wch: 12 }, // dot_code
       { wch: 15 }, // pressure_rating
       { wch: 18 }, // initial_tread_depth
@@ -145,9 +158,9 @@ const TyreInventoryImportModal = ({
       { Field: "type", Required: "Yes", Description: "Tyre type: Steer, Drive, Trailer" },
       { Field: "quantity", Required: "Yes", Description: "Number of tyres in stock (whole number)" },
       { Field: "min_quantity", Required: "No", Description: "Minimum stock level for reorder alerts (default: 5)" },
-      { Field: "unit_price", Required: "No", Description: "Unit price of tyre" },
-      { Field: "purchase_cost_zar", Required: "No", Description: "Purchase cost in South African Rand" },
-      { Field: "purchase_cost_usd", Required: "No", Description: "Purchase cost in US Dollars" },
+      { Field: "unit_price", Required: "No", Description: "Unit price in USD ($)" },
+      { Field: "purchase_cost_zar", Required: "No", Description: "Purchase cost in South African Rand (ZAR)" },
+      { Field: "purchase_cost_usd", Required: "No", Description: "Purchase cost in US Dollars (USD) - Primary currency" },
       { Field: "dot_code", Required: "No", Description: "DOT code for tyre manufacturing date (e.g., DOT3524)" },
       { Field: "pressure_rating", Required: "No", Description: "Recommended pressure in PSI" },
       { Field: "initial_tread_depth", Required: "No", Description: "New tyre tread depth in mm" },
@@ -168,9 +181,9 @@ const TyreInventoryImportModal = ({
 
   const downloadCSVTemplate = () => {
     const template = `brand,model,size,type,quantity,min_quantity,unit_price,purchase_cost_zar,purchase_cost_usd,dot_code,pressure_rating,initial_tread_depth,location,supplier,status,warranty_months,warranty_km
-Michelin,XZE2,295/80R22.5,Steer,20,5,4500.00,4200.00,250.00,DOT3524,120,16,main-warehouse,Tyre Depot,new,24,80000
-Bridgestone,R297,11R22.5,Drive,15,5,3800.00,3500.00,210.00,DOT3624,110,15,main-warehouse,Tyre Depot,new,24,80000
-Continental,HTR2,385/65R22.5,Trailer,25,8,3200.00,3000.00,180.00,DOT3724,100,14,secondary-warehouse,Continental Direct,new,18,100000`;
+Michelin,XZE2,295/80R22.5,Steer,20,5,250.00,4200.00,250.00,DOT3524,120,16,main-warehouse,Tyre Depot,new,24,80000
+Bridgestone,R297,11R22.5,Drive,15,5,210.00,3500.00,210.00,DOT3624,110,15,main-warehouse,Tyre Depot,new,24,80000
+Continental,HTR2,385/65R22.5,Trailer,25,8,180.00,3000.00,180.00,DOT3724,100,14,secondary-warehouse,Continental Direct,new,18,100000`;
 
     const blob = new Blob([template], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
@@ -354,13 +367,24 @@ Continental,HTR2,385/65R22.5,Trailer,25,8,3200.00,3000.00,180.00,DOT3724,100,14,
     onOpenChange(false);
   };
 
+  // Get the display price (prioritize purchase_cost_usd, then unit_price)
+  const getDisplayPrice = (record: TyreInventoryRecord): string => {
+    if (record.purchase_cost_usd && record.purchase_cost_usd !== "") {
+      return formatUSD(record.purchase_cost_usd);
+    }
+    if (record.unit_price && record.unit_price !== "") {
+      return formatUSD(record.unit_price);
+    }
+    return "-";
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Import Tyre Inventory</DialogTitle>
           <DialogDescription>
-            Upload an Excel (.xlsx, .xls) or CSV file to bulk import tyre inventory items
+            Upload an Excel (.xlsx, .xls) or CSV file to bulk import tyre inventory items. All prices should be in USD ($).
           </DialogDescription>
         </DialogHeader>
 
@@ -370,10 +394,12 @@ Continental,HTR2,385/65R22.5,Trailer,25,8,3200.00,3000.00,180.00,DOT3724,100,14,
             <AlertDescription>
               <strong>Required columns:</strong> brand, model, size, type, quantity
               <br />
-              <strong>Optional columns:</strong> min_quantity, unit_price, purchase_cost_zar, purchase_cost_usd, dot_code,
-              pressure_rating, initial_tread_depth, location, supplier, status, warranty_months, warranty_km
+              <strong>Optional columns:</strong> min_quantity, unit_price (USD), purchase_cost_zar (ZAR), purchase_cost_usd (USD - Primary),
+              dot_code, pressure_rating, initial_tread_depth, location, supplier, status, warranty_months, warranty_km
               <br />
               <strong>Valid types:</strong> Steer, Drive, Trailer
+              <br />
+              <strong>Currency:</strong> All prices are in <strong>USD ($)</strong>
             </AlertDescription>
           </Alert>
 
@@ -416,7 +442,7 @@ Continental,HTR2,385/65R22.5,Trailer,25,8,3200.00,3000.00,180.00,DOT3724,100,14,
                         <TableHead>Size</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Qty</TableHead>
-                        <TableHead>Cost (ZAR)</TableHead>
+                        <TableHead>Cost (USD)</TableHead>
                         <TableHead>DOT</TableHead>
                         <TableHead>Location</TableHead>
                       </TableRow>
@@ -429,7 +455,9 @@ Continental,HTR2,385/65R22.5,Trailer,25,8,3200.00,3000.00,180.00,DOT3724,100,14,
                           <TableCell className="font-mono text-xs">{record.size}</TableCell>
                           <TableCell>{record.type}</TableCell>
                           <TableCell>{record.quantity}</TableCell>
-                          <TableCell>{record.purchase_cost_zar || '-'}</TableCell>
+                          <TableCell className="text-green-600 dark:text-green-400 font-medium">
+                            {getDisplayPrice(record)}
+                          </TableCell>
                           <TableCell className="font-mono text-xs">{record.dot_code || '-'}</TableCell>
                           <TableCell>{record.location || '-'}</TableCell>
                         </TableRow>
@@ -443,7 +471,7 @@ Continental,HTR2,385/65R22.5,Trailer,25,8,3200.00,3000.00,180.00,DOT3724,100,14,
               </div>
 
               {importResults && (
-                <Alert className={importResults.failed === 0 ? "border-success" : "border-destructive"}>
+                <Alert className={importResults.failed === 0 ? "border-green-500" : "border-destructive"}>
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertDescription>
                     <strong>Import Complete:</strong> {importResults.successful} successful, {importResults.failed} failed

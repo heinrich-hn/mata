@@ -71,7 +71,7 @@ const AddTyreDialog = ({ open, onOpenChange, onAdd }: AddTyreDialogProps) => {
     if (!formData.pressure_rating) newErrors.pressure_rating = "Pressure rating is required";
     if (!formData.initial_tread_depth) newErrors.initial_tread_depth = "Initial tread depth is required";
     if (!formData.supplier) newErrors.supplier = "Supplier is required";
-    if (!formData.purchase_cost_zar) newErrors.purchase_cost_zar = "Purchase cost (ZAR) is required";
+    if (!formData.purchase_cost_usd) newErrors.purchase_cost_usd = "Purchase cost (USD) is required";
     if (!formData.location) newErrors.location = "Location is required";
     if (!formData.status) newErrors.status = "Status is required";
 
@@ -87,11 +87,14 @@ const AddTyreDialog = ({ open, onOpenChange, onAdd }: AddTyreDialogProps) => {
     if (formData.initial_tread_depth && isNaN(Number(formData.initial_tread_depth))) {
       newErrors.initial_tread_depth = "Must be a number";
     }
-    if (formData.purchase_cost_zar && isNaN(Number(formData.purchase_cost_zar))) {
-      newErrors.purchase_cost_zar = "Must be a number";
-    }
     if (formData.purchase_cost_usd && isNaN(Number(formData.purchase_cost_usd))) {
-      newErrors.purchase_cost_usd = "Must be a number";
+      newErrors.purchase_cost_usd = "Must be a valid USD amount";
+    }
+    if (formData.purchase_cost_zar && isNaN(Number(formData.purchase_cost_zar))) {
+      newErrors.purchase_cost_zar = "Must be a valid ZAR amount";
+    }
+    if (formData.unit_price && isNaN(Number(formData.unit_price))) {
+      newErrors.unit_price = "Must be a valid USD amount";
     }
 
     setErrors(newErrors);
@@ -166,7 +169,7 @@ const AddTyreDialog = ({ open, onOpenChange, onAdd }: AddTyreDialogProps) => {
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Tyre to Inventory</DialogTitle>
-          <DialogDescription>Add new tyre stock with comprehensive details</DialogDescription>
+          <DialogDescription>Add new tyre stock with comprehensive details. All prices are in USD ($).</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
@@ -265,53 +268,59 @@ const AddTyreDialog = ({ open, onOpenChange, onAdd }: AddTyreDialogProps) => {
                 {errors.initial_tread_depth && <p className="text-sm text-destructive">{errors.initial_tread_depth}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="supplier">Vendor *</Label>
+                <Label htmlFor="supplier">Supplier *</Label>
                 <Input
                   id="supplier"
                   value={formData.supplier}
                   onChange={handleChange}
-                  placeholder="Enter vendor name"
+                  placeholder="Enter supplier name"
                   className={errors.supplier ? "border-destructive" : ""}
                 />
                 {errors.supplier && <p className="text-sm text-destructive">{errors.supplier}</p>}
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="purchase_cost_zar">Purchase Cost (ZAR) *</Label>
-                <Input
-                  id="purchase_cost_zar"
-                  value={formData.purchase_cost_zar}
-                  onChange={handleChange}
-                  placeholder="Enter cost in ZAR"
-                  type="number"
-                  step="0.01"
-                  className={errors.purchase_cost_zar ? "border-destructive" : ""}
-                />
-                {errors.purchase_cost_zar && <p className="text-sm text-destructive">{errors.purchase_cost_zar}</p>}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="purchase_cost_usd">Purchase Cost (USD) *</Label>
+                  <Input
+                    id="purchase_cost_usd"
+                    value={formData.purchase_cost_usd}
+                    onChange={handleChange}
+                    placeholder="Enter cost in USD (e.g., 250.00)"
+                    type="number"
+                    step="0.01"
+                    className={errors.purchase_cost_usd ? "border-destructive" : ""}
+                  />
+                  {errors.purchase_cost_usd && <p className="text-sm text-destructive">{errors.purchase_cost_usd}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="purchase_cost_zar">Purchase Cost (ZAR) - Optional</Label>
+                  <Input
+                    id="purchase_cost_zar"
+                    value={formData.purchase_cost_zar}
+                    onChange={handleChange}
+                    placeholder="Enter cost in ZAR (e.g., 4200.00)"
+                    type="number"
+                    step="0.01"
+                  />
+                  {errors.purchase_cost_zar && <p className="text-sm text-destructive">{errors.purchase_cost_zar}</p>}
+                </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="purchase_cost_usd">Purchase Cost (USD)</Label>
-                <Input
-                  id="purchase_cost_usd"
-                  value={formData.purchase_cost_usd}
-                  onChange={handleChange}
-                  placeholder="Enter cost in USD"
-                  type="number"
-                  step="0.01"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="unit_price">Unit Price</Label>
+                <Label htmlFor="unit_price">Unit Price (USD) - Optional</Label>
                 <Input
                   id="unit_price"
                   value={formData.unit_price}
                   onChange={handleChange}
-                  placeholder="Unit price"
+                  placeholder="Enter unit price in USD"
                   type="number"
                   step="0.01"
                 />
+                {errors.unit_price && <p className="text-sm text-destructive">{errors.unit_price}</p>}
+                <p className="text-xs text-muted-foreground">If different from purchase cost (e.g., retail price)</p>
               </div>
             </div>
 

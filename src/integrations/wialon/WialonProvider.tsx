@@ -1,5 +1,5 @@
 // src/integrations/wialon/WialonProvider.tsx
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import '@/integrations/wialon/types'; // Window augmentation for wialon SDK
 import { ReactNode, useEffect, useState } from 'react';
 import { WialonContext } from './WialonContext';
 import { useWialon } from './useWialon';
@@ -14,13 +14,13 @@ export const WialonProvider = ({ children }: WialonProviderProps) => {
 
   useEffect(() => {
     // Load Wialon SDK if not already loaded
-    if ((window as any).wialon) {
+    if (window.wialon) {
       console.log('Wialon SDK already loaded');
       console.log('SDK structure check:', {
-        hasWialon: !!(window as any).wialon,
-        hasCore: !!(window as any).wialon?.core,
-        hasSession: !!(window as any).wialon?.core?.Session,
-        hasGetInstance: typeof (window as any).wialon?.core?.Session?.getInstance === 'function'
+        hasWialon: !!window.wialon,
+        hasCore: !!window.wialon?.core,
+        hasSession: !!window.wialon?.core?.Session,
+        hasGetInstance: typeof window.wialon?.core?.Session?.getInstance === 'function'
       });
       setSdkLoaded(true);
       return;
@@ -37,14 +37,14 @@ export const WialonProvider = ({ children }: WialonProviderProps) => {
 
       // Wait for SDK to be fully initialized
       const checkSDKReady = () => {
-        const wialon = (window as any).wialon;
-        if (wialon && wialon.core && wialon.core.Session) {
+        const wialonSdk = window.wialon;
+        if (wialonSdk && wialonSdk.core && wialonSdk.core.Session) {
           console.log('Wialon SDK fully initialized and ready');
           console.log('SDK structure:', {
-            hasCore: !!wialon.core,
-            hasSession: !!wialon.core.Session,
-            hasGetInstance: typeof wialon.core.Session.getInstance === 'function',
-            sessionMethods: wialon.core.Session.getInstance ? Object.keys(wialon.core.Session.getInstance()).slice(0, 10) : []
+            hasCore: !!wialonSdk.core,
+            hasSession: !!wialonSdk.core.Session,
+            hasGetInstance: typeof wialonSdk.core.Session.getInstance === 'function',
+            sessionMethods: wialonSdk.core.Session.getInstance ? Object.keys(wialonSdk.core.Session.getInstance()).slice(0, 10) : []
           });
           setSdkLoaded(true);
         } else {

@@ -3,9 +3,10 @@ import Button from '@/components/ui/button-variants';
 import { Input, TextArea } from '@/components/ui/form-elements';
 import Modal from '@/components/ui/modal';
 import { useDrivers } from '@/hooks/useDrivers';
-import { generateDieselDebriefPDF, generateDieselDebriefPDFBlob } from '@/lib/dieselDebriefExport';
+import { generateDieselDebriefPDF, generateDieselDebriefPDFBlob, generateWeeklyDebriefsPDF } from '@/lib/dieselDebriefExport';
+import type { WeeklyDebriefRecord, WeeklyDebriefNorm } from '@/lib/dieselDebriefExport';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/formatters';
-import { AlertCircle, CheckCircle2, FileText, Share2 } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle2, FileText, Share2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export interface TrailerFuelData {
@@ -31,7 +32,7 @@ export interface DieselRecord {
   vehicle_litres_only?: number;
   trailer_litres_total?: number;
   total_cost?: number;
-  currency?: 'ZAR' | 'USD';
+  currency?: string;
   distance_travelled?: number;
   probe_discrepancy?: number;
   debrief_notes?: string;
@@ -51,6 +52,10 @@ interface DieselDebriefModalProps {
   onDebrief: (debriefData: DebriefData) => Promise<void>;
   /** Called with the record ID when a WhatsApp share succeeds */
   onWhatsappShared?: (recordId: string) => void;
+  /** All diesel records — used for the weekly PDF export (last 7 days). */
+  allDieselRecords?: WeeklyDebriefRecord[];
+  /** Diesel norms — used for the weekly PDF export. */
+  dieselNorms?: WeeklyDebriefNorm[];
 }
 
 /** Normalise a phone number to E.164 digits-only (no + or spaces). */
@@ -67,6 +72,8 @@ const DieselDebriefModal = ({
   dieselRecord,
   onDebrief,
   onWhatsappShared,
+  allDieselRecords,
+  dieselNorms,
 }: DieselDebriefModalProps) => {
   const [formData, setFormData] = useState({
     debrief_notes: '',
@@ -380,6 +387,22 @@ const DieselDebriefModal = ({
               <FileText className="h-4 w-4 mr-2" />
               Export PDF
             </Button>
+            {allDieselRecords && allDieselRecords.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  generateWeeklyDebriefsPDF({
+                    records: allDieselRecords,
+                    norms: dieselNorms || [],
+                    fleetNumber: dieselRecord.fleet_number,
+                  })
+                }
+                disabled={isProcessing}
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Weekly PDF
+              </Button>
+            )}
             <Button
               variant="outline"
               className="gap-2 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"

@@ -13,8 +13,8 @@ export function formatDate(date: string | Date) {
   }).format(new Date(date));
 }
 
-export function formatCurrency(amount: number, currency: string = "USD") {
-  const currencyCode = currency === "ZAR" ? "ZAR" : "USD";
+export function formatCurrency(amount: number, _currency: string = "USD") {
+  const currencyCode = "USD";
   const locale = currencyCode === "USD" ? "en-US" : "en-ZA";
 
   return new Intl.NumberFormat(locale, {

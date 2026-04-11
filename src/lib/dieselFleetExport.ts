@@ -24,6 +24,10 @@ export interface DieselExportRecord {
   debrief_signed_by?: string;
   debrief_date?: string;
   notes?: string;
+  /** Reefer-specific fields */
+  operating_hours?: number | null;
+  previous_operating_hours?: number | null;
+  hours_operated?: number | null;
 }
 
 export interface FleetExportOptions {
@@ -55,11 +59,7 @@ export const generateFleetDieselPDF = (options: FleetExportOptions) => {
 
   // Calculate summary statistics
   const totalLitres = fleetRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-  const totalCostZAR = fleetRecords
-    .filter(r => (r.currency || 'ZAR') === 'ZAR')
-    .reduce((sum, r) => sum + (r.total_cost || 0), 0);
-  const totalCostUSD = fleetRecords
-    .filter(r => r.currency === 'USD')
+  const totalCost = fleetRecords
     .reduce((sum, r) => sum + (r.total_cost || 0), 0);
   const totalDistance = fleetRecords.reduce((sum, r) => sum + (r.distance_travelled || 0), 0);
   const avgKmPerLitre = totalLitres > 0 ? totalDistance / totalLitres : 0;
@@ -123,10 +123,7 @@ export const generateFleetDieselPDF = (options: FleetExportOptions) => {
   doc.setFont("helvetica", "bold");
   doc.text("Total Cost:", margin + 5, row2Y);
   doc.setFont("helvetica", "normal");
-  let costText = formatCurrency(totalCostZAR, 'ZAR');
-  if (totalCostUSD > 0) {
-    costText += ` + ${formatCurrency(totalCostUSD, 'USD')}`;
-  }
+  const costText = formatCurrency(totalCost);
   doc.text(costText, margin + 40, row2Y);
 
   doc.setFont("helvetica", "bold");
@@ -155,8 +152,8 @@ export const generateFleetDieselPDF = (options: FleetExportOptions) => {
         record.driver_name || "N/A",
         record.fuel_station || "N/A",
         `${formatNumber(record.litres_filled || 0)} L`,
-        record.cost_per_litre ? formatCurrency(record.cost_per_litre, (record.currency || 'ZAR') as 'ZAR' | 'USD') : "N/A",
-        formatCurrency(record.total_cost || 0, (record.currency || 'ZAR') as 'ZAR' | 'USD'),
+        record.cost_per_litre ? formatCurrency(record.cost_per_litre) : "N/A",
+        formatCurrency(record.total_cost || 0),
         record.distance_travelled ? `${formatNumber(record.distance_travelled)} km` : "N/A",
         record.km_per_litre ? formatNumber(record.km_per_litre, 2) : "N/A",
       ];
@@ -243,11 +240,7 @@ export const generateFleetDieselExcel = (options: FleetExportOptions) => {
 
   // Calculate summary statistics
   const totalLitres = fleetRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-  const totalCostZAR = fleetRecords
-    .filter(r => (r.currency || 'ZAR') === 'ZAR')
-    .reduce((sum, r) => sum + (r.total_cost || 0), 0);
-  const totalCostUSD = fleetRecords
-    .filter(r => r.currency === 'USD')
+  const totalCost = fleetRecords
     .reduce((sum, r) => sum + (r.total_cost || 0), 0);
   const totalDistance = fleetRecords.reduce((sum, r) => sum + (r.distance_travelled || 0), 0);
   const avgKmPerLitre = totalLitres > 0 ? totalDistance / totalLitres : 0;
@@ -264,8 +257,6 @@ export const generateFleetDieselExcel = (options: FleetExportOptions) => {
     ['SUMMARY'],
     ['Total Records', fleetRecords.length],
     ['Total Litres', totalLitres.toFixed(2)],
-    ['Total Cost (ZAR)', totalCostZAR.toFixed(2)],
-    ['Total Cost (USD)', totalCostUSD.toFixed(2)],
     ['Total Distance (km)', totalDistance.toFixed(2)],
     ['Average km/L', avgKmPerLitre.toFixed(2)],
     [''],
@@ -313,7 +304,7 @@ export const generateFleetDieselExcel = (options: FleetExportOptions) => {
           record.litres_filled?.toFixed(2) || '',
           record.cost_per_litre?.toFixed(2) || '',
           record.total_cost?.toFixed(2) || '',
-          record.currency || 'ZAR',
+          record.currency || 'USD',
           record.km_reading || '',
           record.previous_km_reading || '',
           record.distance_travelled || '',
@@ -339,7 +330,7 @@ export const generateFleetDieselExcel = (options: FleetExportOptions) => {
       '',
       totalLitres.toFixed(2),
       '',
-      (totalCostZAR + totalCostUSD).toFixed(2),
+      (totalCost).toFixed(2),
       '',
       '',
       '',
@@ -374,7 +365,7 @@ export const generateFleetDieselExcel = (options: FleetExportOptions) => {
   // Driver Summary Sheet
   const driverSummary = new Map<string, {
     litres: number;
-    costZAR: number;
+    cost: number;
     costUSD: number;
     distance: number;
     fills: number;
@@ -384,14 +375,14 @@ export const generateFleetDieselExcel = (options: FleetExportOptions) => {
     const driver = record.driver_name || 'Unknown';
     const existing = driverSummary.get(driver) || {
       litres: 0,
-      costZAR: 0,
+      cost: 0,
       costUSD: 0,
       distance: 0,
       fills: 0,
     };
 
     existing.litres += record.litres_filled || 0;
-    existing.costZAR += (record.currency || 'ZAR') === 'ZAR' ? (record.total_cost || 0) : 0;
+    existing.cost += (record.total_cost || 0);
     existing.costUSD += record.currency === 'USD' ? (record.total_cost || 0) : 0;
     existing.distance += record.distance_travelled || 0;
     existing.fills += 1;
@@ -400,11 +391,11 @@ export const generateFleetDieselExcel = (options: FleetExportOptions) => {
   });
 
   const driverData = [
-    ['Driver', 'Total Litres', 'Total Cost (ZAR)', 'Total Cost (USD)', 'Total Distance (km)', 'Avg km/L', 'Fill Count'],
+    ['Driver', 'Total Litres', 'Total Cost', 'Total Distance (km)', 'Avg km/L', 'Fill Count'],
     ...Array.from(driverSummary.entries()).map(([driver, stats]) => [
       driver,
       stats.litres.toFixed(2),
-      stats.costZAR.toFixed(2),
+      stats.cost.toFixed(2),
       stats.costUSD.toFixed(2),
       stats.distance.toFixed(2),
       stats.litres > 0 ? (stats.distance / stats.litres).toFixed(2) : '0.00',
@@ -450,11 +441,7 @@ export const generateAllFleetsDieselPDF = (
   // Calculate overall totals
   const filteredRecords = records.filter(r => fleetsToExport.includes(r.fleet_number));
   const totalLitres = filteredRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-  const totalCostZAR = filteredRecords
-    .filter(r => (r.currency || 'ZAR') === 'ZAR')
-    .reduce((sum, r) => sum + (r.total_cost || 0), 0);
-  const totalCostUSD = filteredRecords
-    .filter(r => r.currency === 'USD')
+  const totalCost = filteredRecords
     .reduce((sum, r) => sum + (r.total_cost || 0), 0);
   const totalDistance = filteredRecords.reduce((sum, r) => sum + (r.distance_travelled || 0), 0);
 
@@ -494,7 +481,7 @@ export const generateAllFleetsDieselPDF = (
   doc.text(`Fleets: ${fleetsToExport.length}`, margin + 10, summaryY);
   doc.text(`Records: ${filteredRecords.length}`, margin + 50, summaryY);
   doc.text(`Litres: ${formatNumber(totalLitres)}`, margin + 95, summaryY);
-  doc.text(`Cost: ${formatCurrency(totalCostZAR + totalCostUSD, 'ZAR')}`, margin + 140, summaryY);
+  doc.text(`Cost: ${formatCurrency(totalCost)}`, margin + 140, summaryY);
 
   doc.setTextColor(0, 0, 0);
   yPos += 35;
@@ -503,8 +490,7 @@ export const generateAllFleetsDieselPDF = (
   const fleetData = fleetsToExport.map(fleet => {
     const fleetRecords = filteredRecords.filter(r => r.fleet_number === fleet);
     const litres = fleetRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-    const costZAR = fleetRecords
-      .filter(r => (r.currency || 'ZAR') === 'ZAR')
+    const cost = fleetRecords
       .reduce((sum, r) => sum + (r.total_cost || 0), 0);
     const costUSD = fleetRecords
       .filter(r => r.currency === 'USD')
@@ -516,8 +502,8 @@ export const generateAllFleetsDieselPDF = (
     return [
       fleet,
       formatNumber(litres) + ' L',
-      formatCurrency(costZAR, 'ZAR'),
-      costUSD > 0 ? formatCurrency(costUSD, 'USD') : '-',
+      formatCurrency(cost),
+      costUSD > 0 ? formatCurrency(costUSD) : '-',
       formatNumber(distance) + ' km',
       formatNumber(avgKmL, 2),
       String(fleetRecords.length),
@@ -527,13 +513,12 @@ export const generateAllFleetsDieselPDF = (
 
   autoTable(doc, {
     startY: yPos,
-    head: [['Fleet', 'Litres', 'Cost (ZAR)', 'Cost (USD)', 'Distance', 'Avg km/L', 'Records', 'Drivers']],
+    head: [['Fleet', 'Litres', 'Cost (USD)', 'Cost (USD)', 'Distance', 'Avg km/L', 'Records', 'Drivers']],
     body: fleetData,
     foot: [[
       'TOTAL',
       formatNumber(totalLitres) + ' L',
-      formatCurrency(totalCostZAR, 'ZAR'),
-      totalCostUSD > 0 ? formatCurrency(totalCostUSD, 'USD') : '-',
+      formatCurrency(totalCost),
       formatNumber(totalDistance) + ' km',
       totalLitres > 0 ? formatNumber(totalDistance / totalLitres, 2) : '-',
       String(filteredRecords.length),
@@ -594,11 +579,7 @@ export const generateAllFleetsDieselExcel = (
 
   // Calculate overall totals
   const totalLitres = filteredRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-  const totalCostZAR = filteredRecords
-    .filter(r => (r.currency || 'ZAR') === 'ZAR')
-    .reduce((sum, r) => sum + (r.total_cost || 0), 0);
-  const totalCostUSD = filteredRecords
-    .filter(r => r.currency === 'USD')
+  const totalCost = filteredRecords
     .reduce((sum, r) => sum + (r.total_cost || 0), 0);
   const totalDistance = filteredRecords.reduce((sum, r) => sum + (r.distance_travelled || 0), 0);
 
@@ -613,8 +594,6 @@ export const generateAllFleetsDieselExcel = (
     ['Total Fleets', fleetsToExport.length],
     ['Total Records', filteredRecords.length],
     ['Total Litres', totalLitres.toFixed(2)],
-    ['Total Cost (ZAR)', totalCostZAR.toFixed(2)],
-    ['Total Cost (USD)', totalCostUSD.toFixed(2)],
     ['Total Distance (km)', totalDistance.toFixed(2)],
     ['Average km/L', totalLitres > 0 ? (totalDistance / totalLitres).toFixed(2) : '0.00'],
   ];
@@ -625,12 +604,11 @@ export const generateAllFleetsDieselExcel = (
 
   // Fleet Comparison Sheet
   const fleetComparisonData = [
-    ['Fleet', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Records', 'Drivers'],
+    ['Fleet', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Records', 'Drivers'],
     ...fleetsToExport.map(fleet => {
       const fleetRecords = filteredRecords.filter(r => r.fleet_number === fleet);
       const litres = fleetRecords.reduce((sum, r) => sum + (r.litres_filled || 0), 0);
-      const costZAR = fleetRecords
-        .filter(r => (r.currency || 'ZAR') === 'ZAR')
+      const cost = fleetRecords
         .reduce((sum, r) => sum + (r.total_cost || 0), 0);
       const costUSD = fleetRecords
         .filter(r => r.currency === 'USD')
@@ -641,7 +619,7 @@ export const generateAllFleetsDieselExcel = (
       return [
         fleet,
         litres.toFixed(2),
-        costZAR.toFixed(2),
+        cost.toFixed(2),
         costUSD.toFixed(2),
         distance.toFixed(2),
         litres > 0 ? (distance / litres).toFixed(2) : '0.00',
@@ -653,8 +631,7 @@ export const generateAllFleetsDieselExcel = (
     [
       'TOTAL',
       totalLitres.toFixed(2),
-      totalCostZAR.toFixed(2),
-      totalCostUSD.toFixed(2),
+      totalCost.toFixed(2),
       totalDistance.toFixed(2),
       totalLitres > 0 ? (totalDistance / totalLitres).toFixed(2) : '0.00',
       filteredRecords.length,
@@ -701,7 +678,7 @@ export const generateAllFleetsDieselExcel = (
         record.litres_filled?.toFixed(2) || '',
         record.cost_per_litre?.toFixed(2) || '',
         record.total_cost?.toFixed(2) || '',
-        record.currency || 'ZAR',
+        record.currency || 'USD',
         record.distance_travelled || '',
         record.km_per_litre?.toFixed(2) || '',
       ]),
@@ -734,8 +711,7 @@ export const generateAllFleetsDieselExcel = (
 export interface DieselDriverReport {
   driver: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
   totalDistance: number;
   avgKmPerLitre: number;
   fillCount: number;
@@ -745,8 +721,7 @@ export interface DieselDriverReport {
 export interface DieselReeferDriverReport {
   driver: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
   fillCount: number;
   lastFillDate: string;
   fleets: string[];
@@ -757,8 +732,7 @@ export interface DieselReeferDriverReport {
 export interface DieselFleetReport {
   fleet: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
   totalDistance: number;
   avgKmPerLitre: number;
   fillCount: number;
@@ -768,8 +742,7 @@ export interface DieselFleetReport {
 export interface DieselReeferFleetReport {
   fleet: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
   fillCount: number;
   drivers: string[];
   avgLitresPerHour: number;
@@ -779,8 +752,7 @@ export interface DieselReeferFleetReport {
 export interface DieselStationReport {
   station: string;
   totalLitres: number;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
   avgCostPerLitre: number;
   fillCount: number;
   fleetsServed: string[];
@@ -793,8 +765,7 @@ export interface DieselWeeklyFleetData {
   consumption: number | null;
   totalHours: number;
   reeferConsumption: number | null;
-  totalCostZAR: number;
-  totalCostUSD: number;
+  totalCost: number;
 }
 
 export interface DieselWeeklySectionData {
@@ -808,8 +779,7 @@ export interface DieselWeeklySectionData {
     consumption: number | null;
     totalHours: number;
     reeferConsumption: number | null;
-    totalCostZAR: number;
-    totalCostUSD: number;
+    totalCost: number;
   };
 }
 
@@ -823,8 +793,7 @@ export interface DieselWeeklyReport {
     totalLitres: number;
     totalKm: number;
     consumption: number | null;
-    totalCostZAR: number;
-    totalCostUSD: number;
+    totalCost: number;
   };
 }
 
@@ -893,13 +862,11 @@ export const generateComprehensiveDieselExcel = ({
   // ── 1. Overview ──────────────────────────────────────────────────────────
   {
     const truckLitres = truckRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
-    const truckCostZAR = truckRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
-    const truckCostUSD = truckRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
     const truckDist = truckRecords.reduce((s, r) => s + (r.distance_travelled || 0), 0);
+    const truckCost = truckRecords.reduce((s, r) => s + (r.total_cost || 0), 0);
 
     const reeferLitres = reeferRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
-    const reeferCostZAR = reeferRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
-    const reeferCostUSD = reeferRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
+    const reeferCost = reeferRecords.reduce((s, r) => s + (r.total_cost || 0), 0);
 
     const data: AoaRow[] = [
       ['CAR CRAFT CO — DIESEL CONSUMPTION REPORT'],
@@ -909,8 +876,7 @@ export const generateComprehensiveDieselExcel = ({
       ['Metric', 'Value'],
       ['Total Truck Records', truckRecords.length],
       ['Total Litres (Trucks)', n2(truckLitres)],
-      ['Total Cost — ZAR', n2(truckCostZAR)],
-      ['Total Cost — USD', n2(truckCostUSD)],
+      ['Total Cost', n2(truckCost)],
       ['Total Distance (km)', n2(truckDist)],
       ['Overall km/L', truckLitres > 0 ? n3(truckDist / truckLitres) : '—'],
       ['Unique Truck Fleets', fleetReports.length],
@@ -920,8 +886,7 @@ export const generateComprehensiveDieselExcel = ({
       ['Metric', 'Value'],
       ['Total Reefer Records', reeferRecords.length],
       ['Total Litres (Reefers)', n2(reeferLitres)],
-      ['Total Cost — ZAR', n2(reeferCostZAR)],
-      ['Total Cost — USD', n2(reeferCostUSD)],
+      ['Total Cost', n2(reeferCost)],
       ['Unique Reefer Units', reeferFleetReports.length],
       ['Unique Reefer Drivers', reeferDriverReports.length],
     ];
@@ -934,14 +899,13 @@ export const generateComprehensiveDieselExcel = ({
   // ── 2. Truck - By Driver ─────────────────────────────────────────────────
   {
     const headers: AoaRow = [
-      'Driver', 'Total Litres', 'Total Cost (ZAR)', 'Total Cost (USD)',
+      'Driver', 'Total Litres', 'Total Cost',
       'Total Distance (km)', 'Avg km/L', 'Fill Count', 'Last Fill Date',
     ];
     const rows: AoaRow[] = driverReports.map(r => [
       r.driver,
       n2(r.totalLitres),
-      n2(r.totalCostZAR),
-      n2(r.totalCostUSD),
+      n2(r.totalCost),
       n2(r.totalDistance),
       n3(r.avgKmPerLitre),
       r.fillCount,
@@ -951,8 +915,7 @@ export const generateComprehensiveDieselExcel = ({
     rows.push([
       'TOTAL',
       n2(driverReports.reduce((s, r) => s + r.totalLitres, 0)),
-      n2(driverReports.reduce((s, r) => s + r.totalCostZAR, 0)),
-      n2(driverReports.reduce((s, r) => s + r.totalCostUSD, 0)),
+      n2(driverReports.reduce((s, r) => s + r.totalCost, 0)),
       n2(driverReports.reduce((s, r) => s + r.totalDistance, 0)),
       '', driverReports.reduce((s, r) => s + r.fillCount, 0), '',
     ]);
@@ -968,14 +931,13 @@ export const generateComprehensiveDieselExcel = ({
   // ── 3. Truck - By Fleet ──────────────────────────────────────────────────
   {
     const headers: AoaRow = [
-      'Fleet', 'Total Litres', 'Total Cost (ZAR)', 'Total Cost (USD)',
+      'Fleet', 'Total Litres', 'Total Cost',
       'Total Distance (km)', 'Avg km/L', 'Fill Count', 'Drivers',
     ];
     const rows: AoaRow[] = fleetReports.map(r => [
       r.fleet,
       n2(r.totalLitres),
-      n2(r.totalCostZAR),
-      n2(r.totalCostUSD),
+      n2(r.totalCost),
       n2(r.totalDistance),
       n3(r.avgKmPerLitre),
       r.fillCount,
@@ -984,8 +946,7 @@ export const generateComprehensiveDieselExcel = ({
     rows.push([
       'TOTAL',
       n2(fleetReports.reduce((s, r) => s + r.totalLitres, 0)),
-      n2(fleetReports.reduce((s, r) => s + r.totalCostZAR, 0)),
-      n2(fleetReports.reduce((s, r) => s + r.totalCostUSD, 0)),
+      n2(fleetReports.reduce((s, r) => s + r.totalCost, 0)),
       n2(fleetReports.reduce((s, r) => s + r.totalDistance, 0)),
       '',
       fleetReports.reduce((s, r) => s + r.fillCount, 0),
@@ -1003,14 +964,13 @@ export const generateComprehensiveDieselExcel = ({
   // ── 4. Truck - By Station ────────────────────────────────────────────────
   {
     const headers: AoaRow = [
-      'Fuel Station', 'Total Litres', 'Total Cost (ZAR)', 'Total Cost (USD)',
+      'Fuel Station', 'Total Litres', 'Total Cost',
       'Avg Cost / Litre', 'Fill Count', 'Fleets Served',
     ];
     const rows: AoaRow[] = stationReports.map(r => [
       r.station,
       n2(r.totalLitres),
-      n2(r.totalCostZAR),
-      n2(r.totalCostUSD),
+      n2(r.totalCost),
       n2(r.avgCostPerLitre),
       r.fillCount,
       r.fleetsServed.sort().join(', '),
@@ -1018,8 +978,7 @@ export const generateComprehensiveDieselExcel = ({
     rows.push([
       'TOTAL',
       n2(stationReports.reduce((s, r) => s + r.totalLitres, 0)),
-      n2(stationReports.reduce((s, r) => s + r.totalCostZAR, 0)),
-      n2(stationReports.reduce((s, r) => s + r.totalCostUSD, 0)),
+      n2(stationReports.reduce((s, r) => s + r.totalCost, 0)),
       '',
       stationReports.reduce((s, r) => s + r.fillCount, 0),
       '',
@@ -1049,7 +1008,7 @@ export const generateComprehensiveDieselExcel = ({
         aoa.push([`▸ ${section.name}`]);
 
         if (section.isReeferSection) {
-          aoa.push(['Fleet', 'Litres', 'Hours Operated', 'L / H', 'Cost (ZAR)', 'Cost (USD)'] as AoaRow);
+          aoa.push(['Fleet', 'Litres', 'Hours Operated', 'L / H', 'Cost (USD)', 'Cost (USD)'] as AoaRow);
           for (const d of section.data) {
             if (d.totalLitres > 0 || d.totalHours > 0) {
               aoa.push([
@@ -1057,8 +1016,7 @@ export const generateComprehensiveDieselExcel = ({
                 n2(d.totalLitres),
                 dash(d.totalHours, 1),
                 dash(d.reeferConsumption, 2),
-                n2(d.totalCostZAR),
-                n2(d.totalCostUSD),
+                n2(d.totalCost),
               ]);
             }
           }
@@ -1068,11 +1026,10 @@ export const generateComprehensiveDieselExcel = ({
             n2(st.totalLitres),
             st.totalHours > 0 ? n3(st.totalHours) : '—',
             st.reeferConsumption != null ? n3(st.reeferConsumption) : '—',
-            n2(st.totalCostZAR),
-            n2(st.totalCostUSD),
+            n2(st.totalCost),
           ]);
         } else {
-          aoa.push(['Fleet', 'Litres', 'KM', 'km / L', 'Cost (ZAR)', 'Cost (USD)'] as AoaRow);
+          aoa.push(['Fleet', 'Litres', 'KM', 'km / L', 'Cost (USD)', 'Cost (USD)'] as AoaRow);
           for (const d of section.data) {
             if (d.totalLitres > 0 || d.totalKm > 0) {
               aoa.push([
@@ -1080,8 +1037,7 @@ export const generateComprehensiveDieselExcel = ({
                 n2(d.totalLitres),
                 d.totalKm > 0 ? d.totalKm : '—',
                 dash(d.consumption, 3),
-                n2(d.totalCostZAR),
-                n2(d.totalCostUSD),
+                n2(d.totalCost),
               ]);
             }
           }
@@ -1091,8 +1047,7 @@ export const generateComprehensiveDieselExcel = ({
             n2(st.totalLitres),
             st.totalKm > 0 ? st.totalKm : '—',
             st.consumption != null ? n3(st.consumption) : '—',
-            n2(st.totalCostZAR),
-            n2(st.totalCostUSD),
+            n2(st.totalCost),
           ]);
         }
         aoa.push([]);
@@ -1104,8 +1059,7 @@ export const generateComprehensiveDieselExcel = ({
         n2(gt.totalLitres),
         gt.totalKm > 0 ? gt.totalKm : '—',
         gt.consumption != null ? n3(gt.consumption) : '—',
-        n2(gt.totalCostZAR),
-        n2(gt.totalCostUSD),
+        n2(gt.totalCost),
       ]);
       aoa.push([]);
       aoa.push([]);
@@ -1122,14 +1076,13 @@ export const generateComprehensiveDieselExcel = ({
   // ── 6. Reefer - By Fleet ─────────────────────────────────────────────────
   {
     const headers: AoaRow = [
-      'Reefer Unit', 'Total Litres', 'Total Cost (ZAR)', 'Total Cost (USD)',
+      'Reefer Unit', 'Total Litres', 'Total Cost',
       'Avg L / H', 'Hours Operated', 'Fill Count', 'Drivers',
     ];
     const rows: AoaRow[] = reeferFleetReports.map(r => [
       r.fleet,
       n2(r.totalLitres),
-      n2(r.totalCostZAR),
-      n2(r.totalCostUSD),
+      n2(r.totalCost),
       r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—',
       r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—',
       r.fillCount,
@@ -1138,8 +1091,7 @@ export const generateComprehensiveDieselExcel = ({
     rows.push([
       'TOTAL',
       n2(reeferFleetReports.reduce((s, r) => s + r.totalLitres, 0)),
-      n2(reeferFleetReports.reduce((s, r) => s + r.totalCostZAR, 0)),
-      n2(reeferFleetReports.reduce((s, r) => s + r.totalCostUSD, 0)),
+      n2(reeferFleetReports.reduce((s, r) => s + r.totalCost, 0)),
       '',
       n2(reeferFleetReports.reduce((s, r) => s + r.totalHoursOperated, 0)),
       reeferFleetReports.reduce((s, r) => s + r.fillCount, 0),
@@ -1157,14 +1109,13 @@ export const generateComprehensiveDieselExcel = ({
   // ── 7. Reefer - By Driver ────────────────────────────────────────────────
   {
     const headers: AoaRow = [
-      'Driver', 'Total Litres', 'Total Cost (ZAR)', 'Total Cost (USD)',
+      'Driver', 'Total Litres', 'Total Cost',
       'Avg L / H', 'Hours Operated', 'Fill Count', 'Last Fill Date', 'Reefer Units',
     ];
     const rows: AoaRow[] = reeferDriverReports.map(r => [
       r.driver,
       n2(r.totalLitres),
-      n2(r.totalCostZAR),
-      n2(r.totalCostUSD),
+      n2(r.totalCost),
       r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—',
       r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—',
       r.fillCount,
@@ -1174,8 +1125,7 @@ export const generateComprehensiveDieselExcel = ({
     rows.push([
       'TOTAL',
       n2(reeferDriverReports.reduce((s, r) => s + r.totalLitres, 0)),
-      n2(reeferDriverReports.reduce((s, r) => s + r.totalCostZAR, 0)),
-      n2(reeferDriverReports.reduce((s, r) => s + r.totalCostUSD, 0)),
+      n2(reeferDriverReports.reduce((s, r) => s + r.totalCost, 0)),
       '',
       n2(reeferDriverReports.reduce((s, r) => s + r.totalHoursOperated, 0)),
       reeferDriverReports.reduce((s, r) => s + r.fillCount, 0),
@@ -1193,14 +1143,13 @@ export const generateComprehensiveDieselExcel = ({
   // ── 8. Reefer - By Station ───────────────────────────────────────────────
   {
     const headers: AoaRow = [
-      'Fuel Station', 'Total Litres', 'Total Cost (ZAR)', 'Total Cost (USD)',
+      'Fuel Station', 'Total Litres', 'Total Cost',
       'Avg Cost / Litre', 'Fill Count', 'Reefer Units Served',
     ];
     const rows: AoaRow[] = reeferStationReports.map(r => [
       r.station,
       n2(r.totalLitres),
-      n2(r.totalCostZAR),
-      n2(r.totalCostUSD),
+      n2(r.totalCost),
       n2(r.avgCostPerLitre),
       r.fillCount,
       r.fleetsServed.sort().join(', '),
@@ -1208,8 +1157,7 @@ export const generateComprehensiveDieselExcel = ({
     rows.push([
       'TOTAL',
       n2(reeferStationReports.reduce((s, r) => s + r.totalLitres, 0)),
-      n2(reeferStationReports.reduce((s, r) => s + r.totalCostZAR, 0)),
-      n2(reeferStationReports.reduce((s, r) => s + r.totalCostUSD, 0)),
+      n2(reeferStationReports.reduce((s, r) => s + r.totalCost, 0)),
       '',
       reeferStationReports.reduce((s, r) => s + r.fillCount, 0),
       '',
@@ -1245,7 +1193,7 @@ export const generateComprehensiveDieselExcel = ({
           r.litres_filled != null ? n2(r.litres_filled) : '',
           r.cost_per_litre != null ? n2(r.cost_per_litre) : '',
           r.total_cost != null ? n2(r.total_cost) : '',
-          r.currency || 'ZAR',
+          r.currency || 'USD',
           r.km_reading || '',
           r.previous_km_reading || '',
           r.distance_travelled || '',
@@ -1278,8 +1226,7 @@ export const generateComprehensiveDieselExcel = ({
     const rows: AoaRow[] = reeferRecords
       .slice()
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((r: any) => {
+      .map((r) => {
         const lph = r.hours_operated && r.litres_filled
           ? n2(r.litres_filled / r.hours_operated) : '—';
         return [
@@ -1290,7 +1237,7 @@ export const generateComprehensiveDieselExcel = ({
           r.litres_filled != null ? n2(r.litres_filled) : '',
           r.cost_per_litre != null ? n2(r.cost_per_litre) : '',
           r.total_cost != null ? n2(r.total_cost) : '',
-          r.currency || 'ZAR',
+          r.currency || 'USD',
           r.operating_hours != null ? r.operating_hours : '',
           r.previous_operating_hours != null ? r.previous_operating_hours : '',
           r.hours_operated != null ? r.hours_operated : '',
@@ -1510,17 +1457,15 @@ export const generateStyledDieselExcel = async (
     _xlSheetTitle(ws, 'CAR CRAFT CO — DIESEL CONSUMPTION REPORT', sub, 2);
 
     const tL = truckRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
-    const tZAR = truckRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
-    const tUSD = truckRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
     const tD = truckRecords.reduce((s, r) => s + (r.distance_travelled || 0), 0);
+    const tCost = truckRecords.reduce((s, r) => s + (r.total_cost || 0), 0);
 
     _xlSection(ws, '▸  TRUCK FLEET SUMMARY', 2);
     _xlHeaders(ws, ['Metric', 'Value']);
     ([
       ['Total Truck Records', truckRecords.length],
       ['Total Litres', n2(tL)],
-      ['Total Cost — ZAR', n2(tZAR)],
-      ['Total Cost — USD', n2(tUSD)],
+      ['Total Cost', n2(tCost)],
       ['Total Distance (km)', n2(tD)],
       ['Overall km/L', tL > 0 ? n3(tD / tL) : '—'],
       ['Unique Fleets', fleetReports.length],
@@ -1529,16 +1474,14 @@ export const generateStyledDieselExcel = async (
 
     ws.addRow([]);
     const rL = reeferRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
-    const rZAR = reeferRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
-    const rUSD = reeferRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
+    const rCost = reeferRecords.reduce((s, r) => s + (r.total_cost || 0), 0);
 
     _xlSection(ws, '▸  REEFER FLEET SUMMARY', 2, XC.cyan);
     _xlHeaders(ws, ['Metric', 'Value'], XC.cyan);
     ([
       ['Total Reefer Records', reeferRecords.length],
       ['Total Litres', n2(rL)],
-      ['Total Cost — ZAR', n2(rZAR)],
-      ['Total Cost — USD', n2(rUSD)],
+      ['Total Cost', n2(rCost)],
       ['Unique Reefer Units', reeferFleetReports.length],
       ['Unique Reefer Drivers', reeferDriverReports.length],
     ] as [string, string | number][]).forEach((vals, i) => _xlDataRow(ws, vals, i % 2 === 1));
@@ -1551,10 +1494,10 @@ export const generateStyledDieselExcel = async (
     const ws = wb.addWorksheet('Truck – By Driver');
     ws.columns = [28, 14, 16, 16, 18, 10, 10, 14].map(w => ({ width: w }));
     _xlSheetTitle(ws, 'TRUCK FLEET — BY DRIVER', sub, 8);
-    _xlHeaders(ws, ['Driver', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Fill Count', 'Last Fill Date']);
+    _xlHeaders(ws, ['Driver', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Fill Count', 'Last Fill Date']);
     driverReports.forEach((r, i) =>
-      _xlDataRow(ws, [r.driver, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), n2(r.totalDistance), n3(r.avgKmPerLitre), r.fillCount, r.lastFillDate], i % 2 === 1));
-    _xlTotalRow(ws, ['TOTAL', n2(xlSum(driverReports, 'totalLitres')), n2(xlSum(driverReports, 'totalCostZAR')), n2(xlSum(driverReports, 'totalCostUSD')), n2(xlSum(driverReports, 'totalDistance')), '', xlSum(driverReports, 'fillCount'), '']);
+      _xlDataRow(ws, [r.driver, n2(r.totalLitres), n2(r.totalCost), n2(r.totalDistance), n3(r.avgKmPerLitre), r.fillCount, r.lastFillDate], i % 2 === 1));
+    _xlTotalRow(ws, ['TOTAL', n2(xlSum(driverReports, 'totalLitres')), n2(xlSum(driverReports, 'totalCost')), n2(xlSum(driverReports, 'totalDistance')), '', xlSum(driverReports, 'fillCount'), '']);
     ws.views = [{ state: 'frozen', ySplit: 5 }];
   }
 
@@ -1563,10 +1506,10 @@ export const generateStyledDieselExcel = async (
     const ws = wb.addWorksheet('Truck – By Fleet');
     ws.columns = [14, 14, 16, 16, 18, 10, 10, 42].map(w => ({ width: w }));
     _xlSheetTitle(ws, 'TRUCK FLEET — BY FLEET NUMBER', sub, 8);
-    _xlHeaders(ws, ['Fleet', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Fill Count', 'Drivers']);
+    _xlHeaders(ws, ['Fleet', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Fill Count', 'Drivers']);
     fleetReports.forEach((r, i) =>
-      _xlDataRow(ws, [r.fleet, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), n2(r.totalDistance), n3(r.avgKmPerLitre), r.fillCount, r.drivers.join(', ')], i % 2 === 1));
-    _xlTotalRow(ws, ['TOTAL', n2(xlSum(fleetReports, 'totalLitres')), n2(xlSum(fleetReports, 'totalCostZAR')), n2(xlSum(fleetReports, 'totalCostUSD')), n2(xlSum(fleetReports, 'totalDistance')), '', xlSum(fleetReports, 'fillCount'), '']);
+      _xlDataRow(ws, [r.fleet, n2(r.totalLitres), n2(r.totalCost), n2(r.totalDistance), n3(r.avgKmPerLitre), r.fillCount, r.drivers.join(', ')], i % 2 === 1));
+    _xlTotalRow(ws, ['TOTAL', n2(xlSum(fleetReports, 'totalLitres')), n2(xlSum(fleetReports, 'totalCost')), n2(xlSum(fleetReports, 'totalDistance')), '', xlSum(fleetReports, 'fillCount'), '']);
     ws.views = [{ state: 'frozen', ySplit: 5 }];
   }
 
@@ -1575,10 +1518,10 @@ export const generateStyledDieselExcel = async (
     const ws = wb.addWorksheet('Truck – By Station');
     ws.columns = [30, 14, 16, 16, 16, 10, 42].map(w => ({ width: w }));
     _xlSheetTitle(ws, 'TRUCK FLEET — BY FUEL STATION', sub, 7);
-    _xlHeaders(ws, ['Fuel Station', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Avg Cost/Litre', 'Fill Count', 'Fleets Served']);
+    _xlHeaders(ws, ['Fuel Station', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Avg Cost/Litre', 'Fill Count', 'Fleets Served']);
     stationReports.forEach((r, i) =>
-      _xlDataRow(ws, [r.station, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), n2(r.avgCostPerLitre), r.fillCount, r.fleetsServed.sort().join(', ')], i % 2 === 1));
-    _xlTotalRow(ws, ['TOTAL', n2(xlSum(stationReports, 'totalLitres')), n2(xlSum(stationReports, 'totalCostZAR')), n2(xlSum(stationReports, 'totalCostUSD')), '', xlSum(stationReports, 'fillCount'), '']);
+      _xlDataRow(ws, [r.station, n2(r.totalLitres), n2(r.totalCost), n2(r.avgCostPerLitre), r.fillCount, r.fleetsServed.sort().join(', ')], i % 2 === 1));
+    _xlTotalRow(ws, ['TOTAL', n2(xlSum(stationReports, 'totalLitres')), n2(xlSum(stationReports, 'totalCost')), '', xlSum(stationReports, 'fillCount'), '']);
     ws.views = [{ state: 'frozen', ySplit: 5 }];
   }
 
@@ -1602,8 +1545,8 @@ export const generateStyledDieselExcel = async (
 
         _xlHeaders(ws,
           isR
-            ? ['Reefer Unit', 'Litres', 'Hrs Operated', 'L / H', 'Cost (ZAR)', 'Cost (USD)']
-            : ['Fleet', 'Litres', 'KM', 'km / L', 'Cost (ZAR)', 'Cost (USD)'],
+            ? ['Reefer Unit', 'Litres', 'Hrs Operated', 'L / H', 'Cost (USD)', 'Cost (USD)']
+            : ['Fleet', 'Litres', 'KM', 'km / L', 'Cost (USD)', 'Cost (USD)'],
           isR ? XC.cyan : XC.navy);
 
         let ai = 0;
@@ -1611,15 +1554,15 @@ export const generateStyledDieselExcel = async (
           if (isR ? (d.totalLitres === 0 && d.totalHours === 0) : (d.totalLitres === 0 && d.totalKm === 0)) continue;
           _xlDataRow(ws,
             isR
-              ? [d.fleet, n2(d.totalLitres), dash(d.totalHours, 1), dash(d.reeferConsumption, 2), n2(d.totalCostZAR), n2(d.totalCostUSD)]
-              : [d.fleet, n2(d.totalLitres), d.totalKm > 0 ? d.totalKm : '—', dash(d.consumption, 3), n2(d.totalCostZAR), n2(d.totalCostUSD)],
+              ? [d.fleet, n2(d.totalLitres), dash(d.totalHours, 1), dash(d.reeferConsumption, 2), n2(d.totalCost)]
+              : [d.fleet, n2(d.totalLitres), d.totalKm > 0 ? d.totalKm : '—', dash(d.consumption, 3), n2(d.totalCost)],
             ai++ % 2 === 1);
         }
 
         const st = section.sectionTotal;
         const stRow = ws.addRow(isR
-          ? ['Section Total', n2(st.totalLitres), st.totalHours > 0 ? n3(st.totalHours) : '—', st.reeferConsumption ? n3(st.reeferConsumption) : '—', n2(st.totalCostZAR), n2(st.totalCostUSD)]
-          : ['Section Total', n2(st.totalLitres), st.totalKm > 0 ? st.totalKm : '—', st.consumption ? n3(st.consumption) : '—', n2(st.totalCostZAR), n2(st.totalCostUSD)]);
+          ? ['Section Total', n2(st.totalLitres), st.totalHours > 0 ? n3(st.totalHours) : '—', st.reeferConsumption ? n3(st.reeferConsumption) : '—', n2(st.totalCost)]
+          : ['Section Total', n2(st.totalLitres), st.totalKm > 0 ? st.totalKm : '—', st.consumption ? n3(st.consumption) : '—', n2(st.totalCost)]);
         stRow.height = 16;
         for (let c = 1; c <= CC; c++) {
           const cell = stRow.getCell(c);
@@ -1632,7 +1575,7 @@ export const generateStyledDieselExcel = async (
       }
 
       const gt = week.grandTotal;
-      _xlTotalRow(ws, [`GRAND TOTAL — Week ${week.weekNumber}`, n2(gt.totalLitres), gt.totalKm > 0 ? gt.totalKm : '—', gt.consumption ? n3(gt.consumption) : '—', n2(gt.totalCostZAR), n2(gt.totalCostUSD)]);
+      _xlTotalRow(ws, [`GRAND TOTAL — Week ${week.weekNumber}`, n2(gt.totalLitres), gt.totalKm > 0 ? gt.totalKm : '—', gt.consumption ? n3(gt.consumption) : '—', n2(gt.totalCost)]);
       ws.addRow([]);
       ws.addRow([]);
     }
@@ -1643,10 +1586,10 @@ export const generateStyledDieselExcel = async (
     const ws = wb.addWorksheet('Reefer – By Fleet');
     ws.columns = [14, 14, 16, 16, 12, 16, 10, 42].map(w => ({ width: w }));
     _xlSheetTitle(ws, 'REEFER FLEET — BY REEFER UNIT', sub, 8);
-    _xlHeaders(ws, ['Reefer Unit', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Avg L/H', 'Hrs Operated', 'Fill Count', 'Drivers'], XC.cyan);
+    _xlHeaders(ws, ['Reefer Unit', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Avg L/H', 'Hrs Operated', 'Fill Count', 'Drivers'], XC.cyan);
     reeferFleetReports.forEach((r, i) =>
-      _xlDataRow(ws, [r.fleet, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—', r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—', r.fillCount, r.drivers.join(', ')], i % 2 === 1));
-    _xlTotalRow(ws, ['TOTAL', n2(xlSum(reeferFleetReports, 'totalLitres')), n2(xlSum(reeferFleetReports, 'totalCostZAR')), n2(xlSum(reeferFleetReports, 'totalCostUSD')), '', n2(xlSum(reeferFleetReports, 'totalHoursOperated')), xlSum(reeferFleetReports, 'fillCount'), '']);
+      _xlDataRow(ws, [r.fleet, n2(r.totalLitres), n2(r.totalCost), r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—', r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—', r.fillCount, r.drivers.join(', ')], i % 2 === 1));
+    _xlTotalRow(ws, ['TOTAL', n2(xlSum(reeferFleetReports, 'totalLitres')), n2(xlSum(reeferFleetReports, 'totalCost')), '', n2(xlSum(reeferFleetReports, 'totalHoursOperated')), xlSum(reeferFleetReports, 'fillCount'), '']);
     ws.views = [{ state: 'frozen', ySplit: 5 }];
   }
 
@@ -1655,10 +1598,10 @@ export const generateStyledDieselExcel = async (
     const ws = wb.addWorksheet('Reefer – By Driver');
     ws.columns = [28, 14, 16, 16, 12, 16, 10, 14, 32].map(w => ({ width: w }));
     _xlSheetTitle(ws, 'REEFER FLEET — BY DRIVER', sub, 9);
-    _xlHeaders(ws, ['Driver', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Avg L/H', 'Hrs Operated', 'Fill Count', 'Last Fill Date', 'Reefer Units'], XC.cyan);
+    _xlHeaders(ws, ['Driver', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Avg L/H', 'Hrs Operated', 'Fill Count', 'Last Fill Date', 'Reefer Units'], XC.cyan);
     reeferDriverReports.forEach((r, i) =>
-      _xlDataRow(ws, [r.driver, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—', r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—', r.fillCount, r.lastFillDate, r.fleets.join(', ')], i % 2 === 1));
-    _xlTotalRow(ws, ['TOTAL', n2(xlSum(reeferDriverReports, 'totalLitres')), n2(xlSum(reeferDriverReports, 'totalCostZAR')), n2(xlSum(reeferDriverReports, 'totalCostUSD')), '', n2(xlSum(reeferDriverReports, 'totalHoursOperated')), xlSum(reeferDriverReports, 'fillCount'), '', '']);
+      _xlDataRow(ws, [r.driver, n2(r.totalLitres), n2(r.totalCost), r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—', r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—', r.fillCount, r.lastFillDate, r.fleets.join(', ')], i % 2 === 1));
+    _xlTotalRow(ws, ['TOTAL', n2(xlSum(reeferDriverReports, 'totalLitres')), n2(xlSum(reeferDriverReports, 'totalCost')), '', n2(xlSum(reeferDriverReports, 'totalHoursOperated')), xlSum(reeferDriverReports, 'fillCount'), '', '']);
     ws.views = [{ state: 'frozen', ySplit: 5 }];
   }
 
@@ -1667,10 +1610,10 @@ export const generateStyledDieselExcel = async (
     const ws = wb.addWorksheet('Reefer – By Station');
     ws.columns = [30, 14, 16, 16, 16, 10, 42].map(w => ({ width: w }));
     _xlSheetTitle(ws, 'REEFER FLEET — BY FUEL STATION', sub, 7);
-    _xlHeaders(ws, ['Fuel Station', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Avg Cost/Litre', 'Fill Count', 'Reefer Units Served'], XC.cyan);
+    _xlHeaders(ws, ['Fuel Station', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Avg Cost/Litre', 'Fill Count', 'Reefer Units Served'], XC.cyan);
     reeferStationReports.forEach((r, i) =>
-      _xlDataRow(ws, [r.station, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), n2(r.avgCostPerLitre), r.fillCount, r.fleetsServed.sort().join(', ')], i % 2 === 1));
-    _xlTotalRow(ws, ['TOTAL', n2(xlSum(reeferStationReports, 'totalLitres')), n2(xlSum(reeferStationReports, 'totalCostZAR')), n2(xlSum(reeferStationReports, 'totalCostUSD')), '', xlSum(reeferStationReports, 'fillCount'), '']);
+      _xlDataRow(ws, [r.station, n2(r.totalLitres), n2(r.totalCost), n2(r.avgCostPerLitre), r.fillCount, r.fleetsServed.sort().join(', ')], i % 2 === 1));
+    _xlTotalRow(ws, ['TOTAL', n2(xlSum(reeferStationReports, 'totalLitres')), n2(xlSum(reeferStationReports, 'totalCost')), '', xlSum(reeferStationReports, 'fillCount'), '']);
     ws.views = [{ state: 'frozen', ySplit: 5 }];
   }
 
@@ -1683,7 +1626,7 @@ export const generateStyledDieselExcel = async (
     truckRecords.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .forEach((r, i) => {
         const kml = r.distance_travelled && r.litres_filled ? n3(r.distance_travelled / r.litres_filled) : '—';
-        _xlDataRow(ws, [r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '', r.litres_filled ? n2(r.litres_filled) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '', r.total_cost ? n2(r.total_cost) : '', r.currency || 'ZAR', r.km_reading || '', r.previous_km_reading || '', r.distance_travelled || '', kml, r.debrief_signed ? 'Completed' : 'Pending', r.debrief_signed_by || '', r.debrief_date || '', (r.notes || '').replace(/[\t\n\r]/g, ' ')], i % 2 === 1);
+        _xlDataRow(ws, [r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '', r.litres_filled ? n2(r.litres_filled) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '', r.total_cost ? n2(r.total_cost) : '', r.currency || 'USD', r.km_reading || '', r.previous_km_reading || '', r.distance_travelled || '', kml, r.debrief_signed ? 'Completed' : 'Pending', r.debrief_signed_by || '', r.debrief_date || '', (r.notes || '').replace(/[\t\n\r]/g, ' ')], i % 2 === 1);
       });
     ws.views = [{ state: 'frozen', ySplit: 5 }];
   }
@@ -1694,11 +1637,10 @@ export const generateStyledDieselExcel = async (
     ws.columns = [12, 14, 24, 28, 12, 12, 12, 8, 14, 14, 14, 8, 32].map(w => ({ width: w }));
     _xlSheetTitle(ws, 'REEFER TRANSACTIONS — RAW DATA', sub, 13);
     _xlHeaders(ws, ['Date', 'Reefer Unit', 'Driver', 'Fuel Station', 'Litres', 'Cost/Litre', 'Total Cost', 'Currency', 'Op. Hours', 'Prev Hours', 'Hours Operated', 'L / H', 'Notes'], XC.cyan);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (reeferRecords as any[]).slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    reeferRecords.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .forEach((r, i) => {
         const lph = r.hours_operated && r.litres_filled ? n2(r.litres_filled / r.hours_operated) : '—';
-        _xlDataRow(ws, [r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '', r.litres_filled ? n2(r.litres_filled) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '', r.total_cost ? n2(r.total_cost) : '', r.currency || 'ZAR', r.operating_hours ?? '', r.previous_operating_hours ?? '', r.hours_operated ?? '', lph, (r.notes || '').replace(/[\t\n\r]/g, ' ')], i % 2 === 1);
+        _xlDataRow(ws, [r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '', r.litres_filled ? n2(r.litres_filled) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '', r.total_cost ? n2(r.total_cost) : '', r.currency || 'USD', r.operating_hours ?? '', r.previous_operating_hours ?? '', r.hours_operated ?? '', lph, (r.notes || '').replace(/[\t\n\r]/g, ' ')], i % 2 === 1);
       });
     ws.views = [{ state: 'frozen', ySplit: 5 }];
   }
@@ -1774,8 +1716,7 @@ export const generateComprehensiveDieselPDF = (
   };
 
   const addFooters = (): void => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const total = (doc.internal as any).getNumberOfPages() as number;
+    const total = (doc.internal as unknown as { getNumberOfPages(): number }).getNumberOfPages();
     for (let p = 1; p <= total; p++) {
       doc.setPage(p);
       doc.setFontSize(8);
@@ -1788,8 +1729,7 @@ export const generateComprehensiveDieselPDF = (
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const lastY = (): number => (doc as any).lastAutoTable?.finalY ?? 22;
+  const lastY = (): number => (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 22;
 
   const addSectionHeading = (title: string, rgb: [number, number, number] = HEAD): number => {
     const y = lastY() + 8;
@@ -1827,20 +1767,14 @@ export const generateComprehensiveDieselPDF = (
   if (sel.overview) {
     const startY = addSectionHeading('OVERVIEW — FLEET SUMMARY');
     const tL = truckRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
-    const tZAR = truckRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
-    const tUSD = truckRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
     const tD = truckRecords.reduce((s, r) => s + (r.distance_travelled || 0), 0);
     const rL = reeferRecords.reduce((s, r) => s + (r.litres_filled || 0), 0);
-    const rZAR = reeferRecords.filter(r => (r.currency || 'ZAR') === 'ZAR').reduce((s, r) => s + (r.total_cost || 0), 0);
-    const rUSD = reeferRecords.filter(r => r.currency === 'USD').reduce((s, r) => s + (r.total_cost || 0), 0);
     autoTable(doc, {
       ...baseOpts(startY),
       head: [['Category', 'Truck Fleet', 'Reefer Fleet']],
       body: [
         ['Total Records', truckRecords.length, reeferRecords.length],
         ['Total Litres', n2(tL), n2(rL)],
-        ['Total Cost (ZAR)', n2(tZAR), n2(rZAR)],
-        ['Total Cost (USD)', n2(tUSD), n2(rUSD)],
         ['Total Distance (km)', n2(tD), 'N/A'],
         ['Overall km/L', tL > 0 ? n3(tD / tL) : '—', 'N/A (L/hr)'],
         ['Unique Fleets/Units', fleetReports.length, reeferFleetReports.length],
@@ -1854,9 +1788,9 @@ export const generateComprehensiveDieselPDF = (
   if (sel.truckByDriver && driverReports.length > 0) {
     autoTable(doc, {
       ...baseOpts(addSectionHeading('TRUCK FLEET — BY DRIVER')),
-      head: [['Driver', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Fills', 'Last Fill']],
-      body: driverReports.map(r => [r.driver, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), n2(r.totalDistance), n3(r.avgKmPerLitre), r.fillCount, r.lastFillDate]),
-      foot: [['TOTAL', n2(pdfSum(driverReports, 'totalLitres')), n2(pdfSum(driverReports, 'totalCostZAR')), n2(pdfSum(driverReports, 'totalCostUSD')), n2(pdfSum(driverReports, 'totalDistance')), '', pdfSum(driverReports, 'fillCount'), '']],
+      head: [['Driver', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Fills', 'Last Fill']],
+      body: driverReports.map(r => [r.driver, n2(r.totalLitres), n2(r.totalCost), n2(r.totalDistance), n3(r.avgKmPerLitre), r.fillCount, r.lastFillDate]),
+      foot: [['TOTAL', n2(pdfSum(driverReports, 'totalLitres')), n2(pdfSum(driverReports, 'totalCost')), n2(pdfSum(driverReports, 'totalDistance')), '', pdfSum(driverReports, 'fillCount'), '']],
       columnStyles: { 0: { cellWidth: 48 } },
     });
   }
@@ -1865,9 +1799,9 @@ export const generateComprehensiveDieselPDF = (
   if (sel.truckByFleet && fleetReports.length > 0) {
     autoTable(doc, {
       ...baseOpts(addSectionHeading('TRUCK FLEET — BY FLEET NUMBER')),
-      head: [['Fleet', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Fills', 'Drivers']],
-      body: fleetReports.map(r => [r.fleet, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), n2(r.totalDistance), n3(r.avgKmPerLitre), r.fillCount, r.drivers.slice(0, 4).join(', ') + (r.drivers.length > 4 ? ` +${r.drivers.length - 4}` : '')]),
-      foot: [['TOTAL', n2(pdfSum(fleetReports, 'totalLitres')), n2(pdfSum(fleetReports, 'totalCostZAR')), n2(pdfSum(fleetReports, 'totalCostUSD')), n2(pdfSum(fleetReports, 'totalDistance')), '', pdfSum(fleetReports, 'fillCount'), '']],
+      head: [['Fleet', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Distance (km)', 'Avg km/L', 'Fills', 'Drivers']],
+      body: fleetReports.map(r => [r.fleet, n2(r.totalLitres), n2(r.totalCost), n2(r.totalDistance), n3(r.avgKmPerLitre), r.fillCount, r.drivers.slice(0, 4).join(', ') + (r.drivers.length > 4 ? ` +${r.drivers.length - 4}` : '')]),
+      foot: [['TOTAL', n2(pdfSum(fleetReports, 'totalLitres')), n2(pdfSum(fleetReports, 'totalCost')), n2(pdfSum(fleetReports, 'totalDistance')), '', pdfSum(fleetReports, 'fillCount'), '']],
     });
   }
 
@@ -1875,9 +1809,9 @@ export const generateComprehensiveDieselPDF = (
   if (sel.truckByStation && stationReports.length > 0) {
     autoTable(doc, {
       ...baseOpts(addSectionHeading('TRUCK FLEET — BY FUEL STATION')),
-      head: [['Fuel Station', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Avg Cost/Litre', 'Fills', 'Fleets Served']],
-      body: stationReports.map(r => [r.station, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), n2(r.avgCostPerLitre), r.fillCount, r.fleetsServed.slice(0, 5).join(', ') + (r.fleetsServed.length > 5 ? ` +${r.fleetsServed.length - 5}` : '')]),
-      foot: [['TOTAL', n2(pdfSum(stationReports, 'totalLitres')), n2(pdfSum(stationReports, 'totalCostZAR')), n2(pdfSum(stationReports, 'totalCostUSD')), '', pdfSum(stationReports, 'fillCount'), '']],
+      head: [['Fuel Station', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Avg Cost/Litre', 'Fills', 'Fleets Served']],
+      body: stationReports.map(r => [r.station, n2(r.totalLitres), n2(r.totalCost), n2(r.avgCostPerLitre), r.fillCount, r.fleetsServed.slice(0, 5).join(', ') + (r.fleetsServed.length > 5 ? ` +${r.fleetsServed.length - 5}` : '')]),
+      foot: [['TOTAL', n2(pdfSum(stationReports, 'totalLitres')), n2(pdfSum(stationReports, 'totalCost')), '', pdfSum(stationReports, 'fillCount'), '']],
     });
   }
 
@@ -1899,16 +1833,16 @@ export const generateComprehensiveDieselPDF = (
         autoTable(doc, {
           ...baseOpts(subY + 2, isR),
           head: [isR
-            ? ['Reefer Unit', 'Litres', 'Hrs Operated', 'L/H', 'Cost (ZAR)', 'Cost (USD)']
-            : ['Fleet', 'Litres', 'KM', 'km/L', 'Cost (ZAR)', 'Cost (USD)']],
+            ? ['Reefer Unit', 'Litres', 'Hrs Operated', 'L/H', 'Cost (USD)', 'Cost (USD)']
+            : ['Fleet', 'Litres', 'KM', 'km/L', 'Cost (USD)', 'Cost (USD)']],
           body: section.data
             .filter(d => isR ? d.totalLitres > 0 || d.totalHours > 0 : d.totalLitres > 0 || d.totalKm > 0)
             .map(d => isR
-              ? [d.fleet, n2(d.totalLitres), dash(d.totalHours, 1), dash(d.reeferConsumption, 2), n2(d.totalCostZAR), n2(d.totalCostUSD)]
-              : [d.fleet, n2(d.totalLitres), d.totalKm > 0 ? d.totalKm : '—', dash(d.consumption, 3), n2(d.totalCostZAR), n2(d.totalCostUSD)]),
+              ? [d.fleet, n2(d.totalLitres), dash(d.totalHours, 1), dash(d.reeferConsumption, 2), n2(d.totalCost)]
+              : [d.fleet, n2(d.totalLitres), d.totalKm > 0 ? d.totalKm : '—', dash(d.consumption, 3), n2(d.totalCost)]),
           foot: [isR
-            ? ['Section Total', n2(st.totalLitres), st.totalHours > 0 ? n3(st.totalHours) : '—', st.reeferConsumption ? n3(st.reeferConsumption) : '—', n2(st.totalCostZAR), n2(st.totalCostUSD)]
-            : ['Section Total', n2(st.totalLitres), st.totalKm > 0 ? st.totalKm : '—', st.consumption ? n3(st.consumption) : '—', n2(st.totalCostZAR), n2(st.totalCostUSD)]],
+            ? ['Section Total', n2(st.totalLitres), st.totalHours > 0 ? n3(st.totalHours) : '—', st.reeferConsumption ? n3(st.reeferConsumption) : '—', n2(st.totalCost)]
+            : ['Section Total', n2(st.totalLitres), st.totalKm > 0 ? st.totalKm : '—', st.consumption ? n3(st.consumption) : '—', n2(st.totalCost)]],
         });
       }
       const gt = week.grandTotal;
@@ -1918,7 +1852,7 @@ export const generateComprehensiveDieselPDF = (
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
       doc.setTextColor(...TTEXT);
-      doc.text(`GRAND TOTAL  —  Litres: ${n2(gt.totalLitres)}   |   Cost ZAR: ${n2(gt.totalCostZAR)}   |   Cost USD: ${n2(gt.totalCostUSD)}`, ML + 3, gtY + 4.5);
+      doc.text(`GRAND TOTAL  —  Litres: ${n2(gt.totalLitres)}   |   Cost: ${n2(gt.totalCost)}`, ML + 3, gtY + 4.5);
       doc.setTextColor(0, 0, 0);
     }
   }
@@ -1927,9 +1861,9 @@ export const generateComprehensiveDieselPDF = (
   if (sel.reeferByFleet && reeferFleetReports.length > 0) {
     autoTable(doc, {
       ...baseOpts(addSectionHeading('REEFER FLEET — BY REEFER UNIT', CYAN), true),
-      head: [['Reefer Unit', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Avg L/H', 'Hrs Operated', 'Fills', 'Drivers']],
-      body: reeferFleetReports.map(r => [r.fleet, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—', r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—', r.fillCount, r.drivers.slice(0, 3).join(', ')]),
-      foot: [['TOTAL', n2(pdfSum(reeferFleetReports, 'totalLitres')), n2(pdfSum(reeferFleetReports, 'totalCostZAR')), n2(pdfSum(reeferFleetReports, 'totalCostUSD')), '', n2(pdfSum(reeferFleetReports, 'totalHoursOperated')), pdfSum(reeferFleetReports, 'fillCount'), '']],
+      head: [['Reefer Unit', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Avg L/H', 'Hrs Operated', 'Fills', 'Drivers']],
+      body: reeferFleetReports.map(r => [r.fleet, n2(r.totalLitres), n2(r.totalCost), r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—', r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—', r.fillCount, r.drivers.slice(0, 3).join(', ')]),
+      foot: [['TOTAL', n2(pdfSum(reeferFleetReports, 'totalLitres')), n2(pdfSum(reeferFleetReports, 'totalCost')), '', n2(pdfSum(reeferFleetReports, 'totalHoursOperated')), pdfSum(reeferFleetReports, 'fillCount'), '']],
     });
   }
 
@@ -1937,9 +1871,9 @@ export const generateComprehensiveDieselPDF = (
   if (sel.reeferByDriver && reeferDriverReports.length > 0) {
     autoTable(doc, {
       ...baseOpts(addSectionHeading('REEFER FLEET — BY DRIVER', CYAN), true),
-      head: [['Driver', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Avg L/H', 'Hrs Operated', 'Fills', 'Last Fill', 'Reefer Units']],
-      body: reeferDriverReports.map(r => [r.driver, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—', r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—', r.fillCount, r.lastFillDate, r.fleets.join(', ')]),
-      foot: [['TOTAL', n2(pdfSum(reeferDriverReports, 'totalLitres')), n2(pdfSum(reeferDriverReports, 'totalCostZAR')), n2(pdfSum(reeferDriverReports, 'totalCostUSD')), '', n2(pdfSum(reeferDriverReports, 'totalHoursOperated')), pdfSum(reeferDriverReports, 'fillCount'), '', '']],
+      head: [['Driver', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Avg L/H', 'Hrs Operated', 'Fills', 'Last Fill', 'Reefer Units']],
+      body: reeferDriverReports.map(r => [r.driver, n2(r.totalLitres), n2(r.totalCost), r.avgLitresPerHour > 0 ? n2(r.avgLitresPerHour) : '—', r.totalHoursOperated > 0 ? n2(r.totalHoursOperated) : '—', r.fillCount, r.lastFillDate, r.fleets.join(', ')]),
+      foot: [['TOTAL', n2(pdfSum(reeferDriverReports, 'totalLitres')), n2(pdfSum(reeferDriverReports, 'totalCost')), '', n2(pdfSum(reeferDriverReports, 'totalHoursOperated')), pdfSum(reeferDriverReports, 'fillCount'), '', '']],
       columnStyles: { 0: { cellWidth: 45 } },
     });
   }
@@ -1948,9 +1882,9 @@ export const generateComprehensiveDieselPDF = (
   if (sel.reeferByStation && reeferStationReports.length > 0) {
     autoTable(doc, {
       ...baseOpts(addSectionHeading('REEFER FLEET — BY FUEL STATION', CYAN), true),
-      head: [['Fuel Station', 'Total Litres', 'Cost (ZAR)', 'Cost (USD)', 'Avg Cost/Litre', 'Fills', 'Reefer Units']],
-      body: reeferStationReports.map(r => [r.station, n2(r.totalLitres), n2(r.totalCostZAR), n2(r.totalCostUSD), n2(r.avgCostPerLitre), r.fillCount, r.fleetsServed.join(', ')]),
-      foot: [['TOTAL', n2(pdfSum(reeferStationReports, 'totalLitres')), n2(pdfSum(reeferStationReports, 'totalCostZAR')), n2(pdfSum(reeferStationReports, 'totalCostUSD')), '', pdfSum(reeferStationReports, 'fillCount'), '']],
+      head: [['Fuel Station', 'Total Litres', 'Cost (USD)', 'Cost (USD)', 'Avg Cost/Litre', 'Fills', 'Reefer Units']],
+      body: reeferStationReports.map(r => [r.station, n2(r.totalLitres), n2(r.totalCost), n2(r.avgCostPerLitre), r.fillCount, r.fleetsServed.join(', ')]),
+      foot: [['TOTAL', n2(pdfSum(reeferStationReports, 'totalLitres')), n2(pdfSum(reeferStationReports, 'totalCost')), '', pdfSum(reeferStationReports, 'fillCount'), '']],
     });
   }
 
@@ -1963,7 +1897,7 @@ export const generateComprehensiveDieselPDF = (
       head: [['Date', 'Fleet', 'Driver', 'Station', 'Litres', 'Cost/L', 'Total', 'Ccy', 'KM', '∆KM', 'km/L', 'Debrief']],
       body: truckRecords.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(r => {
         const kml = r.distance_travelled && r.litres_filled ? n3(r.distance_travelled / r.litres_filled) : '—';
-        return [r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '', r.litres_filled ? n2(r.litres_filled) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '', r.total_cost ? n2(r.total_cost) : '', r.currency || 'ZAR', r.km_reading || '', r.distance_travelled || '', kml, r.debrief_signed ? '✓' : '—'];
+        return [r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '', r.litres_filled ? n2(r.litres_filled) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '', r.total_cost ? n2(r.total_cost) : '', r.currency || 'USD', r.km_reading || '', r.distance_travelled || '', kml, r.debrief_signed ? '✓' : '—'];
       }),
       styles: { fontSize: 8, cellPadding: 1.5 },
       headStyles: { fillColor: HEAD, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
@@ -1978,10 +1912,9 @@ export const generateComprehensiveDieselPDF = (
     autoTable(doc, {
       ...baseOpts(addSectionHeading('REEFER TRANSACTIONS — RAW DATA', CYAN), true),
       head: [['Date', 'Unit', 'Driver', 'Station', 'Litres', 'Cost/L', 'Total', 'Ccy', 'Op.Hrs', '∆Hrs', 'L/H', 'Notes']],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      body: (reeferRecords as any[]).slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(r => {
+      body: reeferRecords.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(r => {
         const lph = r.hours_operated && r.litres_filled ? n2(r.litres_filled / r.hours_operated) : '—';
-        return [r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '', r.litres_filled ? n2(r.litres_filled) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '', r.total_cost ? n2(r.total_cost) : '', r.currency || 'ZAR', r.operating_hours ?? '', r.hours_operated ?? '', lph, (r.notes || '').substring(0, 40)];
+        return [r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '', r.litres_filled ? n2(r.litres_filled) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '', r.total_cost ? n2(r.total_cost) : '', r.currency || 'USD', r.operating_hours ?? '', r.hours_operated ?? '', lph, (r.notes || '').substring(0, 40)];
       }),
       styles: { fontSize: 8, cellPadding: 1.5 },
       headStyles: { fillColor: CYAN, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
@@ -2080,7 +2013,7 @@ export const generateYearlyWeeklyDieselExcel = async (
   const truckWeeks = groupByWeek(truckRecords);
   const sortedTruckWeeks = Array.from(truckWeeks.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-  let truckGrandLitres = 0, truckGrandCostZAR = 0, truckGrandCostUSD = 0, truckGrandDistance = 0;
+  let truckGrandLitres = 0, truckGrandCost = 0, truckGrandDistance = 0;
 
   for (const [, { weekStart, weekNum, records }] of sortedTruckWeeks) {
     // Week header
@@ -2090,22 +2023,21 @@ export const generateYearlyWeeklyDieselExcel = async (
     // Sort by date within the week
     const sorted = records.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    let weekLitres = 0, weekCostZAR = 0, weekCostUSD = 0, weekDist = 0;
+    let weekLitres = 0, weekCost = 0, weekDist = 0;
     sorted.forEach((r, i) => {
       const litres = r.litres_filled || 0;
       const cost = r.total_cost || 0;
       const dist = r.distance_travelled || 0;
       const kml = dist && litres ? n3(dist / litres) : '—';
-      const isUSD = r.currency === 'USD';
 
       weekLitres += litres;
-      if (isUSD) weekCostUSD += cost; else weekCostZAR += cost;
+      weekCost += cost;
       weekDist += dist;
 
       _xlDataRow(wsTruck, [
         r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '',
         litres ? n2(litres) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '',
-        cost ? n2(cost) : '', r.currency || 'ZAR',
+        cost ? n2(cost) : '', r.currency || 'USD',
         r.km_reading || '', dist || '', kml,
         (r.notes || '').replace(/[\t\n\r]/g, ' '),
       ], i % 2 === 1);
@@ -2113,23 +2045,18 @@ export const generateYearlyWeeklyDieselExcel = async (
 
     // Week subtotal
     const weekTotalLabel = `Week ${weekNum} Total — ${records.length} transactions`;
-    const weekCostStr = weekCostUSD > 0
-      ? `${n2(weekCostZAR)} ZAR + ${n2(weekCostUSD)} USD`
-      : `${n2(weekCostZAR)}`;
+    const weekCostStr = `${n2(weekCost)}`;
     _xlTotalRow(wsTruck, [weekTotalLabel, '', '', '', n2(weekLitres), '', weekCostStr, '', '', weekDist || '', weekDist && weekLitres ? n3(weekDist / weekLitres) : '', '']);
     wsTruck.addRow([]);
 
     truckGrandLitres += weekLitres;
-    truckGrandCostZAR += weekCostZAR;
-    truckGrandCostUSD += weekCostUSD;
+    truckGrandCost += weekCost;
     truckGrandDistance += weekDist;
   }
 
   // Grand total for trucks
   if (sortedTruckWeeks.length > 0) {
-    const grandCostStr = truckGrandCostUSD > 0
-      ? `${n2(truckGrandCostZAR)} ZAR + ${n2(truckGrandCostUSD)} USD`
-      : `${n2(truckGrandCostZAR)}`;
+    const grandCostStr = `${n2(truckGrandCost)}`;
     _xlTotalRow(wsTruck, [`YEAR ${year} GRAND TOTAL — ${truckRecords.filter(r => new Date(r.date).getFullYear() === year).length} transactions`, '', '', '', n2(truckGrandLitres), '', grandCostStr, '', '', truckGrandDistance || '', truckGrandLitres ? n3(truckGrandDistance / truckGrandLitres) : '', '']);
   }
   wsTruck.views = [{ state: 'frozen', ySplit: 4 }];
@@ -2146,7 +2073,7 @@ export const generateYearlyWeeklyDieselExcel = async (
   const reeferWeeks = groupByWeek(reeferYearlyRecords);
   const sortedReeferWeeks = Array.from(reeferWeeks.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-  let reeferGrandLitres = 0, reeferGrandCostZAR = 0, reeferGrandCostUSD = 0;
+  let reeferGrandLitres = 0, reeferGrandCost = 0;
 
   for (const [, { weekStart, weekNum, records }] of sortedReeferWeeks) {
     _xlSection(wsReefer, `WEEK ${weekNum} — ${fmtWeek(weekStart)}`, reeferCols, XC.cyan);
@@ -2154,41 +2081,35 @@ export const generateYearlyWeeklyDieselExcel = async (
 
     const sorted = records.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    let weekLitres = 0, weekCostZAR = 0, weekCostUSD = 0;
+    let weekLitres = 0, weekCost = 0;
     sorted.forEach((r, i: number) => {
       const litres = r.litres_filled || 0;
       const cost = r.total_cost || 0;
       const lph = r.hours_operated && litres ? n2(litres / r.hours_operated) : '—';
-      const isUSD = r.currency === 'USD';
 
       weekLitres += litres;
-      if (isUSD) weekCostUSD += cost; else weekCostZAR += cost;
+      weekCost += cost;
 
       _xlDataRow(wsReefer, [
         r.date, r.fleet_number, r.driver_name || '', r.fuel_station || '',
         litres ? n2(litres) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '',
-        cost ? n2(cost) : '', r.currency || 'ZAR',
+        cost ? n2(cost) : '', r.currency || 'USD',
         r.operating_hours ?? '', r.hours_operated ?? '', lph,
         (r.notes || '').replace(/[\t\n\r]/g, ' '),
       ], i % 2 === 1);
     });
 
-    const weekCostStr = weekCostUSD > 0
-      ? `${n2(weekCostZAR)} ZAR + ${n2(weekCostUSD)} USD`
-      : `${n2(weekCostZAR)}`;
+    const weekCostStr = `${n2(weekCost)}`;
     _xlTotalRow(wsReefer, [`Week ${weekNum} Total — ${records.length} transactions`, '', '', '', n2(weekLitres), '', weekCostStr, '', '', '', '', '']);
     wsReefer.addRow([]);
 
     reeferGrandLitres += weekLitres;
-    reeferGrandCostZAR += weekCostZAR;
-    reeferGrandCostUSD += weekCostUSD;
+    reeferGrandCost += weekCost;
   }
 
   // Grand total for reefers
   if (sortedReeferWeeks.length > 0) {
-    const grandCostStr = reeferGrandCostUSD > 0
-      ? `${n2(reeferGrandCostZAR)} ZAR + ${n2(reeferGrandCostUSD)} USD`
-      : `${n2(reeferGrandCostZAR)}`;
+    const grandCostStr = `${n2(reeferGrandCost)}`;
     _xlTotalRow(wsReefer, [`YEAR ${year} GRAND TOTAL — ${reeferYearlyRecords.filter((r) => new Date(r.date).getFullYear() === year).length} transactions`, '', '', '', n2(reeferGrandLitres), '', grandCostStr, '', '', '', '', '']);
   }
   wsReefer.views = [{ state: 'frozen', ySplit: 4 }];

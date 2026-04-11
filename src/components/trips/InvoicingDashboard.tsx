@@ -7,22 +7,21 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import
-  {
-    AlertCircle,
-    Bell,
-    Building2,
-    Calendar,
-    CheckCircle,
-    ChevronDown,
-    Clock,
-    DollarSign,
-    Download,
-    FileSpreadsheet,
-    FileText,
-    Receipt,
-    Send
-  } from "lucide-react";
+import {
+  AlertCircle,
+  Bell,
+  Building2,
+  Calendar,
+  CheckCircle,
+  ChevronDown,
+  Clock,
+  DollarSign,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Receipt,
+  Send
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface InvoiceTrip {
@@ -172,7 +171,7 @@ const InvoicingDashboard = () => {
           toPay: 0,
           outstanding: 0,
           paid: 0,
-          currency: trip.revenue_currency || "ZAR",
+          currency: trip.revenue_currency || "USD",
           toInvoiceTrips: [],
           outstandingTrips: [],
           paidTrips: [],
@@ -221,13 +220,13 @@ const InvoicingDashboard = () => {
   const statistics = useMemo(() => {
     const stats = {
       readyCount: readyToInvoice.length,
-      readyAmount: { ZAR: 0, USD: 0 },
+      readyAmount: { USD: 0 },
       invoicedCount: invoiceSent.length,
-      invoicedAmount: { ZAR: 0, USD: 0 },
+      invoicedAmount: { USD: 0 },
       paidCount: paymentReceived.length,
-      paidAmount: { ZAR: 0, USD: 0 },
+      paidAmount: { USD: 0 },
       overdueCount: 0,
-      overdueAmount: { ZAR: 0, USD: 0 },
+      overdueAmount: { USD: 0 },
       avgDaysToPayment: 0,
     };
 
@@ -236,12 +235,12 @@ const InvoicingDashboard = () => {
     let paymentCount = 0;
 
     readyToInvoice.forEach((trip) => {
-      const currency = (trip.revenue_currency || "ZAR") as "ZAR" | "USD";
+      const currency = (trip.revenue_currency || "USD") as string;
       stats.readyAmount[currency] += trip.base_revenue || 0;
     });
 
     invoiceSent.forEach((trip) => {
-      const currency = (trip.revenue_currency || "ZAR") as "ZAR" | "USD";
+      const currency = (trip.revenue_currency || "USD") as string;
       stats.invoicedAmount[currency] += trip.base_revenue || 0;
 
       // Check if overdue
@@ -253,7 +252,7 @@ const InvoicingDashboard = () => {
     });
 
     paymentReceived.forEach((trip) => {
-      const currency = (trip.revenue_currency || "ZAR") as "ZAR" | "USD";
+      const currency = (trip.revenue_currency || "USD") as string;
       stats.paidAmount[currency] += trip.base_revenue || 0;
 
       // Calculate days to payment
@@ -269,9 +268,8 @@ const InvoicingDashboard = () => {
     return stats;
   }, [readyToInvoice, invoiceSent, paymentReceived]);
 
-  const formatCurrency = (amount: number, currency: string) => {
-    const symbol = currency === "USD" ? "$" : "R";
-    return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatCurrency = (amount: number, _currency: string = 'USD') => {
+    return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (dateString: string | null | undefined) => {
@@ -303,7 +301,7 @@ const InvoicingDashboard = () => {
           trip.client_name || "",
           `${trip.origin || ""} - ${trip.destination || ""}`,
           (trip.base_revenue || 0).toString(),
-          trip.revenue_currency || "ZAR",
+          trip.revenue_currency || "USD",
           trip.status || "",
           trip.invoice_number || "",
           formatDate(trip.invoice_submitted_date),
@@ -408,9 +406,8 @@ const InvoicingDashboard = () => {
     const isOverdue = trip.status === "invoiced" && dueDate && dueDate < new Date();
 
     return (
-      <div className={`group flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-accent/50 hover:shadow-md transition-all duration-200 ${
-        isOverdue ? 'border-red-200 bg-red-50/50 hover:bg-red-50' : 'border-border'
-      }`}>
+      <div className={`group flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-accent/50 hover:shadow-md transition-all duration-200 ${isOverdue ? 'border-red-200 bg-red-50/50 hover:bg-red-50' : 'border-border'
+        }`}>
         {/* Left: Trip Info */}
         <div className="flex items-center gap-6 flex-1 min-w-0">
           {/* Trip Number & Status */}
@@ -418,7 +415,7 @@ const InvoicingDashboard = () => {
             <span className="font-semibold text-sm">{trip.trip_number || "No Trip #"}</span>
             <div className="flex items-center gap-1.5 mt-1">
               <Badge variant={trip.revenue_currency === "USD" ? "secondary" : "outline"} className="text-xs px-1.5 py-0">
-                {trip.revenue_currency || "ZAR"}
+                {trip.revenue_currency || "USD"}
               </Badge>
               {isOverdue && <Badge variant="destructive" className="text-xs px-1.5 py-0">Overdue</Badge>}
             </div>
@@ -502,13 +499,8 @@ const InvoicingDashboard = () => {
           </div>
           <div className="text-2xl font-bold tabular-nums">{statistics.readyCount}</div>
           <div className="text-sm text-muted-foreground tabular-nums">
-            {formatCurrency(statistics.readyAmount.ZAR, "ZAR")}
+            {formatCurrency(statistics.readyAmount.USD)}
           </div>
-          {statistics.readyAmount.USD > 0 && (
-            <div className="text-sm text-muted-foreground tabular-nums">
-              {formatCurrency(statistics.readyAmount.USD, "USD")}
-            </div>
-          )}
         </div>
 
         <div className="bg-card/80 backdrop-blur-sm border border-border/60 rounded-xl p-4 shadow-sm">
@@ -518,13 +510,8 @@ const InvoicingDashboard = () => {
           </div>
           <div className="text-2xl font-bold tabular-nums">{statistics.invoicedCount}</div>
           <div className="text-sm text-muted-foreground tabular-nums">
-            {formatCurrency(statistics.invoicedAmount.ZAR, "ZAR")}
+            {formatCurrency(statistics.invoicedAmount.USD)}
           </div>
-          {statistics.invoicedAmount.USD > 0 && (
-            <div className="text-sm text-muted-foreground tabular-nums">
-              {formatCurrency(statistics.invoicedAmount.USD, "USD")}
-            </div>
-          )}
         </div>
 
         <div className="bg-card/80 backdrop-blur-sm border border-border/60 rounded-xl p-4 shadow-sm">
@@ -534,13 +521,8 @@ const InvoicingDashboard = () => {
           </div>
           <div className="text-2xl font-bold text-emerald-600 tabular-nums">{statistics.paidCount}</div>
           <div className="text-sm text-muted-foreground tabular-nums">
-            {formatCurrency(statistics.paidAmount.ZAR, "ZAR")}
+            {formatCurrency(statistics.paidAmount.USD)}
           </div>
-          {statistics.paidAmount.USD > 0 && (
-            <div className="text-sm text-muted-foreground tabular-nums">
-              {formatCurrency(statistics.paidAmount.USD, "USD")}
-            </div>
-          )}
         </div>
 
         <div className="bg-card/80 backdrop-blur-sm border border-border/60 rounded-xl p-4 shadow-sm">
@@ -550,7 +532,7 @@ const InvoicingDashboard = () => {
           </div>
           <div className="text-2xl font-bold text-destructive tabular-nums">{statistics.overdueCount}</div>
           <div className="text-sm text-muted-foreground tabular-nums">
-            {formatCurrency(statistics.overdueAmount.ZAR, "ZAR")}
+            {formatCurrency(statistics.overdueAmount.USD)}
           </div>
         </div>
 
@@ -574,8 +556,7 @@ const InvoicingDashboard = () => {
             <h4 className="text-sm font-semibold text-destructive">Overdue Invoices Require Attention</h4>
             <p className="text-sm text-destructive/70 mt-0.5">
               You have {statistics.overdueCount} overdue invoice{statistics.overdueCount !== 1 ? "s" : ""} totaling{" "}
-              {formatCurrency(statistics.overdueAmount.ZAR, "ZAR")}
-              {statistics.overdueAmount.USD > 0 && ` / ${formatCurrency(statistics.overdueAmount.USD, "USD")}`}
+              {formatCurrency(statistics.overdueAmount.USD)}
             </p>
           </div>
         </div>

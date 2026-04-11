@@ -2,14 +2,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-// Note: After applying the migration, regenerate types with:
-// npx supabase gen types typescript --project-id wxvhkljrbcpcgpgdqhsp > src/integrations/supabase/types.ts
 
-// Helper to bypass TypeScript strict typing for tables not yet in types
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fromTable = (tableName: string) => (supabase as any).from(tableName);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const rpcCall = (fnName: string, params: Record<string, unknown>) => (supabase as any).rpc(fnName, params);
 
 // Types for Fuel Bunkers
 export interface FuelBunker {
@@ -201,7 +194,7 @@ export const useFuelBunkers = (activeOnly = false) => {
   return useQuery({
     queryKey: activeOnly ? BUNKER_KEYS.active : BUNKER_KEYS.all,
     queryFn: async () => {
-      let query = fromTable("fuel_bunkers")
+      let query = supabase.from("fuel_bunkers")
         .select("*")
         .order("name");
 
@@ -221,7 +214,7 @@ export const useFuelTransactions = (bunkerId?: string, limit = 100) => {
   return useQuery({
     queryKey: bunkerId ? BUNKER_KEYS.bunkerTransactions(bunkerId) : BUNKER_KEYS.transactions,
     queryFn: async () => {
-      let query = fromTable("fuel_transactions")
+      let query = supabase.from("fuel_transactions")
         .select(`
           *,
           bunker:fuel_bunkers(id, name, fuel_type, location)
@@ -235,7 +228,7 @@ export const useFuelTransactions = (bunkerId?: string, limit = 100) => {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as FuelTransaction[];
+      return (data || []) as unknown as FuelTransaction[];
     },
   });
 };
@@ -247,7 +240,7 @@ export const useCreateFuelBunker = () => {
 
   return useMutation({
     mutationFn: async (data: CreateBunkerData) => {
-      const { data: bunker, error } = await fromTable("fuel_bunkers")
+      const { data: bunker, error } = await supabase.from("fuel_bunkers")
         .insert([{
           ...data,
           current_level_liters: data.current_level_liters || 0,
@@ -276,7 +269,7 @@ export const useUpdateFuelBunker = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<FuelBunker> & { id: string }) => {
-      const { data: bunker, error } = await fromTable("fuel_bunkers")
+      const { data: bunker, error } = await supabase.from("fuel_bunkers")
         .update(data)
         .eq("id", id)
         .select()
@@ -302,7 +295,7 @@ export const useDeleteFuelBunker = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await fromTable("fuel_bunkers")
+      const { error } = await supabase.from("fuel_bunkers")
         .delete()
         .eq("id", id);
 
@@ -325,7 +318,7 @@ export const useDispenseFuel = () => {
 
   return useMutation({
     mutationFn: async (data: DispenseFuelData) => {
-      const { data: result, error } = await rpcCall("dispense_fuel", {
+      const { data: result, error } = await supabase.rpc("dispense_fuel", {
         p_bunker_id: data.bunker_id,
         p_quantity_liters: data.quantity_liters,
         p_vehicle_id: data.vehicle_id || null,
@@ -365,7 +358,7 @@ export const useRefillBunker = () => {
 
   return useMutation({
     mutationFn: async (data: RefillBunkerData) => {
-      const { data: result, error } = await rpcCall("refill_bunker", {
+      const { data: result, error } = await supabase.rpc("refill_bunker", {
         p_bunker_id: data.bunker_id,
         p_quantity_liters: data.quantity_liters,
         p_unit_cost: data.unit_cost || null,
@@ -382,7 +375,7 @@ export const useRefillBunker = () => {
 
       // Background calculation: Add refill amount to any open dip record for this bunker
       const addedLiters = response.added_liters ?? data.quantity_liters;
-      const { data: openDipRecord } = await fromTable("daily_dip_records")
+      const { data: openDipRecord } = await supabase.from("daily_dip_records")
         .select("id, diesel_additions_liters")
         .eq("bunker_id", data.bunker_id)
         .eq("status", "open")
@@ -390,7 +383,7 @@ export const useRefillBunker = () => {
 
       if (openDipRecord) {
         const currentAdditions = (openDipRecord as { diesel_additions_liters: number }).diesel_additions_liters || 0;
-        const { error: dipUpdateError } = await fromTable("daily_dip_records")
+        const { error: dipUpdateError } = await supabase.from("daily_dip_records")
           .update({
             diesel_additions_liters: currentAdditions + addedLiters,
             updated_at: new Date().toISOString(),
@@ -426,7 +419,7 @@ export const useAdjustBunkerLevel = () => {
 
   return useMutation({
     mutationFn: async (data: AdjustBunkerData) => {
-      const { data: result, error } = await rpcCall("adjust_bunker_level", {
+      const { data: result, error } = await supabase.rpc("adjust_bunker_level", {
         p_bunker_id: data.bunker_id,
         p_new_level: data.new_level,
         p_reason: data.reason || null,
@@ -463,7 +456,8 @@ export const useEditFuelTransaction = () => {
 
   return useMutation({
     mutationFn: async (data: EditFuelTransactionData) => {
-      const { data: result, error } = await rpcCall("edit_refill_transaction", {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- edit_refill_transaction not in generated types
+      const { data: result, error } = await (supabase.rpc as any)("edit_refill_transaction", {
         p_transaction_id: data.transaction_id,
         p_quantity_liters: data.quantity_liters ?? null,
         p_unit_cost: data.unit_cost ?? null,
@@ -502,7 +496,7 @@ export const useLowFuelAlerts = () => {
   return useQuery({
     queryKey: ["fuel-bunkers", "low-alerts"],
     queryFn: async () => {
-      const { data, error } = await fromTable("fuel_bunkers")
+      const { data, error } = await supabase.from("fuel_bunkers")
         .select("*")
         .eq("is_active", true)
         .not("min_level_alert", "is", null);
@@ -524,7 +518,7 @@ export const useDailyDipRecords = (bunkerId?: string, limit = 50) => {
   return useQuery({
     queryKey: bunkerId ? BUNKER_KEYS.bunkerDipRecords(bunkerId) : BUNKER_KEYS.dipRecords,
     queryFn: async () => {
-      let query = fromTable("daily_dip_records")
+      let query = supabase.from("daily_dip_records")
         .select(`
           *,
           bunker:fuel_bunkers(id, name, fuel_type, location)
@@ -538,7 +532,7 @@ export const useDailyDipRecords = (bunkerId?: string, limit = 50) => {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as DailyDipRecord[];
+      return (data || []) as unknown as DailyDipRecord[];
     },
   });
 };
@@ -549,7 +543,7 @@ export const useTodaysDipRecord = (bunkerId: string) => {
   return useQuery({
     queryKey: ["dip-records", bunkerId, today],
     queryFn: async () => {
-      const { data, error } = await fromTable("daily_dip_records")
+      const { data, error } = await supabase.from("daily_dip_records")
         .select(`
           *,
           bunker:fuel_bunkers(id, name, fuel_type, location)
@@ -559,7 +553,7 @@ export const useTodaysDipRecord = (bunkerId: string) => {
         .maybeSingle();
 
       if (error) throw error;
-      return data as DailyDipRecord | null;
+      return data as unknown as DailyDipRecord | null;
     },
     enabled: !!bunkerId,
   });
@@ -573,7 +567,7 @@ export const useCreateDipRecord = () => {
   return useMutation({
     mutationFn: async (data: CreateDipRecordData) => {
       // Check if record already exists for this date
-      const { data: existing } = await fromTable("daily_dip_records")
+      const { data: existing } = await supabase.from("daily_dip_records")
         .select("id")
         .eq("bunker_id", data.bunker_id)
         .eq("record_date", data.record_date)
@@ -583,7 +577,7 @@ export const useCreateDipRecord = () => {
         throw new Error("A dip record already exists for this date");
       }
 
-      const { data: record, error } = await fromTable("daily_dip_records")
+      const { data: record, error } = await supabase.from("daily_dip_records")
         .insert([{
           bunker_id: data.bunker_id,
           record_date: data.record_date,
@@ -601,7 +595,7 @@ export const useCreateDipRecord = () => {
       if (error) throw error;
 
       // Sync bunker's current level to the opening dip measurement (physical reading)
-      const { error: bunkerUpdateError } = await fromTable("fuel_bunkers")
+      const { error: bunkerUpdateError } = await supabase.from("fuel_bunkers")
         .update({
           current_level_liters: data.opening_volume_liters,
           updated_at: new Date().toISOString(),
@@ -612,7 +606,7 @@ export const useCreateDipRecord = () => {
         console.error("Failed to sync bunker level from opening dip record:", bunkerUpdateError);
       }
 
-      return record as DailyDipRecord;
+      return record as unknown as DailyDipRecord;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.dipRecords });
@@ -633,7 +627,7 @@ export const useCloseDipRecord = () => {
   return useMutation({
     mutationFn: async (data: CloseDipRecordData) => {
       // First get the opening readings and bunker info
-      const { data: existing, error: fetchError } = await fromTable("daily_dip_records")
+      const { data: existing, error: fetchError } = await supabase.from("daily_dip_records")
         .select("*, bunker:fuel_bunkers(id, name)")
         .eq("id", data.id)
         .single();
@@ -641,7 +635,7 @@ export const useCloseDipRecord = () => {
       if (fetchError) throw fetchError;
       if (!existing) throw new Error("Dip record not found");
 
-      const record = existing as DailyDipRecord;
+      const record = existing as unknown as DailyDipRecord;
 
       // Calculate values
       // Diesel additions (refills during this open period) must be accounted for
@@ -663,7 +657,7 @@ export const useCloseDipRecord = () => {
         variance = tankUsage - pumpIssued;
       }
 
-      const { data: updated, error } = await fromTable("daily_dip_records")
+      const { data: updated, error } = await supabase.from("daily_dip_records")
         .update({
           closing_dip_cm: data.closing_dip_cm,
           closing_volume_liters: data.closing_volume_liters,
@@ -682,7 +676,7 @@ export const useCloseDipRecord = () => {
       if (error) throw error;
 
       // Update the bunker's current level to match the closing volume from dip reading
-      const { error: bunkerUpdateError } = await fromTable("fuel_bunkers")
+      const { error: bunkerUpdateError } = await supabase.from("fuel_bunkers")
         .update({
           current_level_liters: data.closing_volume_liters,
           updated_at: new Date().toISOString(),
@@ -694,7 +688,7 @@ export const useCloseDipRecord = () => {
         // Don't throw - the dip record was saved, just log the bunker sync failure
       }
 
-      return updated as DailyDipRecord;
+      return updated as unknown as DailyDipRecord;
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.dipRecords });
@@ -739,7 +733,7 @@ export const useEditDipRecord = () => {
   return useMutation({
     mutationFn: async (data: EditDipRecordData) => {
       // First get the existing record to track changes
-      const { data: existing, error: fetchError } = await fromTable("daily_dip_records")
+      const { data: existing, error: fetchError } = await supabase.from("daily_dip_records")
         .select("*")
         .eq("id", data.id)
         .single();
@@ -747,7 +741,7 @@ export const useEditDipRecord = () => {
       if (fetchError) throw fetchError;
       if (!existing) throw new Error("Dip record not found");
 
-      const existingRecord = existing as DailyDipRecord;
+      const existingRecord = existing as unknown as DailyDipRecord;
 
       // Build list of changes for audit trail
       const changes: { field: string; old_value: string | number | null; new_value: string | number | null }[] = [];
@@ -822,7 +816,7 @@ export const useEditDipRecord = () => {
         }
       }
 
-      const { data: record, error } = await fromTable("daily_dip_records")
+      const { data: record, error } = await supabase.from("daily_dip_records")
         .update(updateData)
         .eq("id", data.id)
         .select()
@@ -832,7 +826,7 @@ export const useEditDipRecord = () => {
 
       // If closing volume was updated, sync bunker's current level
       if (data.closing_volume_liters !== undefined && data.closing_volume_liters !== null) {
-        const { error: bunkerUpdateError } = await fromTable("fuel_bunkers")
+        const { error: bunkerUpdateError } = await supabase.from("fuel_bunkers")
           .update({
             current_level_liters: data.closing_volume_liters,
             updated_at: new Date().toISOString(),
@@ -844,7 +838,7 @@ export const useEditDipRecord = () => {
         }
       }
 
-      return { record: record as DailyDipRecord, changes };
+      return { record: record as unknown as DailyDipRecord, changes };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.dipRecords });
@@ -867,9 +861,11 @@ export const useUpdateDipRecord = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<DailyDipRecord> & { id: string }) => {
-      const { data: record, error } = await fromTable("daily_dip_records")
+      const { edit_history, bunker: _bunker, ...rest } = data;
+      const { data: record, error } = await supabase.from("daily_dip_records")
         .update({
-          ...data,
+          ...rest,
+          ...(edit_history ? { edit_history: edit_history as unknown as import("@/integrations/supabase/types").Json } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
@@ -877,7 +873,7 @@ export const useUpdateDipRecord = () => {
         .single();
 
       if (error) throw error;
-      return record as DailyDipRecord;
+      return record as unknown as DailyDipRecord;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BUNKER_KEYS.dipRecords });
@@ -897,19 +893,19 @@ export const useDeleteDipRecord = () => {
   return useMutation({
     mutationFn: async ({ id, deleted_by, reason }: { id: string; deleted_by: string; reason: string }) => {
       // First get the record for logging purposes
-      const { data: existing } = await fromTable("daily_dip_records")
+      const { data: existing } = await supabase.from("daily_dip_records")
         .select("*, bunker:fuel_bunkers(name)")
         .eq("id", id)
         .single();
 
-      const { error } = await fromTable("daily_dip_records")
+      const { error } = await supabase.from("daily_dip_records")
         .delete()
         .eq("id", id);
 
       if (error) throw error;
 
       return {
-        record: existing as DailyDipRecord & { bunker: { name: string } },
+        record: existing as unknown as DailyDipRecord & { bunker: { name: string } },
         deleted_by,
         reason
       };

@@ -2,90 +2,82 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-  } from '@/components/ui/dialog';
-import
-  {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-  } from '@/components/ui/dropdown-menu';
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogFooter,
+DialogHeader,
+DialogTitle,
+} from '@/components/ui/dialog';
+import {
+DropdownMenu,
+DropdownMenuContent,
+DropdownMenuItem,
+DropdownMenuSeparator,
+DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from '@/components/ui/select';
-import
-  {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-  } from '@/components/ui/table';
+import {
+Select,
+SelectContent,
+SelectItem,
+SelectTrigger,
+SelectValue,
+} from '@/components/ui/select';
+import {
+Table,
+TableBody,
+TableCell,
+TableHead,
+TableHeader,
+TableRow,
+} from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useRecruitment } from '@/hooks/useRecruitment';
 import { supabase } from '@/integrations/supabase/client';
-import
-  {
-    generateCandidateListPDF,
-    generateRecruitmentSummaryPDF,
-    generateSingleCandidatePDF,
-  } from '@/lib/recruitmentExport';
-import
-  {
-    CANDIDATE_STATUS_LABELS,
-    CandidateStatus,
-    DriverCandidate,
-    DriverCandidateInsert,
-    EVALUATION_STEPS,
-    EvaluationResult,
-    EvaluationStatus,
-    EvaluationStep,
-  } from '@/types/recruitment';
-import
-  {
-    AlertTriangle,
-    CheckCircle2,
-    ChevronRight,
-    ClipboardCheck,
-    Clock,
-    Download,
-    Edit,
-    ExternalLink,
-    FileText,
-    Loader2,
-    Mail,
-    MoreVertical,
-    Phone,
-    Plus,
-    Route,
-    Search,
-    Trash2,
-    Truck,
-    Upload,
-    User,
-    UserCheck,
-    UserPlus,
-    Users,
-    XCircle
-  } from 'lucide-react';
+import {
+generateCandidateListPDF,
+generateRecruitmentSummaryPDF,
+generateSingleCandidatePDF,
+} from '@/lib/recruitmentExport';
+import {
+CANDIDATE_STATUS_LABELS,
+CandidateStatus,
+DriverCandidate,
+DriverCandidateInsert,
+EVALUATION_STEPS,
+EvaluationResult,
+EvaluationStatus,
+EvaluationStep,
+} from '@/types/recruitment';
+import {
+AlertTriangle,
+CheckCircle2,
+ChevronRight,
+ClipboardCheck,
+Clock,
+Download,
+Edit,
+ExternalLink,
+FileText,
+Loader2,
+Mail,
+MoreVertical,
+Phone,
+Plus,
+Route,
+Search,
+Trash2,
+Truck,
+Upload,
+User,
+
+Users,
+XCircle
+} from 'lucide-react';
 import { useRef, useState } from 'react';
 
 const INITIAL_FORM_STATE: Partial<DriverCandidateInsert> = {
@@ -434,79 +426,6 @@ const DriverRecruitmentSection = () => {
 
   return (
     <div className="space-y-6">
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{stats.total}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">New</CardTitle>
-            <UserPlus className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{stats.new}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Interview</CardTitle>
-            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{stats.atInterview}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Yard Test</CardTitle>
-            <Truck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{stats.atYardTest}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Road Test</CardTitle>
-            <Route className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{stats.atRoadTest}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Hired</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{stats.hired}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rejected</CardTitle>
-            <XCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{stats.rejected}</div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Recruitment Pipeline Visualization */}
       <Card>
         <CardHeader className="pb-3">
@@ -519,22 +438,20 @@ const DriverRecruitmentSection = () => {
               <div key={step.value} className="flex-1">
                 <div className="flex items-center">
                   <div
-                    className={`flex-1 flex flex-col items-center p-4 rounded-lg border-2 ${
-                      index === 0
+                    className={`flex-1 flex flex-col items-center p-4 rounded-lg border-2 ${index === 0
                         ? 'border-purple-300 bg-purple-50'
                         : index === 1
-                        ? 'border-amber-300 bg-amber-50'
-                        : 'border-orange-300 bg-orange-50'
-                    }`}
+                          ? 'border-amber-300 bg-amber-50'
+                          : 'border-orange-300 bg-orange-50'
+                      }`}
                   >
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
-                        index === 0
+                      className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${index === 0
                           ? 'bg-purple-200 text-purple-700'
                           : index === 1
-                          ? 'bg-amber-200 text-amber-700'
-                          : 'bg-orange-200 text-orange-700'
-                      }`}
+                            ? 'bg-amber-200 text-amber-700'
+                            : 'bg-orange-200 text-orange-700'
+                        }`}
                     >
                       {index === 0 ? (
                         <ClipboardCheck className="w-5 h-5" />
@@ -550,8 +467,8 @@ const DriverRecruitmentSection = () => {
                       {step.value === 'interview'
                         ? stats.atInterview
                         : step.value === 'yard_test'
-                        ? stats.atYardTest
-                        : stats.atRoadTest}{' '}
+                          ? stats.atYardTest
+                          : stats.atRoadTest}{' '}
                       candidates
                     </Badge>
                   </div>
@@ -703,43 +620,40 @@ const DriverRecruitmentSection = () => {
                           {/* Step Progress Indicator */}
                           <div className="flex items-center gap-1">
                             <div
-                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                                candidate.interview_result?.status === 'passed'
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${candidate.interview_result?.status === 'passed'
                                   ? 'bg-green-100 text-green-700'
                                   : candidate.interview_result?.status === 'failed'
-                                  ? 'bg-red-100 text-red-700'
-                                  : candidate.current_step === 'interview'
-                                  ? 'bg-purple-100 text-purple-700'
-                                  : 'bg-gray-100 text-gray-400'
-                              }`}
+                                    ? 'bg-red-100 text-red-700'
+                                    : candidate.current_step === 'interview'
+                                      ? 'bg-purple-100 text-purple-700'
+                                      : 'bg-gray-100 text-gray-400'
+                                }`}
                             >
                               1
                             </div>
                             <div className="w-4 h-0.5 bg-gray-200" />
                             <div
-                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                                candidate.yard_test_result?.status === 'passed'
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${candidate.yard_test_result?.status === 'passed'
                                   ? 'bg-green-100 text-green-700'
                                   : candidate.yard_test_result?.status === 'failed'
-                                  ? 'bg-red-100 text-red-700'
-                                  : candidate.current_step === 'yard_test'
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-gray-100 text-gray-400'
-                              }`}
+                                    ? 'bg-red-100 text-red-700'
+                                    : candidate.current_step === 'yard_test'
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-gray-100 text-gray-400'
+                                }`}
                             >
                               2
                             </div>
                             <div className="w-4 h-0.5 bg-gray-200" />
                             <div
-                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                                candidate.road_test_result?.status === 'passed'
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${candidate.road_test_result?.status === 'passed'
                                   ? 'bg-green-100 text-green-700'
                                   : candidate.road_test_result?.status === 'failed'
-                                  ? 'bg-red-100 text-red-700'
-                                  : candidate.current_step === 'road_test'
-                                  ? 'bg-orange-100 text-orange-700'
-                                  : 'bg-gray-100 text-gray-400'
-                              }`}
+                                    ? 'bg-red-100 text-red-700'
+                                    : candidate.current_step === 'road_test'
+                                      ? 'bg-orange-100 text-orange-700'
+                                      : 'bg-gray-100 text-gray-400'
+                                }`}
                             >
                               3
                             </div>

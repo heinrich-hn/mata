@@ -1,0 +1,21 @@
+=== Workshop Mobile Code Quality Details ===
+Generated: Fri Apr 10 13:21:00 UTC 2026
+Target: /workspaces/mata/mobile/src
+
+--- any types (8) ---
+/workspaces/mata/mobile/src/components/inspections/MobileInspectionStart.tsx:136:        const dbAny = supabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+/workspaces/mata/mobile/src/components/maintenance/AddScheduleDialog.tsx:127:      const { error } = await supabase.from("maintenance_schedules").insert([submitData as any]);      if (error) throw error;
+/workspaces/mata/mobile/src/components/dialogs/JobCardDetailsDialog.tsx:93:      return (data || []) as any[];
+/workspaces/mata/mobile/src/components/dialogs/RemoveTyreDialog.tsx:268:          const result = await (supabase.rpc as any)(
+/workspaces/mata/mobile/src/hooks/useFleetBreakdowns.ts:36:const db = supabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+/workspaces/mata/mobile/src/hooks/useFleetBreakdowns.ts:70:                    status: "pending" as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+/workspaces/mata/mobile/src/hooks/useAddPartForm.ts:339:        const vehicleData = currentJobCard.vehicles as any;
+/workspaces/mata/mobile/src/hooks/useAddPartForm.ts:488:          .insert([insertData as any]);
+
+--- @ts-ignore (0) ---
+
+--- @ts-nocheck (0) ---
+
+--- TODO/FIXME (2) ---
+/workspaces/mata/mobile/src/components/tyres/TyreManagementDialog.tsx:677:                    placeholder="DOT XXXX"
+/workspaces/mata/mobile/src/components/dialogs/RemoveTyreDialog.tsx:233:          performed_by: "current_user", // TODO: Get from auth context

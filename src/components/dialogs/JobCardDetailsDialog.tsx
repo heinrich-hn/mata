@@ -88,8 +88,7 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
         `)
         .eq("job_card_id", jobCard.id)
         .order("created_at", { ascending: false });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (data || []) as any[];
+      return data || [];
     },
     enabled: !!jobCard?.id,
   });

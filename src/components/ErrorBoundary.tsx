@@ -69,7 +69,7 @@ class ErrorBoundary extends Component<Props, State> {
                   </p>
                 </div>
               )}
-              
+
               <div className="flex gap-3">
                 <Button
                   onClick={this.handleReset}
@@ -88,7 +88,7 @@ class ErrorBoundary extends Component<Props, State> {
                 </Button>
               </div>
 
-              {process.env.NODE_ENV === "development" && this.state.errorInfo && (
+              {import.meta.env.DEV && this.state.errorInfo && (
                 <details className="mt-4">
                   <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
                     View error details (dev mode)

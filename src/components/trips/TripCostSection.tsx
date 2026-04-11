@@ -39,7 +39,7 @@ const emptyCostEntry = (date: string): TripCostEntry => ({
   category: '',
   sub_category: '',
   amount: 0,
-  currency: 'ZAR',
+  currency: 'USD',
   reference_number: '',
   date: date || new Date().toISOString().split('T')[0],
   notes: '',
@@ -115,14 +115,12 @@ const TripCostSection = ({ costs, onCostsChange, departureDate }: TripCostSectio
     onCostsChange(costs.filter(c => c.id !== id));
   };
 
-  const formatCurrency = (amount: number, currency: string) => {
-    const symbol = currency === 'USD' ? '$' : 'R';
-    return `${symbol}${amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatCurrency = (amount: number, _currency?: string) => {
+    return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   // Calculate totals
-  const totalZAR = costs.filter(c => c.currency === 'ZAR').reduce((sum, c) => sum + c.amount, 0);
-  const totalUSD = costs.filter(c => c.currency === 'USD').reduce((sum, c) => sum + c.amount, 0);
+  const totalCost = costs.reduce((sum, c) => sum + c.amount, 0);
   const flaggedCount = costs.filter(c => c.is_flagged).length;
 
   return (
@@ -162,12 +160,8 @@ const TripCostSection = ({ costs, onCostsChange, departureDate }: TripCostSectio
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Total (ZAR):</span>
-                    <p className="font-semibold text-green-700">{formatCurrency(totalZAR, 'ZAR')}</p>
-                  </div>
-                  <div>
                     <span className="text-muted-foreground">Total (USD):</span>
-                    <p className="font-semibold text-blue-700">{formatCurrency(totalUSD, 'USD')}</p>
+                    <p className="font-semibold text-green-700">{formatCurrency(totalCost)}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Entries:</span>
@@ -302,7 +296,6 @@ const TripCostSection = ({ costs, onCostsChange, departureDate }: TripCostSectio
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="ZAR">ZAR (R)</SelectItem>
                         <SelectItem value="USD">USD ($)</SelectItem>
                       </SelectContent>
                     </Select>

@@ -224,7 +224,7 @@ const BatchDebriefModal = ({
    */
   const generateWhatsAppMessage = (record: DieselRecord): string => {
     // Ensure currency is properly typed
-    const currency = (record.currency as 'ZAR' | 'USD') || 'ZAR';
+    const currency = (record.currency as string) || 'USD';
 
     const lines = [
       '🚛 *Diesel Debrief Report*',
@@ -276,7 +276,7 @@ const BatchDebriefModal = ({
   const shareMultipleRecords = async (records: DieselRecord[], phoneNumber: string) => {
     // Create a summary message for all records
     const summary = records.map((r, index) => {
-      const currency = (r.currency as 'ZAR' | 'USD') || 'ZAR';
+      const currency = (r.currency as string) || 'USD';
       const lines = [
         `${index + 1}. *Fleet ${r.fleet_number}* - ${formatDate(r.date)}`,
         `   Driver: ${r.driver_name || 'N/A'}`,
@@ -540,7 +540,7 @@ const BatchDebriefModal = ({
                 ) : (
                   fleetRecords.map((record) => {
                     const issueCount = getPerformanceIssueCount(record);
-                    const currency = (record.currency as 'ZAR' | 'USD') || 'ZAR';
+                    const currency = (record.currency as string) || 'USD';
 
                     return (
                       <TableRow key={record.id} className="text-sm">

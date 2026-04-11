@@ -49,8 +49,7 @@ export default function JobCardCostSummary({ jobCardId }: JobCardCostSummaryProp
         items_with_documents: 0,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      partsData?.forEach((part: any) => {
+      partsData?.forEach((part) => {
         const price = part.total_price || 0;
         summary.total_items++;
         summary.total_parts_cost += price;
@@ -73,7 +72,7 @@ export default function JobCardCostSummary({ jobCardId }: JobCardCostSummaryProp
 
       return summary as CostSummary;
     },
-  });  if (isLoading) {
+  }); if (isLoading) {
     return (
       <Card>
         <CardHeader>

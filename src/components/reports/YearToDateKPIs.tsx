@@ -14,35 +14,34 @@ import { supabase } from '@/integrations/supabase/client';
 import { Trip } from '@/types/operations';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { endOfWeek, format, getISOWeek, getISOWeekYear, parseISO, startOfWeek } from 'date-fns';
-import
-  {
-    Activity,
-    AlertTriangle,
-    Award,
-    BarChart3,
-    Calendar,
-    ChevronDown,
-    ChevronUp,
-    DollarSign,
-    Download,
-    Edit,
-    FileText,
-    Navigation,
-    Save,
-    Target,
-    TrendingDown,
-    TrendingUp,
-    X,
-    Zap
-  } from 'lucide-react';
+import {
+Activity,
+AlertTriangle,
+Award,
+BarChart3,
+Calendar,
+ChevronDown,
+ChevronUp,
+DollarSign,
+Download,
+Edit,
+FileText,
+Navigation,
+Save,
+Target,
+TrendingDown,
+TrendingUp,
+X,
+Zap
+} from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 
 // Helper functions
-const formatCurrency = (amount: number | null | undefined, currency: string = 'ZAR') => {
+const formatCurrency = (amount: number | null | undefined, currency: string = 'USD') => {
   if (!amount) return `${currency} 0.00`;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: currency === 'USD' ? 'USD' : 'ZAR',
+    currency: currency === 'USD' ? 'USD' : 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(amount);
@@ -91,7 +90,7 @@ interface WeeklyMetrics {
   cpk: number;
   tripCount: number;
   profitMargin: number;
-  currency: 'ZAR' | 'USD';
+  currency: string;
 }
 
 interface YearToDateKPIsProps {
@@ -317,7 +316,7 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
     },
   });
 
-  const { weeklyMetricsZAR, weeklyMetricsUSD } = useMemo(() => {
+  const { weeklyMetrics } = useMemo(() => {
     const completedTrips = trips.filter(trip => {
       if (trip.status !== 'completed' && trip.status !== 'paid') return false;
       if (!trip.arrival_date) return false;
@@ -331,7 +330,7 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
       return recordYear === selectedYear;
     });
 
-    const createEmptyWeek = (weekStart: Date, weekEnd: Date, weekNum: number, currency: 'ZAR' | 'USD'): WeeklyMetrics => ({
+    const createEmptyWeek = (weekStart: Date, weekEnd: Date, weekNum: number, currency: string): WeeklyMetrics => ({
       weekNumber: weekNum,
       weekStart: format(weekStart, 'yyyy-MM-dd'),
       weekEnd: format(weekEnd, 'yyyy-MM-dd'),
@@ -348,8 +347,7 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
       currency
     });
 
-    const zarData: Record<string, WeeklyMetrics> = {};
-    const usdData: Record<string, WeeklyMetrics> = {};
+    const weeklyData: Record<string, WeeklyMetrics> = {};
 
     completedTrips.forEach(trip => {
       const offloadDate = trip.arrival_date;
@@ -364,14 +362,13 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
       if (year !== selectedYear) return;
 
       const weekKey = `${year}-W${String(weekNumber).padStart(2, '0')}`;
-      const currency = trip.revenue_currency || 'ZAR';
-      const targetData = currency === 'USD' ? usdData : zarData;
+      const currency = 'USD';
 
-      if (!targetData[weekKey]) {
-        targetData[weekKey] = createEmptyWeek(weekStart, weekEnd, weekNumber, currency);
+      if (!weeklyData[weekKey]) {
+        weeklyData[weekKey] = createEmptyWeek(weekStart, weekEnd, weekNumber, currency);
       }
 
-      const week = targetData[weekKey];
+      const week = weeklyData[weekKey];
       const tripCosts = calculateTotalCosts(trip.costs);
       const additionalCosts = trip.additional_costs?.reduce((sum, cost) => sum + (cost.amount || 0), 0) || 0;
       const totalTripCosts = tripCosts + additionalCosts;
@@ -394,14 +391,12 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
       if (year !== selectedYear) return;
 
       const weekKey = `${year}-W${String(weekNumber).padStart(2, '0')}`;
-      const currency = (record.currency?.toUpperCase() === 'USD' ? 'USD' : 'ZAR') as 'ZAR' | 'USD';
-      const targetData = currency === 'USD' ? usdData : zarData;
 
-      if (!targetData[weekKey]) {
-        targetData[weekKey] = createEmptyWeek(weekStart, weekEnd, weekNumber, currency);
+      if (!weeklyData[weekKey]) {
+        weeklyData[weekKey] = createEmptyWeek(weekStart, weekEnd, weekNumber, 'USD');
       }
 
-      const week = targetData[weekKey];
+      const week = weeklyData[weekKey];
       week.dieselCosts += record.total_cost || 0;
     });
 
@@ -419,8 +414,7 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
     };
 
     return {
-      weeklyMetricsZAR: calculateWeekTotals(zarData),
-      weeklyMetricsUSD: calculateWeekTotals(usdData)
+      weeklyMetrics: calculateWeekTotals(weeklyData),
     };
   }, [trips, dieselRecords, selectedYear]);
 
@@ -516,21 +510,13 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
     csvContent += `Generated on,${new Date().toLocaleDateString()}\n`;
     csvContent += `Year,${selectedYear}\n\n`;
 
-    if (weeklyMetricsZAR.length > 0) {
-      csvContent += "=== ZAR TRANSACTIONS ===\n";
-      csvContent += "Week Number,Week Start,Week End,Trip Count,Total Revenue (ZAR),Diesel Costs (ZAR),Other Costs (ZAR),Total Costs (ZAR),Gross Profit (ZAR),Profit Margin %,Total KM,IPK,CPK\n";
-      weeklyMetricsZAR.forEach(week => {
+    if (weeklyMetrics.length > 0) {
+      csvContent += "=== TRANSACTIONS ===\n";
+      csvContent += "Week Number,Week Start,Week End,Trip Count,Total Revenue (USD),Diesel Costs (USD),Other Costs (USD),Total Costs (USD),Gross Profit (USD),Profit Margin %,Total KM,IPK,CPK\n";
+      weeklyMetrics.forEach(week => {
         csvContent += `${week.weekNumber},"${week.weekStart}","${week.weekEnd}",${week.tripCount},${week.totalRevenue.toFixed(2)},${week.dieselCosts.toFixed(2)},${week.otherCosts.toFixed(2)},${week.totalCosts.toFixed(2)},${week.grossProfit.toFixed(2)},${week.profitMargin.toFixed(2)},${week.totalKilometers},${week.ipk.toFixed(3)},${week.cpk.toFixed(3)}\n`;
       });
       csvContent += "\n";
-    }
-
-    if (weeklyMetricsUSD.length > 0) {
-      csvContent += "=== USD TRANSACTIONS ===\n";
-      csvContent += "Week Number,Week Start,Week End,Trip Count,Total Revenue (USD),Diesel Costs (USD),Other Costs (USD),Total Costs (USD),Gross Profit (USD),Profit Margin %,Total KM,IPK,CPK\n";
-      weeklyMetricsUSD.forEach(week => {
-        csvContent += `${week.weekNumber},"${week.weekStart}","${week.weekEnd}",${week.tripCount},${week.totalRevenue.toFixed(2)},${week.dieselCosts.toFixed(2)},${week.otherCosts.toFixed(2)},${week.totalCosts.toFixed(2)},${week.grossProfit.toFixed(2)},${week.profitMargin.toFixed(2)},${week.totalKilometers},${week.ipk.toFixed(3)},${week.cpk.toFixed(3)}\n`;
-      });
     }
 
     const encodedUri = encodeURI(csvContent);
@@ -587,60 +573,60 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
 
     return (
       <div className="bg-card/80 backdrop-blur-sm border border-border/60 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Icon className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold">{title}</h3>
-                {description && (
-                  <p className="text-xs text-muted-foreground mt-1">{description}</p>
-                )}
-              </div>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Icon className="w-5 h-5 text-primary" />
             </div>
-          </div>
-
-          <div className="space-y-4">
-            {/* 2026 */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-muted-foreground">2026 YTD</span>
-                {change2026vs2025.percentage !== 0 && (
-                  <Badge variant={isGoodChange2026 ? "default" : "destructive"} className={`text-xs ${isGoodChange2026 ? 'bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10' : ''}`}>
-                    {isGoodChange2026 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-                    {formatPercentage(change2026vs2025.percentage)}
-                  </Badge>
-                )}
-              </div>
-              <div className="text-2xl font-bold tabular-nums">
-                {formatValue(current2026)}{suffix}
-              </div>
-            </div>
-
-            {/* 2025 */}
-            <div className="pt-3 border-t border-border/60">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-muted-foreground">2025 YTD</span>
-                {change2025vs2024.percentage !== 0 && (
-                  <span className={`text-xs font-medium ${isGoodChange2025 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {formatPercentage(change2025vs2024.percentage)}
-                  </span>
-                )}
-              </div>
-              <div className="text-lg font-semibold tabular-nums">
-                {formatValue(current2025)}{suffix}
-              </div>
-            </div>
-
-            {/* 2024 */}
-            <div className="pt-3 border-t border-border/60">
-              <div className="text-sm font-medium text-muted-foreground mb-1">2024 YTD</div>
-              <div className="text-base font-medium text-muted-foreground tabular-nums">
-                {formatValue(previous2024)}{suffix}
-              </div>
+              <h3 className="text-sm font-semibold">{title}</h3>
+              {description && (
+                <p className="text-xs text-muted-foreground mt-1">{description}</p>
+              )}
             </div>
           </div>
+        </div>
+
+        <div className="space-y-4">
+          {/* 2026 */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-muted-foreground">2026 YTD</span>
+              {change2026vs2025.percentage !== 0 && (
+                <Badge variant={isGoodChange2026 ? "default" : "destructive"} className={`text-xs ${isGoodChange2026 ? 'bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10' : ''}`}>
+                  {isGoodChange2026 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                  {formatPercentage(change2026vs2025.percentage)}
+                </Badge>
+              )}
+            </div>
+            <div className="text-2xl font-bold tabular-nums">
+              {formatValue(current2026)}{suffix}
+            </div>
+          </div>
+
+          {/* 2025 */}
+          <div className="pt-3 border-t border-border/60">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-muted-foreground">2025 YTD</span>
+              {change2025vs2024.percentage !== 0 && (
+                <span className={`text-xs font-medium ${isGoodChange2025 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {formatPercentage(change2025vs2024.percentage)}
+                </span>
+              )}
+            </div>
+            <div className="text-lg font-semibold tabular-nums">
+              {formatValue(current2025)}{suffix}
+            </div>
+          </div>
+
+          {/* 2024 */}
+          <div className="pt-3 border-t border-border/60">
+            <div className="text-sm font-medium text-muted-foreground mb-1">2024 YTD</div>
+            <div className="text-base font-medium text-muted-foreground tabular-nums">
+              {formatValue(previous2024)}{suffix}
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -657,8 +643,8 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
     const displayValue = format === 'currency'
       ? formatCurrency(value, 'USD')
       : format === 'percentage'
-      ? `${value.toFixed(1)}%`
-      : formatNumber(value);
+        ? `${value.toFixed(1)}%`
+        : formatNumber(value);
 
     return (
       <div className="bg-card/80 backdrop-blur-sm border border-border/60 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -994,67 +980,8 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
                 </div>
               </div>
 
-              {/* ZAR Section */}
-              {weeklyMetricsZAR.length > 0 && (
-                <div className="mb-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10">
-                        ZAR
-                      </Badge>
-                      <h3 className="font-semibold">South African Rand Transactions</h3>
-                    </div>
-                    <span className="text-sm text-muted-foreground">{weeklyMetricsZAR.length} weeks</span>
-                  </div>
-                  <div className="overflow-x-auto rounded-xl border border-border/60">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="bg-muted/40">
-                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Week</th>
-                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Period</th>
-                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Trips</th>
-                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Revenue</th>
-                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Profit</th>
-                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Margin</th>
-                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">IPK</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {weeklyMetricsZAR.slice(0, 8).map((week) => (
-                          <tr key={`zar-${week.weekStart}`} className="border-t border-border/50 hover:bg-accent/50">
-                            <td className="py-3 px-4">
-                              <div className="font-medium">Week {week.weekNumber}</div>
-                            </td>
-                            <td className="py-3 px-4 text-sm text-muted-foreground">
-                              {new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                              {' - '}
-                              {new Date(week.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </td>
-                            <td className="py-3 px-4 text-right">
-                              <Badge variant="outline">{week.tripCount}</Badge>
-                            </td>
-                            <td className="py-3 px-4 text-right font-medium">
-                              {formatCurrency(week.totalRevenue, 'ZAR')}
-                            </td>
-                            <td className={`py-3 px-4 text-right font-medium tabular-nums ${week.grossProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              {formatCurrency(week.grossProfit, 'ZAR')}
-                            </td>
-                            <td className={`py-3 px-4 text-right font-medium tabular-nums ${week.profitMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              {week.profitMargin.toFixed(1)}%
-                            </td>
-                            <td className="py-3 px-4 text-right tabular-nums">
-                              {formatCurrency(week.ipk, 'ZAR')}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
               {/* USD Section */}
-              {weeklyMetricsUSD.length > 0 && (
+              {weeklyMetrics.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
@@ -1063,7 +990,7 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
                       </Badge>
                       <h3 className="font-semibold">US Dollar Transactions</h3>
                     </div>
-                    <span className="text-sm text-muted-foreground">{weeklyMetricsUSD.length} weeks</span>
+                    <span className="text-sm text-muted-foreground">{weeklyMetrics.length} weeks</span>
                   </div>
                   <div className="overflow-x-auto rounded-xl border border-border/60">
                     <table className="w-full">
@@ -1079,7 +1006,7 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
                         </tr>
                       </thead>
                       <tbody>
-                        {weeklyMetricsUSD.slice(0, 8).map((week) => (
+                        {weeklyMetrics.slice(0, 8).map((week) => (
                           <tr key={`usd-${week.weekStart}`} className="border-t border-border/50 hover:bg-accent/50">
                             <td className="py-3 px-4">
                               <div className="font-medium">Week {week.weekNumber}</div>
@@ -1112,7 +1039,7 @@ const YearToDateKPIs: React.FC<YearToDateKPIsProps> = ({ trips }) => {
                 </div>
               )}
 
-              {weeklyMetricsZAR.length === 0 && weeklyMetricsUSD.length === 0 && (
+              {weeklyMetrics.length === 0 && (
                 <div className="text-center py-12">
                   <Calendar className="mx-auto h-12 w-12 text-muted-foreground" />
                   <h3 className="mt-4 text-lg font-medium">No data for {selectedYear}</h3>

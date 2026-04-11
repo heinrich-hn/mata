@@ -1,6 +1,3 @@
-// src/components/driver/CarReportsGrid.tsx
-'use client';
-
 import {
   AlertDialog,
   AlertDialogAction,

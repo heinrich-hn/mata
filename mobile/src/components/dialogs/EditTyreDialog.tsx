@@ -125,11 +125,14 @@ const EditTyreDialog = ({ open, onOpenChange, tyre, onUpdate }: EditTyreDialogPr
     if (formData.initial_tread_depth && isNaN(Number(formData.initial_tread_depth))) {
       newErrors.initial_tread_depth = "Must be a number";
     }
-    if (formData.purchase_cost_zar && isNaN(Number(formData.purchase_cost_zar))) {
-      newErrors.purchase_cost_zar = "Must be a number";
-    }
     if (formData.purchase_cost_usd && isNaN(Number(formData.purchase_cost_usd))) {
-      newErrors.purchase_cost_usd = "Must be a number";
+      newErrors.purchase_cost_usd = "Must be a valid USD amount";
+    }
+    if (formData.purchase_cost_zar && isNaN(Number(formData.purchase_cost_zar))) {
+      newErrors.purchase_cost_zar = "Must be a valid ZAR amount";
+    }
+    if (formData.unit_price && isNaN(Number(formData.unit_price))) {
+      newErrors.unit_price = "Must be a valid USD amount";
     }
     if (formData.quantity && isNaN(Number(formData.quantity))) {
       newErrors.quantity = "Must be a number";
@@ -200,7 +203,7 @@ const EditTyreDialog = ({ open, onOpenChange, tyre, onUpdate }: EditTyreDialogPr
         <DialogHeader>
           <DialogTitle>Edit Tyre Details</DialogTitle>
           <DialogDescription>
-            Update specifications and details for {tyre.brand} {tyre.model}
+            Update specifications and details for {tyre.brand} {tyre.model}. All prices are in USD ($).
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -386,49 +389,52 @@ const EditTyreDialog = ({ open, onOpenChange, tyre, onUpdate }: EditTyreDialogPr
               </div>
             </div>
 
-            {/* Pricing */}
+            {/* Pricing - USD Primary */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Pricing Information
+                Pricing Information (USD Primary)
               </h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="unit_price">Unit Price (ZAR)</Label>
-                  <Input
-                    id="unit_price"
-                    value={formData.unit_price}
-                    onChange={handleChange}
-                    placeholder="Unit price"
-                    type="number"
-                    step="0.01"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="purchase_cost_zar">Purchase Cost (ZAR)</Label>
-                  <Input
-                    id="purchase_cost_zar"
-                    value={formData.purchase_cost_zar}
-                    onChange={handleChange}
-                    placeholder="Cost in ZAR"
-                    type="number"
-                    step="0.01"
-                    className={errors.purchase_cost_zar ? "border-destructive" : ""}
-                  />
-                  {errors.purchase_cost_zar && <p className="text-sm text-destructive">{errors.purchase_cost_zar}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="purchase_cost_usd">Purchase Cost (USD)</Label>
+                  <Label htmlFor="purchase_cost_usd">Purchase Cost (USD) *</Label>
                   <Input
                     id="purchase_cost_usd"
                     value={formData.purchase_cost_usd}
                     onChange={handleChange}
-                    placeholder="Cost in USD"
+                    placeholder="Enter cost in USD (e.g., 250.00)"
                     type="number"
                     step="0.01"
                     className={errors.purchase_cost_usd ? "border-destructive" : ""}
                   />
                   {errors.purchase_cost_usd && <p className="text-sm text-destructive">{errors.purchase_cost_usd}</p>}
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="unit_price">Unit Price (USD)</Label>
+                  <Input
+                    id="unit_price"
+                    value={formData.unit_price}
+                    onChange={handleChange}
+                    placeholder="Retail price in USD (optional)"
+                    type="number"
+                    step="0.01"
+                  />
+                  {errors.unit_price && <p className="text-sm text-destructive">{errors.unit_price}</p>}
+                  <p className="text-xs text-muted-foreground">If different from purchase cost</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="purchase_cost_zar">Purchase Cost (ZAR) - Reference Only</Label>
+                <Input
+                  id="purchase_cost_zar"
+                  value={formData.purchase_cost_zar}
+                  onChange={handleChange}
+                  placeholder="Enter cost in ZAR (optional)"
+                  type="number"
+                  step="0.01"
+                />
+                {errors.purchase_cost_zar && <p className="text-sm text-destructive">{errors.purchase_cost_zar}</p>}
+                <p className="text-xs text-muted-foreground">For reference/conversion purposes only</p>
               </div>
             </div>
           </div>

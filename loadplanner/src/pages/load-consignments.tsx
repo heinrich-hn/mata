@@ -553,7 +553,6 @@ export default function LoadConsignmentsPage() {
                                 </FormControl>
                                 <SelectContent>
                                   <SelectItem value="USD">USD</SelectItem>
-                                  <SelectItem value="ZAR">ZAR</SelectItem>
                                   <SelectItem value="BWP">BWP</SelectItem>
                                   <SelectItem value="ZMW">ZMW</SelectItem>
                                 </SelectContent>

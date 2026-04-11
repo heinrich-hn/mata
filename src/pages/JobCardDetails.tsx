@@ -110,9 +110,9 @@ const JobCardDetails = () => {
           vendors(id, name, email, phone),
           inventory(
             id,
-            part_name,
+            name,
             part_number,
-            quantity_in_stock,
+            quantity,
             unit_price,
             location,
             supplier
@@ -122,8 +122,7 @@ const JobCardDetails = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (data || []) as any[];
+      return data || [];
     },
     enabled: !!id,
   });

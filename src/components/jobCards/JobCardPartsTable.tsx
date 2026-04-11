@@ -1,12 +1,12 @@
 import {
-AlertDialog,
-AlertDialogAction,
-AlertDialogCancel,
-AlertDialogContent,
-AlertDialogDescription,
-AlertDialogFooter,
-AlertDialogHeader,
-AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,10 +66,10 @@ interface PartsRequest {
   } | null;
   inventory?: {
     id: string;
-    part_name: string;
-    part_number: string | null;
-    quantity_in_stock: number;
-    unit_price: number;
+    name: string;
+    part_number: string;
+    quantity: number;
+    unit_price: number | null;
     location?: string | null;
     supplier?: string | null;
   } | null;

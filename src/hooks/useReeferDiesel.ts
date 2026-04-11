@@ -70,9 +70,18 @@ interface UseReeferDieselRecordsOptions {
   endDate?: string;
 }
 
-// Helper to get table reference with any type to bypass auto-generated type checking
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getReeferTable = () => (supabase as any).from('reefer_diesel_records');
+const getReeferTable = () => supabase.from('reefer_diesel_records');
+
+interface DieselRecordRow {
+  id: string;
+  fleet_number: string;
+  cost_per_litre: number | null;
+  litres_filled: number | null;
+  total_cost: number | null;
+  driver_name: string | null;
+  date: string;
+  [key: string]: unknown;
+}
 
 export const useReeferDieselRecords = (options: UseReeferDieselRecordsOptions = {}) => {
   const queryClient = useQueryClient();
@@ -375,8 +384,7 @@ export const useReeferConsumptionByTruck = () => {
       if (dieselRecordIds.length === 0) return [];
 
       // Fetch the linked diesel records
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: dieselData, error: dieselError } = await (supabase as any)
+      const { data: dieselData, error: dieselError } = await supabase
         .from('diesel_records')
         .select('*')
         .in('id', dieselRecordIds);
@@ -384,8 +392,7 @@ export const useReeferConsumptionByTruck = () => {
       if (dieselError) throw dieselError;
 
       // Create a map of diesel records by ID
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dieselMap = new Map((dieselData || []).map((d: any) => [d.id, d]));
+      const dieselMap = new Map((dieselData || []).map((d: DieselRecordRow) => [d.id, d]));
 
       // Group reefer records by linked diesel record
       const summaryMap = new Map<string, ReeferConsumptionByTruck>();
@@ -393,8 +400,7 @@ export const useReeferConsumptionByTruck = () => {
       ((reeferData || []) as ReeferDieselRecordRow[]).forEach((record) => {
         if (!record.linked_diesel_record_id) return;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const dieselRecord = dieselMap.get(record.linked_diesel_record_id) as any;
+        const dieselRecord = dieselMap.get(record.linked_diesel_record_id) as DieselRecordRow | undefined;
         if (!dieselRecord) return;
 
         const key = dieselRecord.fleet_number;
@@ -441,8 +447,7 @@ export const useTruckDieselRecordsForLinking = (options: {
   return useQuery({
     queryKey: ['truck-diesel-for-linking', options],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase as any)
+      let query = supabase
         .from('diesel_records')
         .select('id, fleet_number, driver_name, date, litres_filled, total_cost, fuel_station, trip_id')
         .order('date', { ascending: false })

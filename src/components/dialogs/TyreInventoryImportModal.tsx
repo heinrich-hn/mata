@@ -416,7 +416,7 @@ Continental,HTR2,385/65R22.5,Trailer,25,8,3200.00,3000.00,180.00,DOT3724,100,14,
                         <TableHead>Size</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Qty</TableHead>
-                        <TableHead>Cost (ZAR)</TableHead>
+                        <TableHead>Cost (USD)</TableHead>
                         <TableHead>DOT</TableHead>
                         <TableHead>Location</TableHead>
                       </TableRow>

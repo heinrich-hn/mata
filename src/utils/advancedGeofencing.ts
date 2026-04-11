@@ -1,4 +1,3 @@
-// src/utils/advancedGeofencing.ts
 import { LatLng, Layer, Map } from 'leaflet';
 import GeometryUtil from 'leaflet-geometryutil';
 

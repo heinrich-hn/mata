@@ -2,6 +2,9 @@ import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+/** jsPDF instance with autoTable plugin properties */
+type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
+
 export interface JobCardExportData {
   jobCard: {
     id: string;
@@ -364,8 +367,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
     margin: { left: margin, right: margin },
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  yPos = (doc as any).lastAutoTable.finalY + 10;
+   
+  yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
 
   // =====================
   // TASKS SECTION
@@ -414,8 +417,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
       },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    yPos = (doc as any).lastAutoTable.finalY + 10;
+     
+    yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
   }
 
   // =====================
@@ -485,8 +488,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
       margin: { left: margin, right: margin },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    yPos = (doc as any).lastAutoTable.finalY + 10;
+     
+    yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
 
     // =====================
     // ATTACHMENTS LIST
@@ -525,8 +528,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
         margin: { left: margin, right: margin },
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      yPos = (doc as any).lastAutoTable.finalY + 10;
+       
+      yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
   }
 
@@ -588,8 +591,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
       margin: { left: margin, right: margin },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    yPos = (doc as any).lastAutoTable.finalY + 10;
+     
+    yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
   }
 
   // =====================
@@ -640,8 +643,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
       margin: { left: margin, right: margin },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    yPos = (doc as any).lastAutoTable.finalY + 10;
+     
+    yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
   }
 
   // =====================
@@ -737,8 +740,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
         },
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      yPos = (doc as any).lastAutoTable.finalY + 10;
+       
+      yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
 
     // Inspection faults table
@@ -795,8 +798,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
         },
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      yPos = (doc as any).lastAutoTable.finalY + 10;
+       
+      yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
 
     // Out of Commission Report section
@@ -893,8 +896,8 @@ export function generateJobCardPDF(data: JobCardExportData): void {
           margin: { left: margin, right: margin },
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        yPos = (doc as any).lastAutoTable.finalY + 8;
+         
+        yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8;
       }
 
       // Additional notes

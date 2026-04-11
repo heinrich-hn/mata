@@ -9,34 +9,32 @@ import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import { CostEntry, Trip } from '@/types/operations';
-import
-  {
-    endOfWeek,
-    format,
-    getISOWeek,
-    getISOWeekYear,
-    getYear,
-    parseISO,
-    startOfWeek,
-    subMonths,
-  } from 'date-fns';
+import {
+  endOfWeek,
+  format,
+  getISOWeek,
+  getISOWeekYear,
+  getYear,
+  parseISO,
+  startOfWeek,
+  subMonths,
+} from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import
-  {
-    Building,
-    Calendar,
-    CalendarRange,
-    DollarSign,
-    Download,
-    FileText,
-    MapPin,
-    Receipt,
-    TrendingDown,
-    TrendingUp,
-    Truck,
-    User
-  } from 'lucide-react';
+import {
+  Building,
+  Calendar,
+  CalendarRange,
+  DollarSign,
+  Download,
+  FileText,
+  MapPin,
+  Receipt,
+  TrendingDown,
+  TrendingUp,
+  Truck,
+  User
+} from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -48,7 +46,6 @@ interface TripReportsSectionProps {
 }
 
 interface CurrencyAmounts {
-  ZAR: number;
   USD: number;
 }
 
@@ -121,10 +118,7 @@ interface TruckSummary {
 
 // Helper to display currency amounts
 const CurrencyDisplay = ({ amounts, type = 'default' }: { amounts: CurrencyAmounts; type?: 'revenue' | 'expense' | 'profit' | 'default' }) => {
-  const hasZAR = amounts.ZAR !== 0;
-  const hasUSD = amounts.USD !== 0;
-
-  if (!hasZAR && !hasUSD) {
+  if (amounts.USD === 0) {
     return <span className="text-muted-foreground">-</span>;
   }
 
@@ -136,17 +130,8 @@ const CurrencyDisplay = ({ amounts, type = 'default' }: { amounts: CurrencyAmoun
   };
 
   return (
-    <div className="space-y-0.5">
-      {hasZAR && (
-        <div className={cn('font-semibold', getColorClass(amounts.ZAR))}>
-          {formatCurrency(amounts.ZAR, 'ZAR')}
-        </div>
-      )}
-      {hasUSD && (
-        <div className={cn('font-semibold', getColorClass(amounts.USD))}>
-          {formatCurrency(amounts.USD, 'USD')}
-        </div>
-      )}
+    <div className={cn('font-semibold', getColorClass(amounts.USD))}>
+      {formatCurrency(amounts.USD)}
     </div>
   );
 };
@@ -208,34 +193,23 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
   const getTripCostsByCurrency = useCallback((tripId: string): CurrencyAmounts => {
     const tripCosts = costEntries.filter(cost => cost.trip_id === tripId);
     return {
-      ZAR: tripCosts
-        .filter(cost => cost.currency === 'ZAR')
-        .reduce((sum, cost) => sum + Number(cost.amount || 0), 0),
       USD: tripCosts
-        .filter(cost => (cost.currency || 'USD') === 'USD')
         .reduce((sum, cost) => sum + Number(cost.amount || 0), 0),
     };
   }, [costEntries]);
 
   // Overall Summary Stats
   const overallStats = useMemo(() => {
-    const revenueZAR = filteredTrips
-      .filter(t => t.revenue_currency === 'ZAR')
-      .reduce((sum, t) => sum + (t.base_revenue || 0), 0);
-    const revenueUSD = filteredTrips
-      .filter(t => (t.revenue_currency || 'USD') === 'USD')
+    const revenue = filteredTrips
       .reduce((sum, t) => sum + (t.base_revenue || 0), 0);
 
-    let expensesZAR = 0;
-    let expensesUSD = 0;
+    let expenses = 0;
     filteredTrips.forEach(t => {
       const costs = getTripCostsByCurrency(t.id);
-      expensesZAR += costs.ZAR;
-      expensesUSD += costs.USD;
+      expenses += costs.USD;
     });
 
-    const profitZAR = revenueZAR - expensesZAR;
-    const profitUSD = revenueUSD - expensesUSD;
+    const profit = revenue - expenses;
     const totalKm = filteredTrips.reduce((sum, t) => sum + (t.distance_km || 0), 0);
     const completedTrips = filteredTrips.filter(t => t.status === 'completed').length;
 
@@ -243,11 +217,11 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
       totalTrips: filteredTrips.length,
       completedTrips,
       activeTrips: filteredTrips.length - completedTrips,
-      revenue: { ZAR: revenueZAR, USD: revenueUSD },
-      expenses: { ZAR: expensesZAR, USD: expensesUSD },
-      profit: { ZAR: profitZAR, USD: profitUSD },
+      revenue: { USD: revenue },
+      expenses: { USD: expenses },
+      profit: { USD: profit },
       totalKm,
-      hasUSD: revenueUSD > 0 || expensesUSD > 0,
+      hasUSD: revenue > 0 || expenses > 0,
     };
   }, [filteredTrips, getTripCostsByCurrency]);
 
@@ -273,21 +247,19 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         startDate: format(weekStart, 'dd MMM'),
         endDate: format(weekEnd, 'dd MMM yyyy'),
         tripCount: 0,
-        revenue: { ZAR: 0, USD: 0 },
-        expenses: { ZAR: 0, USD: 0 },
-        profit: { ZAR: 0, USD: 0 },
+        revenue: { USD: 0 },
+        expenses: { USD: 0 },
+        profit: { USD: 0 },
         totalKm: 0,
       };
 
       const tripCosts = getTripCostsByCurrency(trip.id);
-      const tripCurrency = (trip.revenue_currency || 'USD') as 'ZAR' | 'USD';
+      const tripCurrency = (trip.revenue_currency || 'USD') as string;
       const revenue = trip.base_revenue || 0;
 
       existing.tripCount += 1;
       existing.revenue[tripCurrency] += revenue;
-      existing.expenses.ZAR += tripCosts.ZAR;
       existing.expenses.USD += tripCosts.USD;
-      existing.profit.ZAR = existing.revenue.ZAR - existing.expenses.ZAR;
       existing.profit.USD = existing.revenue.USD - existing.expenses.USD;
       existing.totalKm += trip.distance_km || 0;
 
@@ -317,23 +289,21 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         tripCount: 0,
         completedTrips: 0,
         activeTrips: 0,
-        revenue: { ZAR: 0, USD: 0 },
-        expenses: { ZAR: 0, USD: 0 },
-        profit: { ZAR: 0, USD: 0 },
+        revenue: { USD: 0 },
+        expenses: { USD: 0 },
+        profit: { USD: 0 },
         totalKm: 0,
       };
 
       const tripCosts = getTripCostsByCurrency(trip.id);
-      const tripCurrency = (trip.revenue_currency || 'USD') as 'ZAR' | 'USD';
+      const tripCurrency = (trip.revenue_currency || 'USD') as string;
       const revenue = trip.base_revenue || 0;
 
       existing.tripCount += 1;
       if (trip.status === 'completed') existing.completedTrips += 1;
       else existing.activeTrips += 1;
       existing.revenue[tripCurrency] += revenue;
-      existing.expenses.ZAR += tripCosts.ZAR;
       existing.expenses.USD += tripCosts.USD;
-      existing.profit.ZAR = existing.revenue.ZAR - existing.expenses.ZAR;
       existing.profit.USD = existing.revenue.USD - existing.expenses.USD;
       existing.totalKm += trip.distance_km || 0;
 
@@ -354,29 +324,27 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         driverName,
         tripCount: 0,
         completedTrips: 0,
-        revenue: { ZAR: 0, USD: 0 },
-        expenses: { ZAR: 0, USD: 0 },
-        profit: { ZAR: 0, USD: 0 },
+        revenue: { USD: 0 },
+        expenses: { USD: 0 },
+        profit: { USD: 0 },
         totalKm: 0,
       };
 
       const tripCosts = getTripCostsByCurrency(trip.id);
-      const tripCurrency = (trip.revenue_currency || 'USD') as 'ZAR' | 'USD';
+      const tripCurrency = (trip.revenue_currency || 'USD') as string;
       const revenue = trip.base_revenue || 0;
 
       existing.tripCount += 1;
       if (trip.status === 'completed') existing.completedTrips += 1;
       existing.revenue[tripCurrency] += revenue;
-      existing.expenses.ZAR += tripCosts.ZAR;
       existing.expenses.USD += tripCosts.USD;
-      existing.profit.ZAR = existing.revenue.ZAR - existing.expenses.ZAR;
       existing.profit.USD = existing.revenue.USD - existing.expenses.USD;
       existing.totalKm += trip.distance_km || 0;
 
       driverMap.set(driverName, existing);
     });
 
-    return Array.from(driverMap.values()).sort((a, b) => (b.revenue.ZAR + b.revenue.USD) - (a.revenue.ZAR + a.revenue.USD));
+    return Array.from(driverMap.values()).sort((a, b) => b.revenue.USD - a.revenue.USD);
   }, [filteredTrips, getTripCostsByCurrency]);
 
   // Client Revenue Summary
@@ -390,24 +358,22 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         clientName,
         tripCount: 0,
         completedTrips: 0,
-        revenue: { ZAR: 0, USD: 0 },
-        expenses: { ZAR: 0, USD: 0 },
-        profit: { ZAR: 0, USD: 0 },
+        revenue: { USD: 0 },
+        expenses: { USD: 0 },
+        profit: { USD: 0 },
         totalKm: 0,
         emptyKm: 0,
         lastTripDate: '',
       };
 
       const tripCosts = getTripCostsByCurrency(trip.id);
-      const tripCurrency = (trip.revenue_currency || 'USD') as 'ZAR' | 'USD';
+      const tripCurrency = (trip.revenue_currency || 'USD') as string;
       const revenue = trip.base_revenue || 0;
 
       existing.tripCount += 1;
       if (trip.status === 'completed') existing.completedTrips += 1;
       existing.revenue[tripCurrency] += revenue;
-      existing.expenses.ZAR += tripCosts.ZAR;
       existing.expenses.USD += tripCosts.USD;
-      existing.profit.ZAR = existing.revenue.ZAR - existing.expenses.ZAR;
       existing.profit.USD = existing.revenue.USD - existing.expenses.USD;
       existing.totalKm += trip.distance_km || 0;
       existing.emptyKm += trip.empty_km || 0;
@@ -419,7 +385,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
       clientMap.set(clientName, existing);
     });
 
-    return Array.from(clientMap.values()).sort((a, b) => (b.revenue.ZAR + b.revenue.USD) - (a.revenue.ZAR + a.revenue.USD));
+    return Array.from(clientMap.values()).sort((a, b) => b.revenue.USD - a.revenue.USD);
   }, [filteredTrips, getTripCostsByCurrency]);
 
   // Route Summary
@@ -436,20 +402,18 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         origin: trip.origin,
         destination: trip.destination,
         tripCount: 0,
-        revenue: { ZAR: 0, USD: 0 },
-        expenses: { ZAR: 0, USD: 0 },
-        profit: { ZAR: 0, USD: 0 },
+        revenue: { USD: 0 },
+        expenses: { USD: 0 },
+        profit: { USD: 0 },
       };
 
       const tripCosts = getTripCostsByCurrency(trip.id);
-      const tripCurrency = (trip.revenue_currency || 'USD') as 'ZAR' | 'USD';
+      const tripCurrency = (trip.revenue_currency || 'USD') as string;
       const revenue = trip.base_revenue || 0;
 
       existing.tripCount += 1;
       existing.revenue[tripCurrency] += revenue;
-      existing.expenses.ZAR += tripCosts.ZAR;
       existing.expenses.USD += tripCosts.USD;
-      existing.profit.ZAR = existing.revenue.ZAR - existing.expenses.ZAR;
       existing.profit.USD = existing.revenue.USD - existing.expenses.USD;
 
       routeMap.set(routeKey, existing);
@@ -470,28 +434,26 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
       const existing = truckMap.get(fleetNumber) || {
         fleetNumber,
         tripCount: 0,
-        revenue: { ZAR: 0, USD: 0 },
-        expenses: { ZAR: 0, USD: 0 },
-        profit: { ZAR: 0, USD: 0 },
+        revenue: { USD: 0 },
+        expenses: { USD: 0 },
+        profit: { USD: 0 },
         totalKm: 0,
       };
 
       const tripCosts = getTripCostsByCurrency(trip.id);
-      const tripCurrency = (trip.revenue_currency || 'USD') as 'ZAR' | 'USD';
+      const tripCurrency = (trip.revenue_currency || 'USD') as string;
       const revenue = trip.base_revenue || 0;
 
       existing.tripCount += 1;
       existing.revenue[tripCurrency] += revenue;
-      existing.expenses.ZAR += tripCosts.ZAR;
       existing.expenses.USD += tripCosts.USD;
-      existing.profit.ZAR = existing.revenue.ZAR - existing.expenses.ZAR;
       existing.profit.USD = existing.revenue.USD - existing.expenses.USD;
       existing.totalKm += trip.distance_km || 0;
 
       truckMap.set(fleetNumber, existing);
     });
 
-    return Array.from(truckMap.values()).sort((a, b) => (b.revenue.ZAR + b.revenue.USD) - (a.revenue.ZAR + a.revenue.USD));
+    return Array.from(truckMap.values()).sort((a, b) => b.revenue.USD - a.revenue.USD);
   }, [filteredTrips, getTripCostsByCurrency]);
 
   // Expense summaries - group cost entries by category for filtered trips
@@ -503,13 +465,13 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
     const categoryMap = new Map<string, { category: string; count: number; amounts: CurrencyAmounts }>();
     filteredCosts.forEach(cost => {
       const cat = cost.category || 'Uncategorized';
-      const existing = categoryMap.get(cat) || { category: cat, count: 0, amounts: { ZAR: 0, USD: 0 } };
+      const existing = categoryMap.get(cat) || { category: cat, count: 0, amounts: { USD: 0 } };
       existing.count += 1;
-      const currency = (cost.currency || 'USD') as 'ZAR' | 'USD';
+      const currency = (cost.currency || 'USD') as string;
       existing.amounts[currency] += Number(cost.amount || 0);
       categoryMap.set(cat, existing);
     });
-    const byCategory = Array.from(categoryMap.values()).sort((a, b) => (b.amounts.ZAR + b.amounts.USD) - (a.amounts.ZAR + a.amounts.USD));
+    const byCategory = Array.from(categoryMap.values()).sort((a, b) => b.amounts.USD - a.amounts.USD);
 
     // By sub-category (within each category)
     const subCatMap = new Map<string, { category: string; subCategory: string; count: number; amounts: CurrencyAmounts }>();
@@ -517,30 +479,30 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
       const cat = cost.category || 'Uncategorized';
       const sub = cost.sub_category || 'General';
       const key = `${cat}||${sub}`;
-      const existing = subCatMap.get(key) || { category: cat, subCategory: sub, count: 0, amounts: { ZAR: 0, USD: 0 } };
+      const existing = subCatMap.get(key) || { category: cat, subCategory: sub, count: 0, amounts: { USD: 0 } };
       existing.count += 1;
-      const currency = (cost.currency || 'USD') as 'ZAR' | 'USD';
+      const currency = (cost.currency || 'USD') as string;
       existing.amounts[currency] += Number(cost.amount || 0);
       subCatMap.set(key, existing);
     });
-    const bySubCategory = Array.from(subCatMap.values()).sort((a, b) => (b.amounts.ZAR + b.amounts.USD) - (a.amounts.ZAR + a.amounts.USD));
+    const bySubCategory = Array.from(subCatMap.values()).sort((a, b) => b.amounts.USD - a.amounts.USD);
 
     // By vehicle
     const vehicleMap = new Map<string, { vehicle: string; count: number; amounts: CurrencyAmounts }>();
     filteredCosts.forEach(cost => {
       const vehicle = cost.vehicle_identifier || 'Unknown';
-      const existing = vehicleMap.get(vehicle) || { vehicle, count: 0, amounts: { ZAR: 0, USD: 0 } };
+      const existing = vehicleMap.get(vehicle) || { vehicle, count: 0, amounts: { USD: 0 } };
       existing.count += 1;
-      const currency = (cost.currency || 'USD') as 'ZAR' | 'USD';
+      const currency = (cost.currency || 'USD') as string;
       existing.amounts[currency] += Number(cost.amount || 0);
       vehicleMap.set(vehicle, existing);
     });
-    const byVehicle = Array.from(vehicleMap.values()).sort((a, b) => (b.amounts.ZAR + b.amounts.USD) - (a.amounts.ZAR + a.amounts.USD));
+    const byVehicle = Array.from(vehicleMap.values()).sort((a, b) => b.amounts.USD - a.amounts.USD);
 
     // Totals
-    const totals: CurrencyAmounts = { ZAR: 0, USD: 0 };
+    const totals: CurrencyAmounts = { USD: 0 };
     filteredCosts.forEach(cost => {
-      const currency = (cost.currency || 'USD') as 'ZAR' | 'USD';
+      const currency = (cost.currency || 'USD') as string;
       totals[currency] += Number(cost.amount || 0);
     });
 
@@ -598,8 +560,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
       };
 
       // Calculate margins
-      const marginZAR = overallStats.revenue.ZAR > 0 ? ((overallStats.profit.ZAR / overallStats.revenue.ZAR) * 100).toFixed(2) + '%' : '0%';
-      const marginUSD = overallStats.revenue.USD > 0 ? ((overallStats.profit.USD / overallStats.revenue.USD) * 100).toFixed(2) + '%' : '0%';
+      const margin = overallStats.revenue.USD > 0 ? ((overallStats.profit.USD / overallStats.revenue.USD) * 100).toFixed(2) + '%' : '0%';
 
       // ═══ SUMMARY ═══
       const sWs = wb.addWorksheet('Summary');
@@ -620,14 +581,10 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
       const sRows: [string, string | number][] = [
         ['Total Trips', overallStats.totalTrips],
         ['Total Kilometers', overallStats.totalKm],
-        ['Revenue (ZAR)', overallStats.revenue.ZAR],
-        ['Expenses (ZAR)', overallStats.expenses.ZAR],
-        ['Net Profit (ZAR)', overallStats.profit.ZAR],
-        ['Profit Margin (ZAR)', marginZAR],
         ['Revenue (USD)', overallStats.revenue.USD],
         ['Expenses (USD)', overallStats.expenses.USD],
         ['Net Profit (USD)', overallStats.profit.USD],
-        ['Profit Margin (USD)', marginUSD],
+        ['Profit Margin (USD)', margin],
       ];
       sRows.forEach((row, i) => {
         const r = sWs.getRow(5 + i);
@@ -643,90 +600,90 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
       // ═══ BY CLIENT ═══
       const cWs = wb.addWorksheet('By Client');
-      cWs.getRow(1).values = ['Client', 'Trips', 'Revenue (ZAR)', 'Revenue (USD)', 'Expenses (ZAR)', 'Expenses (USD)', 'Profit (ZAR)', 'Profit (USD)'];
+      cWs.getRow(1).values = ['Client', 'Trips', 'Revenue (USD)', 'Expenses (USD)', 'Profit (USD)'];
       styleHeader(cWs, 1);
       clientSummaries.forEach((c, i) => {
-        cWs.getRow(i + 2).values = [c.clientName, c.tripCount, c.revenue.ZAR, c.revenue.USD, c.expenses.ZAR, c.expenses.USD, c.profit.ZAR, c.profit.USD];
+        cWs.getRow(i + 2).values = [c.clientName, c.tripCount, c.revenue.USD, c.expenses.USD, c.profit.USD];
       });
-      styleData(cWs, 2, clientSummaries.length, [3,4,5,6,7,8]);
+      styleData(cWs, 2, clientSummaries.length, [3, 4, 5, 6, 7, 8]);
       addTotalsRow(cWs, clientSummaries.length + 2, [
-        'TOTAL', clientSummaries.reduce((s,c) => s+c.tripCount, 0),
-        clientSummaries.reduce((s,c) => s+c.revenue.ZAR, 0), clientSummaries.reduce((s,c) => s+c.revenue.USD, 0),
-        clientSummaries.reduce((s,c) => s+c.expenses.ZAR, 0), clientSummaries.reduce((s,c) => s+c.expenses.USD, 0),
-        clientSummaries.reduce((s,c) => s+c.profit.ZAR, 0), clientSummaries.reduce((s,c) => s+c.profit.USD, 0),
-      ], [3,4,5,6,7,8]);
+        'TOTAL', clientSummaries.reduce((s, c) => s + c.tripCount, 0),
+        clientSummaries.reduce((s, c) => s + c.revenue.USD, 0), clientSummaries.reduce((s, c) => s + c.revenue.USD, 0),
+        clientSummaries.reduce((s, c) => s + c.expenses.USD, 0), clientSummaries.reduce((s, c) => s + c.expenses.USD, 0),
+        clientSummaries.reduce((s, c) => s + c.profit.USD, 0), clientSummaries.reduce((s, c) => s + c.profit.USD, 0),
+      ], [3, 4, 5, 6, 7, 8]);
       cWs.autoFilter = { from: 'A1', to: `H${clientSummaries.length + 1}` };
       cWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(cWs);
 
       // ═══ BY DRIVER ═══
       const dWs = wb.addWorksheet('By Driver');
-      dWs.getRow(1).values = ['Driver', 'Trips', 'KM', 'Revenue (ZAR)', 'Revenue (USD)', 'Expenses (ZAR)', 'Expenses (USD)', 'Profit (ZAR)', 'Profit (USD)'];
+      dWs.getRow(1).values = ['Driver', 'Trips', 'KM', 'Revenue (USD)', 'Expenses (USD)', 'Profit (USD)'];
       styleHeader(dWs, 1);
       driverSummaries.forEach((d, i) => {
-        dWs.getRow(i + 2).values = [d.driverName, d.tripCount, d.totalKm, d.revenue.ZAR, d.revenue.USD, d.expenses.ZAR, d.expenses.USD, d.profit.ZAR, d.profit.USD];
+        dWs.getRow(i + 2).values = [d.driverName, d.tripCount, d.totalKm, d.revenue.USD, d.expenses.USD, d.profit.USD];
       });
-      styleData(dWs, 2, driverSummaries.length, [4,5,6,7,8,9]);
+      styleData(dWs, 2, driverSummaries.length, [4, 5, 6, 7, 8, 9]);
       addTotalsRow(dWs, driverSummaries.length + 2, [
-        'TOTAL', driverSummaries.reduce((s,d) => s+d.tripCount, 0), driverSummaries.reduce((s,d) => s+d.totalKm, 0),
-        driverSummaries.reduce((s,d) => s+d.revenue.ZAR, 0), driverSummaries.reduce((s,d) => s+d.revenue.USD, 0),
-        driverSummaries.reduce((s,d) => s+d.expenses.ZAR, 0), driverSummaries.reduce((s,d) => s+d.expenses.USD, 0),
-        driverSummaries.reduce((s,d) => s+d.profit.ZAR, 0), driverSummaries.reduce((s,d) => s+d.profit.USD, 0),
-      ], [4,5,6,7,8,9]);
+        'TOTAL', driverSummaries.reduce((s, d) => s + d.tripCount, 0), driverSummaries.reduce((s, d) => s + d.totalKm, 0),
+        driverSummaries.reduce((s, d) => s + d.revenue.USD, 0), driverSummaries.reduce((s, d) => s + d.revenue.USD, 0),
+        driverSummaries.reduce((s, d) => s + d.expenses.USD, 0), driverSummaries.reduce((s, d) => s + d.expenses.USD, 0),
+        driverSummaries.reduce((s, d) => s + d.profit.USD, 0), driverSummaries.reduce((s, d) => s + d.profit.USD, 0),
+      ], [4, 5, 6, 7, 8, 9]);
       dWs.autoFilter = { from: 'A1', to: `I${driverSummaries.length + 1}` };
       dWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(dWs);
 
       // ═══ BY TRUCK ═══
       const tWs = wb.addWorksheet('By Truck');
-      tWs.getRow(1).values = ['Truck', 'Trips', 'KM', 'Revenue (ZAR)', 'Revenue (USD)', 'Expenses (ZAR)', 'Expenses (USD)', 'Profit (ZAR)', 'Profit (USD)'];
+      tWs.getRow(1).values = ['Truck', 'Trips', 'KM', 'Revenue (USD)', 'Expenses (USD)', 'Profit (USD)'];
       styleHeader(tWs, 1);
       truckSummaries.forEach((t, i) => {
-        tWs.getRow(i + 2).values = [t.fleetNumber, t.tripCount, t.totalKm, t.revenue.ZAR, t.revenue.USD, t.expenses.ZAR, t.expenses.USD, t.profit.ZAR, t.profit.USD];
+        tWs.getRow(i + 2).values = [t.fleetNumber, t.tripCount, t.totalKm, t.revenue.USD, t.expenses.USD, t.profit.USD];
       });
-      styleData(tWs, 2, truckSummaries.length, [4,5,6,7,8,9]);
+      styleData(tWs, 2, truckSummaries.length, [4, 5, 6, 7, 8, 9]);
       addTotalsRow(tWs, truckSummaries.length + 2, [
-        'TOTAL', truckSummaries.reduce((s,t) => s+t.tripCount, 0), truckSummaries.reduce((s,t) => s+t.totalKm, 0),
-        truckSummaries.reduce((s,t) => s+t.revenue.ZAR, 0), truckSummaries.reduce((s,t) => s+t.revenue.USD, 0),
-        truckSummaries.reduce((s,t) => s+t.expenses.ZAR, 0), truckSummaries.reduce((s,t) => s+t.expenses.USD, 0),
-        truckSummaries.reduce((s,t) => s+t.profit.ZAR, 0), truckSummaries.reduce((s,t) => s+t.profit.USD, 0),
-      ], [4,5,6,7,8,9]);
+        'TOTAL', truckSummaries.reduce((s, t) => s + t.tripCount, 0), truckSummaries.reduce((s, t) => s + t.totalKm, 0),
+        truckSummaries.reduce((s, t) => s + t.revenue.USD, 0), truckSummaries.reduce((s, t) => s + t.revenue.USD, 0),
+        truckSummaries.reduce((s, t) => s + t.expenses.USD, 0), truckSummaries.reduce((s, t) => s + t.expenses.USD, 0),
+        truckSummaries.reduce((s, t) => s + t.profit.USD, 0), truckSummaries.reduce((s, t) => s + t.profit.USD, 0),
+      ], [4, 5, 6, 7, 8, 9]);
       tWs.autoFilter = { from: 'A1', to: `I${truckSummaries.length + 1}` };
       tWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(tWs);
 
       // ═══ WEEKLY ═══
       const wWs = wb.addWorksheet('Weekly');
-      wWs.getRow(1).values = ['Week', 'Year', 'Trips', 'KM', 'Revenue (ZAR)', 'Revenue (USD)', 'Expenses (ZAR)', 'Expenses (USD)', 'Profit (ZAR)', 'Profit (USD)'];
+      wWs.getRow(1).values = ['Week', 'Year', 'Trips', 'KM', 'Revenue (USD)', 'Expenses (USD)', 'Profit (USD)'];
       styleHeader(wWs, 1);
       weeklySummaries.forEach((w, i) => {
-        wWs.getRow(i + 2).values = [w.weekNumber, w.year, w.tripCount, w.totalKm, w.revenue.ZAR, w.revenue.USD, w.expenses.ZAR, w.expenses.USD, w.profit.ZAR, w.profit.USD];
+        wWs.getRow(i + 2).values = [w.weekNumber, w.year, w.tripCount, w.totalKm, w.revenue.USD, w.expenses.USD, w.profit.USD];
       });
-      styleData(wWs, 2, weeklySummaries.length, [5,6,7,8,9,10]);
+      styleData(wWs, 2, weeklySummaries.length, [5, 6, 7, 8, 9, 10]);
       wWs.autoFilter = { from: 'A1', to: `J${weeklySummaries.length + 1}` };
       wWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(wWs);
 
       // ═══ MONTHLY ═══
       const mWs = wb.addWorksheet('Monthly');
-      mWs.getRow(1).values = ['Month', 'Year', 'Trips', 'KM', 'Revenue (ZAR)', 'Revenue (USD)', 'Expenses (ZAR)', 'Expenses (USD)', 'Profit (ZAR)', 'Profit (USD)'];
+      mWs.getRow(1).values = ['Month', 'Year', 'Trips', 'KM', 'Revenue (USD)', 'Expenses (USD)', 'Profit (USD)'];
       styleHeader(mWs, 1);
       monthlySummaries.forEach((m, i) => {
-        mWs.getRow(i + 2).values = [m.monthName, m.year, m.tripCount, m.totalKm, m.revenue.ZAR, m.revenue.USD, m.expenses.ZAR, m.expenses.USD, m.profit.ZAR, m.profit.USD];
+        mWs.getRow(i + 2).values = [m.monthName, m.year, m.tripCount, m.totalKm, m.revenue.USD, m.expenses.USD, m.profit.USD];
       });
-      styleData(mWs, 2, monthlySummaries.length, [5,6,7,8,9,10]);
+      styleData(mWs, 2, monthlySummaries.length, [5, 6, 7, 8, 9, 10]);
       mWs.autoFilter = { from: 'A1', to: `J${monthlySummaries.length + 1}` };
       mWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(mWs);
 
       // ═══ BY ROUTE ═══
       const rWs = wb.addWorksheet('By Route');
-      rWs.getRow(1).values = ['Route', 'Origin', 'Destination', 'Trips', 'Revenue (ZAR)', 'Revenue (USD)', 'Expenses (ZAR)', 'Expenses (USD)', 'Profit (ZAR)', 'Profit (USD)'];
+      rWs.getRow(1).values = ['Route', 'Origin', 'Destination', 'Trips', 'Revenue (USD)', 'Expenses (USD)', 'Profit (USD)'];
       styleHeader(rWs, 1);
       routeSummaries.forEach((r, i) => {
-        rWs.getRow(i + 2).values = [r.route, r.origin, r.destination, r.tripCount, r.revenue.ZAR, r.revenue.USD, r.expenses.ZAR, r.expenses.USD, r.profit.ZAR, r.profit.USD];
+        rWs.getRow(i + 2).values = [r.route, r.origin, r.destination, r.tripCount, r.revenue.USD, r.expenses.USD, r.profit.USD];
       });
-      styleData(rWs, 2, routeSummaries.length, [5,6,7,8,9,10]);
+      styleData(rWs, 2, routeSummaries.length, [5, 6, 7, 8, 9, 10]);
       rWs.autoFilter = { from: 'A1', to: `J${routeSummaries.length + 1}` };
       rWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(rWs);
@@ -799,7 +756,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
       styleH(sWs, 4);
       const sRows: [string, number][] = [
         ['Total Entries', expenseSummaries.totalEntries],
-        ['Total (ZAR)', expenseSummaries.totals.ZAR],
         ['Total (USD)', expenseSummaries.totals.USD],
       ];
       sRows.forEach((row, i) => {
@@ -815,34 +771,34 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
       // By Category
       const catWs = wb.addWorksheet('By Category');
-      catWs.getRow(1).values = ['Category', 'Entries', 'Amount (ZAR)', 'Amount (USD)'];
+      catWs.getRow(1).values = ['Category', 'Entries', 'Amount (USD)'];
       styleH(catWs, 1);
       expenseSummaries.byCategory.forEach((c, i) => {
-        catWs.getRow(i + 2).values = [c.category, c.count, c.amounts.ZAR, c.amounts.USD];
+        catWs.getRow(i + 2).values = [c.category, c.count, c.amounts.USD];
       });
-      styleD(catWs, 2, expenseSummaries.byCategory.length, [3,4]);
+      styleD(catWs, 2, expenseSummaries.byCategory.length, [3, 4]);
       catWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(catWs);
 
       // By Sub-Category
       const subWs = wb.addWorksheet('By Sub-Category');
-      subWs.getRow(1).values = ['Category', 'Sub-Category', 'Entries', 'Amount (ZAR)', 'Amount (USD)'];
+      subWs.getRow(1).values = ['Category', 'Sub-Category', 'Entries', 'Amount (USD)'];
       styleH(subWs, 1);
       expenseSummaries.bySubCategory.forEach((s, i) => {
-        subWs.getRow(i + 2).values = [s.category, s.subCategory, s.count, s.amounts.ZAR, s.amounts.USD];
+        subWs.getRow(i + 2).values = [s.category, s.subCategory, s.count, s.amounts.USD];
       });
-      styleD(subWs, 2, expenseSummaries.bySubCategory.length, [4,5]);
+      styleD(subWs, 2, expenseSummaries.bySubCategory.length, [4, 5]);
       subWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(subWs);
 
       // By Vehicle
       const vWs = wb.addWorksheet('By Vehicle');
-      vWs.getRow(1).values = ['Vehicle', 'Entries', 'Amount (ZAR)', 'Amount (USD)'];
+      vWs.getRow(1).values = ['Vehicle', 'Entries', 'Amount (USD)'];
       styleH(vWs, 1);
       expenseSummaries.byVehicle.forEach((v, i) => {
-        vWs.getRow(i + 2).values = [v.vehicle, v.count, v.amounts.ZAR, v.amounts.USD];
+        vWs.getRow(i + 2).values = [v.vehicle, v.count, v.amounts.USD];
       });
-      styleD(vWs, 2, expenseSummaries.byVehicle.length, [3,4]);
+      styleD(vWs, 2, expenseSummaries.byVehicle.length, [3, 4]);
       vWs.views = [{ state: 'frozen', ySplit: 1 }];
       autoW(vWs);
 
@@ -905,8 +861,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         startY: 43,
         head: [['Currency', 'Total Expenses']],
         body: [
-          ['ZAR', formatCurrency(expenseSummaries.totals.ZAR, 'ZAR')],
-          ['USD', formatCurrency(expenseSummaries.totals.USD, 'USD')],
+          ['USD', formatCurrency(expenseSummaries.totals.USD)],
         ],
         theme: 'striped',
         headStyles: { fillColor: [59, 130, 246], fontSize: 9 },
@@ -923,12 +878,11 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
       autoTable(doc, {
         startY: catStartY + 3,
-        head: [['Category', 'Entries', 'Amount (ZAR)', 'Amount (USD)']],
+        head: [['Category', 'Entries', 'Amount (USD)']],
         body: expenseSummaries.byCategory.map(c => [
           c.category,
           c.count.toString(),
-          formatCurrency(c.amounts.ZAR, 'ZAR'),
-          formatCurrency(c.amounts.USD, 'USD'),
+          formatCurrency(c.amounts.USD),
         ]),
         theme: 'striped',
         headStyles: { fillColor: [59, 130, 246], fontSize: 9 },
@@ -944,12 +898,11 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
       autoTable(doc, {
         startY: vehStartY + 3,
-        head: [['Vehicle', 'Entries', 'Amount (ZAR)', 'Amount (USD)']],
+        head: [['Vehicle', 'Entries', 'Amount (USD)']],
         body: expenseSummaries.byVehicle.map(v => [
           v.vehicle,
           v.count.toString(),
-          formatCurrency(v.amounts.ZAR, 'ZAR'),
-          formatCurrency(v.amounts.USD, 'USD'),
+          formatCurrency(v.amounts.USD),
         ]),
         theme: 'striped',
         headStyles: { fillColor: [59, 130, 246], fontSize: 9 },
@@ -1105,10 +1058,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Revenue</p>
-              <p className="text-lg font-bold text-emerald-600 tabular-nums">{formatCurrency(overallStats.revenue.ZAR, 'ZAR')}</p>
-              {overallStats.revenue.USD > 0 && (
-                <p className="text-sm font-semibold text-emerald-600/70 tabular-nums">{formatCurrency(overallStats.revenue.USD, 'USD')}</p>
-              )}
+              <p className="text-lg font-bold text-emerald-600 tabular-nums">{formatCurrency(overallStats.revenue.USD)}</p>
             </div>
           </div>
         </div>
@@ -1120,10 +1070,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Expenses</p>
-              <p className="text-lg font-bold text-rose-600 tabular-nums">{formatCurrency(overallStats.expenses.ZAR, 'ZAR')}</p>
-              {overallStats.expenses.USD > 0 && (
-                <p className="text-sm font-semibold text-rose-600/70 tabular-nums">{formatCurrency(overallStats.expenses.USD, 'USD')}</p>
-              )}
+              <p className="text-lg font-bold text-rose-600 tabular-nums">{formatCurrency(overallStats.expenses.USD)}</p>
             </div>
           </div>
         </div>
@@ -1132,26 +1079,20 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
           <div className="flex items-center gap-3">
             <div className={cn(
               "h-10 w-10 rounded-xl flex items-center justify-center",
-              overallStats.profit.ZAR >= 0 ? "bg-emerald-500/10" : "bg-orange-500/10"
+              overallStats.profit.USD >= 0 ? "bg-emerald-500/10" : "bg-orange-500/10"
             )}>
-              {overallStats.profit.ZAR >= 0 ? (
+              {overallStats.profit.USD >= 0 ? (
                 <TrendingUp className="h-5 w-5 text-emerald-600" />
               ) : (
                 <TrendingDown className="h-5 w-5 text-orange-600" />
               )}
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Net Profit (ZAR)</p>
+              <p className="text-xs text-muted-foreground">Net Profit (USD)</p>
               <p className={cn(
                 "text-lg font-bold tabular-nums",
-                overallStats.profit.ZAR >= 0 ? "text-emerald-600" : "text-orange-600"
-              )}>{formatCurrency(overallStats.profit.ZAR, 'ZAR')}</p>
-              {overallStats.hasUSD && (
-                <p className={cn(
-                  "text-sm font-semibold tabular-nums",
-                  overallStats.profit.USD >= 0 ? "text-emerald-600/70" : "text-orange-600/70"
-                )}>{formatCurrency(overallStats.profit.USD, 'USD')}</p>
-              )}
+                overallStats.profit.USD >= 0 ? "text-emerald-600" : "text-orange-600"
+              )}>{formatCurrency(overallStats.profit.USD)}</p>
             </div>
           </div>
         </div>
@@ -1233,11 +1174,11 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                             </div>
                           </div>
                         </div>
-                        {month.revenue.ZAR > 0 && (
+                        {month.revenue.USD > 0 && (
                           <div className="mt-3">
                             <Progress
-                              value={Math.min(100, Math.max(0, (month.profit.ZAR / month.revenue.ZAR) * 100))}
-                              className={cn("h-2", month.profit.ZAR >= 0 ? "[&>div]:bg-emerald-500" : "[&>div]:bg-orange-500")}
+                              value={Math.min(100, Math.max(0, (month.profit.USD / month.revenue.USD) * 100))}
+                              className={cn("h-2", month.profit.USD >= 0 ? "[&>div]:bg-emerald-500" : "[&>div]:bg-orange-500")}
                             />
                           </div>
                         )}
@@ -1391,12 +1332,12 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                       const totals = clients.reduce(
                         (acc, c) => ({
                           trips: acc.trips + c.tripCount,
-                          revenueZAR: acc.revenueZAR + c.revenue.ZAR,
+                          revenue: acc.revenue + c.revenue.USD,
                           revenueUSD: acc.revenueUSD + c.revenue.USD,
                           totalKm: acc.totalKm + c.totalKm,
                           emptyKm: acc.emptyKm + c.emptyKm,
                         }),
-                        { trips: 0, revenueZAR: 0, revenueUSD: 0, totalKm: 0, emptyKm: 0 }
+                        { trips: 0, revenue: 0, revenueUSD: 0, totalKm: 0, emptyKm: 0 }
                       );
                       return totals;
                     };
@@ -1412,9 +1353,9 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                           <div className="flex items-center gap-4 mt-1 sm:mt-0 text-xs">
                             <span className="font-medium text-green-700">
                               Revenue: {summary.revenueUSD > 0 ? `$${summary.revenueUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ''}
-                              {summary.revenueUSD > 0 && summary.revenueZAR > 0 ? ' + ' : ''}
-                              {summary.revenueZAR > 0 ? `R${summary.revenueZAR.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ''}
-                              {summary.revenueUSD === 0 && summary.revenueZAR === 0 ? '$0.00' : ''}
+                              {summary.revenueUSD > 0 && summary.revenue > 0 ? ' + ' : ''}
+                              {summary.revenue > 0 ? `R${summary.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ''}
+                              {summary.revenueUSD === 0 && summary.revenue === 0 ? '$0.00' : ''}
                             </span>
                             <span className="text-gray-600">{summary.totalKm.toLocaleString()} km</span>
                             {summary.emptyKm > 0 && (
@@ -1583,14 +1524,10 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
           </div>
 
           {/* Totals summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm">
-              <p className="text-xs text-muted-foreground mb-1">Total Expenses (ZAR)</p>
-              <p className="text-xl font-bold tabular-nums">{formatCurrency(expenseSummaries.totals.ZAR, 'ZAR')}</p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm">
               <p className="text-xs text-muted-foreground mb-1">Total Expenses (USD)</p>
-              <p className="text-xl font-bold tabular-nums">{formatCurrency(expenseSummaries.totals.USD, 'USD')}</p>
+              <p className="text-xl font-bold tabular-nums">{formatCurrency(expenseSummaries.totals.USD)}</p>
             </div>
             <div className="p-4 rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm">
               <p className="text-xs text-muted-foreground mb-1">Expense Entries</p>
@@ -1611,8 +1548,8 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
               {expenseSummaries.byCategory.length > 0 ? (
                 <div className="space-y-3">
                   {expenseSummaries.byCategory.map((cat) => {
-                    const totalAll = expenseSummaries.totals.ZAR + expenseSummaries.totals.USD;
-                    const catTotal = cat.amounts.ZAR + cat.amounts.USD;
+                    const totalAll = expenseSummaries.totals.USD;
+                    const catTotal = cat.amounts.USD;
                     const pct = totalAll > 0 ? (catTotal / totalAll) * 100 : 0;
                     return (
                       <div key={cat.category} className="p-4 rounded-xl border border-border/50 bg-card/60 hover:bg-accent/50 transition-colors">
@@ -1626,15 +1563,9 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                               <p className="text-sm text-muted-foreground">{cat.count} entries • {pct.toFixed(1)}% of total</p>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 sm:gap-6">
-                            <div className="text-right">
-                              <p className="text-xs text-muted-foreground">ZAR</p>
-                              <p className="font-semibold tabular-nums">{formatCurrency(cat.amounts.ZAR, 'ZAR')}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-muted-foreground">USD</p>
-                              <p className="font-semibold tabular-nums">{formatCurrency(cat.amounts.USD, 'USD')}</p>
-                            </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">USD</p>
+                            <p className="font-semibold tabular-nums">{formatCurrency(cat.amounts.USD)}</p>
                           </div>
                         </div>
                         <div className="mt-3">
@@ -1666,8 +1597,8 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
               {expenseSummaries.byVehicle.length > 0 ? (
                 <div className="space-y-3">
                   {expenseSummaries.byVehicle.map((veh) => {
-                    const totalAll = expenseSummaries.totals.ZAR + expenseSummaries.totals.USD;
-                    const vehTotal = veh.amounts.ZAR + veh.amounts.USD;
+                    const totalAll = expenseSummaries.totals.USD;
+                    const vehTotal = veh.amounts.USD;
                     const pct = totalAll > 0 ? (vehTotal / totalAll) * 100 : 0;
                     return (
                       <div key={veh.vehicle} className="p-4 rounded-xl border border-border/50 bg-card/60 hover:bg-accent/50 transition-colors">
@@ -1681,15 +1612,9 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                               <p className="text-sm text-muted-foreground">{veh.count} entries • {pct.toFixed(1)}% of total</p>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 sm:gap-6">
-                            <div className="text-right">
-                              <p className="text-xs text-muted-foreground">ZAR</p>
-                              <p className="font-semibold tabular-nums">{formatCurrency(veh.amounts.ZAR, 'ZAR')}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-muted-foreground">USD</p>
-                              <p className="font-semibold tabular-nums">{formatCurrency(veh.amounts.USD, 'USD')}</p>
-                            </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">USD</p>
+                            <p className="font-semibold tabular-nums">{formatCurrency(veh.amounts.USD)}</p>
                           </div>
                         </div>
                         <div className="mt-3">
@@ -1726,7 +1651,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                         <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Category</th>
                         <th className="text-left py-2.5 px-3 font-medium text-muted-foreground">Sub-Category</th>
                         <th className="text-center py-2.5 px-3 font-medium text-muted-foreground">Entries</th>
-                        <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">ZAR</th>
+                        <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">USD</th>
                         <th className="text-right py-2.5 px-3 font-medium text-muted-foreground">USD</th>
                       </tr>
                     </thead>
@@ -1736,7 +1661,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                           <td className="py-2.5 px-3 font-medium">{row.category}</td>
                           <td className="py-2.5 px-3">{row.subCategory}</td>
                           <td className="py-2.5 px-3 text-center tabular-nums">{row.count}</td>
-                          <td className="py-2.5 px-3 text-right tabular-nums">{formatCurrency(row.amounts.ZAR, 'ZAR')}</td>
+                          <td className="py-2.5 px-3 text-right tabular-nums">{formatCurrency(row.amounts.USD)}</td>
                           <td className="py-2.5 px-3 text-right tabular-nums">{formatCurrency(row.amounts.USD, 'USD')}</td>
                         </tr>
                       ))}
@@ -1745,7 +1670,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                       <tr className="border-t-2 border-border/60 font-semibold">
                         <td className="py-2.5 px-3" colSpan={2}>Total</td>
                         <td className="py-2.5 px-3 text-center tabular-nums">{expenseSummaries.totalEntries}</td>
-                        <td className="py-2.5 px-3 text-right tabular-nums">{formatCurrency(expenseSummaries.totals.ZAR, 'ZAR')}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums">{formatCurrency(expenseSummaries.totals.USD)}</td>
                         <td className="py-2.5 px-3 text-right tabular-nums">{formatCurrency(expenseSummaries.totals.USD, 'USD')}</td>
                       </tr>
                     </tfoot>

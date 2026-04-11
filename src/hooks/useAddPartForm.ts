@@ -338,8 +338,7 @@ export function useAddPartForm(
           return [];
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const vehicleData = currentJobCard.vehicles as any;
+        const vehicleData = currentJobCard.vehicles as { registration_number: string; fleet_number: string } | { registration_number: string; fleet_number: string }[] | null;
         if (vehicleData) {
           const vehicle = Array.isArray(vehicleData)
             ? vehicleData[0]

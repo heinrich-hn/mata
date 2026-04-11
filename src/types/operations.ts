@@ -24,7 +24,7 @@ export interface Trip {
   departure_date?: string;
   arrival_date?: string;
   base_revenue?: number;
-  revenue_currency?: 'ZAR' | 'USD';
+  revenue_currency?: string;
   revenue_type?: 'per_load' | 'per_km';
   rate_per_km?: number;
   additional_revenue?: number;
@@ -41,7 +41,7 @@ export interface Trip {
   invoice_date?: string;
   invoice_due_date?: string;
   invoice_amount?: number;
-  invoice_currency?: 'ZAR' | 'USD';
+  invoice_currency?: string;
   invoice_terms_days?: number;
   follow_up_date?: string;
   follow_up_notes?: string;
@@ -185,6 +185,12 @@ export interface DieselConsumptionRecord {
   requires_debrief?: boolean;
   debrief_trigger_reason?: string;
   cost_entry_ids?: string[];
+
+  // Reefer-specific fields (populated for reefer fleet records)
+  operating_hours?: number | null;
+  previous_operating_hours?: number | null;
+  hours_operated?: number | null;
+  litres_per_hour?: number | null;
 
   created_at?: string;
   updated_at?: string;
@@ -330,7 +336,7 @@ export interface CustomerPerformance {
   customerName: string;
   totalTrips: number;
   totalRevenue: number;
-  currency: 'ZAR' | 'USD';
+  currency: string;
   averagePaymentDays: number;
   paymentScore: number;
   lastTripDate: string;

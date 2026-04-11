@@ -455,7 +455,6 @@ const CompletedTripEditModal = ({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="USD">USD (US Dollar)</SelectItem>
-                    <SelectItem value="ZAR">ZAR (South African Rand)</SelectItem>
                     <SelectItem value="EUR">EUR (Euro)</SelectItem>
                     <SelectItem value="GBP">GBP (British Pound)</SelectItem>
                     <SelectItem value="BWP">BWP (Botswana Pula)</SelectItem>

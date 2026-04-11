@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, ExternalLink, ListPlus, Send, Trash2 } from "lucide-react";
@@ -78,8 +79,7 @@ const JobCardFollowUpsPopover = ({ jobCardId, jobNumber, followUpCount }: JobCar
         enabled: open,
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parseComments = (raw: any): FollowUpComment[] | null => {
+    const parseComments = (raw: unknown): FollowUpComment[] | null => {
         if (!raw) return null;
         if (Array.isArray(raw)) return raw as FollowUpComment[];
         return null;
@@ -102,8 +102,7 @@ const JobCardFollowUpsPopover = ({ jobCardId, jobNumber, followUpCount }: JobCar
 
         const { error } = await supabase
             .from("action_items")
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .update({ comments: updatedComments as any })
+            .update({ comments: updatedComments as unknown as Json[] })
             .eq("id", followUpId);
 
         if (error) {

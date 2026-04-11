@@ -233,11 +233,10 @@ const Reports = () => {
 
     const fetchOverdueSchedules = async () => {
         const today = new Date().toISOString().split("T")[0];
-        const query = supabase
+        const q: { lt: (col: string, val: string) => { neq: (col: string, val: string) => { order: (col: string) => PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }> } } } = supabase
             .from("maintenance_schedules")
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .select("*, vehicles(fleet_number, registration_number, make, model)") as any;
-        const { data, error } = await query
+            .select("*, vehicles(fleet_number, registration_number, make, model)") as never;
+        const { data, error } = await q
             .lt("next_due_date", today)
             .neq("status", "completed")
             .order("next_due_date");

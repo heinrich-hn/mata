@@ -50,14 +50,13 @@ export const useSavedRoutes = () => {
   const { data: routes = [], isLoading, error } = useQuery({
     queryKey: ['saved-routes'],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('saved_routes')
         .select('*')
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []) as SavedRoute[];
+      return (data || []) as unknown as SavedRoute[];
     },
     retry: false,
   });
@@ -67,8 +66,7 @@ export const useSavedRoutes = () => {
     mutationFn: async (routeData: CreateRouteData) => {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('saved_routes')
         .insert({
           name: routeData.name,
@@ -84,7 +82,7 @@ export const useSavedRoutes = () => {
         .single();
 
       if (error) throw error;
-      return data as SavedRoute;
+      return data as unknown as SavedRoute;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['saved-routes'] });
@@ -106,8 +104,7 @@ export const useSavedRoutes = () => {
   // Update existing route
   const updateRoute = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<CreateRouteData> }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('saved_routes')
         .update({
           ...updates,
@@ -118,7 +115,7 @@ export const useSavedRoutes = () => {
         .single();
 
       if (error) throw error;
-      return data as SavedRoute;
+      return data as unknown as SavedRoute;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['saved-routes'] });
@@ -140,8 +137,7 @@ export const useSavedRoutes = () => {
   // Delete route
   const deleteRoute = useMutation({
     mutationFn: async (id: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('saved_routes')
         .delete()
         .eq('id', id);
@@ -168,9 +164,7 @@ export const useSavedRoutes = () => {
   // Increment usage count when route is used
   const incrementUsageCount = useMutation({
     mutationFn: async (id: string) => {
-      // Use RPC function from migration (not yet in generated types)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any).rpc('increment_route_usage', {
+      const { error } = await supabase.rpc('increment_route_usage', {
         route_id: id,
       });
 

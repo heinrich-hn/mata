@@ -63,8 +63,7 @@ const ReeferLinkageModal = ({
 
     setIsLoadingPreviousHours(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('reefer_diesel_records')
         .select('operating_hours, date')
         .eq('reefer_unit', reeferUnit)
@@ -180,7 +179,7 @@ const ReeferLinkageModal = ({
         litres_filled: litresFilled,
         cost_per_litre: costPerLitre,
         total_cost: totalCost,
-        currency: dieselRecord.currency || 'ZAR',
+        currency: dieselRecord.currency || 'USD',
         operating_hours: operatingHours,
         previous_operating_hours: previousHoursInfo.hours,
         hours_operated: hoursOperated,
@@ -244,7 +243,7 @@ const ReeferLinkageModal = ({
             <div className="text-right">
               <p className="font-bold">{formatNumber(dieselRecord.litres_filled)} L</p>
               <p className="text-sm text-muted-foreground">
-                {formatCurrency(dieselRecord.total_cost, (dieselRecord.currency || 'ZAR') as 'ZAR' | 'USD')}
+                {formatCurrency(dieselRecord.total_cost, (dieselRecord.currency || 'USD') as string)}
               </p>
             </div>
           </div>

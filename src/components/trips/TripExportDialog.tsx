@@ -245,7 +245,7 @@ const TripExportDialog = ({ isOpen, onClose, trips, tripType }: TripExportDialog
       } else {
         // Standard format
         exportData = tripsToExport.map(trip => {
-          const tripCurrency = trip.revenue_currency || 'ZAR';
+          const tripCurrency = trip.revenue_currency || 'USD';
           const expenses = calcExpenses(trip, tripCurrency);
           const revenue = trip.base_revenue || 0;
           return {
@@ -320,7 +320,7 @@ const TripExportDialog = ({ isOpen, onClose, trips, tripType }: TripExportDialog
 
       // Group revenue by currency
       const revenueByCurrency = tripsToExport.reduce((acc, trip) => {
-        const currency = trip.revenue_currency || 'ZAR';
+        const currency = trip.revenue_currency || 'USD';
         acc[currency] = (acc[currency] || 0) + (trip.base_revenue || 0);
         return acc;
       }, {} as Record<string, number>);

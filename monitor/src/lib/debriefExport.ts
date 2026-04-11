@@ -24,7 +24,7 @@ type GroupedDrivers = [string, DebriefRecord[]][];
 
 function formatCurrency(amount: number | null, currency: string | null): string {
     if (amount == null) return '-';
-    return `${currency || 'ZAR'} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currency || 'USD'} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /**

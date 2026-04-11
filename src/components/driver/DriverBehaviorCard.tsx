@@ -1,6 +1,3 @@
-// src/components/DriverBehaviorCard.tsx
-'use client';
-
 import {
   Card,
   CardContent,

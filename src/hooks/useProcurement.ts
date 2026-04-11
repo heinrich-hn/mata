@@ -964,11 +964,10 @@ export const useCashManagerRequests = () => {
   return useQuery({
     queryKey: PROCUREMENT_KEYS.cashManager,
     queryFn: async () => {
-      // Use any-typed select to avoid excessively deep type instantiation
-      const query = supabase
+      // Use intermediate variable to avoid excessively deep type instantiation with complex joins
+      const { data, error } = await supabase
         .from("parts_requests")
-        .select("*, job_card:job_cards(id, job_number, title, status), vendor:vendors(id, vendor_name, contact_person, phone), inventory:inventory(id, name, part_number, quantity)") as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-      const { data, error } = await query
+        .select("*, job_card:job_cards(id, job_number, title, status), vendor:vendors(id, vendor_name, contact_person, phone), inventory:inventory(id, name, part_number, quantity)")
         .eq("procurement_started", true)
         .not("status", "eq", "fulfilled")
         // Also exclude items already allocated to job cards from inventory
@@ -976,7 +975,7 @@ export const useCashManagerRequests = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as PartsRequest[];
+      return (data || []) as unknown as PartsRequest[];
     },
   });
 };

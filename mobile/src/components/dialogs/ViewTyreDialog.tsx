@@ -15,9 +15,9 @@ interface TyreStock {
   initialTreadDepth: number | null;
   quantity: number;
   minQuantity: number;
-  unitPrice: number;
-  purchaseCostZar: number | null;
-  purchaseCostUsd: number | null;
+  unitPrice: number; // Now required, in USD
+  purchaseCostZar: number | null; // Keep for reference but not display
+  purchaseCostUsd: number | null; // In USD
   location: string;
   supplier: string;
   status: string;
@@ -67,11 +67,30 @@ const ViewTyreDialog = ({ open, onOpenChange, tyre, onInstall, onEdit }: ViewTyr
     );
   };
 
-  const formatCurrency = (amount: number | null, currency: "ZAR" | "USD") => {
+  // Format currency in USD only
+  const formatUSD = (amount: number | null | undefined): string => {
     if (amount === null || amount === undefined) return "-";
-    const symbol = currency === "ZAR" ? "R" : "$";
-    return `${symbol}${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
   };
+
+  // Get the price to display (prioritize purchaseCostUsd, then unitPrice)
+  const getDisplayPrice = (): number | null => {
+    if (tyre.purchaseCostUsd !== null && tyre.purchaseCostUsd !== undefined) {
+      return tyre.purchaseCostUsd;
+    }
+    if (tyre.unitPrice !== null && tyre.unitPrice !== undefined) {
+      return tyre.unitPrice;
+    }
+    return null;
+  };
+
+  const displayPrice = getDisplayPrice();
+  const totalValue = displayPrice ? displayPrice * tyre.quantity : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -199,45 +218,39 @@ const ViewTyreDialog = ({ open, onOpenChange, tyre, onInstall, onEdit }: ViewTyr
 
           <Separator />
 
-          {/* Pricing Information */}
+          {/* Pricing Information - All in USD */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
-              Pricing Information
+              Pricing Information (USD)
             </h3>
-            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+            <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
               <div>
                 <p className="text-sm text-muted-foreground">Unit Price</p>
                 <p className="font-mono font-medium text-lg">
-                  {tyre.unitPrice ? formatCurrency(tyre.unitPrice, "ZAR") : "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Purchase Cost (ZAR)</p>
-                <p className="font-mono font-medium text-lg text-green-600 dark:text-green-400">
-                  {formatCurrency(tyre.purchaseCostZar, "ZAR")}
+                  {displayPrice ? formatUSD(displayPrice) : "-"}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Purchase Cost (USD)</p>
-                <p className="font-mono font-medium text-lg text-blue-600 dark:text-blue-400">
-                  {formatCurrency(tyre.purchaseCostUsd, "USD")}
+                <p className="font-mono font-medium text-lg text-green-600 dark:text-green-400">
+                  {tyre.purchaseCostUsd ? formatUSD(tyre.purchaseCostUsd) : "-"}
                 </p>
               </div>
             </div>
 
-            {/* Total Stock Value */}
-            {tyre.purchaseCostZar && (
+            {/* Total Stock Value in USD */}
+            {totalValue && totalValue > 0 && (
               <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Stock Value</p>
+                    <p className="text-sm text-muted-foreground">Total Stock Value (USD)</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {tyre.quantity} units × {formatCurrency(tyre.purchaseCostZar, "ZAR")}
+                      {tyre.quantity} units × {formatUSD(displayPrice)}
                     </p>
                   </div>
                   <p className="font-bold text-xl text-primary">
-                    {formatCurrency(tyre.purchaseCostZar * tyre.quantity, "ZAR")}
+                    {formatUSD(totalValue)}
                   </p>
                 </div>
               </div>

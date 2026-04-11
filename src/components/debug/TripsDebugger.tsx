@@ -112,7 +112,7 @@ const TripsDebugger = () => {
         route: 'Cape Town - Johannesburg',
         status: 'active',
         base_revenue: 15000,
-        revenue_currency: 'ZAR',
+        revenue_currency: 'USD',
         departure_date: new Date().toISOString().split('T')[0],
         import_source: 'manual_test',
         created_at: new Date().toISOString()
@@ -235,7 +235,7 @@ const TripsDebugger = () => {
         const updates: Record<string, string> = {};
 
         if (!trip.payment_status) updates.payment_status = 'unpaid';
-        if (!trip.revenue_currency) updates.revenue_currency = 'ZAR';
+        if (!trip.revenue_currency) updates.revenue_currency = 'USD';
         if (!trip.status) updates.status = 'active';
 
         if (Object.keys(updates).length > 0) {
@@ -454,7 +454,7 @@ const TripsDebugger = () => {
                           <div><strong>Client:</strong> {trip.client_name || 'N/A'}</div>
                           <div><strong>Route:</strong> {trip.route || `${trip.origin || 'N/A'} → ${trip.destination || 'N/A'}`}</div>
                           <div><strong>Status:</strong> {trip.status}</div>
-                          <div><strong>Revenue:</strong> {trip.base_revenue ? `${trip.revenue_currency || 'ZAR'} ${trip.base_revenue}` : 'N/A'}</div>
+                          <div><strong>Revenue:</strong> {trip.base_revenue ? `${trip.revenue_currency || 'USD'} ${trip.base_revenue}` : 'N/A'}</div>
                           <div><strong>Departure:</strong> {trip.departure_date || 'N/A'}</div>
                           <div><strong>Source:</strong> {trip.import_source || 'N/A'}</div>
                           <div><strong>Driver:</strong> {trip.driver_name || 'N/A'}</div>

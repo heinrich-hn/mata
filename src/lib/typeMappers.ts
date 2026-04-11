@@ -1,4 +1,3 @@
-
 import type { Database, Json } from '@/integrations/supabase/types';
 import type {
   ActionItem,
@@ -45,9 +44,9 @@ export const mapDbToTrip = (db: DbTrip): Trip => ({
   client_type: (db.client_type as Trip['client_type']) || 'external',
   status: (db.status as Trip['status']) || 'active',
   payment_status: (db.payment_status as Trip['payment_status']) || 'unpaid',
-  revenue_currency: (db.revenue_currency as Trip['revenue_currency']) || 'ZAR',
+  revenue_currency: (db.revenue_currency as Trip['revenue_currency']) || 'USD',
   revenue_type: (db.revenue_type as Trip['revenue_type']) || 'per_load',
-  invoice_currency: (db.invoice_currency as Trip['invoice_currency']) || 'ZAR',
+  invoice_currency: (db.invoice_currency as Trip['invoice_currency']) || 'USD',
   follow_up_method: db.follow_up_method as Trip['follow_up_method'],
   additional_costs: parseJsonArray(db.additional_costs),
   delay_reasons: parseJsonArray(db.delay_reasons),

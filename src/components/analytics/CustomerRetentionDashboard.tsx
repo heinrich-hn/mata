@@ -187,7 +187,6 @@ const CustomerRetentionDashboard = ({ trips }: CustomerRetentionDashboardProps) 
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Currencies</SelectItem>
-                  <SelectItem value="ZAR">ZAR (R)</SelectItem>
                   <SelectItem value="USD">USD ($)</SelectItem>
                 </SelectContent>
               </Select>

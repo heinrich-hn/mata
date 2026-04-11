@@ -1,5 +1,5 @@
 // src/integrations/wialon/useWialon.ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabase/client';
 import { getWialonAdvancedService } from './wialonAdvanced';
@@ -63,8 +63,8 @@ export interface UseWialonResult {
   filterUnits: (filters: UnitFilters) => WialonUnit[];
   callAPI: (service: string, params?: Record<string, unknown>) => Promise<{ error?: number; error_description?: string; [key: string]: unknown }>;
   // Enhanced methods
-  getUnitHistory: (unitId: number, from: Date, to: Date) => Promise<any[]>;
-  sendCommand: (unitId: number, command: string, params?: any) => Promise<boolean>;
+  getUnitHistory: (unitId: number, from: Date, to: Date) => Promise<WialonRawMessage[]>;
+  sendCommand: (unitId: number, command: string, params?: Record<string, unknown>) => Promise<boolean>;
 }
 
 interface WialonUnit {
@@ -81,10 +81,19 @@ interface WialonUnit {
   } | null;
   // Enhanced properties
   cls?: number;
-  lmsg?: any;
-  sens?: any;
-  prms?: any;
-  flds?: any;
+  lmsg?: { t: number; f: number; tp?: string; pos?: WialonUnit['pos'] };
+  sens?: Record<string, { v?: number; t?: number }>;
+  prms?: Record<string, unknown>;
+  flds?: Record<string, unknown>;
+}
+
+interface WialonRawMessage {
+  et: number;
+  i: number;
+  t: number;
+  p?: Record<string, unknown>;
+  pos?: WialonUnit['pos'];
+  f?: number;
 }
 
 interface UnitFilters {
@@ -146,7 +155,7 @@ export function useWialon(): UseWialonResult {
   const wialonServiceRef = useRef(getWialonAdvancedService());
 
   // Enhanced API call with retry mechanism
-  const callWialonAPI = useCallback(async (service: string, params: any = {}, sessionData?: ProxySessionData) => {
+  const callWialonAPI = useCallback(async (service: string, params: Record<string, unknown> = {}, sessionData?: ProxySessionData) => {
     const activeSession = sessionData || proxySession;
 
     if (!activeSession) {
@@ -273,7 +282,7 @@ export function useWialon(): UseWialonResult {
       }
 
       // Enhanced unit processing
-      const fetchedUnits: WialonUnit[] = unitsResponse.items.map((item: any) => {
+      const fetchedUnits: WialonUnit[] = unitsResponse.items.map((item: WialonUnit) => {
         let position = item.pos;
 
         // Fallback to last message position
@@ -392,8 +401,8 @@ export function useWialon(): UseWialonResult {
 
       if (eventsResponse && eventsResponse.messages) {
         const processedEvents: WialonEvent[] = eventsResponse.messages
-          .filter((msg: any) => msg.et && msg.et > 0) // Filter event messages
-          .map((msg: any, index: number) => {
+          .filter((msg: WialonRawMessage) => msg.et && msg.et > 0) // Filter event messages
+          .map((msg: WialonRawMessage, index: number) => {
             // Determine event severity based on type
             let severity: 'low' | 'medium' | 'high' | 'critical' = 'low';
             let description = 'Unknown event';
@@ -624,7 +633,7 @@ export function useWialon(): UseWialonResult {
   }, [units, vehicleLocations]);
 
   // Get unit history
-  const getUnitHistory = useCallback(async (unitId: number, from: Date, to: Date): Promise<any[]> => {
+  const getUnitHistory = useCallback(async (unitId: number, from: Date, to: Date): Promise<WialonRawMessage[]> => {
     if (!proxySession) {
       throw new Error('No active session');
     }
@@ -647,7 +656,7 @@ export function useWialon(): UseWialonResult {
   }, [proxySession, callWialonAPI]);
 
   // Send command to unit
-  const sendCommand = useCallback(async (unitId: number, command: string, params?: any): Promise<boolean> => {
+  const sendCommand = useCallback(async (unitId: number, command: string, params?: Record<string, unknown>): Promise<boolean> => {
     if (!proxySession) {
       throw new Error('No active session');
     }

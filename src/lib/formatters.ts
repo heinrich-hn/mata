@@ -1,8 +1,5 @@
-// Utility functions for formatting data
-
-export const formatCurrency = (amount: number, currency: 'ZAR' | 'USD' = 'USD'): string => {
-  const symbol = currency === 'USD' ? '$' : 'R';
-  return `${symbol}${amount.toLocaleString('en-US', {
+export const formatCurrency = (amount: number, _currency?: string): string => {
+  return `$${amount.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

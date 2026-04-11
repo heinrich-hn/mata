@@ -119,11 +119,11 @@ const ReeferDieselTab = () => {
                     {formatNumber(record.litres_filled)} L
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {formatCurrency(record.total_cost, (record.currency || 'ZAR') as 'ZAR' | 'USD')}
+                    {formatCurrency(record.total_cost, (record.currency || 'USD') as string)}
                   </p>
                   {record.cost_per_litre && (
                     <p className="text-xs text-muted-foreground">
-                      @ {formatCurrency(record.cost_per_litre, (record.currency || 'ZAR') as 'ZAR' | 'USD')}/L
+                      @ {formatCurrency(record.cost_per_litre, (record.currency || 'USD') as string)}/L
                     </p>
                   )}
                 </div>

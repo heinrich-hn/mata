@@ -28,7 +28,7 @@ export const CostForm = ({ tripId, cost, onSubmit, onCancel }: CostFormProps) =>
     category: '',
     subCategory: '',
     amount: '',
-    currency: 'ZAR',
+    currency: 'USD',
     referenceNumber: '',
     date: new Date().toISOString().split('T')[0],
     notes: '',
@@ -47,7 +47,7 @@ export const CostForm = ({ tripId, cost, onSubmit, onCancel }: CostFormProps) =>
         category: cost.category || '',
         subCategory: cost.sub_category || '',
         amount: cost.amount?.toString() || '',
-        currency: cost.currency || 'ZAR',
+        currency: cost.currency || 'USD',
         referenceNumber: cost.reference_number || '',
         date: cost.date || '',
         notes: cost.notes || '',
@@ -274,7 +274,6 @@ export const CostForm = ({ tripId, cost, onSubmit, onCancel }: CostFormProps) =>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ZAR">ZAR (R)</SelectItem>
               <SelectItem value="USD">USD ($)</SelectItem>
             </SelectContent>
           </Select>

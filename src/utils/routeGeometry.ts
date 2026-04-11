@@ -1,4 +1,3 @@
-// src/utils/routeGeometry.ts
 import GeometryUtil from 'leaflet-geometryutil';
 import { LatLng, Polyline, Map } from 'leaflet';
 

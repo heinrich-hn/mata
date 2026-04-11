@@ -54,9 +54,9 @@ const Invoicing = () => {
   // Calculate statistics
   const statistics = useMemo(() => {
     const stats = {
-      totalOutstanding: { ZAR: 0, USD: 0 },
-      totalPaid: { ZAR: 0, USD: 0 },
-      overdueAmount: { ZAR: 0, USD: 0 },
+      totalOutstanding: 0,
+      totalPaid: 0,
+      overdueAmount: 0,
       overdueCount: 0,
       invoiceCount: trips.length,
       paidCount: 0,
@@ -66,27 +66,26 @@ const Invoicing = () => {
     const today = new Date();
 
     trips.forEach((trip) => {
-      const currency = (trip.revenue_currency || "ZAR") as "ZAR" | "USD";
       const amount = trip.base_revenue || 0;
 
       if (trip.status === "paid") {
-        stats.totalPaid[currency] += amount;
+        stats.totalPaid += amount;
         stats.paidCount++;
       } else {
-        stats.totalOutstanding[currency] += amount;
+        stats.totalOutstanding += amount;
 
         // Check if overdue (30 days from invoice submitted date)
         const dueDate = getDueDate(trip.invoice_submitted_date);
         if (dueDate && dueDate < today) {
-          stats.overdueAmount[currency] += amount;
+          stats.overdueAmount += amount;
           stats.overdueCount++;
         }
       }
     });
 
     // Calculate collection rate
-    const totalInvoiced = stats.totalPaid.ZAR + stats.totalPaid.USD + stats.totalOutstanding.ZAR + stats.totalOutstanding.USD;
-    const totalCollected = stats.totalPaid.ZAR + stats.totalPaid.USD;
+    const totalInvoiced = stats.totalPaid + stats.totalOutstanding;
+    const totalCollected = stats.totalPaid;
     stats.collectionRate = totalInvoiced > 0 ? (totalCollected / totalInvoiced) * 100 : 0;
 
     return stats;
@@ -117,10 +116,10 @@ const Invoicing = () => {
   // Calculate aging
   const invoiceAging = useMemo(() => {
     const aging = {
-      current: { ZAR: 0, USD: 0, count: 0 },
-      days30: { ZAR: 0, USD: 0, count: 0 },
-      days60: { ZAR: 0, USD: 0, count: 0 },
-      days90Plus: { ZAR: 0, USD: 0, count: 0 },
+      current: { amount: 0, count: 0 },
+      days30: { amount: 0, count: 0 },
+      days60: { amount: 0, count: 0 },
+      days90Plus: { amount: 0, count: 0 },
     };
 
     const today = new Date();
@@ -128,12 +127,11 @@ const Invoicing = () => {
     filteredTrips.forEach((trip) => {
       if (trip.status === "paid") return;
 
-      const currency = (trip.revenue_currency || "ZAR") as "ZAR" | "USD";
       const amount = trip.base_revenue || 0;
 
       const dueDate = getDueDate(trip.invoice_submitted_date);
       if (!dueDate) {
-        aging.current[currency] += amount;
+        aging.current.amount += amount;
         aging.current.count++;
         return;
       }
@@ -141,16 +139,16 @@ const Invoicing = () => {
       const daysPastDue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
       if (daysPastDue < 0) {
-        aging.current[currency] += amount;
+        aging.current.amount += amount;
         aging.current.count++;
       } else if (daysPastDue <= 30) {
-        aging.days30[currency] += amount;
+        aging.days30.amount += amount;
         aging.days30.count++;
       } else if (daysPastDue <= 60) {
-        aging.days60[currency] += amount;
+        aging.days60.amount += amount;
         aging.days60.count++;
       } else {
-        aging.days90Plus[currency] += amount;
+        aging.days90Plus.amount += amount;
         aging.days90Plus.count++;
       }
     });
@@ -158,9 +156,8 @@ const Invoicing = () => {
     return aging;
   }, [filteredTrips]);
 
-  const formatCurrency = (amount: number, currency: string) => {
-    const symbol = currency === "USD" ? "$" : "R";
-    return `${symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatCurrency = (amount: number, _currency?: string) => {
+    return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (dateString: string | null | undefined) => {
@@ -179,7 +176,7 @@ const Invoicing = () => {
           formatDate(trip.invoice_submitted_date),
           dueDate ? formatDate(dueDate.toISOString()) : "N/A",
           (trip.base_revenue || 0).toString(),
-          trip.revenue_currency || "ZAR",
+          trip.revenue_currency || "USD",
           trip.status || "",
         ];
       }),
@@ -234,10 +231,7 @@ const Invoicing = () => {
               <CardTitle className="text-sm font-medium">Total Outstanding</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-1">
-                <div className="text-2xl font-semibold">{formatCurrency(statistics.totalOutstanding.ZAR, "ZAR")}</div>
-                <div className="text-xs text-muted-foreground">{formatCurrency(statistics.totalOutstanding.USD, "USD")}</div>
-              </div>
+              <div className="text-2xl font-semibold">{formatCurrency(statistics.totalOutstanding, "USD")}</div>
             </CardContent>
           </Card>
 
@@ -249,7 +243,7 @@ const Invoicing = () => {
               <div className="space-y-1">
                 <div className="text-2xl font-semibold">{statistics.overdueCount}</div>
                 <div className="text-xs text-muted-foreground">
-                  {formatCurrency(statistics.overdueAmount.ZAR, "ZAR")}
+                  {formatCurrency(statistics.overdueAmount, "USD")}
                 </div>
               </div>
             </CardContent>
@@ -281,10 +275,7 @@ const Invoicing = () => {
               <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-1">
-                <div className="text-2xl font-semibold">{formatCurrency(statistics.totalPaid.ZAR, "ZAR")}</div>
-                <div className="text-xs text-muted-foreground">{formatCurrency(statistics.totalPaid.USD, "USD")}</div>
-              </div>
+              <div className="text-2xl font-semibold">{formatCurrency(statistics.totalPaid, "USD")}</div>
             </CardContent>
           </Card>
         </div>
@@ -299,7 +290,7 @@ const Invoicing = () => {
                   <h4 className="font-semibold">Overdue Invoices Require Attention</h4>
                   <p className="text-sm text-muted-foreground mt-1">
                     You have {statistics.overdueCount} overdue invoice{statistics.overdueCount !== 1 ? "s" : ""} totaling{" "}
-                    {formatCurrency(statistics.overdueAmount.ZAR, "ZAR")} / {formatCurrency(statistics.overdueAmount.USD, "USD")}
+                    {formatCurrency(statistics.overdueAmount, "USD")}
                   </p>
                 </div>
               </div>
@@ -315,11 +306,11 @@ const Invoicing = () => {
 
           {/* Invoice Aging Tab */}
           <TabsContent value="aging" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>ZAR Aging Analysis</CardTitle>
-                  <CardDescription>Outstanding invoices by age (South African Rand)</CardDescription>
+                  <CardTitle>Invoice Aging Analysis</CardTitle>
+                  <CardDescription>Outstanding invoices by age</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
@@ -327,65 +318,28 @@ const Invoicing = () => {
                       <p className="text-sm font-medium">Current (Not Due)</p>
                       <p className="text-xs text-muted-foreground">{invoiceAging.current.count} invoices</p>
                     </div>
-                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.current.ZAR, "ZAR")}</p>
+                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.current.amount, "USD")}</p>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
                     <div>
                       <p className="text-sm font-medium">1-30 Days</p>
                       <p className="text-xs text-muted-foreground">{invoiceAging.days30.count} invoices</p>
                     </div>
-                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days30.ZAR, "ZAR")}</p>
+                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days30.amount, "USD")}</p>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
                     <div>
                       <p className="text-sm font-medium">31-60 Days</p>
                       <p className="text-xs text-muted-foreground">{invoiceAging.days60.count} invoices</p>
                     </div>
-                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days60.ZAR, "ZAR")}</p>
+                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days60.amount, "USD")}</p>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
                     <div>
                       <p className="text-sm font-medium">90+ Days</p>
                       <p className="text-xs text-muted-foreground">{invoiceAging.days90Plus.count} invoices</p>
                     </div>
-                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days90Plus.ZAR, "ZAR")}</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>USD Aging Analysis</CardTitle>
-                  <CardDescription>Outstanding invoices by age (US Dollars)</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">Current (Not Due)</p>
-                      <p className="text-xs text-muted-foreground">{invoiceAging.current.count} invoices</p>
-                    </div>
-                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.current.USD, "USD")}</p>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">1-30 Days</p>
-                      <p className="text-xs text-muted-foreground">{invoiceAging.days30.count} invoices</p>
-                    </div>
-                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days30.USD, "USD")}</p>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">31-60 Days</p>
-                      <p className="text-xs text-muted-foreground">{invoiceAging.days60.count} invoices</p>
-                    </div>
-                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days60.USD, "USD")}</p>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">90+ Days</p>
-                      <p className="text-xs text-muted-foreground">{invoiceAging.days90Plus.count} invoices</p>
-                    </div>
-                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days90Plus.USD, "USD")}</p>
+                    <p className="text-lg font-bold">{formatCurrency(invoiceAging.days90Plus.amount, "USD")}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -409,7 +363,6 @@ const Invoicing = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Currencies</SelectItem>
-                        <SelectItem value="ZAR">ZAR (R)</SelectItem>
                         <SelectItem value="USD">USD ($)</SelectItem>
                       </SelectContent>
                     </Select>
@@ -489,15 +442,14 @@ const Invoicing = () => {
                                 </span>
                               </td>
                               <td className="py-3 px-4 text-sm text-right font-medium">
-                                {formatCurrency(trip.base_revenue || 0, trip.revenue_currency || "ZAR")}
+                                {formatCurrency(trip.base_revenue || 0, trip.revenue_currency || "USD")}
                               </td>
                               <td className="py-3 px-4 text-center">
                                 <span
-                                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                    trip.status === "paid"
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-yellow-100 text-yellow-800"
-                                  }`}
+                                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${trip.status === "paid"
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                                    }`}
                                 >
                                   {trip.status === "paid" ? "Paid" : "Invoiced"}
                                 </span>

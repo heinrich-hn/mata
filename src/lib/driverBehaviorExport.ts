@@ -4,11 +4,30 @@ import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// Flexible type for PDF generation that accepts database records
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DriverBehaviorEventExtended = Record<string, any> & {
+// Type for driver behavior events used in PDF/Excel generation
+interface DriverBehaviorEventExtended {
   id: string;
-};
+  driver_name: string;
+  event_date: string;
+  event_time?: string | null;
+  event_type: string;
+  fleet_number?: string | null;
+  severity?: string | null;
+  location?: string | null;
+  points?: number | null;
+  description?: string | null;
+  status?: string | null;
+  debriefed_at?: string | null;
+  debrief_conducted_by?: string | null;
+  debrief_notes?: string | null;
+  coaching_action_plan?: string | null;
+  driver_signature?: string | null;
+  debriefer_signature?: string | null;
+  witness_signature?: string | null;
+  driver_acknowledged?: boolean | null;
+  corrective_action_taken?: string | null;
+  [key: string]: unknown;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Surfsight media helpers for exports
@@ -814,4 +833,323 @@ export const generateDriverBehaviorPDF = (
 
   const label = type === 'pending' ? 'pending' : type === 'debriefed' ? 'debriefed' : 'all';
   doc.save(`driver_behavior_${label}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Weekly Driver Behavior Debrief Export — Last 7 days per driver with signature
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a PDF containing the last 7 days of debriefed driver behavior events
+ * grouped by driver, with an acknowledgment & signature section per driver.
+ * Only includes events that have been debriefed (debriefed_at is non-null).
+ */
+export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExtended[]) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - 2 * margin;
+
+  const now = new Date();
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const rangeStart = format(sevenDaysAgo, 'yyyy-MM-dd');
+  const rangeEnd = format(now, 'yyyy-MM-dd');
+
+  // Filter: debriefed events within the last 7 days
+  const filtered = events.filter(e =>
+    e.debriefed_at &&
+    e.event_date >= rangeStart &&
+    e.event_date <= rangeEnd,
+  );
+
+  // Group by driver
+  const byDriver: Record<string, DriverBehaviorEventExtended[]> = {};
+  for (const e of filtered) {
+    const driver = e.driver_name || 'Unknown';
+    if (!byDriver[driver]) byDriver[driver] = [];
+    byDriver[driver].push(e);
+  }
+  // Sort each group by date ascending
+  for (const driver of Object.keys(byDriver)) {
+    byDriver[driver].sort((a, b) => a.event_date.localeCompare(b.event_date));
+  }
+  const driverNames = Object.keys(byDriver).sort();
+
+  if (driverNames.length === 0) {
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('No debriefed behavior events found for the last 7 days.', pageWidth / 2, 40, { align: 'center' });
+    doc.save(`weekly-driver-debriefs-${format(now, 'yyyy-MM-dd')}.pdf`);
+    return;
+  }
+
+  let yPos = 0;
+
+  const checkPageBreak = (space: number) => {
+    if (yPos + space > pageHeight - 30) {
+      doc.addPage();
+      yPos = 20;
+      return true;
+    }
+    return false;
+  };
+
+  const addFooter = () => {
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
+    doc.text(
+      `Generated: ${format(now, 'MMM dd, yyyy HH:mm')} | Weekly Driver Behavior Debrief Report`,
+      pageWidth / 2,
+      pageHeight - 10,
+      { align: 'center' },
+    );
+    doc.setTextColor(0, 0, 0);
+  };
+
+  const severityColor = (s: string | null): [number, number, number] => {
+    switch (s) {
+      case 'critical': return [220, 38, 38];
+      case 'high': return [234, 88, 12];
+      case 'medium': return [202, 138, 4];
+      case 'low': return [37, 99, 235];
+      default: return [100, 100, 100];
+    }
+  };
+
+  // ── One page (or more) per driver ──
+  driverNames.forEach((driver, driverIdx) => {
+    if (driverIdx > 0) doc.addPage();
+    yPos = 20;
+
+    const driverEvents = byDriver[driver];
+    const totalPoints = driverEvents.reduce((s, e) => s + (e.points || 0), 0);
+
+    // ── Title ──
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('WEEKLY DRIVER BEHAVIOR DEBRIEF', pageWidth / 2, yPos, { align: 'center' });
+    yPos += 9;
+
+    doc.setFontSize(11);
+    doc.text(`Driver: ${driver}`, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 7;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `Period: ${format(sevenDaysAgo, 'dd MMM yyyy')} – ${format(now, 'dd MMM yyyy')}`,
+      pageWidth / 2,
+      yPos,
+      { align: 'center' },
+    );
+    yPos += 5;
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Generated: ${format(now, 'dd MMM yyyy HH:mm')}`, pageWidth / 2, yPos, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    yPos += 10;
+
+    // ── Summary box ──
+    doc.setFillColor(240, 245, 255);
+    doc.roundedRect(margin, yPos, contentWidth, 14, 2, 2, 'F');
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Summary:', margin + 4, yPos + 5);
+    doc.setFont('helvetica', 'normal');
+    const fleetNums = [...new Set(driverEvents.map(e => e.fleet_number).filter(Boolean))].join(', ') || 'N/A';
+    doc.text(
+      `Events: ${driverEvents.length}  |  Total Points: ${totalPoints}  |  Fleet: ${fleetNums}`,
+      margin + 28,
+      yPos + 5,
+    );
+    const conductors = [...new Set(driverEvents.map(e => e.debrief_conducted_by).filter(Boolean))].join(', ');
+    if (conductors) {
+      doc.setFontSize(8);
+      doc.text(`Debriefed by: ${conductors}`, margin + 4, yPos + 11);
+    }
+    yPos += 18;
+
+    // ── Table header ──
+    const colWidths = [20, 32, 18, 18, 14, 35, 33];
+    const headers = ['Date', 'Event Type', 'Severity', 'Points', 'Ack.', 'Conducted By', 'Action Plan'];
+
+    doc.setFillColor(30, 41, 59); // slate-800
+    doc.rect(margin, yPos, contentWidth, 8, 'F');
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    let xPos = margin + 2;
+    headers.forEach((h, i) => {
+      doc.text(h, xPos, yPos + 5.5);
+      xPos += colWidths[i];
+    });
+    doc.setTextColor(0, 0, 0);
+    yPos += 10;
+
+    // ── Table rows ──
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+
+    driverEvents.forEach((event, rowIdx) => {
+      checkPageBreak(16);
+
+      if (rowIdx % 2 === 0) {
+        doc.setFillColor(249, 250, 251);
+        doc.rect(margin, yPos - 3, contentWidth, 8, 'F');
+      }
+
+      xPos = margin + 2;
+
+      // Date
+      doc.text(format(new Date(event.event_date), 'dd MMM'), xPos, yPos);
+      xPos += colWidths[0];
+
+      // Event type
+      doc.text((event.event_type || '').substring(0, 18), xPos, yPos);
+      xPos += colWidths[1];
+
+      // Severity (colour-coded)
+      const sevCol = severityColor(event.severity);
+      doc.setTextColor(sevCol[0], sevCol[1], sevCol[2]);
+      doc.text((event.severity || 'N/A').toUpperCase(), xPos, yPos);
+      doc.setTextColor(0, 0, 0);
+      xPos += colWidths[2];
+
+      // Points
+      doc.text(String(event.points ?? 0), xPos, yPos);
+      xPos += colWidths[3];
+
+      // Acknowledged
+      doc.text(event.driver_acknowledged ? 'Yes' : 'No', xPos, yPos);
+      xPos += colWidths[4];
+
+      // Conducted by
+      doc.text((event.debrief_conducted_by || 'N/A').substring(0, 18), xPos, yPos);
+      xPos += colWidths[5];
+
+      // Action plan (truncated)
+      const plan = (event.coaching_action_plan || '—').substring(0, 20) + ((event.coaching_action_plan || '').length > 20 ? '...' : '');
+      doc.text(plan, xPos, yPos);
+
+      yPos += 7;
+
+      // Debrief notes sub-row
+      if (event.debrief_notes) {
+        checkPageBreak(8);
+        doc.setFontSize(6.5);
+        doc.setTextColor(100, 100, 100);
+        const noteText = `Notes: ${event.debrief_notes.substring(0, 100)}${event.debrief_notes.length > 100 ? '...' : ''}`;
+        doc.text(noteText, margin + 4, yPos);
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(7.5);
+        yPos += 5;
+      }
+
+      // Separator
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, yPos - 1, margin + contentWidth, yPos - 1);
+    });
+
+    yPos += 6;
+
+    // ── Event details section (descriptions + corrective actions) ──
+    checkPageBreak(16 + driverEvents.length * 12);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('EVENT DETAILS & CORRECTIVE ACTIONS', margin, yPos);
+    yPos += 7;
+
+    driverEvents.forEach((event, idx) => {
+      checkPageBreak(22);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${idx + 1}. ${event.event_type} — ${format(new Date(event.event_date), 'dd MMM yyyy')}`, margin + 2, yPos);
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+
+      if (event.description) {
+        const desc = doc.splitTextToSize(`Description: ${event.description}`, contentWidth - 8);
+        doc.text(desc, margin + 4, yPos);
+        yPos += desc.length * 4 + 2;
+      }
+      if (event.corrective_action_taken) {
+        const action = doc.splitTextToSize(`Corrective Action: ${event.corrective_action_taken}`, contentWidth - 8);
+        doc.text(action, margin + 4, yPos);
+        yPos += action.length * 4 + 2;
+      }
+      if (event.coaching_action_plan) {
+        const plan = doc.splitTextToSize(`Action Plan: ${event.coaching_action_plan}`, contentWidth - 8);
+        doc.text(plan, margin + 4, yPos);
+        yPos += plan.length * 4 + 2;
+      }
+      yPos += 3;
+    });
+
+    // ──────────────────────────────────────────────
+    // DRIVER ACKNOWLEDGMENT & SIGNATURE SECTION
+    // ──────────────────────────────────────────────
+    checkPageBreak(85);
+
+    yPos += 4;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ACKNOWLEDGMENT & SIGNATURES', margin, yPos + 2);
+    yPos += 8;
+
+    doc.setDrawColor(180, 180, 180);
+    doc.rect(margin, yPos, contentWidth, 74);
+
+    const sigStartY = yPos + 6;
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      'I, the undersigned driver, acknowledge that I have been debriefed on the above behavioral',
+      margin + 4,
+      sigStartY,
+    );
+    doc.text(
+      'events for the stated period. I understand the corrective actions discussed and commit to',
+      margin + 4,
+      sigStartY + 5,
+    );
+    doc.text(
+      'improving my driving behavior accordingly.',
+      margin + 4,
+      sigStartY + 10,
+    );
+
+    const sig1Y = sigStartY + 20;
+    const sig2Y = sig1Y + 24;
+
+    // Driver signature
+    doc.setFont('helvetica', 'bold');
+    doc.text('Driver:', margin + 4, sig1Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Name:', margin + 4, sig1Y + 7);
+    doc.line(margin + 18, sig1Y + 8, margin + 80, sig1Y + 8);
+    doc.text('Signature:', margin + 85, sig1Y + 7);
+    doc.line(margin + 103, sig1Y + 8, margin + contentWidth - 4, sig1Y + 8);
+    doc.text('Date:', margin + 4, sig1Y + 14);
+    doc.line(margin + 16, sig1Y + 15, margin + 55, sig1Y + 15);
+
+    // Fleet Manager / Debriefer signature
+    doc.setFont('helvetica', 'bold');
+    doc.text('Fleet Manager / Debriefer:', margin + 4, sig2Y);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Name:', margin + 4, sig2Y + 7);
+    doc.line(margin + 18, sig2Y + 8, margin + 80, sig2Y + 8);
+    doc.text('Signature:', margin + 85, sig2Y + 7);
+    doc.line(margin + 103, sig2Y + 8, margin + contentWidth - 4, sig2Y + 8);
+    doc.text('Date:', margin + 4, sig2Y + 14);
+    doc.line(margin + 16, sig2Y + 15, margin + 55, sig2Y + 15);
+
+    addFooter();
+  });
+
+  const fileName = `weekly-driver-debriefs-${format(now, 'yyyy-MM-dd')}.pdf`;
+  doc.save(fileName);
 };

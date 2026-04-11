@@ -1,4 +1,3 @@
-// src/utils/geocoding.ts
 import { geocodeService } from 'esri-leaflet-geocoder';
 import { GeoSearchControl, OpenStreetMapProvider } from 'leaflet-geosearch';
 import 'leaflet-geosearch/dist/geosearch.css';
@@ -9,6 +8,15 @@ export interface SearchResult {
   x: number; // longitude
   y: number; // latitude
   bounds?: [[number, number], [number, number]];
+}
+
+interface GeoSearchResult {
+  label: string;
+  x: number;
+  y: number;
+  raw?: {
+    boundingbox?: [string, string, string, string];
+  };
 }
 
 export class GeocodingService {
@@ -30,8 +38,7 @@ export class GeocodingService {
     try {
       const results = await this.osmProvider.search({ query });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return results.map((r: any) => ({
+      return results.map((r: GeoSearchResult) => ({
         label: r.label,
         x: r.x,
         y: r.y,

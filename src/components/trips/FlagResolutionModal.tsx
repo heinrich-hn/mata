@@ -27,12 +27,12 @@ interface FlagResolutionModalProps {
   isUnverifiedCosts?: boolean;
 }
 
-const FlagResolutionModal = ({ 
-  cost, 
-  isOpen, 
-  onClose, 
-  onResolve, 
-  isUnverifiedCosts = false 
+const FlagResolutionModal = ({
+  cost,
+  isOpen,
+  onClose,
+  onResolve,
+  isUnverifiedCosts = false
 }: FlagResolutionModalProps) => {
   const [formData, setFormData] = useState({
     amount: '',
@@ -78,7 +78,7 @@ const FlagResolutionModal = ({
     if (isUnverifiedCosts) {
       const hasReceipt = selectedFiles && selectedFiles.length > 0;
       const hasComment = formData.resolutionComment.trim().length > 0;
-      
+
       if (formData.verificationType === 'quick') {
         if (!hasReceipt && !hasComment) {
           newErrors.documentation = 'Quick verification requires either a receipt attachment OR justification comment';
@@ -170,15 +170,14 @@ const FlagResolutionModal = ({
     try {
       setUploading(true);
 
-      const uploadedAttachments = await uploadFiles(cost.id);
-      const allAttachments = [...existingAttachments, ...uploadedAttachments];
+      await uploadFiles(cost.id);
 
       const investigationNotes = cost.investigation_notes
         ? `${cost.investigation_notes}\n\n--- RESOLUTION ---\n${formData.resolutionComment}\nVerification Type: ${formData.verificationType}`
         : `Resolution: ${formData.resolutionComment}\nVerification Type: ${formData.verificationType}`;
 
       // Update cost entry
-      const updateData: any = {
+      const updateData: Record<string, string | number | null> = {
         amount: Number(formData.amount),
         notes: formData.notes,
         investigation_status: 'resolved',
@@ -215,7 +214,7 @@ const FlagResolutionModal = ({
           `All expenses verified: ${formData.resolutionComment}`,
           'user'
         );
-        
+
         if (!success && missingDocs) {
           toast({
             title: 'Documentation Required',
@@ -268,7 +267,7 @@ const FlagResolutionModal = ({
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = 'ZAR') => {
+  const formatCurrency = (amount: number, currency: string = 'USD') => {
     const symbol = currency === 'USD' ? '$' : 'R';
     return `${symbol}${amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
@@ -348,7 +347,7 @@ const FlagResolutionModal = ({
                 </label>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {formData.verificationType === 'quick' 
+                {formData.verificationType === 'quick'
                   ? 'Quick verification requires either a receipt OR justification comment'
                   : 'Detailed verification requires BOTH a receipt AND justification comment'}
               </p>
@@ -388,7 +387,7 @@ const FlagResolutionModal = ({
               value={formData.resolutionComment}
               onChange={(e) => setFormData(prev => ({ ...prev, resolutionComment: e.target.value }))}
               rows={4}
-              placeholder={isUnverifiedCosts 
+              placeholder={isUnverifiedCosts
                 ? "Provide justification for this expense..."
                 : "Explain how this flag was resolved..."}
             />

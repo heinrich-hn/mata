@@ -191,7 +191,7 @@ export function CompleteMaintenanceDialog({
             </div>
 
             <div>
-              <Label htmlFor="cost">Total Cost (ZAR)</Label>
+              <Label htmlFor="cost">Total Cost (USD)</Label>
               <Input
                 id="cost"
                 type="number"

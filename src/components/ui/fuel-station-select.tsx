@@ -34,7 +34,7 @@ export const FuelStationSelect = ({
   const [newStationName, setNewStationName] = useState('');
   const [newStationLocation, setNewStationLocation] = useState('');
   const [newStationPrice, setNewStationPrice] = useState('');
-  const [newStationCurrency, setNewStationCurrency] = useState('ZAR');
+  const [newStationCurrency, setNewStationCurrency] = useState('USD');
 
   // Generate unique IDs for accessibility
   const selectId = id || `fuel-station-${Math.random().toString(36).substr(2, 9)}`;
@@ -59,7 +59,7 @@ export const FuelStationSelect = ({
       name: s.name,
       location: s.location,
       price: s.price_per_litre,
-      currency: s.currency || 'ZAR',
+      currency: s.currency || 'USD',
       isSaved: true,
     }));
 
@@ -70,7 +70,7 @@ export const FuelStationSelect = ({
         name,
         location: undefined as string | undefined,
         price: undefined as number | undefined,
-        currency: 'ZAR',
+        currency: 'USD',
         isSaved: false,
       }));
 
@@ -104,9 +104,9 @@ export const FuelStationSelect = ({
     if (onPriceChange) {
       const station = savedStations.find(s => s.name === stationName);
       if (station?.price_per_litre) {
-        onPriceChange(station.price_per_litre, station.currency || 'ZAR');
+        onPriceChange(station.price_per_litre, station.currency || 'USD');
       } else {
-        onPriceChange(null, 'ZAR');
+        onPriceChange(null, 'USD');
       }
     }
   };
@@ -135,7 +135,7 @@ export const FuelStationSelect = ({
     setNewStationName('');
     setNewStationLocation('');
     setNewStationPrice('');
-    setNewStationCurrency('ZAR');
+    setNewStationCurrency('USD');
     setShowAddDialog(false);
   };
 
@@ -362,7 +362,6 @@ export const FuelStationSelect = ({
                   className="w-full h-10 px-3 rounded-md border bg-background"
                   aria-label="Select currency for station price"
                 >
-                  <option value="ZAR">ZAR (R)</option>
                   <option value="USD">USD ($)</option>
                 </select>
               </div>

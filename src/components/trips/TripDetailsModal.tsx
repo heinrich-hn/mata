@@ -344,8 +344,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
 
   const flaggedCosts = costs.filter(c => c.is_flagged);
   const unresolvedFlags = flaggedCosts.filter(c => c.investigation_status !== 'resolved');
-  const totalCostsZAR = costs.filter(c => (c.currency || 'ZAR') === 'ZAR').reduce((sum, c) => sum + c.amount, 0);
-  const totalCostsUSD = costs.filter(c => c.currency === 'USD').reduce((sum, c) => sum + c.amount, 0);
+  const totalCosts = costs.reduce((sum, c) => sum + c.amount, 0);
   const canComplete = trip.status === 'active' && unresolvedFlags.length === 0 && !kmValidation.hasMismatch;
 
   return (
@@ -539,10 +538,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Costs</p>
-                      <p className="text-2xl font-bold">{formatCurrency(totalCostsZAR, 'ZAR')}</p>
-                      {totalCostsUSD > 0 && (
-                        <p className="text-lg font-semibold text-muted-foreground">{formatCurrency(totalCostsUSD, 'USD')}</p>
-                      )}
+                      <p className="text-2xl font-bold">{formatCurrency(totalCosts)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Cost Entries</p>

@@ -1,4 +1,3 @@
-
 import type { IncidentDocument, IncidentTimelineEvent } from "@/hooks/useIncidentDocuments";
 import type { Incident } from "@/hooks/useIncidents";
 import { supabase } from "@/integrations/supabase/client";

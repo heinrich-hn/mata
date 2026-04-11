@@ -479,14 +479,14 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
 
   // Calculate summary statistics
   const stats = useMemo(() => {
-    const totalExpenses = { ZAR: 0, USD: 0 };
+    const totalExpenses = { USD: 0 };
     let flaggedCount = 0;
     let unresolvedFlagCount = 0;
     let resolvedCount = 0;
     let missingSlipCount = 0;
 
     expenses.forEach((expense) => {
-      const currency = (expense.currency as 'ZAR' | 'USD') || 'USD';
+      const currency = (expense.currency as string) || 'USD';
       totalExpenses[currency] += expense.amount || 0;
 
       // Only count missing slips for non-resolved costs
@@ -595,7 +595,6 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
       // Summary data
       const sRows: [string, string | number][] = [
         ['Total Entries', filteredExpenses.length],
-        ['Total Expenses (ZAR)', stats.totalExpenses.ZAR],
         ['Total Expenses (USD)', stats.totalExpenses.USD],
         ['Flagged', stats.flaggedCount],
         ['Unresolved', stats.unresolvedFlagCount],
@@ -611,7 +610,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
         row.values = [r[0], r[1]];
         row.getCell(1).font = { bold: true, size: 10, name: 'Calibri' };
         row.getCell(2).font = { size: 10, name: 'Calibri' };
-        if (typeof r[1] === 'number' && (r[0].includes('ZAR') || r[0].includes('USD'))) {
+        if (typeof r[1] === 'number' && (r[0].includes('USD'))) {
           row.getCell(2).numFmt = currencyFmt;
         }
         row.eachCell(cell => { cell.border = thinBorder; });
@@ -758,7 +757,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
       // Summary row
       doc.setFontSize(10);
       doc.text(
-        `Total: ${fmtCurrency(stats.totalExpenses.ZAR, 'ZAR')}${stats.totalExpenses.USD > 0 ? ` + ${fmtCurrency(stats.totalExpenses.USD, 'USD')}` : ''} | Flagged: ${stats.flaggedCount} | Missing Slips: ${stats.missingSlipCount}`,
+        `Total: ${fmtCurrency(stats.totalExpenses.USD)} | Flagged: ${stats.flaggedCount} | Missing Slips: ${stats.missingSlipCount}`,
         14, 31
       );
 
@@ -1161,8 +1160,7 @@ const TripExpensesSection = ({ trips, onViewTrip }: TripExpensesSectionProps) =>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-card/80 backdrop-blur-sm border border-border/60 rounded-xl px-5 py-3.5 shadow-sm">
         <div>
           <span className="text-sm font-medium text-muted-foreground tabular-nums">
-            {stats.totalCount} entries totaling {formatCurrency(stats.totalExpenses.ZAR, 'ZAR')}
-            {stats.totalExpenses.USD > 0 && ` + ${formatCurrency(stats.totalExpenses.USD, 'USD')}`}
+            {stats.totalCount} entries totaling {formatCurrency(stats.totalExpenses.USD)}
           </span>
         </div>
         <div className="flex items-center gap-3 text-sm flex-wrap">

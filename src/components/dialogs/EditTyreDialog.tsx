@@ -393,7 +393,7 @@ const EditTyreDialog = ({ open, onOpenChange, tyre, onUpdate }: EditTyreDialogPr
               </h3>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="unit_price">Unit Price (ZAR)</Label>
+                  <Label htmlFor="unit_price">Unit Price (USD)</Label>
                   <Input
                     id="unit_price"
                     value={formData.unit_price}
@@ -404,12 +404,12 @@ const EditTyreDialog = ({ open, onOpenChange, tyre, onUpdate }: EditTyreDialogPr
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="purchase_cost_zar">Purchase Cost (ZAR)</Label>
+                  <Label htmlFor="purchase_cost_zar">Purchase Cost (USD)</Label>
                   <Input
                     id="purchase_cost_zar"
                     value={formData.purchase_cost_zar}
                     onChange={handleChange}
-                    placeholder="Cost in ZAR"
+                    placeholder="Cost in USD"
                     type="number"
                     step="0.01"
                     className={errors.purchase_cost_zar ? "border-destructive" : ""}

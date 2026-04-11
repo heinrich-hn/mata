@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserSelect } from "@/components/ui/user-select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -93,27 +94,25 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
         }
       }
 
-      const submitData = {
-        title: data.title,
-        description: data.description,
-        schedule_type: data.schedule_type,
-        frequency: data.frequency,
-        frequency_value: data.frequency_value,
-        start_date: data.start_date,
-        category: data.category,
-        maintenance_type: data.maintenance_type,
-        priority: data.priority,
-        assigned_to: data.assigned_to || null,
-        estimated_duration_hours: data.estimated_duration_hours,
-        auto_create_job_card: data.auto_create_job_card,
-        odometer_based: data.odometer_based,
-        odometer_interval_km: data.odometer_interval_km,
-        notes: data.notes || null,
-        // Required fields
+      const submitData: Database['public']['Tables']['maintenance_schedules']['Insert'] = {
+        title: data.title as string,
+        description: data.description as string,
+        schedule_type: data.schedule_type as string,
+        service_type: (data.maintenance_type as string) || "general",
+        frequency: data.frequency as string,
+        frequency_value: data.frequency_value as number,
+        start_date: data.start_date as string,
+        category: data.category as string,
+        maintenance_type: data.maintenance_type as string,
+        priority: data.priority as string,
+        assigned_to: (data.assigned_to as string) || null,
+        estimated_duration_hours: data.estimated_duration_hours as number,
+        auto_create_job_card: data.auto_create_job_card as boolean,
+        odometer_based: data.odometer_based as boolean,
+        odometer_interval_km: data.odometer_interval_km as number,
+        notes: (data.notes as string) || null,
         next_due_date: nextDueDate.toISOString().split('T')[0],
-        // Vehicle ID - null for fleet-wide, specific UUID for vehicle-specific
-        vehicle_id: data.vehicle_id === "none" ? null : data.vehicle_id,
-        // Optional fields
+        vehicle_id: data.vehicle_id === "none" ? "" : data.vehicle_id as string,
         created_by: "System User",
         notification_channels: {
           email: true,
@@ -123,8 +122,7 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
         notification_recipients: [],
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await supabase.from("maintenance_schedules").insert([submitData as any]);      if (error) throw error;
+      const { error } = await supabase.from("maintenance_schedules").insert([submitData]);      if (error) throw error;
 
       toast({
         title: "Success",

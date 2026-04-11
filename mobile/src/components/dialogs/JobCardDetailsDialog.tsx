@@ -89,6 +89,8 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
         `)
         .eq("job_card_id", jobCard.id)
         .order("created_at", { ascending: false });
+      // Type assertion: query selects DB column names (name, quantity) but
+      // component PartsRequest interface uses different names (part_name, quantity_in_stock)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (data || []) as any[];
     },

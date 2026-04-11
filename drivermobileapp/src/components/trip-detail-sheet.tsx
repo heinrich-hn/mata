@@ -99,7 +99,6 @@ interface TripDetailSheetProps {
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-const ZAR_TO_USD_RATE = 18.6;
 
 const INITIAL_EXPENSE_FORM: ExpenseFormData = {
   category: "",
@@ -295,12 +294,6 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
     [availableSubCategories]
   );
 
-  const usdEquivalent = useMemo(() => {
-    const amt = parseFloat(formData.amount);
-    if (!amt || amt <= 0 || formData.currency !== "ZAR") return null;
-    return (amt / ZAR_TO_USD_RATE).toFixed(2);
-  }, [formData.amount, formData.currency]);
-
   const totalExpensesUsd = useMemo(
     () => tripExpenses.reduce((s: number, e: CostEntry) => s + (e.currency === "USD" ? e.amount : 0), 0),
     [tripExpenses]
@@ -384,18 +377,12 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
   // ─── Start Edit Handler ─────────────────────────────────────────────
 
   const startEdit = useCallback((entry: CostEntry) => {
-    // Extract original ZAR amount from notes if present
-    let amount = entry.amount.toString();
-    let currency = entry.currency || 'USD';
-    const zarMatch = entry.notes?.match(/\[Original: ZAR ([\d.]+),/);
-    if (zarMatch) {
-      amount = zarMatch[1];
-      currency = 'ZAR';
-    }
+    
+    const amount = entry.amount.toString();
+    const currency = entry.currency || 'USD';
 
     // Strip the driver metadata suffix from notes for editing
     let cleanNotes = entry.notes || '';
-    cleanNotes = cleanNotes.replace(/\s*\[Original: ZAR [\d.]+, Rate: [\d.]+\]/, '');
     cleanNotes = cleanNotes.replace(/\s*\[Driver: [^\]]+\]/, '');
     cleanNotes = cleanNotes.replace(/\s*\[Submitted by: [^\]]+\]/, '');
     cleanNotes = cleanNotes.trim();
@@ -432,8 +419,8 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
       }
 
       const rawAmount = parseFloat(data.amount);
-      const usdAmount = data.currency === "ZAR" ? rawAmount / ZAR_TO_USD_RATE : rawAmount;
-      const zarNote = data.currency === "ZAR" ? ` [Original: ZAR ${rawAmount.toFixed(2)}, Rate: ${ZAR_TO_USD_RATE}]` : "";
+      const usdAmount = rawAmount;
+      const zarNote = "";
 
       const { data: inserted, error } = await supabase.from("cost_entries").insert({
         trip_id: trip.id,
@@ -496,8 +483,8 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
       }
 
       const rawAmount = parseFloat(data.amount);
-      const usdAmount = data.currency === "ZAR" ? rawAmount / ZAR_TO_USD_RATE : rawAmount;
-      const zarNote = data.currency === "ZAR" ? ` [Original: ZAR ${rawAmount.toFixed(2)}, Rate: ${ZAR_TO_USD_RATE}]` : "";
+      const usdAmount = rawAmount;
+      const zarNote = "";
 
       const { error } = await supabase.from("cost_entries").update({
         category: data.category,
@@ -863,13 +850,10 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
                     <div className="flex rounded-lg border overflow-hidden">
                       <button
                         type="button"
-                        onClick={() => handleInputChange("currency", "ZAR")}
                         className={cn(
                           "flex-1 py-2.5 text-xs font-semibold transition-colors",
-                          formData.currency === "ZAR" ? "bg-primary text-primary-foreground" : "bg-muted/30 text-muted-foreground"
                         )}
                       >
-                        ZAR (R)
                       </button>
                       <button
                         type="button"
@@ -887,7 +871,7 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
                   {/* Amount */}
                   <div>
                     <Label className="text-xs font-medium mb-1.5 block">
-                      Amount ({formData.currency === "ZAR" ? "R" : "$"}) *
+                      Amount ($) *
                     </Label>
                     <Input
                       type="number"
@@ -901,14 +885,6 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
                     />
                     {errors.amount && <p className="text-xs text-destructive mt-1">{errors.amount}</p>}
                   </div>
-
-                  {/* ZAR preview */}
-                  {formData.currency === "ZAR" && usdEquivalent && (
-                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-info/10 border border-info/20">
-                      <span className="text-[10px] text-info">USD equivalent (÷ {ZAR_TO_USD_RATE})</span>
-                      <span className="text-sm font-bold text-info tabular-nums">$ {usdEquivalent}</span>
-                    </div>
-                  )}
 
                   {/* Date + Ref */}
                   <div className="grid grid-cols-2 gap-3">

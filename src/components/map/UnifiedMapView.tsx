@@ -433,9 +433,7 @@ const UnifiedMapView: React.FC = () => {
   // Load Geofences
   const loadGeofences = useCallback(async () => {
     try {
-      // Bypass TypeScript checking for geofences table that's not in generated types
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('geofences')
         .select('*')
         .eq('is_active', true)

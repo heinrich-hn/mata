@@ -256,7 +256,7 @@ const TripLinkageModal = ({
             </div>
             <div className="space-y-1">
               <p><strong>Litres:</strong> {dieselRecord.litres_filled.toFixed(1)}L</p>
-              <p><strong>Cost:</strong> {formatCurrency(dieselRecord.total_cost, (dieselRecord.currency || 'ZAR') as 'ZAR' | 'USD')}</p>
+              <p><strong>Cost:</strong> {formatCurrency(dieselRecord.total_cost, (dieselRecord.currency || 'USD') as string)}</p>
               <p><strong>Station:</strong> {dieselRecord.fuel_station}</p>
             </div>
           </div>
@@ -414,7 +414,7 @@ const TripLinkageModal = ({
                     <div className="flex items-start space-x-3">
                       <Info className="w-5 h-5 text-info mt-0.5" />
                       <p className="text-sm">
-                        When you link this diesel record to a trip, a cost entry of {formatCurrency(dieselRecord.total_cost, (dieselRecord.currency || 'ZAR') as 'ZAR' | 'USD')} will be automatically added to the trip&apos;s expenses.
+                        When you link this diesel record to a trip, a cost entry of {formatCurrency(dieselRecord.total_cost, (dieselRecord.currency || 'USD') as string)} will be automatically added to the trip&apos;s expenses.
                       </p>
                     </div>
                   </div>

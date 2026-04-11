@@ -11,7 +11,7 @@ export interface DieselRecordData {
   fuel_station?: string;
   litres_filled?: number;
   total_cost?: number;
-  currency?: 'ZAR' | 'USD';
+  currency?: string;
   distance_travelled?: number;
   debrief_signed?: boolean;
   debrief_notes?: string;

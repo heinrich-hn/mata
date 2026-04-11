@@ -486,7 +486,7 @@ export const GPSAnalyticsDashboard = () => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-ZA", {
       style: "currency",
-      currency: "ZAR",
+      currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);

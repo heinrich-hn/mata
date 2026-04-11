@@ -114,7 +114,7 @@ export const RouteSelect = ({
   const [newRoute, setNewRoute] = useState({
     route: '',
     toll_fee: '',
-    currency: 'USD' as 'USD' | 'ZAR',
+    currency: 'USD' as string,
     description: '',
   });
 
@@ -546,14 +546,13 @@ export const RouteSelect = ({
                     <Label htmlFor="currency">Currency</Label>
                     <Select
                       value={newRoute.currency}
-                      onValueChange={(val: 'USD' | 'ZAR') => setNewRoute((prev) => ({ ...prev, currency: val }))}
+                      onValueChange={(val: string) => setNewRoute((prev) => ({ ...prev, currency: val }))}
                     >
                       <SelectTrigger id="currency">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="USD">USD ($)</SelectItem>
-                        <SelectItem value="ZAR">ZAR (R)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -664,14 +663,13 @@ export const RouteSelect = ({
                             <Label className="text-xs">Currency</Label>
                             <Select
                               value={item.currency}
-                              onValueChange={(val: 'USD' | 'ZAR') => updateExpenseItem(index, 'currency', val)}
+                              onValueChange={(val: string) => updateExpenseItem(index, 'currency', val)}
                             >
                               <SelectTrigger className="h-8 text-xs">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="USD">USD</SelectItem>
-                                <SelectItem value="ZAR">ZAR</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -812,14 +810,13 @@ export const RouteSelect = ({
                     <Label htmlFor="edit-currency">Currency</Label>
                     <Select
                       value={newRoute.currency}
-                      onValueChange={(val: 'USD' | 'ZAR') => setNewRoute((prev) => ({ ...prev, currency: val }))}
+                      onValueChange={(val: string) => setNewRoute((prev) => ({ ...prev, currency: val }))}
                     >
                       <SelectTrigger id="edit-currency">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="USD">USD ($)</SelectItem>
-                        <SelectItem value="ZAR">ZAR (R)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -931,14 +928,13 @@ export const RouteSelect = ({
                             <Label className="text-xs">Currency</Label>
                             <Select
                               value={item.currency}
-                              onValueChange={(val: 'USD' | 'ZAR') => updateExpenseItem(index, 'currency', val)}
+                              onValueChange={(val: string) => updateExpenseItem(index, 'currency', val)}
                             >
                               <SelectTrigger className="h-8 text-xs">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="USD">USD</SelectItem>
-                                <SelectItem value="ZAR">ZAR</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>

@@ -44,7 +44,6 @@ export const HIGH_RISK_CATEGORIES = ['Non-Value-Added Costs', 'Border Costs'] as
 // Currency options
 export const CURRENCY_OPTIONS = [
   { value: 'USD', label: 'USD ($)', symbol: '$' },
-  { value: 'ZAR', label: 'ZAR (R)', symbol: 'R' },
 ] as const;
 
 // Type helpers

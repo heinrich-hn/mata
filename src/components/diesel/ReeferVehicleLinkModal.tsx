@@ -56,7 +56,7 @@ const ReeferVehicleLinkModal = ({
                 driverName: r.driver_name,
                 litres: r.litres_filled,
                 cost: r.total_cost,
-                currency: r.currency || 'ZAR',
+                currency: r.currency || 'USD',
                 station: r.fuel_station,
             }));
     }, [reeferRecord, dieselRecords]);
@@ -127,7 +127,7 @@ const ReeferVehicleLinkModal = ({
                         <p><strong>Unit:</strong> {reeferRecord.reefer_unit}</p>
                         <p><strong>Date:</strong> {formatDate(reeferRecord.date)}</p>
                         <p><strong>Litres:</strong> {reeferRecord.litres_filled.toFixed(1)}L</p>
-                        <p><strong>Cost:</strong> {formatCurrency(reeferRecord.total_cost, (reeferRecord.currency || 'ZAR') as 'ZAR' | 'USD')}</p>
+                        <p><strong>Cost:</strong> {formatCurrency(reeferRecord.total_cost, (reeferRecord.currency || 'USD') as string)}</p>
                     </div>
                 </div>
 
@@ -184,7 +184,7 @@ const ReeferVehicleLinkModal = ({
                                         </div>
                                         <p><strong>Driver:</strong> {selectedOption.driverName || 'N/A'}</p>
                                         <p><strong>Station:</strong> {selectedOption.station}</p>
-                                        <p><strong>Horse Fill:</strong> {selectedOption.litres.toFixed(1)}L — {formatCurrency(selectedOption.cost, selectedOption.currency as 'ZAR' | 'USD')}</p>
+                                        <p><strong>Horse Fill:</strong> {selectedOption.litres.toFixed(1)}L — {formatCurrency(selectedOption.cost, selectedOption.currency as string)}</p>
                                     </div>
                                 )}
                             </div>

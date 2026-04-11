@@ -2,13 +2,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-// NOTE: After running the fleet_breakdowns migration, regenerate types with:
-// npx supabase gen types typescript --project-id wxvhkljrbcpcgpgdqhsp > src/integrations/supabase/types.ts
-// Then remove the `as any` cast below.
-
-// Use `as any` until types are regenerated after migration
-const db = supabase as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-
 export interface FleetBreakdown {
     id: string;
     source_app: string;
@@ -44,7 +37,7 @@ export function useFleetBreakdowns() {
     return useQuery<FleetBreakdown[]>({
         queryKey: ["fleet-breakdowns"],
         queryFn: async () => {
-            const { data, error } = await db
+            const { data, error } = await supabase
                 .from("fleet_breakdowns")
                 .select("*")
                 .order("breakdown_date", { ascending: false });
@@ -61,7 +54,7 @@ export function useUpdateFleetBreakdown() {
 
     return useMutation({
         mutationFn: async ({ id, ...updates }: Partial<FleetBreakdown> & { id: string }) => {
-            const { data, error } = await db
+            const { data, error } = await supabase
                 .from("fleet_breakdowns")
                 .update(updates)
                 .eq("id", id)
@@ -104,7 +97,7 @@ export function useScheduleBreakdownForInspection() {
                     inspection_type: "breakdown",
                     inspector_name: "Workshop",
                     initiated_via: "breakdown",
-                    status: "pending" as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+                    status: "pending" as const,
                     vehicle_id: breakdown.vehicle_id,
                     vehicle_registration: breakdown.vehicle_registration,
                     vehicle_make: breakdown.vehicle_make,
@@ -117,7 +110,7 @@ export function useScheduleBreakdownForInspection() {
             if (inspError) throw inspError;
 
             // 2. Link the inspection back to the breakdown
-            const { data, error } = await db
+            const { data, error } = await supabase
                 .from("fleet_breakdowns")
                 .update({
                     status: "scheduled_for_inspection",
@@ -155,7 +148,7 @@ export function useCreateFleetBreakdown() {
 
     return useMutation({
         mutationFn: async (breakdown: Omit<FleetBreakdown, "id" | "created_at" | "updated_at">) => {
-            const { data, error } = await db
+            const { data, error } = await supabase
                 .from("fleet_breakdowns")
                 .insert(breakdown)
                 .select()
@@ -187,7 +180,7 @@ export function useDeleteFleetBreakdown() {
 
     return useMutation({
         mutationFn: async (id: string) => {
-            const { error } = await db
+            const { error } = await supabase
                 .from("fleet_breakdowns")
                 .delete()
                 .eq("id", id);
@@ -217,7 +210,7 @@ export function useDismissBreakdown() {
 
     return useMutation({
         mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
-            const { data, error } = await db
+            const { data, error } = await supabase
                 .from("fleet_breakdowns")
                 .update({
                     status: "dismissed",

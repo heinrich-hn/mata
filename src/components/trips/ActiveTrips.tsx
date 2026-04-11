@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
@@ -33,7 +33,7 @@ import {
   RefreshCw,
   RouteIcon,
   Search,
-  Settings,
+
   Trash2,
   Truck,
   Upload,
@@ -378,7 +378,7 @@ const ActiveTrips = ({
   const calculateProfit = (trip: Trip): { amount: number; currency: string } | null => {
     const revenue = (trip.base_revenue || 0) + (trip.additional_revenue || 0);
     const expenses = [...(trip.costs || []), ...(trip.additional_costs || [])].reduce((sum, c) => sum + (c.amount || 0), 0);
-    const currency = trip.revenue_currency || 'ZAR';
+    const currency = trip.revenue_currency || 'USD';
     return { amount: revenue - expenses, currency };
   };
 
@@ -419,87 +419,6 @@ const ActiveTrips = ({
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        {/* Enhanced Header with Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
-          {stats.tripsNeedingAttention > 0 && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Needs Attention</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold">{stats.tripsNeedingAttention}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stats.tripsWithFlaggedCosts > 0 && `${stats.tripsWithFlaggedCosts} flagged`}
-                  {stats.tripsWithNoCosts > 0 && ` ${stats.tripsWithNoCosts} missing`}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {stats.tripsWithNoBaseRevenue > 0 && (
-            <Card className="border-amber-200 bg-amber-50/30">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Missing Revenue</CardTitle>
-                <DollarSign className="h-4 w-4 text-amber-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold text-amber-700">{stats.tripsWithNoBaseRevenue}</div>
-                <p className="text-xs text-amber-600 mt-1">trips need revenue</p>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card className={stats.tripsNeedingAttention > 0 || stats.tripsWithNoBaseRevenue > 0 ? '' : 'md:col-span-2'}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Trips</CardTitle>
-              <RouteIcon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{stats.totalTrips}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {filterOptions.fleets.length} fleets, {filterOptions.drivers.length} drivers
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{formatCurrency(stats.totalRevenue)}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Avg {formatCurrency(stats.avgRevenuePerTrip)} per trip
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{formatCurrency(stats.totalExpenses)}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-              <Gauge className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{formatCurrency(stats.netProfit)}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats.totalDistance.toLocaleString()} total km
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Missing Base Revenue Banner Alert */}
         {filteredTrips.filter(t => (!t.base_revenue || t.base_revenue === 0) && !t.zero_revenue_comment).length > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
@@ -529,47 +448,36 @@ const ActiveTrips = ({
 
         {/* Premium Toolbar */}
         <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 bg-muted/30 border-b">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Settings className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold tracking-tight">Trip Management</h2>
-                <p className="text-xs text-muted-foreground">Manage and monitor all active trips</p>
-              </div>
-            </div>
+          <div className="flex items-center justify-end gap-2 p-3 bg-muted/30 border-b">
 
-            <div className="flex items-center gap-2">
-              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grouped' | 'list')} className="mr-2">
-                <TabsList className="h-9">
-                  <TabsTrigger value="grouped" className="text-xs px-3">Grouped View</TabsTrigger>
-                  <TabsTrigger value="list" className="text-xs px-3">List View</TabsTrigger>
-                </TabsList>
-              </Tabs>
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grouped' | 'list')} className="mr-2">
+              <TabsList className="h-9">
+                <TabsTrigger value="grouped" className="text-xs px-3">Grouped View</TabsTrigger>
+                <TabsTrigger value="list" className="text-xs px-3">List View</TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-              {onRefresh && (
-                <Button variant="outline" size="sm" onClick={onRefresh} className="h-9 gap-2">
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
-              )}
-
-              <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)} className="h-9 gap-2">
-                <Download className="h-4 w-4" />
-                Export
+            {onRefresh && (
+              <Button variant="outline" size="sm" onClick={onRefresh} className="h-9 gap-2">
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
               </Button>
+            )}
 
-              <Button variant="outline" size="sm" onClick={onImport} className="h-9 gap-2">
-                <Upload className="h-4 w-4" />
-                Import
-              </Button>
+            <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)} className="h-9 gap-2">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
 
-              <Button size="sm" onClick={onAddTrip} className="h-9 gap-2 bg-primary hover:bg-primary/90">
-                <Plus className="h-4 w-4" />
-                New Trip
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={onImport} className="h-9 gap-2">
+              <Upload className="h-4 w-4" />
+              Import
+            </Button>
+
+            <Button size="sm" onClick={onAddTrip} className="h-9 gap-2 bg-primary hover:bg-primary/90">
+              <Plus className="h-4 w-4" />
+              New Trip
+            </Button>
           </div>
 
           {/* Enhanced Filter Bar */}
@@ -1316,7 +1224,7 @@ const ActiveTrips = ({
           tripType="active"
         />
       </div>
-    </TooltipProvider>
+    </TooltipProvider >
   );
 };
 

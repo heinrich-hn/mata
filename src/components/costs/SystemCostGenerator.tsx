@@ -56,51 +56,28 @@ interface SystemCostRates {
   };
 }
 
-interface CurrencyRates {
-  usdToZar: number;
-  zarToUsd: number;
-  lastUpdated: string;
-}
 
 interface SystemCostGeneratorProps {
   trip: Trip;
   onGenerateSystemCosts: (costs: Omit<CostEntry, 'id' | 'attachments'>[]) => void;
 }
 
-// Default currency rates (should ideally be fetched from an API)
-const DEFAULT_CURRENCY_RATES: CurrencyRates = {
-  usdToZar: 18.5,
-  zarToUsd: 0.054,
-  lastUpdated: new Date().toISOString()
-};
 
 // Utility function for currency formatting
-const formatCurrency = (amount: number, currency: string = 'ZAR'): string => {
-  const symbol = currency === 'USD' ? '$' : 'R';
+const formatCurrency = (amount: number, _currency: string = 'USD'): string => {
+  const symbol = '$';
   return `${symbol}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-// Utility function for currency conversion
-const convertCurrency = (amount: number, fromCurrency: string, toCurrency: string, rates: CurrencyRates): number => {
-  if (fromCurrency === toCurrency) return amount;
 
-  if (fromCurrency === 'ZAR' && toCurrency === 'USD') {
-    return amount * rates.zarToUsd;
-  } else if (fromCurrency === 'USD' && toCurrency === 'ZAR') {
-    return amount * rates.usdToZar;
-  }
-
-  return amount; // Default to no conversion if currencies not supported
-};
 
 const SystemCostGenerator: React.FC<SystemCostGeneratorProps> = ({
   trip,
   onGenerateSystemCosts
 }) => {
-  const [currencyRates] = useState<CurrencyRates>(DEFAULT_CURRENCY_RATES);
 
   const [systemRates, setSystemRates] = useState<SystemCostRates>({
-    // ZAR rates (base currency)
+    // Base rates
     costPerKm: 2.5,
     costPerDay: 1500,
     adminFee: 500,
@@ -108,9 +85,9 @@ const SystemCostGenerator: React.FC<SystemCostGeneratorProps> = ({
     maintenanceRate: 0.015,
     // USD rates
     usdRates: {
-      costPerKm: 0.14, // Approximately 2.5 ZAR converted to USD
-      costPerDay: 81,  // Approximately 1500 ZAR converted to USD
-      adminFee: 27     // Approximately 500 ZAR converted to USD
+      costPerKm: 0.14,
+      costPerDay: 81,
+      adminFee: 27
     }
   });
 
@@ -224,14 +201,14 @@ const SystemCostGenerator: React.FC<SystemCostGeneratorProps> = ({
 
   const totalSystemCosts = calculatedCosts.reduce((sum, cost) => sum + cost.amount, 0);
 
-  // Update USD rates when ZAR rates change (auto-conversion)
+  // Update rates
   const updateCurrencyRates = () => {
     setSystemRates(prev => ({
       ...prev,
       usdRates: {
-        costPerKm: convertCurrency(prev.costPerKm, 'ZAR', 'USD', currencyRates),
-        costPerDay: convertCurrency(prev.costPerDay, 'ZAR', 'USD', currencyRates),
-        adminFee: convertCurrency(prev.adminFee, 'ZAR', 'USD', currencyRates)
+        costPerKm: prev.costPerKm,
+        costPerDay: prev.costPerDay,
+        adminFee: prev.adminFee
       }
     }));
   };
@@ -253,7 +230,7 @@ const SystemCostGenerator: React.FC<SystemCostGeneratorProps> = ({
         }
       }));
     } else {
-      // Update ZAR rate and auto-convert USD
+      // Update rate
       setSystemRates(prev => ({
         ...prev,
         [field]: parseFloat(value) || 0
@@ -286,46 +263,18 @@ const SystemCostGenerator: React.FC<SystemCostGeneratorProps> = ({
                   {trip.revenueCurrency}
                 </span>
               </div>
-              {trip.revenueCurrency === 'USD' && (
-                <>
-                  <div>
-                    <span className="font-medium">USD to ZAR:</span>
-                    <span className="ml-2">1 USD = R{currencyRates.usdToZar}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium">Using USD Rates:</span>
-                    <span className="ml-2 text-green-600">✓ Enabled</span>
-                  </div>
-                </>
-              )}
-              {trip.revenueCurrency === 'ZAR' && (
-                <>
-                  <div>
-                    <span className="font-medium">ZAR to USD:</span>
-                    <span className="ml-2">R1 = ${currencyRates.zarToUsd}</span>
-                  </div>
-                  <div>
-                    <span className="font-medium">Using ZAR Rates:</span>
-                    <span className="ml-2 text-green-600">✓ Base Currency</span>
-                  </div>
-                </>
-              )}
+
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="costPerKm">
-                Cost per Kilometer ({trip.revenueCurrency})
-                {trip.revenueCurrency === 'USD' && systemRates.usdRates && (
-                  <span className="text-xs text-gray-500 ml-1">
-                    (ZAR: R{systemRates.costPerKm})
-                  </span>
-                )}
+                Cost per Kilometer ($)
               </Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">
-                  {trip.revenueCurrency === 'USD' ? '$' : 'R'}
+                  $
                 </span>
                 <Input
                   id="costPerKm"
@@ -340,16 +289,11 @@ const SystemCostGenerator: React.FC<SystemCostGeneratorProps> = ({
 
             <div className="space-y-2">
               <Label htmlFor="costPerDay">
-                Cost per Day ({trip.revenueCurrency})
-                {trip.revenueCurrency === 'USD' && systemRates.usdRates && (
-                  <span className="text-xs text-gray-500 ml-1">
-                    (ZAR: R{systemRates.costPerDay})
-                  </span>
-                )}
+                Cost per Day ($)
               </Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">
-                  {trip.revenueCurrency === 'USD' ? '$' : 'R'}
+                  $
                 </span>
                 <Input
                   id="costPerDay"
@@ -364,16 +308,11 @@ const SystemCostGenerator: React.FC<SystemCostGeneratorProps> = ({
 
             <div className="space-y-2">
               <Label htmlFor="adminFee">
-                Admin Fee ({trip.revenueCurrency})
-                {trip.revenueCurrency === 'USD' && systemRates.usdRates && (
-                  <span className="text-xs text-gray-500 ml-1">
-                    (ZAR: R{systemRates.adminFee})
-                  </span>
-                )}
+                Admin Fee ($)
               </Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">
-                  {trip.revenueCurrency === 'USD' ? '$' : 'R'}
+                  $
                 </span>
                 <Input
                   id="adminFee"

@@ -7,7 +7,7 @@ export interface TripKPIs {
   netProfit: number;
   costPerKm: number | null;
   expenseCount: number;
-  currency: 'ZAR' | 'USD';
+  currency: string;
 }
 
 export interface CategoryBreakdown {
@@ -63,12 +63,12 @@ export const generateReport = (trip: Trip, costs: CostEntry[]): ProcessedTripRep
 };
 
 export const calculateKPIs = (trip: Trip, costs: CostEntry[]): TripKPIs => {
-  const currency = (trip.revenue_currency as 'ZAR' | 'USD') || 'USD';
+  const currency = (trip.revenue_currency as string) || 'USD';
   const totalRevenue = trip.base_revenue || 0;
 
   // Only sum costs that match the trip's revenue currency for accurate profit calculation
   const costsSameCurrency = costs.filter(cost => {
-    const costCurrency = cost.currency || 'ZAR';
+    const costCurrency = cost.currency || 'USD';
     return costCurrency === currency;
   });
   const totalExpenses = costsSameCurrency.reduce((sum, cost) => sum + Number(cost.amount), 0);

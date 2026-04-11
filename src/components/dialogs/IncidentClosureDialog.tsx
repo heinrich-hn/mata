@@ -23,6 +23,7 @@ import type { Incident } from "@/hooks/useIncidents";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface IncidentClosureDialogProps {
   incident: Incident | null;
@@ -37,6 +38,7 @@ const IncidentClosureDialog = ({
 }: IncidentClosureDialogProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { userName, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     insuranceNumber: "",
@@ -79,7 +81,7 @@ const IncidentClosureDialog = ({
             : null,
           resolution_notes: formData.resolutionNotes || null,
           closed_at: new Date().toISOString(),
-          closed_by: "Current User", // TODO: Get from auth context
+          closed_by: userName || user?.email || "Unknown User",
         })
         .eq("id", incident.id);
 

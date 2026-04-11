@@ -154,7 +154,7 @@ const TripReport = ({ report, onBack }: TripReportProps) => {
                 {missingReceipts.entries.map((cost, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <span className="font-medium">{cost.category}:</span>
-                    <span>{formatCurrency(Number(cost.amount), cost.currency as 'ZAR' | 'USD')}</span>
+                    <span>{formatCurrency(Number(cost.amount), cost.currency as string)}</span>
                     <span className="text-muted-foreground">- {formatDate(cost.date)}</span>
                     {cost.reference_number && (
                       <span className="text-muted-foreground">({cost.reference_number})</span>
@@ -312,7 +312,7 @@ const TripReport = ({ report, onBack }: TripReportProps) => {
                           )}
                         </TableCell>
                         <TableCell className="text-right font-semibold whitespace-nowrap">
-                          {formatCurrency(Number(cost.amount), cost.currency as 'ZAR' | 'USD')}
+                          {formatCurrency(Number(cost.amount), cost.currency as string)}
                         </TableCell>
                       </TableRow>
                     ))

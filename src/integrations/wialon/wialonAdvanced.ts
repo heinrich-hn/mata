@@ -1,5 +1,3 @@
-// src/integrations/wialon/wialonAdvanced.ts
-
 export interface TrackingEvent {
   type: 'position' | 'alarm' | 'status';
   unitId: number;

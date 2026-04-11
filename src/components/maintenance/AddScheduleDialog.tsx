@@ -1,4 +1,3 @@
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -11,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { getFleetSubcategory, isReeferFleet, FLEET_SUBCATEGORY_META } from "@/utils/fleetCategories";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -20,6 +20,27 @@ interface AddScheduleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+}
+
+interface ScheduleFormData {
+  vehicle_id: string;
+  title: string;
+  description: string;
+  schedule_type: string;
+  frequency: string;
+  frequency_value: number;
+  start_date: string;
+  category: string;
+  maintenance_type: string;
+  service_type?: string;
+  priority: string;
+  assigned_to: string;
+  estimated_duration_hours: number;
+  auto_create_job_card: boolean;
+  odometer_based: boolean;
+  odometer_interval_km: number;
+  last_odometer_reading: number;
+  notes: string;
 }
 
 export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddScheduleDialogProps) {
@@ -42,7 +63,7 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
     },
   });
 
-  const { register, handleSubmit, watch, setValue, reset } = useForm({
+  const { register, handleSubmit, watch, setValue, reset } = useForm<ScheduleFormData>({
     defaultValues: {
       vehicle_id: "none",
       title: "",
@@ -105,41 +126,41 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
     // so we leave it alone for non-reefer vehicles
   }
 
-  const onSubmit = async (data: Record<string, unknown>) => {
+  const onSubmit = async (data: ScheduleFormData) => {
     setLoading(true);
     try {
       // Calculate next_due_date based on start_date and frequency
-      const startDate = new Date(data.start_date as string);
+      const startDate = new Date(data.start_date);
       const nextDueDate = new Date(startDate);
 
       if (data.schedule_type === "recurring") {
         // Add frequency interval to start date
         switch (data.frequency) {
           case "daily":
-            nextDueDate.setDate(nextDueDate.getDate() + (data.frequency_value as number || 1));
+            nextDueDate.setDate(nextDueDate.getDate() + (data.frequency_value || 1));
             break;
           case "weekly":
-            nextDueDate.setDate(nextDueDate.getDate() + (7 * (data.frequency_value as number || 1)));
+            nextDueDate.setDate(nextDueDate.getDate() + (7 * (data.frequency_value || 1)));
             break;
           case "monthly":
-            nextDueDate.setMonth(nextDueDate.getMonth() + (data.frequency_value as number || 1));
+            nextDueDate.setMonth(nextDueDate.getMonth() + (data.frequency_value || 1));
             break;
           case "quarterly":
-            nextDueDate.setMonth(nextDueDate.getMonth() + (3 * (data.frequency_value as number || 1)));
+            nextDueDate.setMonth(nextDueDate.getMonth() + (3 * (data.frequency_value || 1)));
             break;
           case "yearly":
-            nextDueDate.setFullYear(nextDueDate.getFullYear() + (data.frequency_value as number || 1));
+            nextDueDate.setFullYear(nextDueDate.getFullYear() + (data.frequency_value || 1));
             break;
         }
       }
 
       // For KM-based or hours-based (REEFER) schedules, use a far-future sentinel date
-      const isOdometerBased = data.odometer_based as boolean;
+      const isOdometerBased = data.odometer_based;
       const finalNextDueDate = isOdometerBased
         ? '2099-12-31'
         : nextDueDate.toISOString().split('T')[0];
 
-      const submitData = {
+      const submitData: Database['public']['Tables']['maintenance_schedules']['Insert'] = {
         title: data.title,
         description: data.description,
         schedule_type: data.schedule_type,
@@ -163,7 +184,7 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
         // Required fields
         next_due_date: finalNextDueDate,
         // Vehicle ID - null for fleet-wide, specific UUID for vehicle-specific
-        vehicle_id: data.vehicle_id === "none" ? null : data.vehicle_id,
+        vehicle_id: data.vehicle_id === "none" ? "" : (data.vehicle_id || ""),
         // Optional fields
         created_by: "System User",
         notification_channels: {
@@ -174,8 +195,7 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
         notification_recipients: [],
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await supabase.from("maintenance_schedules").insert([submitData as any]);
+      const { error } = await supabase.from("maintenance_schedules").insert([submitData]);
       if (error) throw error;
 
       toast({

@@ -2,43 +2,39 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import
-  {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-  } from '@/components/ui/collapsible';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
-import
-  {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-  } from '@/components/ui/tooltip';
-import
-  {
-    formatExpenseAmount,
-    getExpenseBadgeColor,
-    RouteExpense
-  } from '@/constants/routePredefinedExpenses';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  formatExpenseAmount,
+  getExpenseBadgeColor,
+  RouteExpense
+} from '@/constants/routePredefinedExpenses';
 import { useToast } from '@/hooks/use-toast';
 import { requestGoogleSheetsSync } from '@/hooks/useGoogleSheetsSync';
 import { useRouteExpenses } from '@/hooks/useRouteExpenses';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import
-  {
-    AlertCircle,
-    CheckCircle2,
-    ChevronDown,
-    DollarSign,
-    Loader2,
-    MapPin,
-    Plus,
-    Sparkles,
-  } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  DollarSign,
+  Loader2,
+  MapPin,
+  Plus,
+  Sparkles,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface RouteExpensesSuggestorProps {
@@ -86,12 +82,12 @@ const RouteExpensesSuggestor = ({
   // Auto-select required expenses when route config loads
   useEffect(() => {
     if (!routeConfig?.expenses || hasAutoSelectedRequired) return;
-    
+
     const requiredIndices = routeConfig.expenses
       .map((expense, index) => ({ expense, index }))
       .filter(({ expense, index }) => expense.is_required && !expenseStatus.get(index))
       .map(({ index }) => index);
-    
+
     if (requiredIndices.length > 0) {
       setSelectedExpenses(new Set(requiredIndices));
       setHasAutoSelectedRequired(true);
@@ -100,22 +96,20 @@ const RouteExpensesSuggestor = ({
 
   // Calculate totals
   const totals = useMemo(() => {
-    if (!routeConfig?.expenses) return { required: { usd: 0, zar: 0 }, selected: { usd: 0, zar: 0 } };
+    if (!routeConfig?.expenses) return { required: 0, selected: 0 };
 
-    const required = { usd: 0, zar: 0 };
-    const selected = { usd: 0, zar: 0 };
+    let required = 0;
+    let selected = 0;
 
     routeConfig.expenses.forEach((expense, index) => {
       if (expenseStatus.get(index)) return; // Skip already added
 
       if (expense.is_required) {
-        if (expense.currency === 'USD') required.usd += expense.amount;
-        else required.zar += expense.amount;
+        required += expense.amount;
       }
 
       if (selectedExpenses.has(index)) {
-        if (expense.currency === 'USD') selected.usd += expense.amount;
-        else selected.zar += expense.amount;
+        selected += expense.amount;
       }
     });
 
@@ -357,14 +351,11 @@ const RouteExpensesSuggestor = ({
                       Selected: {selectedExpenses.size} expense(s)
                     </p>
                     <div className="flex gap-2 text-sm text-muted-foreground">
-                      {totals.selected.usd > 0 && (
+                      {totals.selected > 0 && (
                         <span className="flex items-center gap-1">
                           <DollarSign className="h-3 w-3" />
-                          {formatExpenseAmount(totals.selected.usd, 'USD')}
+                          {formatExpenseAmount(totals.selected, 'USD')}
                         </span>
-                      )}
-                      {totals.selected.zar > 0 && (
-                        <span>{formatExpenseAmount(totals.selected.zar, 'ZAR')}</span>
                       )}
                     </div>
                   </div>
@@ -408,8 +399,8 @@ const ExpenseItem = ({ expense, isAdded, isSelected, onToggle, route }: ExpenseI
         isAdded
           ? 'bg-green-50 border-green-200 opacity-60'
           : isSelected
-          ? 'bg-blue-50 border-blue-300 shadow-sm'
-          : 'bg-white border-gray-200 hover:border-gray-300'
+            ? 'bg-blue-50 border-blue-300 shadow-sm'
+            : 'bg-white border-gray-200 hover:border-gray-300'
       )}
     >
       <div className="flex items-center gap-3">

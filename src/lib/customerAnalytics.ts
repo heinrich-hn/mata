@@ -64,7 +64,7 @@ export const calculateCustomerPerformance = (trips: Trip[]): CustomerPerformance
     };
     const currency = (tripWithCurrency?.revenue_currency ||
                      tripWithCurrency?.payment_currency ||
-                     'ZAR') as 'ZAR' | 'USD';
+                     'USD') as string;
 
     return {
       customerName,

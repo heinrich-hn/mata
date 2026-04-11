@@ -56,7 +56,6 @@ const getTruckDisplayName = (fleetNumber: string): string => {
 type DepotKey = keyof typeof DEPOT_CONFIG;
 
 interface CurrencyAmounts {
-  ZAR: number;
   USD: number;
 }
 
@@ -98,10 +97,10 @@ const CurrencyDisplay = ({
   type?: 'revenue' | 'expense' | 'profit' | 'default';
   size?: 'default' | 'lg';
 }) => {
-  const hasZAR = amounts.ZAR !== 0;
+  const hasAmount = amounts.USD !== 0;
   const hasUSD = amounts.USD !== 0;
 
-  if (!hasZAR && !hasUSD) {
+  if (!hasAmount && !hasUSD) {
     return <span className="text-muted-foreground/60 text-sm italic">No data</span>;
   }
 
@@ -115,17 +114,8 @@ const CurrencyDisplay = ({
   const sizeClass = size === 'lg' ? 'text-base font-bold' : 'text-sm font-semibold';
 
   return (
-    <div className="space-y-0.5">
-      {hasZAR && (
-        <div className={cn(sizeClass, 'tracking-tight tabular-nums', getColorClass(amounts.ZAR))}>
-          {formatCurrency(amounts.ZAR, 'ZAR')}
-        </div>
-      )}
-      {hasUSD && (
-        <div className={cn(sizeClass, 'tracking-tight tabular-nums', getColorClass(amounts.USD))}>
-          {formatCurrency(amounts.USD, 'USD')}
-        </div>
-      )}
+    <div className={cn(sizeClass, 'tracking-tight tabular-nums', getColorClass(amounts.USD))}>
+      {formatCurrency(amounts.USD)}
     </div>
   );
 };
@@ -200,11 +190,7 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
     (tripId: string): CurrencyAmounts => {
       const tripCosts = costEntries.filter((cost) => cost.trip_id === tripId);
       return {
-        ZAR: tripCosts
-          .filter((cost) => (cost.currency || 'ZAR') === 'ZAR')
-          .reduce((sum, cost) => sum + Number(cost.amount || 0), 0),
         USD: tripCosts
-          .filter((cost) => cost.currency === 'USD')
           .reduce((sum, cost) => sum + Number(cost.amount || 0), 0),
       };
     },
@@ -221,9 +207,9 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
         summariesMap.set(truck, {
           fleetNumber: truck,
           tripCount: 0,
-          revenue: { ZAR: 0, USD: 0 },
-          expenses: { ZAR: 0, USD: 0 },
-          profit: { ZAR: 0, USD: 0 },
+          revenue: { USD: 0 },
+          expenses: { USD: 0 },
+          profit: { USD: 0 },
           totalKm: 0,
           weeklySummaries: [],
         });
@@ -271,21 +257,19 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
         startDate: format(weekStart, 'dd MMM'),
         endDate: format(weekEnd, 'dd MMM yyyy'),
         tripCount: 0,
-        revenue: { ZAR: 0, USD: 0 },
-        expenses: { ZAR: 0, USD: 0 },
-        profit: { ZAR: 0, USD: 0 },
+        revenue: { USD: 0 },
+        expenses: { USD: 0 },
+        profit: { USD: 0 },
         totalKm: 0,
       };
 
       const tripCosts = getTripCostsByCurrency(trip.id);
-      const tripCurrency = (trip.revenue_currency || 'ZAR') as 'ZAR' | 'USD';
+      const tripCurrency = (trip.revenue_currency || 'USD') as string;
       const revenue = trip.base_revenue || 0;
 
       existing.tripCount += 1;
       existing.revenue[tripCurrency] += revenue;
-      existing.expenses.ZAR += tripCosts.ZAR;
       existing.expenses.USD += tripCosts.USD;
-      existing.profit.ZAR = existing.revenue.ZAR - existing.expenses.ZAR;
       existing.profit.USD = existing.revenue.USD - existing.expenses.USD;
       existing.totalKm += trip.distance_km || 0;
 
@@ -295,9 +279,7 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
       const summary = summariesMap.get(fleetNumber)!;
       summary.tripCount += 1;
       summary.revenue[tripCurrency] += revenue;
-      summary.expenses.ZAR += tripCosts.ZAR;
       summary.expenses.USD += tripCosts.USD;
-      summary.profit.ZAR = summary.revenue.ZAR - summary.expenses.ZAR;
       summary.profit.USD = summary.revenue.USD - summary.expenses.USD;
       summary.totalKm += trip.distance_km || 0;
     });
@@ -329,9 +311,9 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
           return {
             fleetNumber: truck,
             tripCount: 0,
-            revenue: { ZAR: 0, USD: 0 },
-            expenses: { ZAR: 0, USD: 0 },
-            profit: { ZAR: 0, USD: 0 },
+            revenue: { USD: 0 },
+            expenses: { USD: 0 },
+            profit: { USD: 0 },
             totalKm: 0,
             filteredWeeklySummaries: [],
             selectedWeek: weekFilter,
@@ -354,15 +336,13 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
         }
 
         // Sum up only filtered weeks
-        const filteredRevenue = { ZAR: 0, USD: 0 };
-        const filteredExpenses = { ZAR: 0, USD: 0 };
+        const filteredRevenue = { USD: 0 };
+        const filteredExpenses = { USD: 0 };
         let filteredTrips = 0;
         let filteredKm = 0;
 
         filteredWeeklySummaries.forEach((w) => {
-          filteredRevenue.ZAR += w.revenue.ZAR;
           filteredRevenue.USD += w.revenue.USD;
-          filteredExpenses.ZAR += w.expenses.ZAR;
           filteredExpenses.USD += w.expenses.USD;
           filteredTrips += w.tripCount;
           filteredKm += w.totalKm;
@@ -374,7 +354,6 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
           revenue: filteredRevenue,
           expenses: filteredExpenses,
           profit: {
-            ZAR: filteredRevenue.ZAR - filteredExpenses.ZAR,
             USD: filteredRevenue.USD - filteredExpenses.USD,
           },
           totalKm: filteredKm,
@@ -388,24 +367,21 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
         (acc, truck) => ({
           tripCount: acc.tripCount + truck.tripCount,
           revenue: {
-            ZAR: acc.revenue.ZAR + truck.revenue.ZAR,
             USD: acc.revenue.USD + truck.revenue.USD,
           },
           expenses: {
-            ZAR: acc.expenses.ZAR + truck.expenses.ZAR,
             USD: acc.expenses.USD + truck.expenses.USD,
           },
           profit: {
-            ZAR: acc.profit.ZAR + truck.profit.ZAR,
             USD: acc.profit.USD + truck.profit.USD,
           },
           totalKm: acc.totalKm + truck.totalKm,
         }),
         {
           tripCount: 0,
-          revenue: { ZAR: 0, USD: 0 },
-          expenses: { ZAR: 0, USD: 0 },
-          profit: { ZAR: 0, USD: 0 },
+          revenue: { USD: 0 },
+          expenses: { USD: 0 },
+          profit: { USD: 0 },
           totalKm: 0,
         }
       );
@@ -521,8 +497,8 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
                         {trucksData.map((truck) => {
                           const hasData = truck.tripCount > 0;
                           const profitMargin =
-                            truck.revenue.ZAR > 0
-                              ? (truck.profit.ZAR / truck.revenue.ZAR) * 100
+                            truck.revenue.USD > 0
+                              ? (truck.profit.USD / truck.revenue.USD) * 100
                               : 0;
 
                           return (
@@ -602,7 +578,7 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
                               </div>
 
                               {/* Profit margin progress bar - Modern styling */}
-                              {hasData && truck.revenue.ZAR > 0 && (
+                              {hasData && truck.revenue.USD > 0 && (
                                 <div className="mt-4 pt-4 border-t border-muted/50">
                                   <div className="flex justify-between items-center text-xs mb-2">
                                     <span className="text-muted-foreground/70 font-medium flex items-center gap-1.5">
@@ -620,7 +596,7 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
                                     value={Math.min(100, Math.max(0, profitMargin))}
                                     className={cn(
                                       'h-2 rounded-full',
-                                      truck.profit.ZAR >= 0
+                                      truck.profit.USD >= 0
                                         ? '[&>div]:bg-emerald-500'
                                         : '[&>div]:bg-orange-500'
                                     )}

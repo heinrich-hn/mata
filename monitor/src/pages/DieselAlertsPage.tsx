@@ -308,7 +308,7 @@ export default function DieselAlertsPage() {
                             )}
                             {record.total_cost != null && (
                               <span>
-                                {(record.currency || "ZAR")} {record.total_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {(record.currency || "USD")} {record.total_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             )}
                             {record.distance_travelled != null && (

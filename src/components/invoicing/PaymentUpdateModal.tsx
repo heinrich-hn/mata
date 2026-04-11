@@ -52,7 +52,7 @@ const PaymentUpdateModal: React.FC<PaymentUpdateModalProps> = ({
     setSubmitError(null);
   };
 
-  const formatCurrency = (amount: number | null | undefined, currency: string = 'ZAR') => {
+  const formatCurrency = (amount: number | null | undefined, currency: string = 'USD') => {
     if (!amount) return `${currency} 0.00`;
     return `${currency} ${amount.toFixed(2)}`;
   };
@@ -255,7 +255,7 @@ const PaymentUpdateModal: React.FC<PaymentUpdateModalProps> = ({
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="paymentAmount">Payment Amount ({trip.revenue_currency || 'ZAR'}) *</Label>
+                    <Label htmlFor="paymentAmount">Payment Amount ({trip.revenue_currency || 'USD'}) *</Label>
                     <Input
                       id="paymentAmount"
                       type="number"
