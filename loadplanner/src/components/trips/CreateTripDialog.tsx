@@ -293,8 +293,8 @@ export function CreateLoadDialog({
                     <FormItem>
                       <FormLabel>Client</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
-                        value={field.value || ""}
+                        onValueChange={(val) => field.onChange(val === "__none__" ? "" : val)}
+                        value={field.value || "__none__"}
                       >
                         <FormControl>
                           <SelectTrigger>

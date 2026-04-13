@@ -67,7 +67,8 @@ serve(async (req) => {
       success: [] as string[],
       failed: [] as Array<{ loadRef: string; error: string }>,
       updated: [] as string[],
-      created: [] as string[]
+      created: [] as string[],
+      skipped: [] as Array<{ loadRef: string; reason: string }>
     };
 
     for (const trip of trips) {
@@ -249,7 +250,7 @@ serve(async (req) => {
           }
         }
 
-        // Check if trip already exists
+        // ── Check if trip already exists — if so, ALWAYS skip (one-time post only) ──
         const { data: existingTrip, error: checkError } = await supabase
           .from('trips')
           .select('id')
@@ -266,27 +267,13 @@ serve(async (req) => {
         }
 
         if (existingTrip) {
-          // Update existing trip
-          const { id: _id, created_at: _created_at, ...updateData } = tripData;
-          const { error: updateError } = await supabase
-            .from('trips')
-            .update({
-              ...updateData,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingTrip.id);
-
-          if (updateError) {
-            console.error(`❌ Error updating trip ${trip.loadRef}:`, updateError);
-            results.failed.push({
-              loadRef: trip.loadRef,
-              error: `Update error: ${updateError.message}`
-            });
-          } else {
-            console.log(`✅ Updated trip: ${trip.loadRef}`);
-            results.updated.push(trip.loadRef);
-            results.success.push(trip.loadRef);
-          }
+          // Trip already exists — never post again, no updates
+          console.log(`⏭️ SKIP ${trip.loadRef} — already received, will not post again`);
+          results.skipped.push({
+            loadRef: trip.loadRef,
+            reason: 'Already received — one-time post only'
+          });
+          continue;
         } else {
           // Create new trip
           const { error: insertError } = await supabase
@@ -320,16 +307,21 @@ serve(async (req) => {
 
     const response = {
       status: results.failed.length > 0 ? 'partial_success' : 'success',
-      message: `Processed ${trips.length} trip(s) — ${results.created.length} created, ${results.updated.length} updated, ${results.failed.length} failed`,
+      message: `Processed ${trips.length} trip(s) — ${results.created.length} created, ${results.updated.length} updated, ${results.skipped.length} skipped, ${results.failed.length} failed`,
       results: {
         total: trips.length,
         successful: results.success.length,
         created: results.created.length,
         updated: results.updated.length,
+        skipped: results.skipped.length,
         failed: results.failed.length
       },
       details: {
         success: results.success,
+        skipped: results.skipped.map(s => ({
+          loadRef: String(s.loadRef),
+          reason: String(s.reason)
+        })),
         failed: results.failed.map(f => ({
           loadRef: String(f.loadRef),
           error: String(f.error)

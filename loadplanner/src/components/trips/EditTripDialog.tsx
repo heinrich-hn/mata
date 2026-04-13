@@ -451,8 +451,8 @@ export function EditLoadDialog({
                     <FormItem>
                       <FormLabel>Client</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
+                        onValueChange={(val) => field.onChange(val === "__none__" ? "" : val)}
+                        value={field.value || "__none__"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -460,6 +460,9 @@ export function EditLoadDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
+                          <SelectItem value="__none__">
+                            <span className="text-muted-foreground">No client</span>
+                          </SelectItem>
                           {clients.map((client) => (
                             <SelectItem key={client.id} value={client.id}>
                               {client.name}

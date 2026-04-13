@@ -727,6 +727,8 @@ export type Database = {
           quantity: number
           special_handling: string[] | null
           status: Database["public"]["Enums"]["load_status"]
+          synced_to_dashboard: boolean
+          synced_to_dashboard_at: string | null
           time_window: string
           updated_at: string
           weight: number
@@ -769,6 +771,8 @@ export type Database = {
           quantity?: number
           special_handling?: string[] | null
           status?: Database["public"]["Enums"]["load_status"]
+          synced_to_dashboard?: boolean
+          synced_to_dashboard_at?: string | null
           time_window: string
           updated_at?: string
           weight?: number
@@ -811,6 +815,8 @@ export type Database = {
           quantity?: number
           special_handling?: string[] | null
           status?: Database["public"]["Enums"]["load_status"]
+          synced_to_dashboard?: boolean
+          synced_to_dashboard_at?: string | null
           time_window?: string
           updated_at?: string
           weight?: number

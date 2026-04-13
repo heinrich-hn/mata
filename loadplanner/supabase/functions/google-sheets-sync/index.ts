@@ -398,7 +398,7 @@ serve(async (req) => {
       .select(`
         id, load_id, status, origin, destination, cargo_type,
         loading_date, offloading_date, time_window, notes, created_at, updated_at,
-        client_id, fleet_vehicle_id, driver_id,
+        client_id, fleet_vehicle_id, driver_id, synced_to_dashboard,
         fleet_vehicles!loads_fleet_vehicle_id_fkey ( vehicle_id, type ),
         drivers!loads_driver_id_fkey ( name, contact )
       `)
@@ -460,22 +460,43 @@ serve(async (req) => {
 
     console.log(`✅ Synced ${dataRows.length} loads to Google Sheets`);
 
-    console.log('📤 Posting to receiver webhook...');
+    // ── Only post DELIVERED loads that haven't been synced yet ──
+    const deliveredUnsynced = (loads as any[]).filter(
+      (load) => load.status === 'delivered' && !load.synced_to_dashboard
+    );
+
+    console.log(`📤 Posting ${deliveredUnsynced.length} delivered+unsynced loads to receiver (${(loads as any[]).length - deliveredUnsynced.length} skipped — not delivered or already synced)...`);
+
     const receiverResults = {
       success: 0,
       failed: 0,
       created: 0,
       updated: 0,
-      skipped: 0,
+      skipped: (loads as any[]).length - deliveredUnsynced.length,
       errors: [] as string[]
     };
 
-    for (const load of loads as any[]) {
+    for (const load of deliveredUnsynced) {
       const result = await postToReceiver(load);
       if (result.ok) {
         receiverResults.success++;
         if (result.created) receiverResults.created++;
         if (result.updated) receiverResults.updated++;
+
+        // Mark as synced so it won't be posted again
+        const { error: flagError } = await supabase
+          .from('loads')
+          .update({
+            synced_to_dashboard: true,
+            synced_to_dashboard_at: new Date().toISOString(),
+          })
+          .eq('id', load.id);
+
+        if (flagError) {
+          console.warn(`⚠️ Posted ${load.load_id} but failed to set synced flag:`, flagError.message);
+        } else {
+          console.log(`🔒 Marked ${load.load_id} as synced_to_dashboard`);
+        }
       } else {
         receiverResults.failed++;
         receiverResults.errors.push(`${load.load_id}: ${result.error}`);
