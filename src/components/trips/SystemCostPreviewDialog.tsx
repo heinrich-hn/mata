@@ -19,8 +19,6 @@ interface SystemCostPreviewDialogProps {
     arrivalDate: string | null;
     distanceKm: number | null;
     effectiveRates: EffectiveRate[];
-    /** If true, delete existing system costs before inserting (for date edits) */
-    replaceExisting?: boolean;
     /** Vehicle FK identifiers for overlap detection */
     fleetVehicleId?: string | null;
     vehicleId?: string | null;
@@ -37,7 +35,6 @@ const SystemCostPreviewDialog = ({
     arrivalDate,
     distanceKm,
     effectiveRates,
-    replaceExisting = false,
     fleetVehicleId,
     vehicleId,
 }: SystemCostPreviewDialogProps) => {
@@ -100,21 +97,19 @@ const SystemCostPreviewDialog = ({
     const handleAccept = async () => {
         setGenerating(true);
         try {
-            // If replacing, delete existing system costs first
-            if (replaceExisting) {
-                await supabase
-                    .from('cost_entries')
-                    .delete()
-                    .eq('trip_id', tripId)
-                    .eq('is_system_generated', true)
-                    .eq('category', 'System Costs');
-            }
+            // Always delete existing system costs before re-inserting (replace, never duplicate)
+            await supabase
+                .from('cost_entries')
+                .delete()
+                .eq('trip_id', tripId)
+                .eq('is_system_generated', true)
+                .eq('category', 'System Costs');
 
             // Check if any overrides were applied
             const hasOverrides = Object.keys(overrides).length > 0;
 
             if (hasOverrides) {
-                // Insert manually with overridden amounts
+                // Insert with overridden amounts
                 const entries = finalCosts.map((cost) => ({
                     ...cost,
                 }));
@@ -124,40 +119,15 @@ const SystemCostPreviewDialog = ({
                     if (error) throw error;
                 }
             } else {
-                // Use the standard function (handles alert resolution too)
-                if (replaceExisting) {
-                    // We already deleted, so insert directly
-                    const entries = calculateSystemCosts(
-                        { id: tripId, departure_date: departureDate, arrival_date: arrivalDate, distance_km: distanceKm },
-                        effectiveRates,
-                        overlapDays
-                    );
-                    if (entries.length > 0) {
-                        const { error } = await supabase.from('cost_entries').insert(entries as never);
-                        if (error) throw error;
-                    }
-                } else {
-                    // Insert with overlap adjustment (can't use generateAndInsertSystemCosts since it doesn't support dayAdj)
-                    const entries = calculateSystemCosts(
-                        { id: tripId, departure_date: departureDate, arrival_date: arrivalDate, distance_km: distanceKm },
-                        effectiveRates,
-                        overlapDays
-                    );
-                    if (entries.length > 0) {
-                        // Check if system costs already exist
-                        const { data: existing } = await supabase
-                            .from('cost_entries')
-                            .select('id')
-                            .eq('trip_id', tripId)
-                            .eq('is_system_generated', true)
-                            .eq('category', 'System Costs');
-                        if (existing && existing.length > 0) {
-                            // Already exists — skip
-                        } else {
-                            const { error } = await supabase.from('cost_entries').insert(entries as never);
-                            if (error) throw error;
-                        }
-                    }
+                // Insert fresh calculated entries
+                const entries = calculateSystemCosts(
+                    { id: tripId, departure_date: departureDate, arrival_date: arrivalDate, distance_km: distanceKm },
+                    effectiveRates,
+                    overlapDays
+                );
+                if (entries.length > 0) {
+                    const { error } = await supabase.from('cost_entries').insert(entries as never);
+                    if (error) throw error;
                 }
             }
 

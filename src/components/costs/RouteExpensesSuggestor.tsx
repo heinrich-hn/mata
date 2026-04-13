@@ -40,7 +40,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 interface RouteExpensesSuggestorProps {
   tripId: string;
   route: string | null | undefined;
-  existingCosts: Array<{ category: string; sub_category?: string }>;
+  existingCosts: Array<{ category: string; sub_category?: string; is_system_generated?: boolean }>;
   onExpensesAdded: () => void;
 }
 
@@ -57,18 +57,19 @@ const RouteExpensesSuggestor = ({
   const [isOpen, setIsOpen] = useState(true);
   const [hasAutoSelectedRequired, setHasAutoSelectedRequired] = useState(false);
 
-  // Check which expenses already exist
+  // Check which expenses already exist (only manual costs block re-adding; system-generated can be replaced)
   const expenseStatus = useMemo(() => {
     if (!routeConfig?.expenses) return new Map<number, boolean>();
 
     const statusMap = new Map<number, boolean>();
     routeConfig.expenses.forEach((expense, index) => {
-      const exists = existingCosts.some(
+      const existsAsManual = existingCosts.some(
         (cost) =>
           cost.category === expense.category &&
-          cost.sub_category === expense.sub_category
+          cost.sub_category === expense.sub_category &&
+          !cost.is_system_generated
       );
-      statusMap.set(index, exists);
+      statusMap.set(index, existsAsManual);
     });
     return statusMap;
   }, [routeConfig?.expenses, existingCosts]);
@@ -167,7 +168,21 @@ const RouteExpensesSuggestor = ({
           notes: `Auto-added from route: ${route}`,
           is_flagged: false,
           is_system_generated: true,
+          investigation_status: 'resolved',
+          resolved_at: new Date().toISOString(),
+          resolved_by: 'system-route-expense',
         }));
+
+      // Delete any existing system-generated route expenses that will be replaced
+      for (const expense of expensesToAdd) {
+        await supabase
+          .from('cost_entries')
+          .delete()
+          .eq('trip_id', tripId)
+          .eq('category', expense.category)
+          .eq('sub_category', expense.sub_category)
+          .eq('is_system_generated', true);
+      }
 
       const { error } = await supabase.from('cost_entries').insert(expensesToAdd);
 

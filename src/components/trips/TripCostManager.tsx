@@ -1,16 +1,15 @@
 import { CostForm } from '@/components/costs/CostForm';
 import RouteExpensesSuggestor from '@/components/costs/RouteExpensesSuggestor';
-import
-  {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from '@/components/ui/alert-dialog';
+import {
+AlertDialog,
+AlertDialogAction,
+AlertDialogCancel,
+AlertDialogContent,
+AlertDialogDescription,
+AlertDialogFooter,
+AlertDialogHeader,
+AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -168,7 +167,7 @@ const TripCostManager = ({ tripId, route, costs, onRefresh, onResolveFlag }: Tri
         <RouteExpensesSuggestor
           tripId={tripId}
           route={route}
-          existingCosts={costs.map((c) => ({ category: c.category, sub_category: c.sub_category }))}
+          existingCosts={costs.map((c) => ({ category: c.category, sub_category: c.sub_category, is_system_generated: c.is_system_generated ?? false }))}
           onExpensesAdded={onRefresh}
         />
       )}

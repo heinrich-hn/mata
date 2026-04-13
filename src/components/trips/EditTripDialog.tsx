@@ -100,7 +100,6 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
     departureDate: string | null;
     arrivalDate: string | null;
     distanceKm: number | null;
-    replaceExisting: boolean;
     fleetVehicleId: string | null;
     vehicleId: string | null;
   } | null>(null);
@@ -360,7 +359,6 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
           departureDate: data.departure_date || null,
           arrivalDate: data.arrival_date || null,
           distanceKm: data.distance_km ? parseFloat(data.distance_km) : null,
-          replaceExisting: true,
           fleetVehicleId: trip.fleet_vehicle_id || null,
           vehicleId: data.vehicle_id || trip.vehicle_id || null,
         });
@@ -1028,7 +1026,6 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
         arrivalDate={systemCostPreview?.arrivalDate || null}
         distanceKm={systemCostPreview?.distanceKm || null}
         effectiveRates={effectiveRates}
-        replaceExisting={systemCostPreview?.replaceExisting}
         fleetVehicleId={systemCostPreview?.fleetVehicleId || null}
         vehicleId={systemCostPreview?.vehicleId || null}
       />

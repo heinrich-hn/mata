@@ -99,13 +99,32 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
 
   // Initialize data and set up real-time subscriptions
   useEffect(() => {
+    const fetchAllCostEntries = async () => {
+      const allCosts: Database['public']['Tables']['cost_entries']['Row'][] = [];
+      let from = 0;
+      const PAGE_SIZE = 1000;
+      while (true) {
+        const { data: page, error } = await supabase
+          .from('cost_entries')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        if (!page || page.length === 0) break;
+        allCosts.push(...page);
+        if (page.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      return allCosts;
+    };
+
     const initializeData = async () => {
       try {
         setIsLoading(true);
 
         const [
           tripsRes,
-          costsRes,
+          costsData,
           dieselRes,
           dieselNormsRes,
           behaviorRes,
@@ -114,7 +133,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
           loadsRes
         ] = await Promise.all([
           supabase.from('trips').select('*').order('created_at', { ascending: false }),
-          supabase.from('cost_entries').select('*').order('created_at', { ascending: false }),
+          fetchAllCostEntries(),
           supabase.from('diesel_records').select('*').order('date', { ascending: false }),
           supabase.from('diesel_norms').select('*').order('fleet_number'),
           supabase.from('driver_behavior_events').select('*').order('event_date', { ascending: false }),
@@ -124,7 +143,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         ]);
 
         if (tripsRes.data) setTrips(tripsRes.data.map(mapDbToTrip));
-        if (costsRes.data) setCostEntries(costsRes.data.map(mapDbToCostEntry));
+        setCostEntries(costsData.map(mapDbToCostEntry));
         if (dieselRes.data) setDieselRecords(dieselRes.data.map(mapDbToDieselRecord));
         if (dieselNormsRes.data) setDieselNorms(dieselNormsRes.data.map(mapDbToDieselNorms));
         if (behaviorRes.data) setDriverBehaviorEvents(behaviorRes.data.map(mapDbToDriverEvent));

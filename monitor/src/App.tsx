@@ -162,7 +162,7 @@ function AppContent() {
           const batch = tripIds.slice(i, i + 50);
           const { data: costData } = await supabase
             .from('cost_entries')
-            .select('trip_id, is_flagged, investigation_status, attachments')
+            .select('trip_id, is_flagged, investigation_status, attachments, is_system_generated')
             .in('trip_id', batch)
             .limit(5000);
 
@@ -173,14 +173,16 @@ function AppContent() {
                 costEntriesMap[cost.trip_id] = { hasCosts: false, flaggedCount: 0, unverifiedCount: 0, missingDocCount: 0 };
               }
               costEntriesMap[cost.trip_id].hasCosts = true;
+              // System-generated costs (diesel linkage, route expenses, system rates) are pre-verified — skip from alert counts
+              if (cost.is_system_generated) continue;
               if (cost.is_flagged && cost.investigation_status !== 'resolved') {
                 costEntriesMap[cost.trip_id].flaggedCount++;
               }
-              // Unverified = any cost not yet approved/verified by an operator
+              // Unverified = any manual cost not yet approved/verified by an operator
               if (cost.investigation_status !== 'resolved') {
                 costEntriesMap[cost.trip_id].unverifiedCount++;
               }
-              // Missing document = cost entry without any attachments/slips
+              // Missing document = manual cost entry without any attachments/slips
               const attachments = cost.attachments as unknown[] | null;
               if (!attachments || (Array.isArray(attachments) && attachments.length === 0)) {
                 costEntriesMap[cost.trip_id].missingDocCount++;

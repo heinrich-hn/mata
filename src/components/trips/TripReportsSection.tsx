@@ -461,6 +461,13 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
     const filteredTripIds = new Set(filteredTrips.map(t => t.id));
     const filteredCosts = costEntries.filter(c => filteredTripIds.has(c.trip_id));
 
+    // Build trip → fleet_number lookup for vehicle grouping
+    const tripFleetMap = new Map<string, string>();
+    filteredTrips.forEach(t => {
+      const fn = (t as Trip & { fleet_number?: string }).fleet_number;
+      if (fn) tripFleetMap.set(t.id, fn);
+    });
+
     // By category
     const categoryMap = new Map<string, { category: string; count: number; amounts: CurrencyAmounts }>();
     filteredCosts.forEach(cost => {
@@ -487,10 +494,10 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
     });
     const bySubCategory = Array.from(subCatMap.values()).sort((a, b) => b.amounts.USD - a.amounts.USD);
 
-    // By vehicle
+    // By vehicle — prefer trip's fleet_number, fall back to cost.vehicle_identifier
     const vehicleMap = new Map<string, { vehicle: string; count: number; amounts: CurrencyAmounts }>();
     filteredCosts.forEach(cost => {
-      const vehicle = cost.vehicle_identifier || 'Unknown';
+      const vehicle = (cost.trip_id && tripFleetMap.get(cost.trip_id)) || cost.vehicle_identifier || 'Unknown';
       const existing = vehicleMap.get(vehicle) || { vehicle, count: 0, amounts: { USD: 0 } };
       existing.count += 1;
       const currency = (cost.currency || 'USD') as string;

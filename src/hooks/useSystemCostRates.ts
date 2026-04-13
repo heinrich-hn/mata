@@ -250,33 +250,29 @@ export function calculateSystemCosts(trip: TripForCostCalc, rates: EffectiveRate
 }
 
 /**
- * Generate and insert system costs for a trip (idempotent — skips if already present).
+ * Generate and insert system costs for a trip.
+ * Replaces any existing system costs — no duplicates, no verification needed.
  */
 export async function generateAndInsertSystemCosts(
     trip: TripForCostCalc,
     rates: EffectiveRate[]
 ): Promise<{ inserted: number; skipped: boolean }> {
-    // Check if system costs already exist for this trip
-    const { data: existing, error: checkError } = await supabase
-        .from('cost_entries')
-        .select('id')
-        .eq('trip_id', trip.id)
-        .eq('is_system_generated', true)
-        .eq('category', 'System Costs')
-        .limit(1);
-
-    if (checkError) {
-        console.error('Error checking existing system costs:', checkError);
-        throw checkError;
-    }
-
-    if (existing && existing.length > 0) {
-        return { inserted: 0, skipped: true };
-    }
-
     const entries = calculateSystemCosts(trip, rates);
     if (entries.length === 0) {
         return { inserted: 0, skipped: false };
+    }
+
+    // Delete any existing system costs for this trip before re-inserting
+    const { error: deleteError } = await supabase
+        .from('cost_entries')
+        .delete()
+        .eq('trip_id', trip.id)
+        .eq('is_system_generated', true)
+        .eq('category', 'System Costs');
+
+    if (deleteError) {
+        console.error('Error deleting existing system costs:', deleteError);
+        throw deleteError;
     }
 
     const { error } = await supabase
