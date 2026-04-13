@@ -432,43 +432,36 @@ const JobCardDetails = () => {
         />
 
         {/* Linked Inspection */}
-        <Collapsible defaultOpen={false}>
-          <Card>
-            <CollapsibleTrigger asChild>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 cursor-pointer hover:bg-accent/50 transition-colors">
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5" />
-                  Linked Inspection
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
-                </CardTitle>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={(e) => { e.stopPropagation(); setShowLinkInspection(true); }}>
-                  <Link2 className="h-3.5 w-3.5" />
-                  {jobCard.inspection_id ? "Change" : "Link Inspection"}
-                </Button>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent>
-                {inspection ? (
-                  <div
-                    className="flex items-center justify-between p-3 rounded-md border cursor-pointer hover:bg-accent transition-colors"
-                    onClick={() => navigate(`/inspections/${jobCard.inspection_id}`)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{inspection.inspection_number}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {inspection.inspection_type} • {new Date(inspection.inspection_date).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm">View</Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No inspection linked. Click &quot;Link Inspection&quot; to associate one.</p>
-                )}
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" />
+              Linked Inspection
+            </CardTitle>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowLinkInspection(true)}>
+              <Link2 className="h-3.5 w-3.5" />
+              {jobCard.inspection_id ? "Change" : "Link Inspection"}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {inspection ? (
+              <div
+                className="flex items-center justify-between p-3 rounded-md border cursor-pointer hover:bg-accent transition-colors"
+                onClick={() => navigate(`/inspections/${jobCard.inspection_id}`)}
+              >
+                <div>
+                  <p className="text-sm font-medium">{inspection.inspection_number}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {inspection.inspection_type} • {new Date(inspection.inspection_date).toLocaleDateString()}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm">View</Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No inspection linked. Click &quot;Link Inspection&quot; to associate one.</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Tasks */}
         <Collapsible defaultOpen={false}>
