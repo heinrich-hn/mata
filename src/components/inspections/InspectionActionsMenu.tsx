@@ -1,20 +1,21 @@
 import { Button } from "@/components/ui/button";
 import {
-DropdownMenu,
-DropdownMenuContent,
-DropdownMenuItem,
-DropdownMenuSeparator,
-DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-AlertTriangle,
-Archive,
-ClipboardList,
-Eye,
-FileText,
-Share2,
-Trash2,
-Wrench,
+  AlertTriangle,
+  Archive,
+  ClipboardList,
+  Eye,
+  FileText,
+  Link2,
+  Share2,
+  Trash2,
+  Wrench,
 } from "lucide-react";
 
 interface InspectionActionsMenuProps {
@@ -23,6 +24,7 @@ interface InspectionActionsMenuProps {
   onView: () => void;
   onShare: () => void;
   onCreateWorkOrder: () => void;
+  onLinkJobCard?: () => void;
   onCorrectiveAction: () => void;
   onRootCauseAnalysis: () => void;
   onViewPDF: () => void;
@@ -37,6 +39,7 @@ export function InspectionActionsMenu({
   onView,
   onShare,
   onCreateWorkOrder,
+  onLinkJobCard,
   onCorrectiveAction,
   onRootCauseAnalysis,
   onViewPDF,
@@ -68,6 +71,13 @@ export function InspectionActionsMenu({
           <Wrench className="h-4 w-4 mr-2" />
           Create Job Card
         </DropdownMenuItem>
+
+        {onLinkJobCard && (
+          <DropdownMenuItem onClick={onLinkJobCard}>
+            <Link2 className="h-4 w-4 mr-2" />
+            Link Existing Job Card
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuItem
           onClick={onCorrectiveAction}

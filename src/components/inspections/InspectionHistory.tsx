@@ -32,6 +32,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useNavigate } from "react-router-dom";
 import CorrectiveActionDialog from "../dialogs/CorrectiveActionDialog";
+import { CreateWorkOrderFromInspectionDialog } from "../dialogs/CreateWorkOrderFromInspectionDialog";
+import { LinkJobCardToInspectionDialog } from "../dialogs/LinkInspectionJobCardDialogs";
 import { RootCauseAnalysisDialog } from "../dialogs/RootCauseAnalysisDialog";
 import StartInspectionDialog from "../dialogs/StartInspectionDialog";
 import { InspectionActionsMenu } from "./InspectionActionsMenu";
@@ -83,6 +85,8 @@ export function InspectionHistory() {
   const [showRootCauseAnalysis, setShowRootCauseAnalysis] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showFaultDetails, setShowFaultDetails] = useState(false);
+  const [showCreateJobCard, setShowCreateJobCard] = useState(false);
+  const [showLinkJobCard, setShowLinkJobCard] = useState(false);
   const [selectedFaults, setSelectedFaults] = useState<FaultDetail[]>([]);
   const [selectedFailedItems, setSelectedFailedItems] = useState<FailedInspectionItem[]>([]);
   const [faultsForCorrectiveAction, setFaultsForCorrectiveAction] = useState<Array<{
@@ -217,8 +221,13 @@ export function InspectionHistory() {
   };
 
   const handleCreateWorkOrder = (inspection: InspectionHistoryRecord) => {
-    // Navigate to job cards page with pre-filled inspection data
-    navigate(`/job-cards?inspection_id=${inspection.id}`);
+    setSelectedInspection(inspection);
+    setShowCreateJobCard(true);
+  };
+
+  const handleLinkJobCard = (inspection: InspectionHistoryRecord) => {
+    setSelectedInspection(inspection);
+    setShowLinkJobCard(true);
   };
 
   const handleViewFaults = async (inspection: InspectionHistoryRecord) => {
@@ -719,6 +728,7 @@ export function InspectionHistory() {
                           onView={() => handleView(inspection)}
                           onShare={() => handleShare(inspection)}
                           onCreateWorkOrder={() => handleCreateWorkOrder(inspection)}
+                          onLinkJobCard={() => handleLinkJobCard(inspection)}
                           onCorrectiveAction={() => handleCorrectiveAction(inspection)}
                           onRootCauseAnalysis={() => handleRootCauseAnalysis(inspection)}
                           onViewPDF={() => handleViewPDF(inspection)}
@@ -1007,6 +1017,33 @@ export function InspectionHistory() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Job Card from Inspection Dialog */}
+      {selectedInspection && (
+        <CreateWorkOrderFromInspectionDialog
+          open={showCreateJobCard}
+          onOpenChange={setShowCreateJobCard}
+          inspectionId={selectedInspection.id}
+          inspectionNumber={selectedInspection.inspection_number}
+          vehicleRegistration={selectedInspection.vehicle_registration}
+          onSuccess={() => {
+            setShowCreateJobCard(false);
+            refetch();
+          }}
+        />
+      )}
+
+      {/* Link Existing Job Card to Inspection Dialog */}
+      {selectedInspection && (
+        <LinkJobCardToInspectionDialog
+          open={showLinkJobCard}
+          onOpenChange={setShowLinkJobCard}
+          inspectionId={selectedInspection.id}
+          onLinked={() => {
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }
