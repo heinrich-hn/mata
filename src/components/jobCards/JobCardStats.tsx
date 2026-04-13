@@ -23,21 +23,17 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
   const totalLaborCost = laborEntries.reduce((sum, entry) => sum + (entry.total_cost || 0), 0);
   const totalLaborHours = laborEntries.reduce((sum, entry) => sum + (entry.hours_worked || 0), 0);
 
-  // Calculate parts costs by category
-  const activeParts = parts.filter(p => p.status !== "cancelled");
-  const inventoryPartsCost = activeParts
-    .filter(p => p.is_from_inventory)
-    .reduce((sum, p) => sum + (p.total_price || 0), 0);
-  const externalPartsCost = activeParts
-    .filter(p => !p.is_from_inventory && !p.is_service)
+  // Calculate parts costs by category (exclude cancelled and rejected)
+  const activeParts = parts.filter(p => p.status !== "cancelled" && p.status !== "rejected");
+  const partsMaterialsCost = activeParts
+    .filter(p => !p.is_service)
     .reduce((sum, p) => sum + (p.total_price || 0), 0);
   const servicesCost = activeParts
     .filter(p => p.is_service)
     .reduce((sum, p) => sum + (p.total_price || 0), 0);
-  const totalPartsCost = inventoryPartsCost + externalPartsCost + servicesCost;
 
   // Grand total
-  const grandTotal = totalPartsCost + totalLaborCost;
+  const grandTotal = partsMaterialsCost + servicesCost + totalLaborCost;
 
   const stats = [
     {
@@ -51,7 +47,7 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
     {
       icon: Package,
       label: "Parts & Materials",
-      value: `$${totalPartsCost.toFixed(2)}`,
+      value: `$${partsMaterialsCost.toFixed(2)}`,
       subtext: `${activeParts.filter(p => !p.is_service).length} items`,
       color: "text-blue-500",
       bgColor: "bg-blue-50",

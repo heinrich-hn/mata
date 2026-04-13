@@ -123,7 +123,7 @@ export default function JobCardWeeklyCostReport() {
       const { data, error } = await supabase
         .from("parts_requests")
         .select("*")
-        .neq("status", "cancelled");
+        .not("status", "in", '("cancelled","rejected")');
 
       if (error) throw error;
       return data || [];
@@ -201,10 +201,10 @@ export default function JobCardWeeklyCostReport() {
       });
 
       const inventoryPartsCost = periodPartsRequests
-        .filter(pr => pr.inventory_id)
+        .filter(pr => pr.is_from_inventory)
         .reduce((sum, pr) => sum + (pr.total_price || 0), 0);
       const externalPartsCost = periodPartsRequests
-        .filter(pr => !pr.inventory_id)
+        .filter(pr => !pr.is_from_inventory)
         .reduce((sum, pr) => sum + (pr.total_price || 0), 0);
 
       periods.push({
