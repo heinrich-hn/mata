@@ -2,7 +2,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
@@ -1181,14 +1180,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                             </div>
                           </div>
                         </div>
-                        {month.revenue.USD > 0 && (
-                          <div className="mt-3">
-                            <Progress
-                              value={Math.min(100, Math.max(0, (month.profit.USD / month.revenue.USD) * 100))}
-                              className={cn("h-2", month.profit.USD >= 0 ? "[&>div]:bg-emerald-500" : "[&>div]:bg-orange-500")}
-                            />
-                          </div>
-                        )}
+
                       </div>
                     );
                   })}
@@ -1575,9 +1567,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                             <p className="font-semibold tabular-nums">{formatCurrency(cat.amounts.USD)}</p>
                           </div>
                         </div>
-                        <div className="mt-3">
-                          <Progress value={pct} className="h-1.5" />
-                        </div>
                       </div>
                     );
                   })}
@@ -1623,9 +1612,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                             <p className="text-xs text-muted-foreground">USD</p>
                             <p className="font-semibold tabular-nums">{formatCurrency(veh.amounts.USD)}</p>
                           </div>
-                        </div>
-                        <div className="mt-3">
-                          <Progress value={pct} className="h-1.5" />
                         </div>
                       </div>
                     );
