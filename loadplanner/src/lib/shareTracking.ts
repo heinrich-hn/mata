@@ -483,7 +483,7 @@ function formatProfessionalMessage(
   }
 
   lines.push('');
-  lines.push('_Powered by LoadPlan™_');
+  lines.push('_Powered by Matanuska™_');
 
   return lines.join('\n');
 }
@@ -581,7 +581,7 @@ function formatDetailedMessage(
   }
 
   lines.push('');
-  lines.push('_LoadPlan Fleet Management_');
+  lines.push('_Matanuska Fleet Management_');
 
   return lines.join('\n');
 }
@@ -678,7 +678,7 @@ export function formatQRInstructionsMessage(
     'provided on the delivery documentation.',
     '',
     '════════════════════════════════════',
-    '_Powered by LoadPlan™_',
+    '_Powered by Matanuska™_',
   ].join('\n');
 }
 
@@ -690,7 +690,7 @@ export function formatCustomerNotificationMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
   shareUrl: string,
-  companyName = 'LoadPlan'
+  companyName = 'Matanuska'
 ): string {
   const etaFormatted = new Date(load.offloading_date).toLocaleDateString('en-GB', {
     weekday: 'long',

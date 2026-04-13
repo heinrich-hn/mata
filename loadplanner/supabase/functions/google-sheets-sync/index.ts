@@ -41,7 +41,7 @@ async function getGoogleAccessToken(): Promise<string> {
     iat: now,
     exp: now + 3600,
   };
-  
+
   const h = base64url(enc.encode(JSON.stringify(header)));
   const p = base64url(enc.encode(JSON.stringify(payload)));
   const unsigned = `${h}.${p}`;
@@ -70,7 +70,7 @@ async function getGoogleAccessToken(): Promise<string> {
       assertion: jwt,
     }),
   });
-  
+
   if (!res.ok) throw new Error(`Google token exchange failed: ${await res.text()}`);
   return (await res.json()).access_token;
 }
@@ -81,9 +81,9 @@ async function ensureSheetExists(token: string): Promise<void> {
     `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties.title`,
     { headers: { Authorization: `Bearer ${token}` } },
   ).then((r) => r.json());
-  
+
   if (meta.sheets?.some((s: any) => s.properties?.title === SHEET_NAME)) return;
-  
+
   await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -120,13 +120,13 @@ async function applyFormatting(token: string, totalRows: number): Promise<void> 
     `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties`,
     { headers: { Authorization: `Bearer ${token}` } },
   ).then((r) => r.json());
-  
+
   const sheet = meta.sheets?.find((s: any) => s.properties?.title === SHEET_NAME);
   if (!sheet) return;
-  
+
   const sheetId = sheet.properties.sheetId;
   const colCount = HEADER_ROW.length;
-  
+
   await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -195,7 +195,7 @@ function buildRow(load: any): (string | number | null)[] {
   const tw = parseTW(load.time_window);
   const o = load.origin || '';
   const d = load.destination || '';
-  
+
   return [
     load.load_id || '',
     load.status || '',
@@ -217,141 +217,62 @@ function buildRow(load: any): (string | number | null)[] {
 }
 
 // ── Enhanced Lookup Functions ─────────────────────────────────────
+// Reuse a single Supabase client instance for all lookups
+const lookupClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 async function getClientName(clientId: string): Promise<string | null> {
   if (!clientId) return null;
-  
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  const { data: client } = await supabase
+
+  const { data: client } = await lookupClient
     .from('clients')
     .select('name')
     .eq('id', clientId)
     .maybeSingle();
-  
+
   return client?.name || null;
 }
 
 async function getDriverName(driverId: string): Promise<string | null> {
   if (!driverId) return null;
-  
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  const { data: driver } = await supabase
+
+  const { data: driver } = await lookupClient
     .from('drivers')
     .select('name')
     .eq('id', driverId)
     .maybeSingle();
-  
+
   return driver?.name || null;
 }
 
-// ── ENHANCED: Vehicle info with receiver name format ─────────────
-async function getVehicleInfo(fleetVehicleId: string): Promise<{ 
-  fleetNumber: string | null; 
-  vehicleId: string | null;
-  vehicleType: string | null;
-  receiverVehicleName: string | null;
-}> {
-  if (!fleetVehicleId) return { 
-    fleetNumber: null, 
-    vehicleId: null, 
-    vehicleType: null,
-    receiverVehicleName: null 
-  };
-  
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  
-  const { data: fleetVehicle } = await supabase
+// ── Vehicle lookup (simplified — receiver only uses fleetNumber) ─
+async function getFleetNumber(fleetVehicleId: string): Promise<string | null> {
+  if (!fleetVehicleId) return null;
+
+  const { data: fleetVehicle } = await lookupClient
     .from('fleet_vehicles')
-    .select('vehicle_id, type, make_model')
+    .select('vehicle_id')
     .eq('id', fleetVehicleId)
     .maybeSingle();
-  
-  if (!fleetVehicle) return { 
-    fleetNumber: null, 
-    vehicleId: null, 
-    vehicleType: null,
-    receiverVehicleName: null 
-  };
-  
-  const fleetNumber = fleetVehicle.vehicle_id;
-  
-  // Map fleet numbers to receiver's vehicle name format
-  const receiverVehicleNames: Record<string, string> = {
-    '4H': '4H',
-    '6H': '6H',
-    '14L': '14L - (ABA 3918)',
-    '15L': '15L - (AAX 2987)',
-    '21H': '21H - ADS 4865',
-    '22H': '22H - AGZ 3812 (ADS 4866)',
-    '23H': '23H - AFQ 1324 (Int Sim)',
-    '24H': '24H - AFQ 1325 (Int Sim)',
-    '26H': '26H - AFQ 1327 (Int Sim)',
-    '28H': '28H - AFQ 1329 (Int Sim)',
-    '29H': '29H - AGJ 3466',
-    '30H': '30H - AGL 4216',
-    '31H': '31H - AGZ 1963 (Int sim)',
-    '32H': '32H - JF964 FS (Int sim)',
-    '33H': '33H - JFK 963 FS (Int sim)',
-    '34H': '34H - (MR86PVGP)',
-    'UD': 'UD',
-    'BVTR 25': 'BVTR 25 - DEMO TO BE RETURNED'
-  };
-  
-  const receiverVehicleName = receiverVehicleNames[fleetNumber] || fleetNumber;
-  
-  console.log(`🔍 Vehicle mapping: ${fleetNumber} → Receiver name: "${receiverVehicleName}"`);
-  
+
+  return fleetVehicle?.vehicle_id || null;
+}
+
+// ── Map load status to shipped/delivered booleans ────────────────
+function mapStatusFlags(loadStatus: string): { shipped: boolean; delivered: boolean } {
+  const status = (loadStatus || '').toLowerCase();
   return {
-    fleetNumber: fleetNumber,
-    vehicleId: fleetNumber,
-    vehicleType: fleetVehicle.type,
-    receiverVehicleName: receiverVehicleName
+    shipped: status === 'in_transit' || status === 'in-transit' || status === 'delivered' || status === 'scheduled',
+    delivered: status === 'delivered',
   };
 }
 
-// ── ENHANCED: Bepaal operasie tipe ───────────────────────────────
-function determineOperation(load: any): 'upsert' | 'update_only' | 'create_only' {
-  // As daar force flags is, gebruik dit
-  if (load.force_create === true) {
-    return 'create_only';
-  }
-  if (load.force_update === true) {
-    return 'update_only';
-  }
-
-  // As die load nie 'n ID het nie, is dit definitely 'n create
-  if (!load.id) {
-    return 'create_only';
-  }
-
-  // Check hoe oud die load is
-  if (load.created_at) {
-    const createdTime = new Date(load.created_at).getTime();
-    const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000;
-    
-    // Jonger as 5 minute - mag 'n nuwe wees (upsert)
-    if (now - createdTime < fiveMinutes) {
-      return 'upsert';
-    }
-  }
-
-  // Default vir bestaande loads is update_only
-  return 'update_only';
-}
-
-// ── ENHANCED: Post to receiver met operasie beheer ───────────────
+// ── Post to receiver webhook ─────────────────────────────────────
 async function postToReceiver(load: any): Promise<{ ok: boolean; created: boolean; updated: boolean; error: string }> {
   const clientName = load.client_id ? await getClientName(load.client_id) : null;
   const driverName = load.driver_id ? await getDriverName(load.driver_id) : null;
-  const vehicleInfo = load.fleet_vehicle_id ? await getVehicleInfo(load.fleet_vehicle_id) : { 
-    fleetNumber: null, 
-    vehicleId: null,
-    vehicleType: null,
-    receiverVehicleName: null
-  };
+  const fleetNumber = load.fleet_vehicle_id ? await getFleetNumber(load.fleet_vehicle_id) : null;
 
-  // Bepaal operasie tipe
-  const operation = determineOperation(load);
+  const statusFlags = mapStatusFlags(load.status);
 
   let tripDurationHours: number | null = null;
   if (load.loading_date && load.offloading_date) {
@@ -365,56 +286,42 @@ async function postToReceiver(load: any): Promise<{ ok: boolean; created: boolea
     }
   }
 
-  // Payload met operasie instruksies
   const payload = {
-    // Operasie beheer
-    operation: operation,
-    
-    // Trip identifikasie - DIT BLY KONSTANT
     loadRef: load.load_id,
-    
+
     // Trip data
     customer: clientName,
     origin: load.origin || null,
     destination: load.destination || null,
     shippedDate: load.loading_date || null,
     deliveredDate: load.offloading_date || null,
-    shippedStatus: load.status,
-    deliveredStatus: null,
+    shippedStatus: statusFlags.shipped ? 'scheduled' : load.status,
+    deliveredStatus: statusFlags.delivered ? 'delivered' : null,
     tripDurationHours: tripDurationHours,
     importSource: 'loads_sync',
     currency: 'USD',
-    
-    // Driver info
+
+    // Driver & vehicle
     driverName: driverName,
-    driverId: load.driver_id,
-    
-    // Vehicle info - MULTIPLE FORMATS
-    fleetNumber: vehicleInfo.fleetNumber,
-    vehicleId: vehicleInfo.vehicleId,
-    vehicleType: vehicleInfo.vehicleType,
-    receiverVehicleName: vehicleInfo.receiverVehicleName,
-    vehicleNamePrefix: vehicleInfo.fleetNumber,
-    
+    fleetNumber: fleetNumber,
+
     // Cargo and client info
     cargoType: load.cargo_type || null,
     notes: load.notes || null,
     clientId: load.client_id || null,
-    
-    // Metadata vir receiver om duplikate te voorkom
+
+    // Metadata
     metadata: {
       sender_id: load.id,
       sender_created_at: load.created_at,
       sender_updated_at: load.updated_at || load.created_at,
-      sender_version: load.version || 1,
       sync_timestamp: new Date().toISOString()
     }
   };
 
-  console.log(`📤 → Receiver for load: ${load.load_id} (Operation: ${operation})`);
-  console.log(`   Fleet: ${vehicleInfo.fleetNumber} → Receiver name: "${vehicleInfo.receiverVehicleName}"`);
-  console.log(`   Driver: ${driverName || 'None'}`);
-  console.log(`   Client: ${clientName || 'None'}`);
+  console.log(`📤 → Receiver for load: ${load.load_id}`);
+  console.log(`   Fleet: ${fleetNumber || 'None'}, Driver: ${driverName || 'None'}, Client: ${clientName || 'None'}`);
+  console.log(`   Status: ${load.status} → shipped=${statusFlags.shipped}, delivered=${statusFlags.delivered}`);
 
   try {
     const res = await fetch(RECEIVER_URL, {
@@ -424,35 +331,21 @@ async function postToReceiver(load: any): Promise<{ ok: boolean; created: boolea
         'Authorization': `Bearer ${DEST_ANON_KEY}`,
         'apikey': DEST_ANON_KEY,
         'x-source': 'loads_sync',
-        'x-operation': operation,
       },
       body: JSON.stringify({ trips: [payload] }),
     });
 
     const responseText = await res.text();
-    
+
     if (!res.ok) {
       console.error(`❌ Receiver error (${res.status}) for ${load.load_id}:`, responseText);
-      return { 
-        ok: false, 
-        created: false, 
-        updated: false, 
-        error: `HTTP ${res.status}: ${responseText}`
-      };
+      return { ok: false, created: false, updated: false, error: `HTTP ${res.status}: ${responseText}` };
     }
 
     try {
       const data = JSON.parse(responseText);
       const created = data.results?.created > 0;
       const updated = data.results?.updated > 0;
-      
-      // Check of die operasie ooreenstem met wat verwag is
-      if (operation === 'update_only' && created) {
-        console.warn(`⚠️ Warning: Expected update but got create for ${load.load_id}`);
-      } else if (operation === 'create_only' && updated) {
-        console.warn(`⚠️ Warning: Expected create but got update for ${load.load_id}`);
-      }
-      
       console.log(`✅ Receiver success for ${load.load_id}: created=${created}, updated=${updated}`);
       return { ok: true, created, updated: updated || !created, error: '' };
     } catch {
@@ -489,7 +382,7 @@ serve(async (req) => {
     }
 
     let loadIds: string[] | null = null;
-    
+
     if (body.id) {
       loadIds = [body.id];
     } else if (body.load_id) {
@@ -516,7 +409,7 @@ serve(async (req) => {
     }
 
     const { data: loads, error: loadError } = await query.limit(500);
-    
+
     if (loadError) {
       console.error('❌ Database error:', loadError);
       throw loadError;
@@ -524,10 +417,10 @@ serve(async (req) => {
 
     if (!loads || loads.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'No loads found to sync', 
-          rowsSynced: 0 
+        JSON.stringify({
+          success: true,
+          message: 'No loads found to sync',
+          rowsSynced: 0
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
@@ -544,7 +437,7 @@ serve(async (req) => {
           .maybeSingle();
         load.fleet_vehicles = v || null;
       }
-      
+
       if (!load.drivers && load.driver_id) {
         const { data: d } = await supabase
           .from('drivers')
@@ -587,8 +480,6 @@ serve(async (req) => {
         receiverResults.failed++;
         receiverResults.errors.push(`${load.load_id}: ${result.error}`);
       }
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     const response = {
@@ -620,7 +511,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Fatal error:', error);
-    
+
     const errorResponse = {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

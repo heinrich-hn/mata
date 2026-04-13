@@ -101,6 +101,8 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
     arrivalDate: string | null;
     distanceKm: number | null;
     replaceExisting: boolean;
+    fleetVehicleId: string | null;
+    vehicleId: string | null;
   } | null>(null);
 
   const form = useForm<TripFormData>({
@@ -359,6 +361,8 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
           arrivalDate: data.arrival_date || null,
           distanceKm: data.distance_km ? parseFloat(data.distance_km) : null,
           replaceExisting: true,
+          fleetVehicleId: trip.fleet_vehicle_id || null,
+          vehicleId: data.vehicle_id || trip.vehicle_id || null,
         });
       }
     } catch (error) {
@@ -1025,6 +1029,8 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
         distanceKm={systemCostPreview?.distanceKm || null}
         effectiveRates={effectiveRates}
         replaceExisting={systemCostPreview?.replaceExisting}
+        fleetVehicleId={systemCostPreview?.fleetVehicleId || null}
+        vehicleId={systemCostPreview?.vehicleId || null}
       />
     </>
   );

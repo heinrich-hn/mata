@@ -186,7 +186,7 @@ export const CostForm = ({ tripId, cost, onSubmit, onCancel }: CostFormProps) =>
             .update({
               status: 'resolved',
               resolved_at: new Date().toISOString(),
-              resolution_comment: 'Cost entry added',
+              resolution_note: 'Cost entry added',
             })
             .eq('source_type', 'trip')
             .eq('source_id', tripId)

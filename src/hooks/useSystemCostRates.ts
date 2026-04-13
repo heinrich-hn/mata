@@ -146,6 +146,31 @@ export const useUpdateCostRate = () => {
     });
 };
 
+/**
+ * Pure helper: resolve effective rates for a specific date from a full rate list.
+ * Used for bulk recalculation where each trip may have a different departure date.
+ */
+export function getEffectiveRatesForDate(allRates: SystemCostRate[], asOfDate: string): EffectiveRate[] {
+    return DEFAULT_RATES.map(defaultRate => {
+        const candidates = allRates
+            .filter(r => r.rate_key === defaultRate.rate_key && r.effective_date <= asOfDate)
+            .sort((a, b) => b.effective_date.localeCompare(a.effective_date));
+
+        if (candidates.length > 0) {
+            const best = candidates[0];
+            return {
+                rate_key: best.rate_key,
+                rate_type: best.rate_type as 'per_km' | 'per_day',
+                amount: best.amount,
+                display_name: best.display_name,
+                effective_date: best.effective_date,
+            };
+        }
+
+        return defaultRate;
+    });
+}
+
 // ────────────────────────────────────────────────────────
 // Pure helper: calculate system cost entries for a trip
 // ────────────────────────────────────────────────────────
@@ -167,8 +192,9 @@ function computeTripDays(departureDate?: string | null, arrivalDate?: string | n
 
 const formatUSD = (n: number) => `$${n.toFixed(2)}`;
 
-export function calculateSystemCosts(trip: TripForCostCalc, rates: EffectiveRate[]) {
-    const tripDays = computeTripDays(trip.departure_date, trip.arrival_date);
+export function calculateSystemCosts(trip: TripForCostCalc, rates: EffectiveRate[], dayAdjustment = 0) {
+    const rawDays = computeTripDays(trip.departure_date, trip.arrival_date);
+    const tripDays = dayAdjustment > 0 ? Math.max(0, rawDays - dayAdjustment) : rawDays;
     const distanceKm = trip.distance_km ?? 0;
     const today = new Date().toISOString().split('T')[0];
     const costDate = trip.departure_date || today;
@@ -198,6 +224,7 @@ export function calculateSystemCosts(trip: TripForCostCalc, rates: EffectiveRate
             amount = rate.amount * distanceKm;
             notes = `${rate.display_name}: ${distanceKm.toLocaleString()} km × ${formatUSD(rate.amount)}/km`;
         } else {
+            if (tripDays <= 0) continue;
             amount = rate.amount * tripDays;
             notes = `${rate.display_name}: ${tripDays} day${tripDays !== 1 ? 's' : ''} × ${formatUSD(rate.amount)}/day`;
         }
@@ -267,7 +294,7 @@ export async function generateAndInsertSystemCosts(
         .update({
             status: 'resolved',
             resolved_at: new Date().toISOString(),
-            resolution_comment: 'System costs auto-generated',
+            resolution_note: 'System costs auto-generated',
         } as never)
         .eq('source_type', 'trip')
         .eq('source_id', trip.id)
@@ -279,4 +306,181 @@ export async function generateAndInsertSystemCosts(
         });
 
     return { inserted: entries.length, skipped: false };
+}
+
+/**
+ * Compute per-day overlap adjustments for trips on the same vehicle.
+ * When trip B's departure_date equals trip A's arrival_date on the same vehicle,
+ * trip B gets 1 day deducted to avoid double-charging per-day costs.
+ *
+ * @param trips Must include fleet_vehicle_id for grouping
+ * @returns Map of trip_id → number of days to deduct
+ */
+export function computeOverlapAdjustments(
+    trips: Array<{ id: string; departure_date: string | null; arrival_date: string | null; fleet_vehicle_id?: string | null }>
+): Map<string, number> {
+    const adjustments = new Map<string, number>();
+
+    // Group by vehicle
+    const byVehicle = new Map<string, typeof trips>();
+    for (const trip of trips) {
+        const vId = trip.fleet_vehicle_id;
+        if (!vId) continue;
+        if (!byVehicle.has(vId)) byVehicle.set(vId, []);
+        byVehicle.get(vId)!.push(trip);
+    }
+
+    for (const [, vehicleTrips] of byVehicle) {
+        if (vehicleTrips.length < 2) continue;
+
+        // Sort by departure_date ascending
+        const sorted = [...vehicleTrips].sort((a, b) =>
+            (a.departure_date || '').localeCompare(b.departure_date || '')
+        );
+
+        // Collect all arrival dates into a Set for fast lookup
+        const arrivalDates = new Set<string>();
+        for (const t of sorted) {
+            if (t.arrival_date) arrivalDates.add(t.arrival_date);
+        }
+
+        // If a trip's departure_date matches any other trip's arrival_date, deduct 1 day
+        for (const t of sorted) {
+            if (t.departure_date && arrivalDates.has(t.departure_date)) {
+                // Make sure we're not matching our own arrival_date == departure_date
+                // (single-day trip). Only count overlaps from OTHER trips.
+                const otherHasArrival = sorted.some(
+                    other => other.id !== t.id && other.arrival_date === t.departure_date
+                );
+                if (otherHasArrival) {
+                    adjustments.set(t.id, (adjustments.get(t.id) || 0) + 1);
+                }
+            }
+        }
+    }
+
+    return adjustments;
+}
+
+/**
+ * Query the database for overlap days for a single trip.
+ * Checks if any other trip on the same vehicle has an arrival_date equal to
+ * this trip's departure_date (or this trip's arrival_date equals another's departure).
+ *
+ * Uses both fleet_vehicle_id and vehicle_id to identify the vehicle.
+ *
+ * @returns Number of days to deduct from per-day cost calculation
+ */
+export async function fetchOverlapAdjustmentForTrip(
+    tripId: string,
+    departureDate: string | null,
+    arrivalDate: string | null,
+    fleetVehicleId?: string | null,
+    vehicleId?: string | null,
+): Promise<number> {
+    if (!departureDate) return 0;
+    if (!fleetVehicleId && !vehicleId) return 0;
+
+    // Build query: find other trips on the same vehicle whose arrival_date == this departure_date
+    let query = supabase
+        .from('trips')
+        .select('id, departure_date, arrival_date')
+        .neq('id', tripId)
+        .eq('arrival_date', departureDate);
+
+    if (fleetVehicleId) {
+        query = query.eq('fleet_vehicle_id', fleetVehicleId);
+    } else if (vehicleId) {
+        query = query.eq('vehicle_id', vehicleId);
+    }
+
+    const { data: endingOnOurStart } = await query;
+
+    let adjustment = 0;
+    if (endingOnOurStart && endingOnOurStart.length > 0) {
+        // Another trip on this vehicle ends on the same day we start → deduct 1 day from us
+        adjustment += 1;
+    }
+
+    return adjustment;
+}
+
+/**
+ * Recalculate and replace system costs for multiple trips.
+ * For each trip, resolves the effective rates as of that trip's departure date,
+ * deletes existing system costs, and inserts recalculated ones.
+ *
+ * @param rateOverrides Optional map of rate_key → amount that overrides the
+ *   effective rate for all trips in this batch. Used for past-period corrections
+ *   without changing the saved rate schedule.
+ */
+export async function recalculateSystemCostsForTrips(
+    trips: Array<{ id: string; departure_date: string | null; arrival_date: string | null; distance_km: number | null; fleet_vehicle_id?: string | null }>,
+    allRates: SystemCostRate[],
+    rateOverrides?: Record<string, number>
+): Promise<{ updated: number; totalOld: number; totalNew: number }> {
+    let updated = 0;
+    let totalOld = 0;
+    let totalNew = 0;
+
+    // Compute overlap adjustments across the whole batch
+    const overlapAdj = computeOverlapAdjustments(trips);
+
+    for (const trip of trips) {
+        // 1. Get existing system costs total for comparison
+        const { data: existing } = await supabase
+            .from('cost_entries')
+            .select('amount')
+            .eq('trip_id', trip.id)
+            .eq('is_system_generated', true)
+            .eq('category', 'System Costs');
+
+        const oldTotal = (existing || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+
+        // 2. Resolve effective rates for this trip's departure date, then apply overrides
+        const tripDate = trip.departure_date || new Date().toISOString().split('T')[0];
+        let rates = getEffectiveRatesForDate(allRates, tripDate);
+
+        if (rateOverrides && Object.keys(rateOverrides).length > 0) {
+            rates = rates.map(r =>
+                rateOverrides[r.rate_key] !== undefined
+                    ? { ...r, amount: rateOverrides[r.rate_key] }
+                    : r
+            );
+        }
+
+        // 3. Delete existing system costs
+        const { error: deleteError } = await supabase
+            .from('cost_entries')
+            .delete()
+            .eq('trip_id', trip.id)
+            .eq('is_system_generated', true)
+            .eq('category', 'System Costs');
+
+        if (deleteError) {
+            console.error(`Error deleting system costs for trip ${trip.id}:`, deleteError);
+            continue;
+        }
+
+        // 4. Calculate and insert new costs (with overlap day adjustment)
+        const dayAdj = overlapAdj.get(trip.id) || 0;
+        const entries = calculateSystemCosts(trip, rates, dayAdj);
+        if (entries.length > 0) {
+            const { error: insertError } = await supabase
+                .from('cost_entries')
+                .insert(entries as never);
+
+            if (insertError) {
+                console.error(`Error inserting system costs for trip ${trip.id}:`, insertError);
+                continue;
+            }
+        }
+
+        const newTotal = entries.reduce((sum, c) => sum + c.amount, 0);
+        totalOld += oldTotal;
+        totalNew += newTotal;
+        updated++;
+    }
+
+    return { updated, totalOld, totalNew };
 }

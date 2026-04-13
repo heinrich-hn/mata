@@ -78,7 +78,7 @@ export const resolveAlert = async (options: ResolveAlertOptions): Promise<boolea
       .update({
         status: 'resolved',
         resolved_at: new Date().toISOString(),
-        resolution_comment: options.resolutionComment,
+        resolution_note: options.resolutionComment,
         resolved_by: options.resolvedBy
       })
       .eq('status', 'active');
@@ -142,7 +142,7 @@ export async function resolveAlertsByTrip(
         .update({
           status: 'resolved',
           resolved_at: new Date().toISOString(),
-          resolution_comment: resolutionComment || `Auto-resolved: ${issueType}`,
+          resolution_note: resolutionComment || `Auto-resolved: ${issueType}`,
           resolved_by: resolvedBy || 'system'
         })
         .in('id', batch);
@@ -165,7 +165,7 @@ export async function resolveDuplicatePODAlerts(podNumber: string): Promise<bool
       .update({
         status: 'resolved',
         resolved_at: new Date().toISOString(),
-        resolution_comment: 'Duplicate POD resolved'
+        resolution_note: 'Duplicate POD resolved'
       })
       .eq('category', 'duplicate_pod')
       .eq('status', 'active')

@@ -50,13 +50,13 @@ export function PWAInstallPrompt() {
               <div className="flex items-start gap-3">
                 {/* App icon */}
                 <div className="flex-shrink-0 h-12 w-12 rounded-xl overflow-hidden bg-white border border-border shadow-sm flex items-center justify-center">
-                  <img src="/loadplan-logo.png" alt="LoadPlan" className="h-10 w-10 object-contain" />
+                  <img src="/loadplan-logo.png" alt="Matanuska" className="h-10 w-10 object-contain" />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className="font-semibold text-sm text-foreground">Install LoadPlan</h3>
+                      <h3 className="font-semibold text-sm text-foreground">Install Matanuska</h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Get quick access to your delivery dashboard
                       </p>

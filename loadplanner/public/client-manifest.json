@@ -1,6 +1,6 @@
 {
-  "name": "LoadPlan Client Portal",
-  "short_name": "LoadPlan",
+  "name": "Matanuska - Client Portal",
+  "short_name": "Matanuska",
   "description": "Track your deliveries, view loads, and monitor fleet in real-time",
   "start_url": "/portal",
   "scope": "/portal",
@@ -8,7 +8,11 @@
   "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#1e40af",
-  "categories": ["business", "logistics", "transportation"],
+  "categories": [
+    "business",
+    "logistics",
+    "transportation"
+  ],
   "icons": [
     {
       "src": "/pwa-icons/icon-72x72.png",

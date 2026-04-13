@@ -20,7 +20,7 @@ export function ClientPWARegistration() {
       'theme-color': '#1e40af',
       'apple-mobile-web-app-capable': 'yes',
       'apple-mobile-web-app-status-bar-style': 'default',
-      'apple-mobile-web-app-title': 'LoadPlan',
+      'apple-mobile-web-app-title': 'Matanuska',
       'mobile-web-app-capable': 'yes',
     };
 

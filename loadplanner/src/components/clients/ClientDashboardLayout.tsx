@@ -43,7 +43,7 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
               <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden bg-white border border-border shadow-sm flex-shrink-0">
                 <img
                   src="/loadplan-logo.png"
-                  alt="LoadPlan"
+                  alt="Matanuska"
                   className="h-7 w-7 sm:h-8 sm:w-8 object-contain"
                 />
               </div>
@@ -124,7 +124,7 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
       <footer className="border-t border-border/80 bg-card/70 backdrop-blur-sm">
         <div className="container mx-auto px-4 sm:px-6 py-3 text-center text-xs text-muted-foreground">
           <p>
-            Powered by <span className="font-semibold text-foreground">LoadPlan</span>
+            Powered by <span className="font-semibold text-foreground">Matanuska</span>
           </p>
         </div>
       </footer>

@@ -5,10 +5,10 @@ import { Input } from '@/components/ui/input';
 import {
     calculateSystemCosts,
     type EffectiveRate,
-    generateAndInsertSystemCosts,
+    fetchOverlapAdjustmentForTrip,
 } from '@/hooks/useSystemCostRates';
 import { supabase } from '@/integrations/supabase/client';
-import { Calculator, Check, X } from 'lucide-react';
+import { AlertTriangle, Calculator, Check, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 interface SystemCostPreviewDialogProps {
@@ -21,6 +21,9 @@ interface SystemCostPreviewDialogProps {
     effectiveRates: EffectiveRate[];
     /** If true, delete existing system costs before inserting (for date edits) */
     replaceExisting?: boolean;
+    /** Vehicle FK identifiers for overlap detection */
+    fleetVehicleId?: string | null;
+    vehicleId?: string | null;
 }
 
 const formatUSD = (n: number) =>
@@ -35,28 +38,43 @@ const SystemCostPreviewDialog = ({
     distanceKm,
     effectiveRates,
     replaceExisting = false,
+    fleetVehicleId,
+    vehicleId,
 }: SystemCostPreviewDialogProps) => {
     const [generating, setGenerating] = useState(false);
     const [overrides, setOverrides] = useState<Record<number, string>>({});
+    const [overlapDays, setOverlapDays] = useState(0);
+    const [overlapLoading, setOverlapLoading] = useState(false);
 
-    // Reset overrides when dialog opens
+    // Reset state and fetch overlap when dialog opens
     useEffect(() => {
         if (isOpen) {
             setOverrides({});
             setGenerating(false);
+            setOverlapDays(0);
+
+            // Fetch overlap adjustment from DB
+            if (tripId && departureDate && (fleetVehicleId || vehicleId)) {
+                setOverlapLoading(true);
+                fetchOverlapAdjustmentForTrip(tripId, departureDate, arrivalDate, fleetVehicleId, vehicleId)
+                    .then(adj => setOverlapDays(adj))
+                    .catch(() => setOverlapDays(0))
+                    .finally(() => setOverlapLoading(false));
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, tripId, departureDate, arrivalDate, fleetVehicleId, vehicleId]);
 
     const previewCosts = useMemo(
         () =>
             calculateSystemCosts(
                 { id: tripId, departure_date: departureDate, arrival_date: arrivalDate, distance_km: distanceKm },
-                effectiveRates
+                effectiveRates,
+                overlapDays
             ),
-        [tripId, departureDate, arrivalDate, distanceKm, effectiveRates]
+        [tripId, departureDate, arrivalDate, distanceKm, effectiveRates, overlapDays]
     );
 
-    const tripDays = useMemo(() => {
+    const rawDays = useMemo(() => {
         if (!departureDate || !arrivalDate) return 1;
         const days =
             Math.ceil(
@@ -65,6 +83,8 @@ const SystemCostPreviewDialog = ({
             ) + 1;
         return Math.max(1, days);
     }, [departureDate, arrivalDate]);
+
+    const tripDays = overlapDays > 0 ? Math.max(0, rawDays - overlapDays) : rawDays;
 
     // Apply overrides to get final amounts
     const finalCosts = previewCosts.map((cost, i) => ({
@@ -109,17 +129,35 @@ const SystemCostPreviewDialog = ({
                     // We already deleted, so insert directly
                     const entries = calculateSystemCosts(
                         { id: tripId, departure_date: departureDate, arrival_date: arrivalDate, distance_km: distanceKm },
-                        effectiveRates
+                        effectiveRates,
+                        overlapDays
                     );
                     if (entries.length > 0) {
                         const { error } = await supabase.from('cost_entries').insert(entries as never);
                         if (error) throw error;
                     }
                 } else {
-                    await generateAndInsertSystemCosts(
+                    // Insert with overlap adjustment (can't use generateAndInsertSystemCosts since it doesn't support dayAdj)
+                    const entries = calculateSystemCosts(
                         { id: tripId, departure_date: departureDate, arrival_date: arrivalDate, distance_km: distanceKm },
-                        effectiveRates
+                        effectiveRates,
+                        overlapDays
                     );
+                    if (entries.length > 0) {
+                        // Check if system costs already exist
+                        const { data: existing } = await supabase
+                            .from('cost_entries')
+                            .select('id')
+                            .eq('trip_id', tripId)
+                            .eq('is_system_generated', true)
+                            .eq('category', 'System Costs');
+                        if (existing && existing.length > 0) {
+                            // Already exists — skip
+                        } else {
+                            const { error } = await supabase.from('cost_entries').insert(entries as never);
+                            if (error) throw error;
+                        }
+                    }
                 }
             }
 
@@ -129,7 +167,7 @@ const SystemCostPreviewDialog = ({
                 .update({
                     status: 'resolved',
                     resolved_at: new Date().toISOString(),
-                    resolution_comment: 'System costs auto-generated',
+                    resolution_note: 'System costs auto-generated',
                 } as never)
                 .eq('source_type', 'trip')
                 .eq('source_id', tripId)
@@ -169,7 +207,16 @@ const SystemCostPreviewDialog = ({
                         <div className="flex justify-between items-center p-2.5 bg-blue-50 rounded-lg">
                             <span className="text-sm font-medium">Duration</span>
                             <span className="font-bold text-sm">
-                                {tripDays} day{tripDays !== 1 ? 's' : ''}
+                                {overlapLoading ? '...' : (
+                                    <>
+                                        {tripDays} day{tripDays !== 1 ? 's' : ''}
+                                        {overlapDays > 0 && (
+                                            <span className="text-xs text-amber-600 font-normal ml-1">
+                                                ({rawDays} − {overlapDays} overlap)
+                                            </span>
+                                        )}
+                                    </>
+                                )}
                             </span>
                         </div>
                         {(distanceKm ?? 0) > 0 && (
@@ -179,6 +226,19 @@ const SystemCostPreviewDialog = ({
                             </div>
                         )}
                     </div>
+
+                    {/* Overlap notice */}
+                    {overlapDays > 0 && (
+                        <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-amber-700">
+                                Another trip on this vehicle ends on the same day this trip starts.
+                                {tripDays > 0
+                                    ? ` Per-day costs have been reduced by ${overlapDays} day to avoid double-charging.`
+                                    : ' Per-day costs are fully covered by the other trip — only per-km costs apply here.'}
+                            </p>
+                        </div>
+                    )}
 
                     {/* Cost breakdown */}
                     <Card>

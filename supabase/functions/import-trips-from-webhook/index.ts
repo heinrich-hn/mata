@@ -95,8 +95,8 @@ serve(async (req) => {
           revenue_currency: trip.currency || REQUIRED_CURRENCY,
           status: REQUIRED_STATUS,
           payment_status: 'unpaid',
-          shipped_status: trip.shippedStatus === 'delivered' || trip.shippedStatus === 'scheduled',
-          delivered_status: trip.deliveredStatus === 'delivered',
+          shipped_status: trip.shippedStatus === 'delivered' || trip.shippedStatus === 'scheduled' || trip.shippedStatus === 'in_transit' || trip.shippedStatus === 'in-transit',
+          delivered_status: trip.deliveredStatus === 'delivered' || trip.shippedStatus === 'delivered',
           external_load_ref: trip.loadRef,
           trip_duration_hours: trip.tripDurationHours,
           import_source: trip.importSource || 'loads_sync',
@@ -108,7 +108,7 @@ serve(async (req) => {
           }
         };
 
-        // 1. Handle Client - Direct UUID match
+        // 1. Handle Client - UUID match first, then name match fallback
         if (trip.clientId) {
           const { data: client } = await supabase
             .from('clients')
@@ -119,13 +119,41 @@ serve(async (req) => {
           if (client) {
             tripData.client_id = client.id;
             tripData.client_name = client.name;
-            console.log(`✅ Found client: ${client.name} (${client.id})`);
+            console.log(`✅ Found client by ID: ${client.name} (${client.id})`);
+          } else if (trip.customer) {
+            // UUID didn't match (cross-DB), try matching by name
+            const { data: nameMatch } = await supabase
+              .from('clients')
+              .select('id, name')
+              .ilike('name', trip.customer)
+              .maybeSingle();
+
+            if (nameMatch) {
+              tripData.client_id = nameMatch.id;
+              tripData.client_name = nameMatch.name;
+              console.log(`✅ Found client by name: ${nameMatch.name} (${nameMatch.id})`);
+            } else {
+              console.log(`⚠️ No client match for ID ${trip.clientId} or name "${trip.customer}", storing name only`);
+              tripData.client_name = trip.customer;
+            }
           } else {
-            console.log(`⚠️ Client ID ${trip.clientId} not found, using name: ${trip.customer}`);
-            tripData.client_name = trip.customer;
+            console.log(`⚠️ Client ID ${trip.clientId} not found and no customer name provided`);
           }
         } else if (trip.customer) {
-          tripData.client_name = trip.customer;
+          // No UUID, try name match
+          const { data: nameMatch } = await supabase
+            .from('clients')
+            .select('id, name')
+            .ilike('name', trip.customer)
+            .maybeSingle();
+
+          if (nameMatch) {
+            tripData.client_id = nameMatch.id;
+            tripData.client_name = nameMatch.name;
+            console.log(`✅ Found client by name: ${nameMatch.name} (${nameMatch.id})`);
+          } else {
+            tripData.client_name = trip.customer;
+          }
         }
 
         // 2. Handle Vehicle - IMPROVED MATCHING
@@ -184,33 +212,34 @@ serve(async (req) => {
               .not('fleet_number', 'is', null)
               .limit(10);
 
-            console.log('📋 Available fleet numbers:', availableVehicles?.map(v => v.fleet_number).join(', '));
+            console.log('📋 Available fleet numbers:', availableVehicles?.map((v: any) => v.fleet_number).join(', '));
           }
         } else {
           console.log('⚠️ No fleetNumber provided in payload');
         }
 
-        // 3. Handle Driver - Match by name
+        // 3. Handle Driver - Match by name and link driver_id
         if (trip.driverName) {
           console.log(`🔍 Looking for driver: "${trip.driverName}"`);
 
-          const nameParts = trip.driverName.toLowerCase().split(' ').filter(p => p.length > 0);
+          const nameParts = trip.driverName.toLowerCase().split(' ').filter((p: string) => p.length > 0);
 
           if (nameParts.length > 0) {
             // Try to match by first_name and last_name
-            const conditions = nameParts.map(part =>
+            const conditions = nameParts.map((part: string) =>
               `first_name.ilike.%${part}%,last_name.ilike.%${part}%`
             ).join(',');
 
             const { data: driver } = await supabase
               .from('drivers')
-              .select('id, first_name, last_name')
+              .select('id, first_name, last_name, auth_user_id')
               .or(conditions)
               .maybeSingle();
 
             if (driver) {
               tripData.driver_name = `${driver.first_name} ${driver.last_name}`.trim();
-              console.log(`✅ Found driver: ${tripData.driver_name}`);
+              tripData.driver_id = driver.auth_user_id || driver.id;
+              console.log(`✅ Found driver: ${tripData.driver_name} (id: ${tripData.driver_id})`);
             } else {
               console.log(`⚠️ No driver found for name: ${trip.driverName}, storing as-is`);
               tripData.driver_name = trip.driverName;
@@ -238,7 +267,7 @@ serve(async (req) => {
 
         if (existingTrip) {
           // Update existing trip
-          const { id, created_at, ...updateData } = tripData;
+          const { id: _id, created_at: _created_at, ...updateData } = tripData;
           const { error: updateError } = await supabase
             .from('trips')
             .update({

@@ -279,7 +279,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         .update({
           status: 'resolved',
           resolved_at: new Date().toISOString(),
-          resolution_comment: 'Cost entry added',
+          resolution_note: 'Cost entry added',
         })
         .eq('source_type', 'trip')
         .eq('source_id', costData.trip_id)

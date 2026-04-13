@@ -100,7 +100,7 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
   const previousPODCounts = useRef<Map<string, number>>(new Map());
   const lastUpdateTime = useRef<number>(0);
   const mountedRef = useRef(true);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const initializedRef = useRef(false);
 
   // Pre-load existing trip alerts from DB to prevent recreating resolved alerts
@@ -192,7 +192,7 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
             .update({
               status: 'resolved',
               resolved_at: new Date().toISOString(),
-              resolution_comment: 'Auto-resolved: duplicate alert for same trip',
+              resolution_note: 'Auto-resolved: duplicate alert for same trip',
             })
             .in('id', batch);
         }
@@ -226,7 +226,7 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
               .update({
                 status: 'resolved',
                 resolved_at: new Date().toISOString(),
-                resolution_comment: 'Auto-resolved: trip not yet completed',
+                resolution_note: 'Auto-resolved: trip not yet completed',
               })
               .eq('source_type', 'trip')
               .eq('category', 'fuel_anomaly')
@@ -261,7 +261,7 @@ export function useTripAlerts(trips: Trip[], options: UseTripAlertsOptions = {})
               .update({
                 status: 'resolved',
                 resolved_at: new Date().toISOString(),
-                resolution_comment: 'Auto-resolved: costs now exist for this trip',
+                resolution_note: 'Auto-resolved: costs now exist for this trip',
               })
               .eq('source_type', 'trip')
               .eq('category', 'fuel_anomaly')

@@ -180,7 +180,7 @@ const RouteExpensesSuggestor = ({
           .update({
             status: 'resolved',
             resolved_at: new Date().toISOString(),
-            resolution_comment: 'Route expenses added',
+            resolution_note: 'Route expenses added',
           })
           .eq('source_type', 'trip')
           .eq('source_id', tripId)

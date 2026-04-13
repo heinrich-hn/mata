@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import {
   calculateSystemCosts,
-  generateAndInsertSystemCosts,
+  fetchOverlapAdjustmentForTrip,
   useEffectiveRates,
 } from '@/hooks/useSystemCostRates';
 import { supabase } from '@/integrations/supabase/client';
@@ -76,6 +76,20 @@ function SystemCostsTab({ trip, onGenerated }: { trip: Trip; onGenerated: () => 
   const { effectiveRates, isLoading } = useEffectiveRates(trip.departure_date || undefined);
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
+  const [overlapDays, setOverlapDays] = useState(0);
+
+  // Fetch overlap adjustment on mount
+  useEffect(() => {
+    if (trip.id && trip.departure_date && (trip.fleet_vehicle_id || trip.vehicle_id)) {
+      fetchOverlapAdjustmentForTrip(
+        trip.id,
+        trip.departure_date,
+        trip.arrival_date || null,
+        trip.fleet_vehicle_id || null,
+        trip.vehicle_id || null
+      ).then(adj => setOverlapDays(adj)).catch(() => setOverlapDays(0));
+    }
+  }, [trip.id, trip.departure_date, trip.arrival_date, trip.fleet_vehicle_id, trip.vehicle_id]);
 
   const previewCosts = calculateSystemCosts(
     {
@@ -84,12 +98,13 @@ function SystemCostsTab({ trip, onGenerated }: { trip: Trip; onGenerated: () => 
       arrival_date: trip.arrival_date,
       distance_km: trip.distance_km,
     },
-    effectiveRates
+    effectiveRates,
+    overlapDays
   );
 
   const totalCosts = previewCosts.reduce((sum, c) => sum + c.amount, 0);
 
-  const tripDays = (() => {
+  const rawDays = (() => {
     if (!trip.departure_date || !trip.arrival_date) return 1;
     const days = Math.ceil(
       (new Date(trip.arrival_date).getTime() - new Date(trip.departure_date).getTime()) /
@@ -98,28 +113,60 @@ function SystemCostsTab({ trip, onGenerated }: { trip: Trip; onGenerated: () => 
     return Math.max(1, days);
   })();
 
+  const tripDays = overlapDays > 0 ? Math.max(0, rawDays - overlapDays) : rawDays;
+
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const result = await generateAndInsertSystemCosts(
+      // Use calculateSystemCosts with overlap adjustment instead of generateAndInsertSystemCosts
+      const entries = calculateSystemCosts(
         {
           id: trip.id,
           departure_date: trip.departure_date,
           arrival_date: trip.arrival_date,
           distance_km: trip.distance_km,
         },
-        effectiveRates
+        effectiveRates,
+        overlapDays
       );
 
-      if (result.skipped) {
+      // Check if already exists
+      const { data: existing } = await supabase
+        .from('cost_entries')
+        .select('id')
+        .eq('trip_id', trip.id)
+        .eq('is_system_generated', true)
+        .eq('category', 'System Costs');
+
+      if (existing && existing.length > 0) {
         toast({
           title: 'Already Generated',
           description: 'System costs already exist for this trip.',
         });
-      } else {
+      } else if (entries.length > 0) {
+        const { error } = await supabase.from('cost_entries').insert(entries as never);
+        if (error) throw error;
+
+        // Auto-resolve no_costs alert
+        supabase
+          .from('alerts')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolution_note: 'System costs auto-generated',
+          } as never)
+          .eq('source_type', 'trip')
+          .eq('source_id', trip.id)
+          .eq('category', 'fuel_anomaly')
+          .eq('status', 'active')
+          .filter('metadata->>issue_type', 'eq', 'no_costs')
+          .then(({ error: resolveErr }) => {
+            if (resolveErr) console.error('Error auto-resolving no_costs alert:', resolveErr);
+          });
+
         toast({
           title: 'Success',
-          description: `${result.inserted} system cost${result.inserted !== 1 ? 's' : ''} generated.`,
+          description: `${entries.length} system cost${entries.length !== 1 ? 's' : ''} generated.`,
         });
       }
       onGenerated();
@@ -157,8 +204,26 @@ function SystemCostsTab({ trip, onGenerated }: { trip: Trip; onGenerated: () => 
           <div className="space-y-2">
             <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
               <span className="text-sm font-medium">Trip Duration</span>
-              <span className="font-bold">{tripDays} day{tripDays !== 1 ? 's' : ''}</span>
+              <span className="font-bold">
+                {tripDays} day{tripDays !== 1 ? 's' : ''}
+                {overlapDays > 0 && (
+                  <span className="text-xs text-amber-600 font-normal ml-1">
+                    ({rawDays} − {overlapDays} overlap)
+                  </span>
+                )}
+              </span>
             </div>
+            {overlapDays > 0 && (
+              <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded text-xs">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-amber-700">
+                  Another trip on this vehicle ends on the same day this trip starts.
+                  {tripDays > 0
+                    ? `Per-day costs reduced by ${overlapDays} day to avoid double-charging.`
+                    : 'Per-day costs are fully covered by the other trip — only per-km costs apply here.'}
+                </p>
+              </div>
+            )}
             {(trip.distance_km ?? 0) > 0 && (
               <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
                 <span className="text-sm font-medium">Trip Distance</span>
@@ -367,7 +432,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <span>Trip {trip.trip_number} - Details</span>

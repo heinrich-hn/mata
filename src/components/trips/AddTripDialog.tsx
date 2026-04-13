@@ -93,6 +93,7 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
     departureDate: string | null;
     arrivalDate: string | null;
     distanceKm: number | null;
+    vehicleId: string | null;
   } | null>(null);
 
   const form = useForm<TripFormData>({
@@ -289,6 +290,7 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
           departureDate: data.departure_date || null,
           arrivalDate: data.arrival_date || null,
           distanceKm: data.distance_km ? parseFloat(data.distance_km) : null,
+          vehicleId: data.vehicle_id || null,
         });
       }
 
@@ -930,6 +932,7 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
         arrivalDate={systemCostPreview?.arrivalDate || null}
         distanceKm={systemCostPreview?.distanceKm || null}
         effectiveRates={effectiveRates}
+        vehicleId={systemCostPreview?.vehicleId || null}
       />
     </>
   );
