@@ -251,7 +251,7 @@ const RemoveTyreDialog = ({ open, onOpenChange, tyre, onRemovalComplete }: Remov
           km_reading: removalReading,
           tread_depth_at_event: tyre.current_tread_depth,
           notes: `Removed from ${tyre.current_fleet_position}. Reason: ${formData.removalReason}. Next: ${formData.nextDestination}`,
-          performed_by: "current_user",
+          performed_by: userName || user?.email || "unknown",
         });
 
       // 5. Update inventory if returning to warehouse

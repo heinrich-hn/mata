@@ -1,29 +1,27 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-  } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { type FleetVehicle, useUpdateFleetVehicle } from '@/hooks/useFleetVehicles';
+import { type FleetVehicle, useFleetVehicles, useUpdateFleetVehicle } from '@/hooks/useFleetVehicles';
 import { cn } from '@/lib/utils';
 import { addDays, format, isBefore, isPast, parseISO } from 'date-fns';
-import
-  {
-    AlertTriangle,
-    Calendar,
-    Car,
-    FileText,
-    Gauge,
-    Package,
-    Pencil,
-    Shield,
-    Truck,
-    XCircle,
-  } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calendar,
+  Car,
+  FileText,
+  Gauge,
+  Package,
+  Pencil,
+  Shield,
+  Truck,
+  XCircle,
+} from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { EditFleetDialog } from './EditFleetDialog';
@@ -133,10 +131,11 @@ export function ViewFleetDialog({
 }: ViewFleetDialogProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const updateVehicle = useUpdateFleetVehicle();
+  const { data: allVehicles = [] } = useFleetVehicles();
 
   const handleToggleActive = async () => {
     if (!vehicle) return;
-    
+
     try {
       await updateVehicle.mutateAsync({
         id: vehicle.id,
@@ -150,6 +149,14 @@ export function ViewFleetDialog({
 
   if (!vehicle) return null;
 
+  // Resolve linked trailers (after null check)
+  const linkedReefer = vehicle.linked_reefer_id
+    ? allVehicles.find((v) => v.id === vehicle.linked_reefer_id) ?? null
+    : null;
+  const linkedInterlink = vehicle.linked_interlink_id
+    ? allVehicles.find((v) => v.id === vehicle.linked_interlink_id) ?? null
+    : null;
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -159,24 +166,24 @@ export function ViewFleetDialog({
               {vehicle.vehicle_id}
             </DialogTitle>
             <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditDialogOpen(true)}
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-                <Button
-                  variant={vehicle.available ? "destructive" : "default"}
-                  size="sm"
-                  onClick={handleToggleActive}
-                  disabled={updateVehicle.isPending}
-                >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  {vehicle.available ? 'Deactivate' : 'Activate'}
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditDialogOpen(true)}
+              >
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+              <Button
+                variant={vehicle.available ? "destructive" : "default"}
+                size="sm"
+                onClick={handleToggleActive}
+                disabled={updateVehicle.isPending}
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                {vehicle.available ? 'Deactivate' : 'Activate'}
+              </Button>
+            </div>
           </DialogHeader>
 
           {/* Header with vehicle info */}
@@ -200,95 +207,131 @@ export function ViewFleetDialog({
           </div>
 
           <div className="space-y-6 pt-4">
-          {/* Basic Information */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-2">
-              Basic Information
-            </h3>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <DetailItem label="Vehicle Type" value={vehicle.type} icon={Package} />
-              <Separator className="my-1" />
-              <DetailItem
-                label="Capacity"
-                value={vehicle.capacity ? `${vehicle.capacity} Tons` : null}
-                icon={Gauge}
-              />
+            {/* Basic Information */}
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-2">
+                Basic Information
+              </h3>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <DetailItem label="Vehicle Type" value={vehicle.type} icon={Package} />
+                <Separator className="my-1" />
+                <DetailItem
+                  label="Capacity"
+                  value={vehicle.capacity ? `${vehicle.capacity} Tons` : null}
+                  icon={Gauge}
+                />
+              </div>
+            </div>
+
+            {/* Vehicle Details */}
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-2">
+                Vehicle Details
+              </h3>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <DetailItem label="Registration Number" value={vehicle.registration_number} icon={FileText} />
+                <Separator className="my-1" />
+                <DetailItem label="VIN Number" value={vehicle.vin_number} icon={FileText} />
+                <Separator className="my-1" />
+                <DetailItem label="Engine Number" value={vehicle.engine_number} icon={Car} />
+                <Separator className="my-1" />
+                <DetailItem label="Make & Model" value={vehicle.make_model} icon={Truck} />
+                <Separator className="my-1" />
+                <DetailItem label="Engine Size" value={vehicle.engine_size} icon={Gauge} />
+              </div>
+            </div>
+
+            {/* Linked Trailers (Horse only) */}
+            {vehicle.type === 'Horse' && (linkedReefer || linkedInterlink) && (
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-2">
+                  Linked Trailers
+                </h3>
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                  {linkedReefer && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Reefer</p>
+                      <DetailItem label="Vehicle ID" value={linkedReefer.vehicle_id} icon={Truck} />
+                      <DetailItem label="Registration" value={linkedReefer.registration_number} icon={FileText} />
+                      <DetailItem label="Make & Model" value={linkedReefer.make_model} icon={Truck} />
+                      {linkedReefer.vin_number && (
+                        <DetailItem label="VIN" value={linkedReefer.vin_number} icon={FileText} />
+                      )}
+                    </div>
+                  )}
+                  {linkedReefer && linkedInterlink && <Separator className="my-2" />}
+                  {linkedInterlink && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Interlink</p>
+                      <DetailItem label="Vehicle ID" value={linkedInterlink.vehicle_id} icon={Truck} />
+                      <DetailItem label="Registration" value={linkedInterlink.registration_number} icon={FileText} />
+                      <DetailItem label="Make & Model" value={linkedInterlink.make_model} icon={Truck} />
+                      {linkedInterlink.vin_number && (
+                        <DetailItem label="VIN" value={linkedInterlink.vin_number} icon={FileText} />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Expiry Dates */}
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-2">
+                Document Expiry Dates
+              </h3>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <ExpiryDateItem
+                  label="License Expiry"
+                  date={vehicle.license_expiry}
+                  icon={Calendar}
+                  active={vehicle.license_active}
+                />
+                <Separator className="my-1" />
+                <ExpiryDateItem
+                  label="COF Expiry"
+                  date={vehicle.cof_expiry}
+                  icon={Shield}
+                  active={vehicle.cof_active}
+                />
+                <Separator className="my-1" />
+                <ExpiryDateItem
+                  label="Radio License Expiry"
+                  date={vehicle.radio_license_expiry}
+                  icon={Calendar}
+                  active={vehicle.radio_license_active}
+                />
+                <Separator className="my-1" />
+                <ExpiryDateItem
+                  label="Insurance Expiry"
+                  date={vehicle.insurance_expiry}
+                  icon={Shield}
+                  active={vehicle.insurance_active}
+                />
+                <Separator className="my-1" />
+                <ExpiryDateItem
+                  label="SVG Expiry"
+                  date={vehicle.svg_expiry}
+                  icon={Calendar}
+                  active={vehicle.svg_active}
+                />
+              </div>
+            </div>
+
+            {/* Timestamps */}
+            <div className="text-xs text-muted-foreground space-y-1">
+              <div>Created: {formatDate(vehicle.created_at)}</div>
+              <div>Last Updated: {formatDate(vehicle.updated_at)}</div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
 
-          {/* Vehicle Details */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-2">
-              Vehicle Details
-            </h3>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <DetailItem label="VIN Number" value={vehicle.vin_number} icon={FileText} />
-              <Separator className="my-1" />
-              <DetailItem label="Engine Number" value={vehicle.engine_number} icon={Car} />
-              <Separator className="my-1" />
-              <DetailItem label="Make & Model" value={vehicle.make_model} icon={Truck} />
-              <Separator className="my-1" />
-              <DetailItem label="Engine Size" value={vehicle.engine_size} icon={Gauge} />
-            </div>
-          </div>
-
-          {/* Expiry Dates */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-2">
-              Document Expiry Dates
-            </h3>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <ExpiryDateItem
-                label="License Expiry"
-                date={vehicle.license_expiry}
-                icon={Calendar}
-                active={vehicle.license_active}
-              />
-              <Separator className="my-1" />
-              <ExpiryDateItem
-                label="COF Expiry"
-                date={vehicle.cof_expiry}
-                icon={Shield}
-                active={vehicle.cof_active}
-              />
-              <Separator className="my-1" />
-              <ExpiryDateItem
-                label="Radio License Expiry"
-                date={vehicle.radio_license_expiry}
-                icon={Calendar}
-                active={vehicle.radio_license_active}
-              />
-              <Separator className="my-1" />
-              <ExpiryDateItem
-                label="Insurance Expiry"
-                date={vehicle.insurance_expiry}
-                icon={Shield}
-                active={vehicle.insurance_active}
-              />
-              <Separator className="my-1" />
-              <ExpiryDateItem
-                label="SVG Expiry"
-                date={vehicle.svg_expiry}
-                icon={Calendar}
-                active={vehicle.svg_active}
-              />
-            </div>
-          </div>
-
-          {/* Timestamps */}
-          <div className="text-xs text-muted-foreground space-y-1">
-            <div>Created: {formatDate(vehicle.created_at)}</div>
-            <div>Last Updated: {formatDate(vehicle.updated_at)}</div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    <EditFleetDialog
-      open={editDialogOpen}
-      onOpenChange={setEditDialogOpen}
-      vehicle={vehicle}
-    />
+      <EditFleetDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        vehicle={vehicle}
+      />
     </>
   );
 }

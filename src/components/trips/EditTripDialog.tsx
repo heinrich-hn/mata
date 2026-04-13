@@ -26,6 +26,8 @@ import { z } from 'zod';
 import SystemCostPreviewDialog from './SystemCostPreviewDialog';
 import TripCostSection, { TripCostEntry } from './TripCostSection';
 import { checkTripKmMismatch } from '@/hooks/useTripKmValidation';
+import { usePreviousTripDetails } from '@/hooks/usePreviousTripDetails';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const tripSchema = z.object({
   trip_number: z.string().min(1, 'Trip number is required').max(50),
@@ -89,6 +91,9 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
   // Track if route was changed to add new expenses
   const [routeChanged, setRouteChanged] = useState(false);
 
+  // KM mismatch override (new POD book)
+  const [kmOverride, setKmOverride] = useState(false);
+
   // State for system cost preview dialog
   const [systemCostPreview, setSystemCostPreview] = useState<{
     tripId: string;
@@ -126,6 +131,13 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
       status: 'active',
     },
   });
+
+  // Fetch previous trip highlights for same vehicle
+  const { data: previousTrip } = usePreviousTripDetails(
+    trip?.id,
+    trip?.fleet_vehicle_id,
+    trip?.trip_number,
+  );
 
   // Watch kilometer fields for auto-calculation
   const startingKm = form.watch('starting_km');
@@ -203,6 +215,7 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
       setTripCosts([]);
       setSelectedRouteExpenses([]);
       setRouteChanged(false);
+      setKmOverride(false);
     }
   }, [trip, isOpen, form]);
 
@@ -210,12 +223,12 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
     if (!trip) return;
 
     try {
-      // Block completion if there's a km mismatch
+      // Block completion if there's a km mismatch (unless overridden — new POD book)
       if (data.status === 'completed' && trip.status !== 'completed') {
         const startingKm = data.starting_km ? parseFloat(data.starting_km) : null;
         const fleetVehicleId = trip.fleet_vehicle_id;
-        if (startingKm != null && fleetVehicleId) {
-          const kmCheck = await checkTripKmMismatch(trip.id, fleetVehicleId, startingKm, data.departure_date || null);
+        if (startingKm != null && fleetVehicleId && !kmOverride) {
+          const kmCheck = await checkTripKmMismatch(trip.id, fleetVehicleId, startingKm, data.departure_date || null, data.trip_number);
           if (kmCheck.hasMismatch) {
             toast({
               title: 'Cannot Complete Trip — KM Mismatch',
@@ -813,6 +826,35 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
                 </div>
               </div>
 
+              {/* Previous Trip Highlights */}
+              {previousTrip && (
+                <div className="border rounded-lg p-3 bg-blue-50/50 border-blue-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm text-blue-800">Previous Trip — {previousTrip.trip_number}</h4>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{previousTrip.status}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Route</p>
+                      <p className="font-medium">{previousTrip.route || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Ending KM</p>
+                      <p className="font-medium">{previousTrip.ending_km?.toLocaleString() || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Distance</p>
+                      <p className="font-medium">{previousTrip.distance_km ? `${previousTrip.distance_km.toLocaleString()} km` : 'N/A'}</p>
+                    </div>
+                  </div>
+                  {previousTrip.ending_km != null && (
+                    <p className="text-xs text-blue-700">
+                      Expected starting KM: <span className="font-semibold">{previousTrip.ending_km.toLocaleString()}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Kilometer Tracking Section */}
               <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
                 <h4 className="font-medium text-sm">Kilometer Tracking</h4>
@@ -933,6 +975,25 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
                   </FormItem>
                 )}
               />
+
+              {/* KM Mismatch Override — New POD Book */}
+              {previousTrip && previousTrip.ending_km != null && (
+                <div className="flex items-start gap-2 p-3 border rounded-lg bg-amber-50/50 border-amber-200">
+                  <Checkbox
+                    id="km-override-edit"
+                    checked={kmOverride}
+                    onCheckedChange={(checked) => setKmOverride(checked === true)}
+                  />
+                  <label htmlFor="km-override-edit" className="text-sm leading-tight cursor-pointer">
+                    <span className="font-medium text-amber-800">New POD book / different sequence</span>
+                    <br />
+                    <span className="text-xs text-muted-foreground">
+                      Check this if the POD numbers follow a new book range that does not continue from the previous sequence.
+                      This will allow completion even if starting KM does not match the previous trip's ending KM ({previousTrip.ending_km.toLocaleString()}).
+                    </span>
+                  </label>
+                </div>
+              )}
 
               {/* Trip Costs Section - Add new costs while editing */}
               <TripCostSection

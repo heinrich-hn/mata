@@ -44,6 +44,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import TripExportDialog from './TripExportDialog';
+import { compareTripNumbers } from '@/hooks/useTripKmValidation';
 
 // Helper function to get week key (Monday of the week)
 const getWeekKey = (dateString: string): string => {
@@ -142,23 +143,36 @@ const ActiveTrips = ({
   const { data: previousEndingKmMap } = useQuery({
     queryKey: ['previous-ending-km', vehicleIds.join(',')],
     queryFn: async () => {
-      if (vehicleIds.length === 0) return new Map<string, { ending_km: number; trip_number: string }[]>();
-      // For each vehicle, get all trips with ending_km ordered by departure_date
+      if (vehicleIds.length === 0) return new Map<string, { ending_km: number; trip_number: string; departure_date: string | null }[]>();
+      // For each vehicle, get all trips with ending_km
       const { data, error } = await supabase
         .from('trips')
         .select('id, fleet_vehicle_id, trip_number, ending_km, departure_date')
         .in('fleet_vehicle_id', vehicleIds)
-        .not('ending_km', 'is', null)
-        .order('departure_date', { ascending: false });
+        .not('ending_km', 'is', null);
 
-      if (error) return new Map<string, { ending_km: number; trip_number: string }[]>();
+      if (error) return new Map<string, { ending_km: number; trip_number: string; departure_date: string | null }[]>();
 
-      const map = new Map<string, { ending_km: number; trip_number: string }[]>();
+      const map = new Map<string, { ending_km: number; trip_number: string; departure_date: string | null }[]>();
       for (const row of data || []) {
         const vid = row.fleet_vehicle_id as string;
         if (!map.has(vid)) map.set(vid, []);
-        map.get(vid)!.push({ ending_km: row.ending_km as number, trip_number: row.trip_number as string });
+        map.get(vid)!.push({
+          ending_km: row.ending_km as number,
+          trip_number: row.trip_number as string,
+          departure_date: row.departure_date as string | null,
+        });
       }
+
+      // Sort each vehicle's trips by trip_number (POD sequence), then departure_date as tiebreaker
+      for (const [, vehicleTrips] of map) {
+        vehicleTrips.sort((a, b) => {
+          const cmp = compareTripNumbers(a.trip_number, b.trip_number);
+          if (cmp !== 0) return cmp;
+          return (a.departure_date || '').localeCompare(b.departure_date || '');
+        });
+      }
+
       return map;
     },
     enabled: vehicleIds.length > 0,
@@ -175,10 +189,11 @@ const ActiveTrips = ({
       const vehicleTrips = previousEndingKmMap.get(trip.fleet_vehicle_id);
       if (!vehicleTrips) continue;
 
-      // Find the first trip that isn't this one (already sorted by departure desc, so first non-self is the previous)
-      const prev = vehicleTrips.find(vt => vt.trip_number !== trip.trip_number);
-      if (!prev) continue;
+      // Find this trip's position in the sorted list, then get the one before it
+      const idx = vehicleTrips.findIndex(vt => vt.trip_number === trip.trip_number);
+      if (idx <= 0) continue;
 
+      const prev = vehicleTrips[idx - 1];
       const gap = trip.starting_km - prev.ending_km;
       if (gap !== 0) {
         result.set(trip.id, { gap, previousEndingKm: prev.ending_km, previousTripNumber: prev.trip_number });

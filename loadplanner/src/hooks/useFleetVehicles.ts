@@ -9,6 +9,7 @@ export interface FleetVehicle {
   capacity: number;
   available: boolean;
   // Vehicle details
+  registration_number?: string | null;
   vin_number?: string | null;
   engine_number?: string | null;
   make_model?: string | null;
@@ -26,6 +27,9 @@ export interface FleetVehicle {
   insurance_active?: boolean;
   svg_expiry?: string | null;
   svg_active?: boolean;
+  // Linked trailers (Horse vehicles only)
+  linked_reefer_id?: string | null;
+  linked_interlink_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,7 +44,7 @@ export function useFleetVehicles() {
         .from('fleet_vehicles')
         .select('*')
         .order('vehicle_id');
-      
+
       if (error) throw error;
       return data as FleetVehicle[];
     },
@@ -49,7 +53,7 @@ export function useFleetVehicles() {
 
 export function useCreateFleetVehicle() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (vehicle: FleetVehicleInsert) => {
       const { data, error } = await supabase
@@ -57,7 +61,7 @@ export function useCreateFleetVehicle() {
         .insert(vehicle)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -73,7 +77,7 @@ export function useCreateFleetVehicle() {
 
 export function useUpdateFleetVehicle() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<FleetVehicle> & { id: string }) => {
       const { data, error } = await supabase
@@ -82,7 +86,7 @@ export function useUpdateFleetVehicle() {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -98,14 +102,14 @@ export function useUpdateFleetVehicle() {
 
 export function useDeleteFleetVehicle() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('fleet_vehicles')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {

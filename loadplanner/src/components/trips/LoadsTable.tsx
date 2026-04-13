@@ -251,9 +251,13 @@ export function LoadsTable({
     setThirdPartyBackloadDialogOpen(true);
   };
 
-  const handleExportPdf = (e: React.MouseEvent, load: Load) => {
+  const handleExportPdf = async (e: React.MouseEvent, load: Load) => {
     e.stopPropagation();
-    exportLoadToPdf(load, loads);
+    try {
+      await exportLoadToPdf(load, loads);
+    } catch {
+      // PDF export failed silently
+    }
   };
 
   const handleConfirmDelete = () => {

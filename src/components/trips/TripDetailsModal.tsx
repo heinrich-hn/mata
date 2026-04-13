@@ -24,6 +24,7 @@ import {
   Truck,
   User
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useCallback, useEffect, useState } from 'react';
 import EditTripDialog from './EditTripDialog';
 import FlagResolutionModal from './FlagResolutionModal';
@@ -31,6 +32,7 @@ import TripCostManager from './TripCostManager';
 import TripCycleTrackerView from './TripCycleTrackerView';
 import { evaluateKmSchedules, updateVehicleOdometer } from '@/lib/maintenanceKmTracking';
 import { useTripKmValidation } from '@/hooks/useTripKmValidation';
+import { usePreviousTripDetails } from '@/hooks/usePreviousTripDetails';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface Trip {
@@ -206,6 +208,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
   const [selectedCost, setSelectedCost] = useState<CostEntry | null>(null);
   const [showFlagModal, setShowFlagModal] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [kmOverride, setKmOverride] = useState(false);
   const { toast } = useToast();
 
   // KM mismatch validation
@@ -214,6 +217,14 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
     trip?.fleet_vehicle_id,
     trip?.starting_km,
     trip?.departure_date,
+    trip?.trip_number,
+  );
+
+  // Previous trip highlights for same vehicle
+  const { data: previousTrip } = usePreviousTripDetails(
+    trip?.id,
+    trip?.fleet_vehicle_id,
+    trip?.trip_number,
   );
 
   const fetchCosts = useCallback(async () => {
@@ -263,8 +274,8 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
   }, [trip, isOpen, fetchCosts]); const handleCompleteTrip = async () => {
     if (!trip) return;
 
-    // Check for KM mismatch
-    if (kmValidation.hasMismatch) {
+    // Check for KM mismatch (unless overridden — new POD book)
+    if (kmValidation.hasMismatch && !kmOverride) {
       toast({
         title: 'Cannot Complete Trip — KM Mismatch',
         description: kmValidation.message || 'Starting KM does not match previous trip ending KM for this vehicle.',
@@ -297,7 +308,13 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
             flags_checked_at: new Date().toISOString(),
             flags_resolved_count: flaggedCosts.length,
             unresolved_flags_at_completion: 0,
-            validated_by: 'system'
+            validated_by: 'system',
+            ...(kmOverride && kmValidation.hasMismatch ? {
+              km_override: true,
+              km_override_reason: 'new_pod_book',
+              km_gap: kmValidation.kmGap,
+              previous_trip_number: kmValidation.previousTripNumber,
+            } : {})
           }
         })
         .eq('id', trip.id);
@@ -345,7 +362,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
   const flaggedCosts = costs.filter(c => c.is_flagged);
   const unresolvedFlags = flaggedCosts.filter(c => c.investigation_status !== 'resolved');
   const totalCosts = costs.reduce((sum, c) => sum + c.amount, 0);
-  const canComplete = trip.status === 'active' && unresolvedFlags.length === 0 && !kmValidation.hasMismatch;
+  const canComplete = trip.status === 'active' && unresolvedFlags.length === 0 && (!kmValidation.hasMismatch || kmOverride);
 
   return (
     <>
@@ -416,12 +433,28 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
 
               {/* KM Mismatch Warning */}
               {kmValidation.hasMismatch && (
-                <Alert variant="destructive">
+                <Alert variant={kmOverride ? 'default' : 'destructive'}>
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Kilometer Mismatch — Cannot Complete Trip</AlertTitle>
-                  <AlertDescription>
-                    {kmValidation.message}
-                    {' '}Please correct the starting KM before completing this trip.
+                  <AlertTitle>
+                    {kmOverride ? 'Kilometer Mismatch — Override Active' : 'Kilometer Mismatch — Cannot Complete Trip'}
+                  </AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p>{kmValidation.message}</p>
+                    <div className="flex items-start gap-2 pt-1">
+                      <Checkbox
+                        id="km-override"
+                        checked={kmOverride}
+                        onCheckedChange={(checked) => setKmOverride(checked === true)}
+                      />
+                      <label htmlFor="km-override" className="text-sm leading-tight cursor-pointer">
+                        <span className="font-medium">New POD book / different sequence</span>
+                        <br />
+                        <span className="text-xs text-muted-foreground">
+                          Check this if the POD numbers follow a new book range that does not continue from the previous sequence.
+                          This will allow completion despite the KM mismatch.
+                        </span>
+                      </label>
+                    </div>
                   </AlertDescription>
                 </Alert>
               )}
@@ -528,6 +561,71 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
                   )}
                 </CardContent>
               </Card>
+
+              {/* Previous Trip Highlights */}
+              {previousTrip && (
+                <Card className="border-blue-200 bg-blue-50/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2 text-blue-800">
+                      <Truck className="w-4 h-4" />
+                      Previous Trip — {previousTrip.trip_number}
+                      <Badge variant={previousTrip.status === 'completed' ? 'default' : 'secondary'} className="ml-auto text-xs">
+                        {previousTrip.status}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Route</p>
+                        <p className="font-medium">{previousTrip.route || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Driver</p>
+                        <p className="font-medium">{previousTrip.driver_name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Departure</p>
+                        <p className="font-medium">{formatDate(previousTrip.departure_date ?? undefined)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Arrival</p>
+                        <p className="font-medium">{formatDate(previousTrip.arrival_date ?? undefined)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Ending KM</p>
+                        <p className="font-medium">{previousTrip.ending_km?.toLocaleString() || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Distance</p>
+                        <p className="font-medium">{previousTrip.distance_km ? `${previousTrip.distance_km.toLocaleString()} km` : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Revenue</p>
+                        <p className="font-medium text-green-700">
+                          {previousTrip.base_revenue ? formatCurrency(previousTrip.base_revenue, previousTrip.revenue_currency || 'USD') : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Client</p>
+                        <p className="font-medium">{previousTrip.client_name || 'N/A'}</p>
+                      </div>
+                    </div>
+                    {previousTrip.ending_km != null && trip.starting_km != null && previousTrip.ending_km === trip.starting_km && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-green-700">
+                        <CheckCircle className="w-3 h-3" />
+                        KM continuity verified — ending KM matches this trip's starting KM
+                      </div>
+                    )}
+                    {previousTrip.ending_km != null && trip.starting_km != null && previousTrip.ending_km !== trip.starting_km && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-red-600">
+                        <AlertTriangle className="w-3 h-3" />
+                        KM gap: previous ending {previousTrip.ending_km.toLocaleString()} vs this starting {trip.starting_km.toLocaleString()} ({trip.starting_km - previousTrip.ending_km > 0 ? '+' : ''}{(trip.starting_km - previousTrip.ending_km).toLocaleString()} km)
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Cost Summary */}
               <Card>

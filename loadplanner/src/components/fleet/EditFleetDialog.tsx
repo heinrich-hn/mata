@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { useUpdateFleetVehicle } from '@/hooks/useFleetVehicles';
+import { useFleetVehicles, useUpdateFleetVehicle } from '@/hooks/useFleetVehicles';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format, parseISO } from 'date-fns';
@@ -37,6 +37,9 @@ import { z } from 'zod';
 import type { FleetVehicle } from '@/hooks/useFleetVehicles';
 
 const vehicleTypes = [
+  'Horse',
+  'Reefer',
+  'Interlink',
   'Flatbed',
   'Box Truck',
   'Refrigerated',
@@ -53,12 +56,16 @@ const formSchema = z.object({
   capacity: z.number().min(0.1, 'Capacity must be greater than 0'),
   available: z.boolean(),
   // Vehicle details
+  registration_number: z.string().optional(),
   vin_number: z.string().optional(),
   engine_number: z.string().optional(),
   make_model: z.string().optional(),
   engine_size: z.string().optional(),
   // Telematics integration
   telematics_asset_id: z.string().optional(),
+  // Linked trailers (Horse only)
+  linked_reefer_id: z.string().optional(),
+  linked_interlink_id: z.string().optional(),
   // Expiry dates only (no active flags)
   license_expiry: z.date().optional(),
   cof_expiry: z.date().optional(),
@@ -77,6 +84,7 @@ interface EditFleetDialogProps {
 
 export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialogProps) {
   const updateFleetVehicle = useUpdateFleetVehicle();
+  const { data: allVehicles = [] } = useFleetVehicles();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -85,6 +93,7 @@ export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialog
       type: '',
       capacity: 0,
       available: true,
+      registration_number: '',
       vin_number: '',
       engine_number: '',
       make_model: '',
@@ -101,11 +110,14 @@ export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialog
         type: vehicle.type,
         capacity: vehicle.capacity,
         available: vehicle.available,
+        registration_number: vehicle.registration_number || '',
         vin_number: vehicle.vin_number || '',
         engine_number: vehicle.engine_number || '',
         make_model: vehicle.make_model || '',
         engine_size: vehicle.engine_size || '',
         telematics_asset_id: vehicle.telematics_asset_id || '',
+        linked_reefer_id: vehicle.linked_reefer_id || '',
+        linked_interlink_id: vehicle.linked_interlink_id || '',
         license_expiry: vehicle.license_expiry ? parseISO(vehicle.license_expiry) : undefined,
         cof_expiry: vehicle.cof_expiry ? parseISO(vehicle.cof_expiry) : undefined,
         radio_license_expiry: vehicle.radio_license_expiry ? parseISO(vehicle.radio_license_expiry) : undefined,
@@ -126,11 +138,14 @@ export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialog
         type: data.type,
         capacity: data.capacity,
         available: data.available,
+        registration_number: data.registration_number || null,
         vin_number: data.vin_number || null,
         engine_number: data.engine_number || null,
         make_model: data.make_model || null,
         engine_size: data.engine_size || null,
         telematics_asset_id: data.telematics_asset_id || null,
+        linked_reefer_id: data.linked_reefer_id && data.linked_reefer_id !== 'none' ? data.linked_reefer_id : null,
+        linked_interlink_id: data.linked_interlink_id && data.linked_interlink_id !== 'none' ? data.linked_interlink_id : null,
         license_expiry: data.license_expiry ? format(data.license_expiry, 'yyyy-MM-dd') : null,
         cof_expiry: data.cof_expiry ? format(data.cof_expiry, 'yyyy-MM-dd') : null,
         radio_license_expiry: data.radio_license_expiry ? format(data.radio_license_expiry, 'yyyy-MM-dd') : null,
@@ -208,6 +223,20 @@ export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialog
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="registration_number"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Registration Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., ABC 123 GP" {...field} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -312,6 +341,70 @@ export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialog
               </div>
             </div>
 
+            {/* Linked Trailers (Horse only) */}
+            {form.watch('type') === 'Horse' && (
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-foreground uppercase tracking-wider">Linked Trailers</h4>
+                <p className="text-xs text-muted-foreground">Link a Reefer and/or Interlink trailer to this Horse. Linked details appear on PDF exports only and do not affect trip assignments.</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="linked_reefer_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Linked Reefer</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Reefer (optional)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {allVehicles
+                              .filter((v) => v.type === 'Reefer' && v.id !== vehicle?.id)
+                              .map((v) => (
+                                <SelectItem key={v.id} value={v.id}>
+                                  {v.vehicle_id} {v.registration_number ? `(${v.registration_number})` : ''}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="linked_interlink_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Linked Interlink</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Interlink (optional)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {allVehicles
+                              .filter((v) => v.type === 'Interlink' && v.id !== vehicle?.id)
+                              .map((v) => (
+                                <SelectItem key={v.id} value={v.id}>
+                                  {v.vehicle_id} {v.registration_number ? `(${v.registration_number})` : ''}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
             {/* Expiry Dates */}
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-foreground uppercase tracking-wider">Expiry Dates</h4>

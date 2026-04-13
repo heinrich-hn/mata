@@ -277,8 +277,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mountedRef.current) setProfile(p);
         }
       } else if (event === "INITIAL_SESSION") {
-        // INITIAL_SESSION with no session means no stored session exists at all.
-        // This is a genuine "not logged in" state — show login screen.
+        // INITIAL_SESSION with no session means either no stored session or
+        // the refresh token was invalid/expired. Clear any state that may
+        // have been set from stale cache and show the login screen.
+        if (!initComplete) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          queryClient.clear();
+        }
         finishInit();
       }
     });
@@ -292,38 +299,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!mountedRef.current) return;
 
         if (userError || !verifiedUser) {
-          // getUser() says the token is invalid. But if onAuthStateChange already
-          // set a valid session (e.g. it refreshed the token), don't override it.
+          // getUser() says the token is invalid/expired.
+          // Do NOT fall back to getSession() — it returns unvalidated cached
+          // data and can create a zombie state (authenticated UI, expired token).
+          // Let onAuthStateChange be the sole authority for session restoration.
           if (initComplete) {
-            // Init already done by onAuthStateChange — don't wipe state.
-            // If the session is truly invalid, TOKEN_REFRESHED with null session
-            // or SIGNED_OUT will fire from the SDK and handle cleanup.
+            // onAuthStateChange already handled init. If it set a valid refreshed
+            // session, the getUser() error is stale (used old token). If the
+            // session is truly dead, the SDK will fire SIGNED_OUT.
             console.warn("getUser() failed after init already complete — deferring to SDK:", userError?.message);
-            return;
+          } else {
+            // Init not yet complete — onAuthStateChange(INITIAL_SESSION) will
+            // fire shortly with either a refreshed session or null.
+            console.warn("getUser() failed, waiting for onAuthStateChange:", userError?.message);
           }
-
-          // Check if getSession() has a cached session (from onAuthStateChange
-          // processing that hasn't set initComplete yet due to async timing)
-          const { data: { session: cachedSession } } = await supabase.auth.getSession();
-          if (cachedSession?.user) {
-            console.warn("getUser() failed but cached session exists — keeping session:", userError?.message);
-            setSession(cachedSession);
-            setUser(cachedSession.user);
-            finishInit();
-            if (cachedSession.user.email) {
-              const p = await fetchProfile(cachedSession.user.email, cachedSession.user);
-              if (mountedRef.current) setProfile(p);
-            }
-            return;
-          }
-
-          // No cached session either — truly not authenticated
-          console.warn("No valid session found:", userError?.message);
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          queryClient.clear();
-          finishInit();
           return;
         }
 
@@ -342,38 +331,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mountedRef.current) setProfile(p);
         }
       })
-      .catch(async (err) => {
+      .catch((err) => {
         console.error("Auth initialization error:", err);
         if (!mountedRef.current) return;
 
-        // Network error — don't wipe state if onAuthStateChange already set a session
+        // Network error during getUser() — don't fall back to getSession()
+        // (which returns unvalidated cached data). Let onAuthStateChange
+        // handle session restoration; the safety timeout catches edge cases.
         if (initComplete) {
           console.warn("getUser() network error after init complete — ignoring");
-          return;
+        } else {
+          console.warn("getUser() network error, waiting for onAuthStateChange");
         }
-
-        // Try cached session as last resort
-        try {
-          const { data: { session: cachedSession } } = await supabase.auth.getSession();
-          if (cachedSession?.user) {
-            console.warn("Auth init failed but cached session exists — keeping session");
-            setSession(cachedSession);
-            setUser(cachedSession.user);
-            finishInit();
-            if (cachedSession.user.email) {
-              const p = await fetchProfile(cachedSession.user.email, cachedSession.user);
-              if (mountedRef.current) setProfile(p);
-            }
-            return;
-          }
-        } catch {
-          // getSession also failed — truly broken
-        }
-
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        finishInit();
       });
 
     return () => {
@@ -437,10 +406,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
-      if (signOutError) {
-        console.error("Sign out error:", signOutError);
-        throw signOutError;
+      // Race signOut against a timeout to prevent hanging if the auth lock
+      // is held by a stuck token refresh.
+      const signOutResult = await Promise.race([
+        supabase.auth.signOut({ scope: "local" }),
+        new Promise<{ error: Error }>(resolve =>
+          setTimeout(() => resolve({ error: new Error("Sign out timed out") }), 5000)
+        ),
+      ]);
+      if (signOutResult.error) {
+        console.error("Sign out error:", signOutResult.error);
       }
     } catch (err) {
       console.error("Sign out exception:", err);
@@ -451,6 +426,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       // Clear stale query cache so re-login fetches fresh data
       queryClient.clear();
+      // Ensure auth storage is cleared even if signOut() timed out,
+      // so the stale session doesn't persist on next app open.
+      try { localStorage.removeItem('mata-driver-auth'); } catch { /* ignore */ }
     }
   }, [supabase, queryClient, setProfile]);
 

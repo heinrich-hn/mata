@@ -1,4 +1,7 @@
+import type { Driver } from "@/hooks/useDrivers";
+import type { FleetVehicle } from "@/hooks/useFleetVehicles";
 import type { Load } from "@/hooks/useTrips";
+import { supabase } from "@/integrations/supabase/client";
 import { COMPANY_NAME, SYSTEM_NAME, pdfColors } from "@/lib/exportStyles";
 import * as timeWindowLib from "@/lib/timeWindow";
 import { format, parseISO } from "date-fns";
@@ -47,7 +50,85 @@ function findParentLoad(load: Load, allLoads: Load[]): Load | undefined {
   return undefined;
 }
 
-export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
+/**
+ * Fetch an image from a URL and return it as a base64 data URI.
+ * Returns null if the fetch fails or the URL is empty.
+ */
+async function fetchImageAsBase64(url: string | null | undefined): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch full driver details from the database.
+ */
+async function fetchFullDriver(driverId: string): Promise<Driver | null> {
+  const { data, error } = await supabase
+    .from("drivers")
+    .select("*")
+    .eq("id", driverId)
+    .single();
+  if (error || !data) return null;
+  return data as Driver;
+}
+
+/**
+ * Fetch full fleet vehicle details from the database.
+ */
+async function fetchFullVehicle(vehicleId: string): Promise<FleetVehicle | null> {
+  const { data, error } = await supabase
+    .from("fleet_vehicles")
+    .select("*")
+    .eq("id", vehicleId)
+    .single();
+  if (error || !data) return null;
+  return data as FleetVehicle;
+}
+
+/**
+ * Format a date string for display, returning 'Not set' for null/undefined.
+ */
+function formatExpiryDate(dateString: string | null | undefined): string {
+  if (!dateString) return "Not set";
+  if (dateString === "9999-12-31") return "N/A";
+  try {
+    return format(parseISO(dateString), "dd MMM yyyy");
+  } catch {
+    return "Invalid date";
+  }
+}
+
+export async function exportLoadToPdf(load: Load, allLoads: Load[]): Promise<void> {
+  // Fetch full driver and vehicle details in parallel
+  const [fullDriver, fullVehicle] = await Promise.all([
+    load.driver?.id ? fetchFullDriver(load.driver.id) : Promise.resolve(null),
+    load.fleet_vehicle?.id ? fetchFullVehicle(load.fleet_vehicle.id) : Promise.resolve(null),
+  ]);
+
+  // Fetch linked trailers if the vehicle is a Horse
+  const [linkedReefer, linkedInterlink] = await Promise.all([
+    fullVehicle?.linked_reefer_id ? fetchFullVehicle(fullVehicle.linked_reefer_id) : Promise.resolve(null),
+    fullVehicle?.linked_interlink_id ? fetchFullVehicle(fullVehicle.linked_interlink_id) : Promise.resolve(null),
+  ]);
+
+  // Pre-fetch images in parallel
+  const [driverPhotoBase64, passportDocBase64] = await Promise.all([
+    fetchImageAsBase64(fullDriver?.photo_url),
+    fetchImageAsBase64(fullDriver?.passport_doc_url),
+  ]);
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -340,6 +421,304 @@ export function exportLoadToPdf(load: Load, allLoads: Load[]): void {
   yPos = addKeyValue("Driver Contact:", load.driver?.contact || "-", yPos);
 
   yPos += 4;
+
+  // ========== DRIVER DETAILS (full) ==========
+  if (fullDriver) {
+    // Check if we need a new page
+    if (yPos > 180) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    yPos = addSectionHeader("Driver Details", pdfColors.navy);
+
+    // Driver photo and basic info row
+    const infoStartX = margin + 4;
+    let photoWidth = 0;
+
+    if (driverPhotoBase64) {
+      try {
+        doc.addImage(driverPhotoBase64, "JPEG", margin + 4, yPos, 30, 36);
+        photoWidth = 36; // photo width + gap
+      } catch {
+        // Image failed — skip silently
+      }
+    }
+
+    const detailX = infoStartX + photoWidth;
+    let detailY = yPos;
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...pdfColors.navy);
+    doc.text(fullDriver.name, detailX, detailY + 5);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+
+    detailY += 10;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(100, 100, 100);
+    doc.text("Contact:", detailX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text(fullDriver.contact || "-", detailX + 40, detailY);
+
+    detailY += 6;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(100, 100, 100);
+    doc.text("ID Number:", detailX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text(fullDriver.id_number || "-", detailX + 40, detailY);
+
+    detailY += 6;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(100, 100, 100);
+    doc.text("Availability:", detailX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text(fullDriver.available ? "Available" : "On Route", detailX + 40, detailY);
+
+    yPos = Math.max(yPos + (driverPhotoBase64 ? 40 : 0), detailY + 6) + 4;
+
+    // Passport Information
+    const passportData: string[][] = [
+      ["Passport Number", fullDriver.passport_number || "Not set"],
+      ["Passport Expiry", formatExpiryDate(fullDriver.passport_expiry)],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [["Passport Details", ""]],
+      body: passportData,
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: pdfColors.blue, textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { fontStyle: "bold", cellWidth: 60 },
+        1: { cellWidth: "auto" },
+      },
+      alternateRowStyles: { fillColor: [241, 245, 249] },
+    });
+
+    yPos =
+      (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
+        .finalY + 6;
+
+    // Passport Document Image
+    if (passportDocBase64) {
+      if (yPos > 160) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...pdfColors.blue);
+      doc.text("Passport Document:", margin + 4, yPos);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+      yPos += 4;
+
+      try {
+        // Add passport image — landscape oriented, max width 120mm
+        const imgWidth = 120;
+        const imgHeight = 80;
+        doc.addImage(passportDocBase64, "JPEG", margin + 4, yPos, imgWidth, imgHeight);
+        yPos += imgHeight + 6;
+      } catch {
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text("(Passport image could not be loaded)", margin + 4, yPos + 4);
+        yPos += 10;
+      }
+    }
+
+    // License & Certificate Expiry Dates
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    const licenseData: string[][] = [
+      ["Driver's License", fullDriver.drivers_license || "Not set"],
+      ["License Expiry", formatExpiryDate(fullDriver.drivers_license_expiry)],
+      ["Retest Certificate Expiry", formatExpiryDate(fullDriver.retest_certificate_expiry)],
+      ["Medical Certificate Expiry", formatExpiryDate(fullDriver.medical_certificate_expiry)],
+      ["Int'l Driving Permit Expiry", formatExpiryDate(fullDriver.international_driving_permit_expiry)],
+      ["Defensive Driving Expiry", formatExpiryDate(fullDriver.defensive_driving_permit_expiry)],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [["Licenses & Certificates", ""]],
+      body: licenseData,
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: pdfColors.blue, textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { fontStyle: "bold", cellWidth: 60 },
+        1: { cellWidth: "auto" },
+      },
+      alternateRowStyles: { fillColor: [241, 245, 249] },
+    });
+
+    yPos =
+      (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
+        .finalY + 8;
+  }
+
+  // ========== VEHICLE DETAILS (full) ==========
+  if (fullVehicle) {
+    if (yPos > 180) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    yPos = addSectionHeader("Vehicle Details", pdfColors.navy);
+
+    // Vehicle identification table
+    const vehicleIdData: string[][] = [
+      ["Registration / Fleet No.", fullVehicle.vehicle_id],
+      ["Registration Number", fullVehicle.registration_number || "Not set"],
+      ["Vehicle Type", fullVehicle.type || "-"],
+      ["Make & Model", fullVehicle.make_model || "Not set"],
+      ["VIN Number", fullVehicle.vin_number || "Not set"],
+      ["Engine Number", fullVehicle.engine_number || "Not set"],
+      ["Engine Size", fullVehicle.engine_size || "Not set"],
+      ["Capacity", fullVehicle.capacity ? `${fullVehicle.capacity} Tons` : "Not set"],
+      ["Status", fullVehicle.available ? "Available" : "Unavailable"],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [["Vehicle Information", ""]],
+      body: vehicleIdData,
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: pdfColors.blue, textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { fontStyle: "bold", cellWidth: 60 },
+        1: { cellWidth: "auto" },
+      },
+      alternateRowStyles: { fillColor: [241, 245, 249] },
+    });
+
+    yPos =
+      (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
+        .finalY + 6;
+
+    // Vehicle Document Expiry Dates
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    const vehicleDocsData: string[][] = [
+      ["License Disk Expiry", formatExpiryDate(fullVehicle.license_expiry)],
+      ["COF Expiry", formatExpiryDate(fullVehicle.cof_expiry)],
+      ["Insurance Expiry", formatExpiryDate(fullVehicle.insurance_expiry)],
+      ["Radio License Expiry", formatExpiryDate(fullVehicle.radio_license_expiry)],
+      ["SVG Expiry", formatExpiryDate(fullVehicle.svg_expiry)],
+    ];
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [["Vehicle Document Expiry Dates", ""]],
+      body: vehicleDocsData,
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: pdfColors.blue, textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { fontStyle: "bold", cellWidth: 60 },
+        1: { cellWidth: "auto" },
+      },
+      alternateRowStyles: { fillColor: [241, 245, 249] },
+    });
+
+    yPos =
+      (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
+        .finalY + 8;
+  }
+
+  // ========== LINKED TRAILERS (Horse vehicles only) ==========
+  if (fullVehicle?.type === 'Horse' && (linkedReefer || linkedInterlink)) {
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    yPos = addSectionHeader("Linked Trailers", pdfColors.navy);
+
+    const trailerSections: { label: string; trailer: FleetVehicle }[] = [];
+    if (linkedReefer) trailerSections.push({ label: "Reefer", trailer: linkedReefer });
+    if (linkedInterlink) trailerSections.push({ label: "Interlink", trailer: linkedInterlink });
+
+    for (const { label, trailer } of trailerSections) {
+      if (yPos > 220) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      const trailerData: string[][] = [
+        ["Vehicle ID", trailer.vehicle_id],
+        ["Registration Number", trailer.registration_number || "Not set"],
+        ["Type", trailer.type || "-"],
+        ["Make & Model", trailer.make_model || "Not set"],
+        ["VIN Number", trailer.vin_number || "Not set"],
+        ["Engine Number", trailer.engine_number || "Not set"],
+        ["Capacity", trailer.capacity ? `${trailer.capacity} Tons` : "Not set"],
+      ];
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [[`${label} Trailer`, ""]],
+        body: trailerData,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: pdfColors.blue, textColor: [255, 255, 255] },
+        columnStyles: {
+          0: { fontStyle: "bold", cellWidth: 60 },
+          1: { cellWidth: "auto" },
+        },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
+      });
+
+      yPos =
+        (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
+          .finalY + 6;
+
+      // Trailer expiry dates
+      const trailerDocsData: string[][] = [
+        ["License Disk Expiry", formatExpiryDate(trailer.license_expiry)],
+        ["COF Expiry", formatExpiryDate(trailer.cof_expiry)],
+        ["Insurance Expiry", formatExpiryDate(trailer.insurance_expiry)],
+        ["Radio License Expiry", formatExpiryDate(trailer.radio_license_expiry)],
+        ["SVG Expiry", formatExpiryDate(trailer.svg_expiry)],
+      ];
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [[`${label} Document Expiry Dates`, ""]],
+        body: trailerDocsData,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: pdfColors.blue, textColor: [255, 255, 255] },
+        columnStyles: {
+          0: { fontStyle: "bold", cellWidth: 60 },
+          1: { cellWidth: "auto" },
+        },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
+      });
+
+      yPos =
+        (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable
+          .finalY + 6;
+    }
+
+    yPos += 2;
+  }
 
   // ========== NOTES ==========
   if (load.notes) {

@@ -25,6 +25,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import SystemCostPreviewDialog from './SystemCostPreviewDialog';
 import TripCostSection, { TripCostEntry } from './TripCostSection';
+import { useLatestVehicleTrip } from '@/hooks/usePreviousTripDetails';
 
 const tripSchema = z.object({
   trip_number: z.string().min(1, 'Trip number is required').max(50),
@@ -130,6 +131,10 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
   const revenueType = form.watch('revenue_type');
   const ratePerKm = form.watch('rate_per_km');
   const distanceKm = form.watch('distance_km');
+  const selectedVehicleId = form.watch('vehicle_id');
+
+  // Fetch latest trip for selected vehicle to show previous trip highlights
+  const { data: latestVehicleTrip } = useLatestVehicleTrip(selectedVehicleId);
 
   // Auto-calculate distance when starting and ending km change
   const calculatedDistance = React.useMemo(() => {
@@ -770,6 +775,35 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
                   />
                 </div>
               </div>
+
+              {/* Previous Trip Highlights */}
+              {latestVehicleTrip && (
+                <div className="border rounded-lg p-3 bg-blue-50/50 border-blue-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm text-blue-800">Previous Trip — {latestVehicleTrip.trip_number}</h4>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{latestVehicleTrip.status}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Route</p>
+                      <p className="font-medium">{latestVehicleTrip.route || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Ending KM</p>
+                      <p className="font-medium">{latestVehicleTrip.ending_km?.toLocaleString() || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Distance</p>
+                      <p className="font-medium">{latestVehicleTrip.distance_km ? `${latestVehicleTrip.distance_km.toLocaleString()} km` : 'N/A'}</p>
+                    </div>
+                  </div>
+                  {latestVehicleTrip.ending_km != null && (
+                    <p className="text-xs text-blue-700">
+                      Expected starting KM for new trip: <span className="font-semibold">{latestVehicleTrip.ending_km.toLocaleString()}</span>
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Kilometer Tracking Section */}
               <div className="space-y-4 border rounded-lg p-4 bg-muted/30">

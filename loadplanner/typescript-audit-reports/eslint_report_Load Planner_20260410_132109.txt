@@ -1,8 +1,0 @@
-
-/workspaces/mata/loadplanner/src/components/ui/form.tsx
-  149:10  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
-
-/workspaces/mata/loadplanner/src/components/ui/navigation-menu.tsx
-  127:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
-
-✖ 2 problems (0 errors, 2 warnings)
