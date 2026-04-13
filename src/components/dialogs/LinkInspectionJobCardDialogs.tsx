@@ -22,6 +22,7 @@ interface LinkInspectionToJobCardDialogProps {
     onOpenChange: (open: boolean) => void;
     jobCardId: string;
     currentInspectionId: string | null;
+    vehicleId?: string | null;
     onLinked: () => void;
 }
 
@@ -30,20 +31,41 @@ export function LinkInspectionToJobCardDialog({
     onOpenChange,
     jobCardId,
     currentInspectionId,
+    vehicleId,
     onLinked,
 }: LinkInspectionToJobCardDialogProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
 
+    // Fetch inspection IDs already linked to other job cards
+    const { data: linkedInspectionIds = [] } = useQuery({
+        queryKey: ["linked-inspection-ids", jobCardId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("job_cards")
+                .select("inspection_id")
+                .not("inspection_id", "is", null)
+                .neq("id", jobCardId);
+            if (error) throw error;
+            return (data || []).map((jc) => jc.inspection_id as string);
+        },
+        enabled: open,
+    });
+
     const { data: inspections = [], isLoading } = useQuery({
-        queryKey: ["inspections-search", search],
+        queryKey: ["inspections-search", search, vehicleId, linkedInspectionIds],
         queryFn: async () => {
             let query = supabase
                 .from("vehicle_inspections")
-                .select("id, inspection_number, inspection_date, inspection_type, vehicle_registration, inspector_name, status")
+                .select("id, inspection_number, inspection_date, inspection_type, vehicle_registration, inspector_name, status, vehicle_id")
                 .order("inspection_date", { ascending: false })
                 .limit(20);
+
+            // Filter to the job card's vehicle
+            if (vehicleId) {
+                query = query.eq("vehicle_id", vehicleId);
+            }
 
             if (search.trim()) {
                 query = query.or(
@@ -53,7 +75,11 @@ export function LinkInspectionToJobCardDialog({
 
             const { data, error } = await query;
             if (error) throw error;
-            return data || [];
+
+            // Exclude inspections already linked to other job cards (keep current)
+            return (data || []).filter(
+                (insp) => insp.id === currentInspectionId || !linkedInspectionIds.includes(insp.id)
+            );
         },
         enabled: open,
     });
@@ -95,7 +121,9 @@ export function LinkInspectionToJobCardDialog({
                         Link Inspection to Job Card
                     </DialogTitle>
                     <DialogDescription>
-                        Search for an existing inspection to link to this job card.
+                        {vehicleId
+                            ? "Showing unlinked inspections for the selected vehicle."
+                            : "Assign a vehicle to the job card first to filter inspections."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -138,8 +166,8 @@ export function LinkInspectionToJobCardDialog({
                                 key={insp.id}
                                 disabled={linkMutation.isPending}
                                 className={`w-full text-left px-3 py-2.5 rounded-md border transition-colors ${insp.id === currentInspectionId
-                                        ? "border-primary bg-primary/5"
-                                        : "border-transparent hover:bg-accent"
+                                    ? "border-primary bg-primary/5"
+                                    : "border-transparent hover:bg-accent"
                                     }`}
                                 onClick={() => linkMutation.mutate(insp.id)}
                             >
@@ -329,10 +357,10 @@ export function LinkJobCardToInspectionDialog({
                                     key={jc.id}
                                     disabled={linkMutation.isPending || !!isLinkedElsewhere}
                                     className={`w-full text-left px-3 py-2.5 rounded-md border transition-colors ${isLinkedHere
-                                            ? "border-primary bg-primary/5"
-                                            : isLinkedElsewhere
-                                                ? "border-transparent opacity-50 cursor-not-allowed"
-                                                : "border-transparent hover:bg-accent"
+                                        ? "border-primary bg-primary/5"
+                                        : isLinkedElsewhere
+                                            ? "border-transparent opacity-50 cursor-not-allowed"
+                                            : "border-transparent hover:bg-accent"
                                         }`}
                                     onClick={() => {
                                         if (isLinkedHere) {

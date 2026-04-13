@@ -560,6 +560,7 @@ const JobCardDetails = () => {
         onOpenChange={setShowLinkInspection}
         jobCardId={jobCard.id}
         currentInspectionId={jobCard.inspection_id}
+        vehicleId={jobCard.vehicle_id}
         onLinked={() => {
           setShowLinkInspection(false);
           handleRefresh();
