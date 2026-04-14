@@ -9,7 +9,6 @@ import { ScheduleList } from "@/components/maintenance/ScheduleList"; // This sh
 import { TemplateManager } from "@/components/maintenance/TemplateManager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { MaintenanceSchedule } from "@/types/maintenance";
@@ -69,63 +68,11 @@ export default function MaintenanceScheduling() {
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Schedule
-          </Button>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Schedules</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{stats?.total || 0}</div>
-              <p className="text-xs text-muted-foreground">Active schedules</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Due Today</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{stats?.dueToday || 0}</div>
-              <p className="text-xs text-muted-foreground">Tasks due today</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{stats?.overdue || 0}</div>
-              <p className="text-xs text-muted-foreground">Require attention</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{stats?.completedThisMonth || 0}</div>
-              <p className="text-xs text-muted-foreground">This month</p>
-            </CardContent>
-          </Card>
-        </div>
-
+      <div className="space-y-4">
+        {/* Tabs at top */}
         <Tabs defaultValue="list" className="w-full">
           <div className="overflow-x-auto -mx-1 px-1">
-            <TabsList className="inline-flex w-auto min-w-full lg:grid lg:w-full lg:grid-cols-7">
+            <TabsList className="inline-flex w-auto min-w-full lg:grid lg:w-full lg:max-w-4xl lg:grid-cols-7">
               <TabsTrigger value="list" className="px-5 py-2.5 text-base whitespace-nowrap">Schedule List</TabsTrigger>
               <TabsTrigger value="calendar" className="px-5 py-2.5 text-base whitespace-nowrap">Calendar View</TabsTrigger>
               <TabsTrigger value="overdue" className="px-5 py-2.5 text-base whitespace-nowrap">
@@ -151,7 +98,38 @@ export default function MaintenanceScheduling() {
             </TabsList>
           </div>
 
-          <TabsContent value="list" className="space-y-4">
+          <TabsContent value="list" className="space-y-4 mt-4">
+            {/* Compact toolbar: stats + add button */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-1.5 text-sm">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-semibold">{stats?.total || 0}</span>
+                <span className="text-muted-foreground text-xs">schedules</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-sm">
+                <Clock className="h-3.5 w-3.5 text-blue-500" />
+                <span className="font-semibold">{stats?.dueToday || 0}</span>
+                <span className="text-muted-foreground text-xs">due today</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-sm">
+                <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                <span className="font-semibold text-red-600">{stats?.overdue || 0}</span>
+                <span className="text-muted-foreground text-xs">overdue</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-sm">
+                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                <span className="font-semibold text-green-600">{stats?.completedThisMonth || 0}</span>
+                <span className="text-muted-foreground text-xs">completed this month</span>
+              </div>
+
+              <div className="flex-1" />
+
+              <Button size="sm" className="h-8 gap-1 text-xs px-2.5" onClick={() => setIsAddDialogOpen(true)}>
+                <Plus className="h-3 w-3" />
+                New Schedule
+              </Button>
+            </div>
+
             <ScheduleList schedules={schedules || []} onUpdate={refetch} />
           </TabsContent>
 

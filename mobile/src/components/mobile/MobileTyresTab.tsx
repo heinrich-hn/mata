@@ -26,6 +26,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, FileText, MoreVertical, Share2, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import MobileTyreJobCards from "@/components/mobile/MobileTyreJobCards";
 
 interface Inspection {
   id: string;
@@ -626,6 +627,9 @@ const MobileTyresTab = () => {
           </div>
         )}
       </div>
+
+      {/* Tyre Job Cards Section */}
+      <MobileTyreJobCards />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

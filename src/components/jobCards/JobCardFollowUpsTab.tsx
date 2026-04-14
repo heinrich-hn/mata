@@ -283,57 +283,40 @@ const JobCardFollowUpsTab = () => {
 
     return (
         <div className="space-y-4">
-            {/* Summary cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-muted-foreground">Total Follow-ups</p>
-                                <p className="text-2xl font-semibold">{followUps.length}</p>
-                            </div>
-                            <ExternalLink className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-muted-foreground">Pending</p>
-                                <p className="text-2xl font-semibold text-yellow-600">{pendingCount}</p>
-                            </div>
-                            <ListPlus className="h-5 w-5 text-yellow-500" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-muted-foreground">Completed</p>
-                                <p className="text-2xl font-semibold text-green-600">{completedCount}</p>
-                            </div>
-                            <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+            {/* Compact toolbar: stats + filters in one row */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {/* Inline stats */}
+                <div className="flex items-center gap-1.5 text-sm">
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-semibold">{followUps.length}</span>
+                    <span className="text-muted-foreground text-xs">total</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-sm">
+                    <ListPlus className="h-3.5 w-3.5 text-yellow-500" />
+                    <span className="font-semibold text-yellow-600">{pendingCount}</span>
+                    <span className="text-muted-foreground text-xs">pending</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-sm">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                    <span className="font-semibold text-green-600">{completedCount}</span>
+                    <span className="text-muted-foreground text-xs">completed</span>
+                </div>
 
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <div className="hidden sm:block h-4 w-px bg-border" />
+
+                {/* Filters inline */}
+                <div className="relative flex-1 min-w-0 sm:min-w-[180px] sm:max-w-[260px]">
+                    <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
-                        placeholder="Search follow-ups, job cards, vehicles..."
+                        placeholder="Search..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9"
+                        className="h-8 pl-7 text-xs"
                     />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-[180px]">
-                        <SelectValue placeholder="Filter by status" />
+                    <SelectTrigger className="h-8 w-[120px] text-xs">
+                        <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>

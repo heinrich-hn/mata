@@ -6,6 +6,7 @@ import JobCardWeeklyCostReport from "@/components/maintenance/JobCardWeeklyCostR
 import JobCardNotesPopover from "@/components/jobCards/JobCardNotesPopover";
 import JobCardFollowUpsPopover from "@/components/jobCards/JobCardFollowUpsPopover";
 import JobCardFollowUpsTab from "@/components/jobCards/JobCardFollowUpsTab";
+import TyreJobCardsTab from "@/components/jobCards/TyreJobCardsTab";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog,
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -468,6 +469,8 @@ const JobCards = () => {
 
   // Base filter (search, priority, assignee)
   const baseFilteredCards = jobCards.filter((card) => {
+    // Exclude tyre job cards from the main tab (they have their own tab)
+    if (card.inspection?.inspection_type === "tyre") return false;
     if (searchTerm && !card.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
       !card.job_number.toLowerCase().includes(searchTerm.toLowerCase())) {
       return false;
@@ -1161,125 +1164,121 @@ const JobCards = () => {
   return (
     <Layout>
       <div className="p-2 sm:p-6 space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        {/* Status indicators */}
+        {(isLoading || queryError) && (
           <div>
             {isLoading && <p className="text-sm text-blue-500">Loading job cards...</p>}
             {queryError && <p className="text-sm text-red-500">Error: {String(queryError)}</p>}
           </div>
-          {activeTab === "job-cards" && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={exportJobCardsToExcel} className="h-9 gap-1.5 text-xs">
-                <Download className="w-3.5 h-3.5" />
-                Job Cards Excel
-              </Button>
-              <Button variant="outline" size="sm" onClick={exportJobCardsToPDF} className="h-9 gap-1.5 text-xs">
-                <FileText className="w-3.5 h-3.5" />
-                Job Cards PDF
-              </Button>
-              <Button onClick={() => setShowAddDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                New Job Card
-              </Button>
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList>
-            <TabsTrigger value="job-cards" className="px-5 py-2.5 text-base">
-              Job Cards
-            </TabsTrigger>
-            <TabsTrigger value="cost-reports" className="px-5 py-2.5 text-base">
-              Cost Reports
-            </TabsTrigger>
-            <TabsTrigger value="follow-ups" className="px-5 py-2.5 text-base">
-              Follow-ups
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-1 px-1">
+            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-4xl sm:grid-cols-5">
+              <TabsTrigger value="job-cards" className="px-5 py-2.5 text-base whitespace-nowrap">
+                Job Cards
+              </TabsTrigger>
+              <TabsTrigger value="cost-reports" className="px-5 py-2.5 text-base whitespace-nowrap">
+                Cost Reports
+              </TabsTrigger>
+              <TabsTrigger value="follow-ups" className="px-5 py-2.5 text-base whitespace-nowrap">
+                Follow-ups
+              </TabsTrigger>
+              <TabsTrigger value="tyre-job-cards" className="px-5 py-2.5 text-base whitespace-nowrap">
+                Tyre Job Cards
+              </TabsTrigger>
+              <TabsTrigger value="tyre-costs" className="px-5 py-2.5 text-base whitespace-nowrap">
+                Tyre Costs
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent value="job-cards" className="space-y-6 mt-6">
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
-                  <ClipboardList className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">{allActiveCards.length}</div>
-                  <p className="text-xs text-muted-foreground">Pending + In Progress</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                  <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">{allCompletedCards.length}</div>
-                  <p className="text-xs text-muted-foreground">Finished jobs</p>
-                </CardContent>
-              </Card>
+          <TabsContent value="job-cards" className="space-y-4 mt-4">
+            {/* Compact toolbar: stats + filters + actions in one row */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {/* Inline stats */}
+              <div className="flex items-center gap-1.5 text-sm">
+                <ClipboardList className="h-3.5 w-3.5 text-orange-500" />
+                <span className="font-semibold">{allActiveCards.length}</span>
+                <span className="text-muted-foreground text-xs">active</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-sm">
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                <span className="font-semibold">{allCompletedCards.length}</span>
+                <span className="text-muted-foreground text-xs">completed</span>
+              </div>
+
+              <div className="hidden sm:block h-4 w-px bg-border" />
+
+              {/* Filters inline */}
+              <div className="relative flex-1 min-w-0 sm:min-w-[180px] sm:max-w-[260px]">
+                <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-8 pl-7 text-xs"
+                />
+              </div>
+
+              <Select value={selectedPriority} onValueChange={setSelectedPriority}>
+                <SelectTrigger className="h-8 w-[120px] text-xs">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priorities</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {assignees.length > 0 && (
+                <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+                  <SelectTrigger className="h-8 w-[130px] text-xs">
+                    <SelectValue placeholder="Assignee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Assignees</SelectItem>
+                    {assignees.map((assignee) => (
+                      <SelectItem key={assignee} value={assignee}>
+                        {assignee}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Spacer to push actions right */}
+              <div className="flex-1" />
+
+              {/* Export + Add buttons */}
+              <div className="flex items-center gap-1.5">
+                <Button variant="outline" size="sm" onClick={exportJobCardsToExcel} className="h-8 gap-1 text-xs px-2.5">
+                  <Download className="w-3 h-3" />
+                  Excel
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportJobCardsToPDF} className="h-8 gap-1 text-xs px-2.5">
+                  <FileText className="w-3 h-3" />
+                  PDF
+                </Button>
+                <Button size="sm" className="h-8 gap-1 text-xs px-2.5" onClick={() => setShowAddDialog(true)}>
+                  <Plus className="h-3 w-3" />
+                  New Job Card
+                </Button>
+              </div>
             </div>
-
-            {/* Filters */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-4">
-                  <div className="flex-1 min-w-0 sm:min-w-[200px]">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search job cards..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-8"
-                      />
-                    </div>
-                  </div>
-
-                  <Select value={selectedPriority} onValueChange={setSelectedPriority}>
-                    <SelectTrigger className="w-full sm:w-[140px]">
-                      <SelectValue placeholder="Priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Priorities</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {assignees.length > 0 && (
-                    <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
-                      <SelectTrigger className="w-full sm:w-[160px]">
-                        <SelectValue placeholder="Assignee" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Assignees</SelectItem>
-                        {assignees.map((assignee) => (
-                          <SelectItem key={assignee} value={assignee}>
-                            {assignee}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Active Job Cards (Pending + In Progress) */}
             <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <ClipboardList className="h-5 w-5 text-orange-500" />
-                    <CardTitle>Active Job Cards</CardTitle>
-                    <Badge className="bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800 font-semibold text-xs">
+              <CardHeader className="pb-3 pt-4 px-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-orange-500" />
+                    <CardTitle className="text-sm font-semibold">Active Job Cards</CardTitle>
+                    <Badge className="bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800 font-semibold text-[11px] px-1.5 py-0">
                       {allActiveCards.length}
                     </Badge>
                   </div>
@@ -1313,11 +1312,8 @@ const JobCards = () => {
                     </div>
                   )}
                 </div>
-                <CardDescription>
-                  Jobs that are pending or currently in progress — categorized by fleet type
-                </CardDescription>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 px-4 pb-4">
                 {allActiveCards.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -1344,12 +1340,12 @@ const JobCards = () => {
 
             {/* Completed Job Cards */}
             <Card>
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    <CardTitle>Completed Job Cards</CardTitle>
-                    <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800 font-semibold text-xs">
+              <CardHeader className="pb-3 pt-4 px-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <CardTitle className="text-sm font-semibold">Completed Job Cards</CardTitle>
+                    <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800 font-semibold text-[11px] px-1.5 py-0">
                       {allCompletedCards.length}
                     </Badge>
                   </div>
@@ -1383,11 +1379,8 @@ const JobCards = () => {
                     </div>
                   )}
                 </div>
-                <CardDescription>
-                  Finished maintenance jobs — categorized by fleet type
-                </CardDescription>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 px-4 pb-4">
                 {allCompletedCards.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <CheckCircle2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -1413,12 +1406,25 @@ const JobCards = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="cost-reports" className="mt-6">
-            <JobCardWeeklyCostReport />
+          <TabsContent value="cost-reports" className="mt-4">
+            <JobCardWeeklyCostReport filter="exclude-tyre" />
           </TabsContent>
 
-          <TabsContent value="follow-ups" className="mt-6">
+          <TabsContent value="follow-ups" className="mt-4">
             <JobCardFollowUpsTab />
+          </TabsContent>
+
+          <TabsContent value="tyre-job-cards" className="mt-4">
+            <TyreJobCardsTab
+              onJobCardClick={(card) => {
+                setSelectedJob(card as unknown as JobCard);
+                setDialogOpen(true);
+              }}
+            />
+          </TabsContent>
+
+          <TabsContent value="tyre-costs" className="mt-4">
+            <JobCardWeeklyCostReport filter="tyre-only" />
           </TabsContent>
         </Tabs>
 

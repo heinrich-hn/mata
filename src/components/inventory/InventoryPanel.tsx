@@ -405,73 +405,45 @@ const InventoryPanel = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Import CSV
-          </Button>
-          <Button variant="outline" onClick={() => setRequestPartsOpen(true)}>
-            <Package className="h-4 w-4 mr-2" />
-            Request Parts
-          </Button>
-          <Button onClick={() => setAddDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Item
-          </Button>
+    <div className="space-y-4">
+      {/* Inline stats toolbar */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+        <div className="flex items-center gap-1.5">
+          <Package className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="font-semibold">{filteredInventory.length}</span>
+          <span className="text-xs text-muted-foreground">items</span>
         </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{filteredInventory.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active part numbers</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{lowStockCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Require reordering</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">${totalValue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Current stock value</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Requested Parts/Services</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">{requestedPartsServices.length}</div>
-            <div className="flex gap-2 text-xs mt-1">
-              {pendingRequestedCount > 0 && (
-                <span className="text-xs text-muted-foreground">{pendingRequestedCount} pending</span>
-              )}
-              <span className="text-xs text-muted-foreground">external + service</span>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="h-4 w-px bg-border" />
+        <div className="flex items-center gap-1.5">
+          <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+          <span className="font-semibold">{lowStockCount}</span>
+          <span className="text-xs text-muted-foreground">low stock</span>
+        </div>
+        <div className="h-4 w-px bg-border" />
+        <div className="flex items-center gap-1.5">
+          <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="font-semibold">${totalValue.toFixed(2)}</span>
+          <span className="text-xs text-muted-foreground">value</span>
+        </div>
+        <div className="h-4 w-px bg-border" />
+        <div className="flex items-center gap-1.5">
+          <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="font-semibold">{requestedPartsServices.length}</span>
+          <span className="text-xs text-muted-foreground">requested{pendingRequestedCount > 0 ? ` (${pendingRequestedCount} pending)` : ""}</span>
+        </div>
+        <div className="flex-1" />
+        <Button variant="outline" size="sm" className="h-8 text-xs px-2.5" onClick={() => setImportDialogOpen(true)}>
+          <Upload className="h-3.5 w-3.5 mr-1" />
+          Import CSV
+        </Button>
+        <Button variant="outline" size="sm" className="h-8 text-xs px-2.5" onClick={() => setRequestPartsOpen(true)}>
+          <Package className="h-3.5 w-3.5 mr-1" />
+          Request Parts
+        </Button>
+        <Button size="sm" className="h-8 text-xs px-2.5" onClick={() => setAddDialogOpen(true)}>
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          Add Item
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

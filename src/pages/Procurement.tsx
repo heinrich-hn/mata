@@ -1261,78 +1261,49 @@ const Procurement = () => {
         </TabsContent>
 
         <TabsContent value="procurement" className="mt-0">
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
+          <div className="space-y-4">
+            {/* Inline stats toolbar */}
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-semibold">{stats?.pending || 0}</span>
+                <span className="text-xs text-muted-foreground">pending</span>
+              </div>
+              <div className="h-4 w-px bg-border" />
+              <div className="flex items-center gap-1.5">
+                <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-semibold">{stats?.sage_pending || 0}</span>
+                <span className="text-xs text-muted-foreground">IR pending</span>
+              </div>
+              <div className="h-4 w-px bg-border" />
+              <div className="flex items-center gap-1.5">
+                <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-semibold">{stats?.cash_manager_pending || 0}</span>
+                <span className="text-xs text-muted-foreground">CM pending</span>
+              </div>
+              <div className="h-4 w-px bg-border" />
+              <div className="flex items-center gap-1.5">
+                <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-semibold">{stats?.ordered || 0}</span>
+                <span className="text-xs text-muted-foreground">ordered</span>
+              </div>
+              <div className="h-4 w-px bg-border" />
+              <div className="flex items-center gap-1.5">
+                <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                <span className="font-semibold">{stats?.received || 0}</span>
+                <span className="text-xs text-muted-foreground">received</span>
+              </div>
+              <div className="h-4 w-px bg-border" />
+              <div className="flex items-center gap-1.5">
+                <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-semibold">${(stats?.pendingValue || 0).toLocaleString()}</span>
+                <span className="text-xs text-muted-foreground">value</span>
+              </div>
+              <div className="flex-1" />
+              <Button size="sm" className="h-8 text-xs px-2.5" onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" />
                 New Request
               </Button>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">{stats?.pending || 0}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">IR Pending</CardTitle>
-                  <BookOpen className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">{stats?.sage_pending || 0}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Cash Mgr Pending</CardTitle>
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">{stats?.cash_manager_pending || 0}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Ordered</CardTitle>
-                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">{stats?.ordered || 0}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Received</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">{stats?.received || 0}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pending Value</CardTitle>
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-semibold">
-                    ${(stats?.pendingValue || 0).toLocaleString()}
-                  </div>
-                </CardContent>
-              </Card>
             </div>
 
             {/* Main Content Tabs */}
