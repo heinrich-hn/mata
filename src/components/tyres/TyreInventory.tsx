@@ -20,7 +20,7 @@ import {
   exportBayTyresToPDF,
 } from "@/utils/tyreExport";
 import { useQuery } from "@tanstack/react-query";
-import { Ban, Download, Eye, FileSpreadsheet, FileText, History, Package, Pencil, Plus, Trash2, Truck, Wrench } from "lucide-react";
+import { ArrowRightLeft, Ban, Download, Eye, FileSpreadsheet, FileText, History, Package, Pencil, Plus, Trash2, Truck, Wrench } from "lucide-react";
 import { useState } from "react";
 import AddBayTyreDialog from "../dialogs/AddBayTyreDialog";
 import AddTyreDialog from "../dialogs/AddTyreDialog";
@@ -30,6 +30,7 @@ import EditInstalledTyreDialog from "../dialogs/EditInstalledTyreDialog";
 import EditTyreDialog from "../dialogs/EditTyreDialog";
 import InstallBayTyreToVehicleDialog from "../dialogs/InstallBayTyreToVehicleDialog";
 import InstallTyreDialog from "../dialogs/InstallTyreDialog";
+import MoveTyreToBayDialog from "../dialogs/MoveTyreToBayDialog";
 import RemoveTyreDialog from "../dialogs/RemoveTyreDialog";
 import TyreInventoryImportModal from "../dialogs/TyreInventoryImportModal";
 import ViewTyreDialog from "../dialogs/ViewTyreDialog";
@@ -104,6 +105,7 @@ const TyreInventory = () => {
   const [editInstalledDialogOpen, setEditInstalledDialogOpen] = useState(false);
   const [editBayTyreDialogOpen, setEditBayTyreDialogOpen] = useState(false);
   const [installBayTyreToVehicleDialogOpen, setInstallBayTyreToVehicleDialogOpen] = useState(false);
+  const [moveTyreToBayDialogOpen, setMoveTyreToBayDialogOpen] = useState(false);
   const [selectedTyre, setSelectedTyre] = useState<InstalledTyreWithVehicle | null>(null);
   const [selectedBayTyre, setSelectedBayTyre] = useState<TyreWithPosition | null>(null);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<TyreStock | null>(null);
@@ -493,6 +495,18 @@ const TyreInventory = () => {
                       <Button
                         size="sm"
                         variant="outline"
+                        className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:border-blue-300"
+                        onClick={() => {
+                          setSelectedBayTyre(tyre);
+                          setMoveTyreToBayDialogOpen(true);
+                        }}
+                        title="Move to Store"
+                      >
+                        <ArrowRightLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="h-8 w-8 p-0"
                         onClick={() => {
                           setSelectedBayTyre(tyre);
@@ -637,6 +651,18 @@ const TyreInventory = () => {
                         title="View Details"
                       >
                         <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:border-blue-300"
+                        onClick={() => {
+                          setSelectedBayTyre(tyre);
+                          setMoveTyreToBayDialogOpen(true);
+                        }}
+                        title="Move to Store"
+                      >
+                        <ArrowRightLeft className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         size="sm"
@@ -1272,6 +1298,16 @@ const TyreInventory = () => {
         onInstallationComplete={() => {
           refetchBays();
           refetch();
+          setSelectedBayTyre(null);
+        }}
+      />
+
+      <MoveTyreToBayDialog
+        open={moveTyreToBayDialogOpen}
+        onOpenChange={setMoveTyreToBayDialogOpen}
+        tyre={selectedBayTyre}
+        onMoved={() => {
+          refetchBays();
           setSelectedBayTyre(null);
         }}
       />
