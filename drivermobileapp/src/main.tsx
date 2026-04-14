@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { Toaster } from "@/components/ui/toaster";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import App from "@/App";
 import "@/index.css";
 
@@ -34,20 +35,19 @@ const queryClient = new QueryClient({
     },
 });
 
-// NOTE: Service worker is registered by vite-plugin-pwa (registerType: "autoUpdate").
-// Do NOT manually register /sw.js here — it conflicts with the plugin's lifecycle.
-
 ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-        <QueryClientProvider client={queryClient}>
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <AuthProvider>
-                    <App />
-                    <PwaInstallPrompt />
-                    <PwaUpdatePrompt />
-                    <Toaster />
-                </AuthProvider>
-            </BrowserRouter>
-        </QueryClientProvider>
+        <ErrorBoundary>
+            <QueryClientProvider client={queryClient}>
+                <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                    <AuthProvider>
+                        <App />
+                        <PwaInstallPrompt />
+                        <PwaUpdatePrompt />
+                        <Toaster />
+                    </AuthProvider>
+                </BrowserRouter>
+            </QueryClientProvider>
+        </ErrorBoundary>
     </React.StrictMode>
 );

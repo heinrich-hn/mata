@@ -1,5 +1,7 @@
+// src/lib/supabase/client.ts
 import type { Database } from "@/types/database";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { persistSessionToIndexedDB, loadSessionFromIndexedDB, clearSessionFromIndexedDB } from "@/lib/session-persistence";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -30,6 +32,53 @@ function inMemoryLock<T>(
   return current;
 }
 
+// Custom storage that uses both localStorage and IndexedDB
+const customStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    try {
+      // Try localStorage first (faster)
+      const localValue = localStorage.getItem(key);
+      if (localValue) return localValue;
+      
+      // Fallback to IndexedDB
+      const indexedDBValue = await loadSessionFromIndexedDB();
+      if (indexedDBValue) {
+        // Restore to localStorage
+        const valueString = JSON.stringify(indexedDBValue);
+        localStorage.setItem(key, valueString);
+        return valueString;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Storage getItem error:', error);
+      return null;
+    }
+  },
+  
+  setItem: async (key: string, value: string): Promise<void> => {
+    try {
+      // Store in localStorage
+      localStorage.setItem(key, value);
+      
+      // Also store in IndexedDB for redundancy
+      const session = JSON.parse(value);
+      await persistSessionToIndexedDB(session);
+    } catch (error) {
+      console.error('Storage setItem error:', error);
+    }
+  },
+  
+  removeItem: async (key: string): Promise<void> => {
+    try {
+      localStorage.removeItem(key);
+      await clearSessionFromIndexedDB();
+    } catch (error) {
+      console.error('Storage removeItem error:', error);
+    }
+  }
+};
+
 export function createClient() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error(
@@ -48,7 +97,7 @@ export function createClient() {
     auth: {
       persistSession: true,
       storageKey: 'mata-driver-auth',
-      storage: globalThis.localStorage,
+      storage: customStorage,
       autoRefreshToken: true,
       detectSessionInUrl: false,
       // Use an in-memory mutex instead of navigator.locks to avoid 5 s

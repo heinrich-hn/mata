@@ -1,5 +1,14 @@
+// src/contexts/auth-context.tsx
 import { createClient } from "@/lib/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
+import { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  persistSessionToIndexedDB,
+  loadSessionFromIndexedDB,
+  clearSessionFromIndexedDB,
+  type SessionBackup,
+} from "@/lib/session-persistence";
 
 export interface Profile {
   user_id: number;
@@ -14,8 +23,6 @@ export interface Profile {
   full_name: string;
   avatar_url?: string | null;
 }
-import { createContext, useContext, useEffect, useMemo, useState, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 
 const PROFILE_CACHE_KEY = "mata-driver-profile";
 const SESSION_BACKUP_KEY = "mata-driver-session-backup";
@@ -39,23 +46,43 @@ function loadCachedProfile(): Profile | null {
   return null;
 }
 
-/** Backup session tokens to a separate key the SDK doesn't touch.
- *  Only the refresh_token + access_token are needed for recovery. */
-function backupSession(s: Session | null) {
+/** Backup session tokens to localStorage and IndexedDB */
+async function backupSession(s: Session | null) {
   try {
     if (s?.refresh_token && s?.access_token) {
-      localStorage.setItem(SESSION_BACKUP_KEY, JSON.stringify({
+      const sessionData = {
         access_token: s.access_token,
         refresh_token: s.refresh_token,
-      }));
+        expires_at: s.expires_at,
+        expires_in: s.expires_in,
+        user: {
+          id: s.user.id,
+          email: s.user.email,
+          user_metadata: s.user.user_metadata,
+        }
+      };
+
+      // Store in localStorage for quick access
+      localStorage.setItem(SESSION_BACKUP_KEY, JSON.stringify(sessionData));
+
+      // Store in IndexedDB for persistence
+      await persistSessionToIndexedDB(sessionData);
     } else {
       localStorage.removeItem(SESSION_BACKUP_KEY);
+      await clearSessionFromIndexedDB();
     }
   } catch { /* storage full / blocked */ }
 }
 
-function loadBackupSession(): { access_token: string; refresh_token: string } | null {
+async function loadBackupSession(): Promise<SessionBackup | null> {
   try {
+    // Try IndexedDB first (more reliable)
+    const indexedDBSession = await loadSessionFromIndexedDB();
+    if (indexedDBSession?.access_token && indexedDBSession?.refresh_token) {
+      return indexedDBSession;
+    }
+
+    // Fallback to localStorage
     const raw = localStorage.getItem(SESSION_BACKUP_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -65,8 +92,11 @@ function loadBackupSession(): { access_token: string; refresh_token: string } | 
   return null;
 }
 
-function clearBackupSession() {
-  try { localStorage.removeItem(SESSION_BACKUP_KEY); } catch { /* ignore */ }
+async function clearBackupSession() {
+  try {
+    localStorage.removeItem(SESSION_BACKUP_KEY);
+    await clearSessionFromIndexedDB();
+  } catch { /* ignore */ }
 }
 
 // Define the shape of the user data returned from Supabase
@@ -245,8 +275,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) return;
 
     // Safety timeout — generous to handle slow mobile networks.
-    // Only stops the loading spinner; does NOT clear user state if a cached
-    // session was already loaded (that would wipe visible data).
     const loadingTimeout = setTimeout(() => {
       if (mountedRef.current && isLoadingRef.current) {
         console.warn("Auth init timeout — forcing loading = false");
@@ -256,7 +284,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let initComplete = false;
 
-    // Helper: mark initialisation done and stop the spinner.
     const finishInit = () => {
       if (!initComplete && mountedRef.current) {
         initComplete = true;
@@ -264,24 +291,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Capture the ref object and current value at effect setup for cleanup safety
     const fetchVersion = fetchVersionRef;
     const initialFetchVersion = fetchVersion.current;
 
-    // Subscribe to auth changes — this is the PRIMARY source of truth.
-    // onAuthStateChange fires INITIAL_SESSION with the cached/refreshed session
-    // before getUser() even resolves, so it handles most cases.
+    // Subscribe to auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!mountedRef.current) return;
 
-      // ── SIGNED_OUT ───────────────────────────────────────────────
-      // Only wipe state on INTENTIONAL sign-out.  The SDK fires
-      // SIGNED_OUT on failed token refreshes (common when a mobile
-      // PWA resumes from background with a brief network gap).
-      // For those spurious events, attempt to recover the session
-      // from our backup instead of wiping the entire app state.
       if (event === "SIGNED_OUT") {
         if (isSigningOutRef.current) {
           // Intentional sign-out — clear everything
@@ -289,76 +307,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
           setProfile(null);
           queryClient.clear();
-          clearBackupSession();
+          await clearBackupSession();
           finishInit();
           return;
         }
 
-        // Unexpected SIGNED_OUT — likely a failed token refresh on mobile resume.
-        // Try to recover from our backup session.
+        // Unexpected SIGNED_OUT — attempt session recovery
         console.warn("Unexpected SIGNED_OUT — attempting session recovery");
-        const backup = loadBackupSession();
+        const backup = await loadBackupSession();
         if (backup && !recoveryInProgressRef.current) {
           recoveryInProgressRef.current = true;
-          // Defer to avoid re-entrance in onAuthStateChange
           setTimeout(async () => {
-            try {
-              const { error: restoreError } = await supabase.auth.setSession({
-                access_token: backup.access_token,
-                refresh_token: backup.refresh_token,
-              });
-              if (restoreError) {
-                console.error("Session recovery failed:", restoreError.message);
-                if (mountedRef.current) {
-                  setSession(null);
-                  setUser(null);
-                  setProfile(null);
-                  queryClient.clear();
-                  clearBackupSession();
-                }
-              }
-              // If successful, onAuthStateChange will fire with the new session
-            } catch (err) {
-              console.error("Session recovery exception:", err);
-              if (mountedRef.current) {
-                setSession(null);
-                setUser(null);
-                setProfile(null);
-                queryClient.clear();
-                clearBackupSession();
-              }
-            } finally {
+            if (!mountedRef.current || isSigningOutRef.current) {
               recoveryInProgressRef.current = false;
+              return;
             }
-          }, 200);
+            let recovered = false;
+            for (let attempt = 0; attempt < 2; attempt++) {
+              if (!mountedRef.current || isSigningOutRef.current) break;
+              try {
+                const { data: restored, error: restoreError } = await supabase.auth.setSession({
+                  access_token: backup.access_token,
+                  refresh_token: backup.refresh_token,
+                });
+                if (!restoreError && restored.session) {
+                  console.log("Session recovered from backup (SIGNED_OUT handler), attempt", attempt + 1);
+                  recovered = true;
+                  break;
+                }
+                console.warn("Recovery attempt", attempt + 1, "failed:", restoreError?.message);
+              } catch (err) {
+                console.error("Recovery attempt", attempt + 1, "exception:", err);
+              }
+              if (attempt < 1) {
+                await new Promise(r => setTimeout(r, 1500));
+              }
+            }
+            if (!recovered && mountedRef.current && !isSigningOutRef.current) {
+              console.error("All recovery attempts failed — clearing session");
+              setSession(null);
+              setUser(null);
+              setProfile(null);
+              queryClient.clear();
+              await clearBackupSession();
+            }
+            if (recovered) {
+              // Reset error state on all queries (e.g. 401s from stale token)
+              // then invalidate so they refetch with the fresh access token.
+              queryClient.resetQueries();
+              queryClient.invalidateQueries({ refetchType: 'all' });
+            }
+            recoveryInProgressRef.current = false;
+          }, 500);
         } else if (!backup) {
-          // No backup to recover from — truly signed out
           setSession(null);
           setUser(null);
           setProfile(null);
           queryClient.clear();
-          clearBackupSession();
+          await clearBackupSession();
         }
         finishInit();
         return;
       }
 
       if (event === "TOKEN_REFRESHED" && !newSession) {
-        // Token refresh returned empty — this is often transient on mobile.
-        // Don't wipe state; wait for the SDK to fire SIGNED_OUT if it's terminal.
         console.warn("TOKEN_REFRESHED with no session — ignoring (waiting for SIGNED_OUT if terminal)");
         finishInit();
         return;
       }
 
-      // For all other events (INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED),
-      // update state from the new session
       if (newSession?.user) {
         setSession(newSession);
         setUser(newSession.user);
-        // Backup session tokens for recovery after spurious mobile SIGNED_OUT
-        backupSession(newSession);
-        // Mark init as done — we have a valid session from the SDK
+        await backupSession(newSession);
         finishInit();
 
         if (newSession.user.email) {
@@ -366,49 +387,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mountedRef.current) setProfile(p);
         }
       } else if (event === "INITIAL_SESSION") {
-        // INITIAL_SESSION with no session means either no stored session or
-        // the refresh token was invalid/expired. Clear any state that may
-        // have been set from stale cache and show the login screen.
-        if (!initComplete) {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          queryClient.clear();
+        const backup = await loadBackupSession();
+        if (backup && !recoveryInProgressRef.current) {
+          console.warn("INITIAL_SESSION with no session — attempting recovery from backup");
+          recoveryInProgressRef.current = true;
+          try {
+            const { data: restored, error: restoreError } = await supabase.auth.setSession({
+              access_token: backup.access_token,
+              refresh_token: backup.refresh_token,
+            });
+            if (restoreError || !restored.session) {
+              console.error("Backup session restore failed on init:", restoreError?.message);
+              if (mountedRef.current) {
+                setSession(null);
+                setUser(null);
+                setProfile(null);
+                queryClient.clear();
+                await clearBackupSession();
+              }
+            }
+          } catch (err) {
+            console.error("Backup session restore exception on init:", err);
+            if (mountedRef.current) {
+              setSession(null);
+              setUser(null);
+              setProfile(null);
+              queryClient.clear();
+              await clearBackupSession();
+            }
+          } finally {
+            recoveryInProgressRef.current = false;
+          }
+        } else if (!backup) {
+          if (!initComplete) {
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            queryClient.clear();
+          }
         }
         finishInit();
       }
     });
 
-    // Secondary validation: getUser() verifies the JWT server-side.
-    // This catches edge cases where the stored JWT is invalid/revoked but
-    // onAuthStateChange still loaded it from cache.
-    // IMPORTANT: Only clear state if onAuthStateChange hasn't already set a user.
     supabase.auth.getUser()
       .then(async ({ data: { user: verifiedUser }, error: userError }) => {
         if (!mountedRef.current) return;
 
         if (userError || !verifiedUser) {
-          // getUser() says the token is invalid/expired.
-          // Do NOT fall back to getSession() — it returns unvalidated cached
-          // data and can create a zombie state (authenticated UI, expired token).
-          // Let onAuthStateChange be the sole authority for session restoration.
           if (initComplete) {
-            // onAuthStateChange already handled init. If it set a valid refreshed
-            // session, the getUser() error is stale (used old token). If the
-            // session is truly dead, the SDK will fire SIGNED_OUT.
             console.warn("getUser() failed after init already complete — deferring to SDK:", userError?.message);
           } else {
-            // Init not yet complete — onAuthStateChange(INITIAL_SESSION) will
-            // fire shortly with either a refreshed session or null.
             console.warn("getUser() failed, waiting for onAuthStateChange:", userError?.message);
           }
           return;
         }
 
-        // getUser() succeeded — if init already done by onAuthStateChange, skip
         if (initComplete) return;
 
-        // Token is valid — now read the (refreshed) session for the JWT
         const { data: { session: freshSession } } = await supabase.auth.getSession();
 
         setSession(freshSession);
@@ -424,9 +460,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Auth initialization error:", err);
         if (!mountedRef.current) return;
 
-        // Network error during getUser() — don't fall back to getSession()
-        // (which returns unvalidated cached data). Let onAuthStateChange
-        // handle session restoration; the safety timeout catches edge cases.
         if (initComplete) {
           console.warn("getUser() network error after init complete — ignoring");
         } else {
@@ -435,68 +468,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
     return () => {
-      // Unsubscribe FIRST to prevent listener firing after mounted=false
       subscription.unsubscribe();
       mountedRef.current = false;
       clearTimeout(loadingTimeout);
 
-      // Use the captured initial version to increment safely
-      // Only increment if no other effect has already incremented it
       if (fetchVersion.current === initialFetchVersion) {
         fetchVersion.current++;
       }
     };
-  }, [supabase, fetchProfile, queryClient, setProfile]); // Keep these dependencies
+  }, [supabase, fetchProfile, queryClient, setProfile]);
 
-  // ── Visibility-based session recovery ──────────────────────────
-  // When the app comes back from background on mobile, proactively
-  // refresh the session.  This ensures the token is valid before any
-  // data-fetching queries fire, and catches cases where the SDK's
-  // internal auto-refresh already failed and emitted SIGNED_OUT.
+  // Visibility-based session recovery
   useEffect(() => {
     if (!supabase) return;
 
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== "visible") return;
       if (isSigningOutRef.current || !mountedRef.current) return;
+      if (recoveryInProgressRef.current) return;
 
-      // Check if we still have a session — if the SDK already wiped it,
-      // attempt recovery from backup.
+      await new Promise(r => setTimeout(r, 300));
+      if (!mountedRef.current || isSigningOutRef.current) return;
+
       const { data: { session: currentSession } } = await supabase.auth.getSession();
 
-      if (currentSession) {
-        // Session present — proactively refresh to ensure the access token is fresh.
-        // The SDK may skip its own refresh if the access token hasn't expired,
-        // but on mobile resume the token may be very close to expiry.
+      if (currentSession?.refresh_token) {
+        try {
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.warn("Proactive session refresh failed (non-fatal):", refreshError.message);
+          } else {
+            // Reset error state on queries that may have failed with 401
+            // during the stale-token window, then refetch everything.
+            queryClient.resetQueries();
+            queryClient.invalidateQueries({ refetchType: 'all' });
+          }
+        } catch {
+          // Network might not be ready yet — non-fatal
+        }
         return;
       }
 
-      // No current session — the SDK may have wiped it.  Try our backup.
-      if (recoveryInProgressRef.current) return;
-      const backup = loadBackupSession();
-      if (backup) {
-        console.warn("No session on foreground resume — restoring from backup");
-        recoveryInProgressRef.current = true;
+      const backup = await loadBackupSession();
+      if (!backup) return;
+
+      console.warn("No session on foreground resume — restoring from backup");
+      recoveryInProgressRef.current = true;
+
+      let recovered = false;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (!mountedRef.current || isSigningOutRef.current) break;
         try {
-          const { error: restoreError } = await supabase.auth.setSession({
+          const { data: restored, error: restoreError } = await supabase.auth.setSession({
             access_token: backup.access_token,
             refresh_token: backup.refresh_token,
           });
-          if (restoreError) {
-            console.error("Foreground session restore failed:", restoreError.message);
-            // Don't wipe state here — let the SIGNED_OUT handler deal with it
+          if (!restoreError && restored.session) {
+            console.log("Session recovered from backup on attempt", attempt + 1);
+            recovered = true;
+            break;
+          }
+          if (attempt < 1) {
+            await new Promise(r => setTimeout(r, 1000));
           }
         } catch (err) {
           console.error("Foreground session restore exception:", err);
-        } finally {
-          recoveryInProgressRef.current = false;
+          if (attempt < 1) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
         }
       }
+      if (recovered) {
+        queryClient.resetQueries();
+        queryClient.invalidateQueries({ refetchType: 'all' });
+      }
+      recoveryInProgressRef.current = false;
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [supabase]);
+  }, [supabase, queryClient]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!supabase) return { error: new Error("Authentication service not available") };
@@ -505,7 +556,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsSigningOut(false);
     isSigningOutRef.current = false;
 
-    // Clear any stale cache from previous session
     queryClient.clear();
 
     try {
@@ -522,7 +572,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.user && data.session && mountedRef.current) {
         setUser(data.user);
         setSession(data.session);
-        backupSession(data.session);
+        await backupSession(data.session);
         const p = await fetchProfile(data.user.email, data.user);
         if (mountedRef.current) setProfile(p);
       }
@@ -544,13 +594,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       setProfile(null);
       setIsLoading(false);
-      clearBackupSession();
+      await clearBackupSession();
       return;
     }
 
     try {
-      // Race signOut against a timeout to prevent hanging if the auth lock
-      // is held by a stuck token refresh.
       const signOutResult = await Promise.race([
         supabase.auth.signOut({ scope: "local" }),
         new Promise<{ error: Error }>(resolve =>
@@ -567,11 +615,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       setProfile(null);
       setIsLoading(false);
-      // Clear stale query cache so re-login fetches fresh data
       queryClient.clear();
-      // Ensure auth storage is cleared even if signOut() timed out,
-      // so the stale session doesn't persist on next app open.
-      clearBackupSession();
+      await clearBackupSession();
       try { localStorage.removeItem('mata-driver-auth'); } catch { /* ignore */ }
     }
   }, [supabase, queryClient, setProfile]);

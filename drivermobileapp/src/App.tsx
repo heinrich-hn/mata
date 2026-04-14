@@ -16,12 +16,6 @@ import DocumentsPage from "@/pages/DocumentsPage";
 
 /**
  * ProtectedRoute with a grace period for transient null-user states.
- *
- * During token refresh and navigator lock recovery, `user` can flash to null
- * for a few hundred milliseconds. Without a grace period, the route redirects
- * to /login and unmounts all child components, wiping query caches and realtime
- * subscriptions. The 1.5s grace only applies when the user was previously
- * authenticated — first-load redirects are still instant.
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { user, isLoading, isSigningOut } = useAuth();
@@ -29,35 +23,29 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const [showLogin, setShowLogin] = useState(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Track whether we ever had a user
     if (user) {
         hadUserRef.current = true;
     }
 
     useEffect(() => {
-        // Clear previous timer on every render
         if (timerRef.current) {
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
 
         if (isLoading || user) {
-            // Loading or user present — no redirect needed
             setShowLogin(false);
             return;
         }
 
-        // User is null and not loading
         if (!hadUserRef.current || isSigningOut) {
-            // Never had a user OR intentional sign-out — redirect immediately
             setShowLogin(true);
             return;
         }
 
-        // Previously had a user — give a grace period for token refresh
         timerRef.current = setTimeout(() => {
             setShowLogin(true);
-        }, 1500);
+        }, 4000);
 
         return () => {
             if (timerRef.current) {
@@ -78,7 +66,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
         );
     }
 
-    // During grace period, show a loading spinner instead of redirecting
     if (!user && !showLogin) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -98,9 +85,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-    // Inactivity timeout lives here (stable mount) instead of per-page
-    // MobileShell, which unmounts/remounts on every navigation and caused
-    // timer thrashing + stale closures over the user object.
     useInactivityTimeout();
 
     return (
