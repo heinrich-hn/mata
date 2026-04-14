@@ -292,9 +292,32 @@ export default function ClientLiveMapPage() {
     return allDepots.filter((d) => depotNames.has(d.name));
   }, [inTransitMatchedLoads, allDepots]);
 
-  const inTransitTrackedVehicles = inTransitMatchedLoads.filter(
-    (m) => m.asset && m.asset.lastLatitude && m.asset.lastLongitude
-  );
+  // Visibility rules for the client portal map:
+  // - Scheduled loads: only show if the vehicle is physically at the load's ORIGIN geofence
+  //   (truck has arrived at the loading point). Never show a merely scheduled trip.
+  // - In-transit loads: show if the vehicle is within any depot or origin geofence.
+  const inTransitTrackedVehicles = useMemo(() => {
+    return inTransitMatchedLoads.filter((m) => {
+      if (!m.asset || !m.asset.lastLatitude || !m.asset.lastLongitude) return false;
+
+      const lat = m.asset.lastLatitude;
+      const lng = m.asset.lastLongitude;
+
+      if (m.load.status === 'scheduled') {
+        // Scheduled: vehicle must be physically at the load's origin to appear
+        const originName = getLocationDisplayName(m.load.origin);
+        const originDepot = allDepots.find((d) => d.name === originName);
+        return originDepot ? isWithinDepot(lat, lng, originDepot) : false;
+      }
+
+      // In-transit: show if within any depot or origin geofence
+      for (const depot of allDepots) {
+        if (isWithinDepot(lat, lng, depot)) return true;
+      }
+
+      return false;
+    });
+  }, [inTransitMatchedLoads, allDepots]);
 
   const isLoading = loadsLoading || telematicsLoading;
 
