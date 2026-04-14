@@ -19,6 +19,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  MapPin,
   Navigation,
   Package,
   TrendingUp,
@@ -86,8 +87,33 @@ export default function ClientOverviewPage() {
       .slice(0, 3);
   }, [allLoads]);
 
+  // For "Marketing" client: next loading origin per vehicle
+  const isMarketingClient = client?.name?.toLowerCase() === 'marketing';
+  const nextLoadingOrigins = useMemo(() => {
+    if (!isMarketingClient) return [];
+    // Get upcoming & in-transit loads grouped by vehicle
+    const vehicleNextLoad = new Map<string, Load>();
+    const upcoming = allLoads
+      .filter((l) => (l.status === 'scheduled' || l.status === 'in-transit' || l.status === 'pending') && l.fleet_vehicle?.vehicle_id)
+      .sort((a, b) => new Date(a.loading_date).getTime() - new Date(b.loading_date).getTime());
+    for (const load of upcoming) {
+      const vid = load.fleet_vehicle!.vehicle_id;
+      if (!vehicleNextLoad.has(vid)) {
+        vehicleNextLoad.set(vid, load);
+      }
+    }
+    return Array.from(vehicleNextLoad.entries()).map(([vehicleId, load]) => ({
+      vehicleId,
+      origin: getLocationDisplayName(load.origin),
+      destination: getLocationDisplayName(load.destination),
+      loadingDate: load.loading_date,
+      loadId: load.load_id,
+      status: load.status,
+    }));
+  }, [allLoads, isMarketingClient]);
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 min-h-[calc(100vh-12rem)]">
       {/* Welcome Section */}
       {isLoading ? (
         <Skeleton className="h-20" />
@@ -145,8 +171,50 @@ export default function ClientOverviewPage() {
         />
       </div>
 
+      {/* Next Loading Origins — Marketing only */}
+      {isMarketingClient && nextLoadingOrigins.length > 0 && (
+        <Card className="border-subtle shadow-sm">
+          <CardHeader className="border-b border-subtle bg-card/70 py-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-sm sm:text-base font-semibold tracking-tight">
+                  Next Loading Origins
+                </CardTitle>
+                <CardDescription>Where each vehicle will be loading from next</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border/40">
+              {nextLoadingOrigins.map((item) => (
+                <div key={item.vehicleId} className="flex items-center justify-between px-5 py-3 hover:bg-subtle/70 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-subtle border border-subtle flex-shrink-0">
+                      <Truck className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">{item.vehicleId}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {item.loadId} &middot; {item.origin} → {item.destination}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-3">
+                    <p className="text-sm font-medium text-primary">{item.origin}</p>
+                    <p className="text-xs text-muted-foreground">{safeFormatDate(item.loadingDate, 'dd MMM yyyy')}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1">
         {/* Active Deliveries */}
         <Card className="border-subtle shadow-sm">
           <CardHeader className="border-b border-subtle bg-card/70">

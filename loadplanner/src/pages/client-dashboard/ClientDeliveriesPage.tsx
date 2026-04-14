@@ -375,9 +375,9 @@ export default function ClientDeliveriesPage() {
 
   /* ——— Render ——— */
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* KPI Stats - Modern grid with clean cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           title="In Transit"
           value={stats.activeInTransit}
@@ -404,18 +404,18 @@ export default function ClientDeliveriesPage() {
 
       {/* Active Deliveries — Modern Card */}
       <Card className="border-border/40 shadow-sm overflow-hidden">
-        <CardHeader className="px-6 py-5 border-b border-border/40 bg-card">
+        <CardHeader className="px-5 py-3 border-b border-border/40 bg-card">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-                <Truck className="h-5 w-5" />
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                <Truck className="h-4 w-4" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold tracking-tight">Active Deliveries</CardTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">Currently in progress or scheduled</p>
+                <CardTitle className="text-sm font-semibold tracking-tight">Active Deliveries</CardTitle>
+                <p className="text-xs text-muted-foreground">Currently in progress or scheduled</p>
               </div>
             </div>
-            <Badge variant="secondary" className="text-xs font-medium px-3 py-1.5 rounded-full">
+            <Badge variant="secondary" className="text-[11px] font-medium px-2 py-1 rounded-full">
               {loadsWithETA.length} {loadsWithETA.length === 1 ? 'shipment' : 'shipments'}
             </Badge>
           </div>
@@ -450,15 +450,15 @@ export default function ClientDeliveriesPage() {
 
       {/* All Shipments — Searchable & Filterable */}
       <Card className="border-border/40 shadow-sm overflow-hidden">
-        <CardHeader className="px-6 py-5 border-b border-border/40 bg-card">
+        <CardHeader className="px-5 py-3 border-b border-border/40 bg-card">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-muted text-foreground">
-                <Package className="h-5 w-5" />
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-muted text-foreground">
+                <Package className="h-4 w-4" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold tracking-tight">All Shipments</CardTitle>
-                <CardDescription className="mt-0.5">Search and filter your shipment history</CardDescription>
+                <CardTitle className="text-sm font-semibold tracking-tight">All Shipments</CardTitle>
+                <CardDescription className="text-xs">Search and filter your shipment history</CardDescription>
               </div>
             </div>
             {hasActiveFilters && (
@@ -615,24 +615,24 @@ function StatCard({
 }) {
   return (
     <Card className="border-border/40 shadow-sm hover:shadow-md transition-shadow">
-      <CardContent className="p-6">
+      <CardContent className="p-4">
         <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-semibold tracking-tight">{value}</p>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">{title}</p>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-2xl font-semibold tracking-tight">{value}</p>
               {trend && (
-                <span className="text-xs font-medium text-success bg-success/10 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-medium text-success bg-success/10 px-1.5 py-0.5 rounded-full">
                   {trend}
                 </span>
               )}
             </div>
             {subtitle && (
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
+              <p className="text-[11px] text-muted-foreground">{subtitle}</p>
             )}
           </div>
-          <div className="p-3 rounded-xl bg-primary/5 text-primary">
-            <Icon className="h-5 w-5" />
+          <div className="p-2 rounded-lg bg-primary/5 text-primary">
+            <Icon className="h-4 w-4" />
           </div>
         </div>
       </CardContent>
@@ -674,184 +674,147 @@ function DeliveryRow({ load }: { load: LoadWithETA }) {
   );
 
   return (
-    <div className="px-6 py-5 hover:bg-muted/30 transition-colors">
+    <div className="px-5 py-3 hover:bg-muted/30 transition-colors">
       {/* Desktop Layout */}
-      <div className="hidden lg:block space-y-4">
-        {/* Main Row */}
-        <div className="flex items-center gap-6">
+      <div className="hidden lg:block space-y-2">
+        {/* Main Row — grid for proportional sizing */}
+        <div className="grid grid-cols-[minmax(120px,1fr)_minmax(180px,2fr)_minmax(160px,1.2fr)_auto] items-center gap-5">
           {/* Load ID & Vehicle */}
-          <div className="w-40 flex-shrink-0">
-            <p className="font-mono text-sm font-semibold text-foreground">{load.load_id}</p>
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">{load.fleet_vehicle?.vehicle_id || 'No vehicle'}</span>
+          <div className="min-w-0">
+            <p className="font-mono text-xs font-semibold text-foreground truncate">{load.load_id}</p>
+            <div className="flex items-center gap-1 mt-0.5">
+              <Truck className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">{load.fleet_vehicle?.vehicle_id || 'No vehicle'}</span>
             </div>
           </div>
 
           {/* Route */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 text-sm">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <MapPin className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                <span className="truncate text-muted-foreground">{origin}</span>
-              </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-              <div className="flex items-center gap-1.5 min-w-0">
-                <MapPin className="h-3.5 w-3.5 text-success flex-shrink-0" />
-                <span className="truncate text-muted-foreground">{destination}</span>
-              </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-xs">
+              <MapPin className="h-3 w-3 text-primary flex-shrink-0" />
+              <span className="truncate text-muted-foreground">{origin}</span>
+              <ArrowRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              <MapPin className="h-3 w-3 text-success flex-shrink-0" />
+              <span className="truncate text-muted-foreground">{destination}</span>
             </div>
-            {/* Date Range */}
-            <div className="flex items-center gap-2 mt-1.5">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <Calendar className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              <span className="text-[11px] text-muted-foreground">
                 {safeFormatDate(load.loading_date, 'dd MMM')} → {safeFormatDate(load.offloading_date, 'dd MMM')}
               </span>
             </div>
           </div>
 
           {/* Progress & ETA */}
-          <div className="w-64 flex-shrink-0">
+          <div className="min-w-0">
             {load.status === 'in-transit' && hasTracking && load.progressData ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
                   <span className="text-muted-foreground">Progress</span>
                   <span className="font-medium">{Math.round(progress)}%</span>
                 </div>
-                <Progress value={progress} className="h-1.5" />
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">ETA</span>
-                  <span className="font-medium">{load.progressData.etaFormatted}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Distance</span>
+                <Progress value={progress} className="h-1" />
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">ETA {load.progressData.etaFormatted}</span>
                   <span className="font-medium">{load.progressData.distanceRemaining?.toFixed(0)} km</span>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full text-sm text-muted-foreground bg-muted/30 rounded-lg py-3">
+              <div className="flex items-center justify-center h-full text-xs text-muted-foreground bg-muted/30 rounded py-2">
                 {load.status === 'scheduled' ? 'Scheduled' : 'No tracking'}
               </div>
             )}
           </div>
 
           {/* Status */}
-          <div className="w-24 flex-shrink-0">
+          <div className="flex-shrink-0 justify-self-end">
             <StatusBadge status={load.status} size="sm" />
           </div>
         </div>
 
-        {/* Timing Details */}
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/40">
+        {/* Timing Details — compact single row */}
+        <div className="grid grid-cols-4 gap-5 pt-2 border-t border-border/30 text-[11px]">
           {/* Loading Point */}
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-              <LogIn className="h-3.5 w-3.5" />
-              Loading Point
+          <div>
+            <p className="font-medium text-muted-foreground flex items-center gap-1 mb-1">
+              <LogIn className="h-3 w-3" /> Load Arrival
             </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Arrival</p>
-                <p className="text-sm font-medium">{formatDateTime(load.actual_loading_arrival)}</p>
-                <p className={cn('text-xs font-medium', loadingArrivalVariance.className)}>
-                  {loadingArrivalVariance.label}
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Departure</p>
-                <p className="text-sm font-medium">{formatDateTime(load.actual_loading_departure)}</p>
-                <p className={cn('text-xs font-medium', loadingDepartureVariance.className)}>
-                  {loadingDepartureVariance.label}
-                </p>
-              </div>
-            </div>
+            <p className="text-xs">{formatDateTime(load.actual_loading_arrival)}</p>
+            <p className={cn('text-[10px] font-medium', loadingArrivalVariance.className)}>{loadingArrivalVariance.label}</p>
           </div>
-
-          {/* Offloading Point */}
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-              <LogOut className="h-3.5 w-3.5" />
-              Offloading Point
+          <div>
+            <p className="font-medium text-muted-foreground flex items-center gap-1 mb-1">
+              <LogIn className="h-3 w-3" /> Load Depart
             </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Arrival</p>
-                <p className="text-sm font-medium">{formatDateTime(load.actual_offloading_arrival)}</p>
-                <p className={cn('text-xs font-medium', offloadingArrivalVariance.className)}>
-                  {offloadingArrivalVariance.label}
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Departure</p>
-                <p className="text-sm font-medium">{formatDateTime(load.actual_offloading_departure)}</p>
-                <p className={cn('text-xs font-medium', offloadingDepartureVariance.className)}>
-                  {offloadingDepartureVariance.label}
-                </p>
-              </div>
-            </div>
+            <p className="text-xs">{formatDateTime(load.actual_loading_departure)}</p>
+            <p className={cn('text-[10px] font-medium', loadingDepartureVariance.className)}>{loadingDepartureVariance.label}</p>
+          </div>
+          <div>
+            <p className="font-medium text-muted-foreground flex items-center gap-1 mb-1">
+              <LogOut className="h-3 w-3" /> Offload Arrival
+            </p>
+            <p className="text-xs">{formatDateTime(load.actual_offloading_arrival)}</p>
+            <p className={cn('text-[10px] font-medium', offloadingArrivalVariance.className)}>{offloadingArrivalVariance.label}</p>
+          </div>
+          <div>
+            <p className="font-medium text-muted-foreground flex items-center gap-1 mb-1">
+              <LogOut className="h-3 w-3" /> Offload Depart
+            </p>
+            <p className="text-xs">{formatDateTime(load.actual_offloading_departure)}</p>
+            <p className={cn('text-[10px] font-medium', offloadingDepartureVariance.className)}>{offloadingDepartureVariance.label}</p>
           </div>
         </div>
       </div>
 
       {/* Mobile Layout */}
-      <div className="lg:hidden space-y-4">
+      <div className="lg:hidden space-y-2.5">
         <div className="flex items-start justify-between">
           <div>
-            <p className="font-mono text-sm font-semibold">{load.load_id}</p>
-            <p className="text-xs text-muted-foreground mt-1">{load.fleet_vehicle?.vehicle_id || 'No vehicle'}</p>
+            <p className="font-mono text-xs font-semibold">{load.load_id}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{load.fleet_vehicle?.vehicle_id || 'No vehicle'}</p>
           </div>
           <StatusBadge status={load.status} size="sm" />
         </div>
 
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+        <div className="space-y-1 text-xs">
+          <div className="flex items-center gap-1.5">
+            <MapPin className="h-3 w-3 text-primary flex-shrink-0" />
             <span className="text-muted-foreground truncate">{origin}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="h-3.5 w-3.5 text-success flex-shrink-0" />
+          <div className="flex items-center gap-1.5">
+            <MapPin className="h-3 w-3 text-success flex-shrink-0" />
             <span className="text-muted-foreground truncate">{destination}</span>
           </div>
         </div>
 
         {load.status === 'in-transit' && hasTracking && load.progressData && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground">Progress</span>
               <span className="font-medium">{Math.round(progress)}%</span>
             </div>
-            <Progress value={progress} className="h-1.5" />
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">ETA</span>
-              <span className="font-medium">{load.progressData.etaFormatted}</span>
+            <Progress value={progress} className="h-1" />
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">ETA {load.progressData.etaFormatted}</span>
+              <span className="font-medium">{load.progressData.distanceRemaining?.toFixed(0)} km</span>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/40">
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <LogIn className="h-3 w-3" />
-              Loading
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/30 text-[11px]">
+          <div>
+            <p className="font-medium text-muted-foreground flex items-center gap-1 mb-0.5">
+              <LogIn className="h-2.5 w-2.5" /> Loading
             </p>
-            <div className="text-xs space-y-1">
-              <p>Arrived: {formatDateTime(load.actual_loading_arrival)}</p>
-              <p className={loadingArrivalVariance.className}>{loadingArrivalVariance.label}</p>
-              <p className="mt-1.5">Departed: {formatDateTime(load.actual_loading_departure)}</p>
-              <p className={loadingDepartureVariance.className}>{loadingDepartureVariance.label}</p>
-            </div>
+            <p>In: {formatDateTime(load.actual_loading_arrival)} <span className={loadingArrivalVariance.className}>{loadingArrivalVariance.label}</span></p>
+            <p>Out: {formatDateTime(load.actual_loading_departure)} <span className={loadingDepartureVariance.className}>{loadingDepartureVariance.label}</span></p>
           </div>
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <LogOut className="h-3 w-3" />
-              Offloading
+          <div>
+            <p className="font-medium text-muted-foreground flex items-center gap-1 mb-0.5">
+              <LogOut className="h-2.5 w-2.5" /> Offloading
             </p>
-            <div className="text-xs space-y-1">
-              <p>Arrived: {formatDateTime(load.actual_offloading_arrival)}</p>
-              <p className={offloadingArrivalVariance.className}>{offloadingArrivalVariance.label}</p>
-              <p className="mt-1.5">Departed: {formatDateTime(load.actual_offloading_departure)}</p>
-              <p className={offloadingDepartureVariance.className}>{offloadingDepartureVariance.label}</p>
-            </div>
+            <p>In: {formatDateTime(load.actual_offloading_arrival)} <span className={offloadingArrivalVariance.className}>{offloadingArrivalVariance.label}</span></p>
+            <p>Out: {formatDateTime(load.actual_offloading_departure)} <span className={offloadingDepartureVariance.className}>{offloadingDepartureVariance.label}</span></p>
           </div>
         </div>
       </div>
