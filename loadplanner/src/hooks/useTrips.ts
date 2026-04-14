@@ -358,7 +358,27 @@ export function useGeofenceLoadUpdate() {
       const isManuallySet = existingSource === 'manual';
 
       const updates: Record<string, unknown> = {};
-      const isoTimestamp = timestamp.toISOString();
+
+      // Apply arrival offset for depots with long internal roads (e.g. BV farm)
+      // Arrivals: add offset (truck entered geofence but needs X min to reach loading point)
+      // Departures: subtract offset (truck left loading point X min before exiting geofence)
+      let adjustedTimestamp = timestamp;
+      if (geofenceName) {
+        const { findDepotByName } = await import('@/lib/depots');
+        const depot = findDepotByName(geofenceName);
+        if (depot?.arrivalOffsetMinutes) {
+          const offsetMs = depot.arrivalOffsetMinutes * 60 * 1000;
+          const isArrival = eventType === 'loading_arrival' || eventType === 'offloading_arrival';
+          const isDeparture = eventType === 'loading_departure' || eventType === 'offloading_departure';
+          if (isArrival) {
+            adjustedTimestamp = new Date(timestamp.getTime() + offsetMs);
+          } else if (isDeparture) {
+            adjustedTimestamp = new Date(timestamp.getTime() - offsetMs);
+          }
+        }
+      }
+
+      const isoTimestamp = adjustedTimestamp.toISOString();
       // Prepare merged time_window JSON
       interface TimeWindowSection {
         plannedArrival?: string;

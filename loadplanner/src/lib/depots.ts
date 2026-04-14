@@ -34,6 +34,14 @@ export interface Depot {
    *   ]
    */
   polygon?: [number, number][];
+  /**
+   * Optional time offset in minutes applied to geofence-triggered timestamps.
+   * For arrival events the offset is ADDED (entry + offset = actual arrival).
+   * For departure events the offset is SUBTRACTED (exit − offset = actual departure).
+   * This accounts for long driveways/roads inside a geofence before reaching
+   * the actual loading/offloading point.
+   */
+  arrivalOffsetMinutes?: number;
 }
 
 /**
@@ -80,9 +88,11 @@ export const DEPOTS: Depot[] = [
     type: "farm",
     country: "Zimbabwe",
     radius: 2500,
-    // 3km-wide corridor (1.5km each side) following the road through BV farm
+    arrivalOffsetMinutes: 45,
+    // BV farm geofence — clockwise loop covering eastern road + NW farm road
+    // Uses fixed ~800m buffer on each side of NW road centerline
     polygon: [
-      // Left side of road
+      // === East corridor — east side (heading south) ===
       [-19.15322280, 32.85968967],
       [-19.16486174, 32.86067196],
       [-19.17844144, 32.85436184],
@@ -94,7 +104,33 @@ export const DEPOTS: Depot[] = [
       [-19.20756133, 32.72767889],
       [-19.20493217, 32.71456586],
       [-19.19733084, 32.69618007],
-      // Right side of road (reversed)
+      // === NW road — west side (heading north from junction) ===
+      [-19.17075751, 32.68566728],
+      [-19.15774404, 32.67176944],
+      [-19.13497116, 32.67443991],
+      [-19.12385630, 32.67638862],
+      [-19.10779569, 32.68150338],
+      [-19.09896411, 32.68455270],
+      [-19.08532472, 32.68073312],
+      [-19.07362147, 32.68133286],
+      [-19.07133337, 32.68224088],
+      [-19.06619478, 32.68113774],
+      [-19.05964099, 32.68071749],
+      // === NW road — cap at tip ===
+      [-19.05464099, 32.68871749],
+      // === NW road — east side (heading south back to junction) ===
+      [-19.05964099, 32.69671749],
+      [-19.06619478, 32.69713774],
+      [-19.07133337, 32.69824088],
+      [-19.07362147, 32.69733286],
+      [-19.08532472, 32.69673312],
+      [-19.09896411, 32.70055270],
+      [-19.10779569, 32.69750338],
+      [-19.12385630, 32.69238862],
+      [-19.13497116, 32.69043991],
+      [-19.15774404, 32.68776944],
+      [-19.17075751, 32.70166728],
+      // === East corridor — west side (heading north back to start) ===
       [-19.17265006, 32.70771862],
       [-19.17932660, 32.72356648],
       [-19.18059139, 32.72844540],
