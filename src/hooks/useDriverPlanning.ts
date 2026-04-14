@@ -26,6 +26,7 @@ export const AT_WORK_LOCATIONS = [
     'Client',
     'Waiting to load',
     'Waiting to offload',
+    'In Transit',
 ] as const;
 
 export type AtWorkLocation = (typeof AT_WORK_LOCATIONS)[number];
@@ -45,8 +46,8 @@ export interface DriverLeave {
 
 export type DriverLeaveInsert = Omit<DriverLeave, 'id' | 'created_at' | 'updated_at'>;
 
-/** Manual day statuses the user can assign. 'off' means no row in DB. */
-export type DayStatus = 'at_work' | 'on_trip' | 'leave' | 'off';
+/** Manual day statuses the user can assign. 'off' means no row in DB. 'off_day' = unapplied off day (light purple). */
+export type DayStatus = 'at_work' | 'on_trip' | 'leave' | 'off' | 'off_day';
 
 export interface TripInfo {
     trip_number: string | null;
@@ -70,6 +71,7 @@ export interface DriverPlanningData {
     daysOnTrip: number;
     daysOnLeave: number;
     daysOff: number;
+    daysOffDay: number;
     maxConsecutiveWorkingDays: number;
     currentStreak: number;
     isOverworked: boolean;
@@ -79,8 +81,8 @@ export interface DriverPlanningData {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const OVERWORK_CONSECUTIVE_THRESHOLD = 14;
-const OVERWORK_MONTHLY_THRESHOLD = 24;
+const OVERWORK_CONSECUTIVE_THRESHOLD = 26;
+const OVERWORK_MONTHLY_THRESHOLD = 26;
 
 function parseDateLocal(dateStr: string): Date {
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -91,8 +93,14 @@ function isWorkingStatus(status: DayStatus): boolean {
     return status === 'at_work' || status === 'on_trip';
 }
 
+/**
+ * Compute consecutive working days, excluding days where the driver was
+ * specifically at Mutare (those don't count towards overwork alerts).
+ * Streaks reset on leave, off, off_day, and Mutare days.
+ */
 function computeConsecutiveWorkingDays(
     dayStatuses: Record<string, DayStatus>,
+    dayNotes: Record<string, string>,
     daysInMonth: Date[]
 ): { maxStreak: number; currentStreak: number } {
     let maxStreak = 0;
@@ -100,7 +108,9 @@ function computeConsecutiveWorkingDays(
 
     for (const day of daysInMonth) {
         const key = format(day, 'yyyy-MM-dd');
-        if (isWorkingStatus(dayStatuses[key] || 'off')) {
+        const status = dayStatuses[key] || 'off';
+        const isMutare = dayNotes[key] === 'Mutare';
+        if (isWorkingStatus(status) && !isMutare) {
             currentStreak++;
             maxStreak = Math.max(maxStreak, currentStreak);
         } else {
@@ -284,16 +294,19 @@ export const useDriverPlanning = (selectedMonth: Date) => {
             let daysOnTrip = 0;
             let daysOnLeave = 0;
             let daysOff = 0;
+            let daysOffDay = 0;
 
             const todayStr = format(new Date(), 'yyyy-MM-dd');
 
             for (const day of daysInMonth) {
                 const key = format(day, 'yyyy-MM-dd');
-                // Priority: leave (auto) > at_work (trip days count as at_work, manual at_work) > off
+                // Priority: leave (auto) > off_day (manual) > at_work (trip days count as at_work, manual at_work) > off
                 // Being on a trip counts as working — tripDays map kept for visual indicator
                 let status: DayStatus;
                 if (leaveDayMap[key]) {
                     status = 'leave';
+                } else if (manualStatuses[key] === 'off_day') {
+                    status = 'off_day';
                 } else if (tripDayMap[key] || manualStatuses[key] === 'at_work') {
                     status = 'at_work';
                 } else {
@@ -306,11 +319,12 @@ export const useDriverPlanning = (selectedMonth: Date) => {
                 if (tripDayMap[key]) daysOnTrip++; // reference count: days with trips
                 if (status === 'at_work') daysAtWork++;
                 else if (status === 'leave') daysOnLeave++;
+                else if (status === 'off_day') daysOffDay++;
                 else if (key <= todayStr) daysOff++;
                 // future dates with 'off' status: don't count in daysOff
             }
 
-            const { maxStreak, currentStreak } = computeConsecutiveWorkingDays(dayStatuses, daysInMonth);
+            const { maxStreak, currentStreak } = computeConsecutiveWorkingDays(dayStatuses, dayNotes, daysInMonth);
             const isOverworked = maxStreak >= OVERWORK_CONSECUTIVE_THRESHOLD || daysAtWork >= OVERWORK_MONTHLY_THRESHOLD;
 
             result.push({
@@ -322,6 +336,7 @@ export const useDriverPlanning = (selectedMonth: Date) => {
                 daysOnTrip,
                 daysOnLeave,
                 daysOff,
+                daysOffDay,
                 maxConsecutiveWorkingDays: maxStreak,
                 currentStreak,
                 isOverworked,
@@ -336,11 +351,11 @@ export const useDriverPlanning = (selectedMonth: Date) => {
     // ─── Mutations: Manual day status ────────────────────────────────────────
 
     const setDayStatusMutation = useMutation({
-        mutationFn: async ({ driverName, date, notes }: { driverName: string; date: string; notes?: string }) => {
+        mutationFn: async ({ driverName, date, status, notes }: { driverName: string; date: string; status?: DayStatus; notes?: string }) => {
             const { error } = await supabase
                 .from('driver_day_status' as any)
                 .upsert(
-                    { driver_name: driverName, date, status: 'at_work', notes: notes || null } as any,
+                    { driver_name: driverName, date, status: status || 'at_work', notes: notes || null } as any,
                     { onConflict: 'driver_name,date' }
                 );
 
@@ -438,7 +453,7 @@ export const useDriverPlanning = (selectedMonth: Date) => {
         isLoading: isLoadingDrivers || isLoadingStatuses || isLoadingTrips || isLoadingLeave,
         activeDrivers,
         getDriverFullName,
-        setDayStatus: setDayStatusMutation.mutateAsync as (data: { driverName: string; date: string; notes?: string }) => Promise<void>,
+        setDayStatus: setDayStatusMutation.mutateAsync as (data: { driverName: string; date: string; status?: DayStatus; notes?: string }) => Promise<void>,
         clearDayStatus: clearDayStatusMutation.mutateAsync,
         createLeave: createLeaveMutation.mutateAsync,
         updateLeave: updateLeaveMutation.mutateAsync,

@@ -74,6 +74,7 @@ const DAY_STATUS_COLORS: Record<DayStatus, string> = {
     on_trip: 'bg-emerald-600',
     leave: 'bg-sky-500',
     off: 'bg-slate-200',
+    off_day: 'bg-purple-300',
 };
 
 const DAY_STATUS_LABELS: Record<DayStatus, string> = {
@@ -81,6 +82,7 @@ const DAY_STATUS_LABELS: Record<DayStatus, string> = {
     on_trip: 'On Trip',
     leave: 'On Leave',
     off: 'Off',
+    off_day: 'Off Day',
 };
 
 export default function DriverPlanningSection() {
@@ -148,13 +150,13 @@ export default function DriverPlanningSection() {
                 ['', ''],
                 ...planningData.map((d): [string, string | number] => [
                     d.driverName,
-                    `Work: ${d.daysAtWork} | Trip: ${d.daysOnTrip} | Leave: ${d.daysOnLeave} | Off: ${d.daysOff} | Streak: ${d.maxConsecutiveWorkingDays}d`,
+                    `Work: ${d.daysAtWork} | Trip: ${d.daysOnTrip} | Leave: ${d.daysOnLeave} | Off Day: ${d.daysOffDay} | Off: ${d.daysOff} | Streak: ${d.maxConsecutiveWorkingDays}d`,
                 ]),
             ],
         });
 
         // Daily status sheet — all drivers, all days
-        const headers = ['Driver', ...daysInMonth.map((d) => format(d, 'dd')), 'Work', 'Trip', 'Leave', 'Off', 'Streak'];
+        const headers = ['Driver', ...daysInMonth.map((d) => format(d, 'dd')), 'Work', 'Trip', 'Leave', 'Off Day', 'Off', 'Streak'];
         const rows = planningData.map((driver) => {
             const dayCells = daysInMonth.map((day) => {
                 const key = format(day, 'yyyy-MM-dd');
@@ -165,6 +167,7 @@ export default function DriverPlanningSection() {
                 if (status === 'at_work' && note) return `W (${note})`;
                 if (status === 'at_work') return 'W';
                 if (status === 'leave') return 'L';
+                if (status === 'off_day') return 'OD';
                 return '';
             });
             return [
@@ -173,6 +176,7 @@ export default function DriverPlanningSection() {
                 String(driver.daysAtWork),
                 String(driver.daysOnTrip),
                 String(driver.daysOnLeave),
+                String(driver.daysOffDay),
                 String(driver.daysOff),
                 `${driver.maxConsecutiveWorkingDays}d`,
             ];
@@ -229,12 +233,13 @@ export default function DriverPlanningSection() {
         // Summary table
         autoTable(doc, {
             startY: 34,
-            head: [['Driver', 'Work', 'Trip', 'Leave', 'Off', 'Streak']],
+            head: [['Driver', 'Work', 'Trip', 'Leave', 'Off Day', 'Off', 'Streak']],
             body: planningData.map((d) => [
                 d.driverName,
                 String(d.daysAtWork),
                 String(d.daysOnTrip),
                 String(d.daysOnLeave),
+                String(d.daysOffDay),
                 String(d.daysOff),
                 `${d.maxConsecutiveWorkingDays}d`,
             ]),
@@ -249,7 +254,7 @@ export default function DriverPlanningSection() {
             doc.setFontSize(14);
             doc.text(driver.driverName, 14, 16);
             doc.setFontSize(9);
-            doc.text(`Work: ${driver.daysAtWork}  |  Trip: ${driver.daysOnTrip}  |  Leave: ${driver.daysOnLeave}  |  Off: ${driver.daysOff}`, 14, 23);
+            doc.text(`Work: ${driver.daysAtWork}  |  Trip: ${driver.daysOnTrip}  |  Leave: ${driver.daysOnLeave}  |  Off Day: ${driver.daysOffDay}  |  Off: ${driver.daysOff}`, 14, 23);
 
             autoTable(doc, {
                 startY: 28,
@@ -335,6 +340,7 @@ export default function DriverPlanningSection() {
                             <div className="flex items-center gap-3 text-[11px] text-slate-500">
                                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Work</span>
                                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Leave</span>
+                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-purple-300 inline-block" /> Off Day</span>
                                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-slate-200 border inline-block" /> Off</span>
                                 <span className="flex items-center gap-1 pl-1.5 border-l border-slate-300"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Trip</span>
                             </div>
@@ -410,7 +416,7 @@ interface DayCellProps {
     tripName: string | undefined;
     dayNote: string | undefined;
     isFutureDay: boolean;
-    onSetStatus: (data: { driverName: string; date: string; notes?: string }) => Promise<unknown>;
+    onSetStatus: (data: { driverName: string; date: string; status?: DayStatus; notes?: string }) => Promise<unknown>;
     onClearStatus: (data: { driverName: string; date: string }) => Promise<unknown>;
 }
 
@@ -422,6 +428,11 @@ function DayCell({ driverName, dateKey, currentStatus, tripName, dayNote, isFutu
     const handleSelectLocation = async (location: string) => {
         setOpen(false);
         await onSetStatus({ driverName, date: dateKey, notes: location });
+    };
+
+    const handleMarkOffDay = async () => {
+        setOpen(false);
+        await onSetStatus({ driverName, date: dateKey, status: 'off_day' });
     };
 
     const handleClear = async () => {
@@ -482,6 +493,16 @@ function DayCell({ driverName, dateKey, currentStatus, tripName, dayNote, isFutu
                                     {loc}
                                 </button>
                             ))}
+                            <div className="border-t mt-1 pt-1">
+                                <button
+                                    type="button"
+                                    className={`flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-purple-50 text-left transition-colors w-full ${currentStatus === 'off_day' ? 'bg-purple-50 font-medium' : ''}`}
+                                    onClick={handleMarkOffDay}
+                                >
+                                    <span className="w-3 h-3 rounded-sm bg-purple-300 shrink-0 inline-block" />
+                                    Off Day (unapplied)
+                                </button>
+                            </div>
                         </>
                     )}
                     {currentStatus === 'at_work' && !tripName && (
@@ -507,6 +528,14 @@ function DayCell({ driverName, dateKey, currentStatus, tripName, dayNote, isFutu
                             <div className="border-t mt-1 pt-1">
                                 <button
                                     type="button"
+                                    className="flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-purple-50 text-left transition-colors w-full"
+                                    onClick={handleMarkOffDay}
+                                >
+                                    <span className="w-3 h-3 rounded-sm bg-purple-300 shrink-0 inline-block" />
+                                    Off Day (unapplied)
+                                </button>
+                                <button
+                                    type="button"
                                     className="flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-slate-50 text-left text-slate-400 w-full transition-colors"
                                     onClick={handleClear}
                                 >
@@ -527,7 +556,7 @@ function DayCell({ driverName, dateKey, currentStatus, tripName, dayNote, isFutu
 interface OverviewGridProps {
     planningData: DriverPlanningData[];
     daysInMonth: Date[];
-    onSetDayStatus: (data: { driverName: string; date: string; notes?: string }) => Promise<unknown>;
+    onSetDayStatus: (data: { driverName: string; date: string; status?: DayStatus; notes?: string }) => Promise<unknown>;
     onClearDayStatus: (data: { driverName: string; date: string }) => Promise<unknown>;
     onSelectDriver: (name: string) => void;
 }
@@ -564,6 +593,7 @@ function OverviewGrid({ planningData, daysInMonth, onSetDayStatus, onClearDaySta
                                 <TableHead className="text-center min-w-[38px] bg-slate-50 text-slate-600 font-semibold text-[10px] uppercase tracking-wider py-2">W</TableHead>
                                 <TableHead className="text-center min-w-[38px] bg-slate-50 text-slate-600 font-semibold text-[10px] uppercase tracking-wider py-2">T</TableHead>
                                 <TableHead className="text-center min-w-[38px] bg-slate-50 text-slate-600 font-semibold text-[10px] uppercase tracking-wider py-2">L</TableHead>
+                                <TableHead className="text-center min-w-[38px] bg-slate-50 text-purple-600 font-semibold text-[10px] uppercase tracking-wider py-2">OD</TableHead>
                                 <TableHead className="text-center min-w-[38px] bg-slate-50 text-slate-600 font-semibold text-[10px] uppercase tracking-wider py-2">O</TableHead>
                                 <TableHead className="text-center min-w-[48px] bg-slate-50 text-slate-600 font-semibold text-[10px] uppercase tracking-wider py-2">Str</TableHead>
                             </TableRow>
@@ -571,7 +601,7 @@ function OverviewGrid({ planningData, daysInMonth, onSetDayStatus, onClearDaySta
                         <TableBody>
                             {planningData.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={daysInMonth.length + 6} className="text-center py-10 text-slate-400 text-sm">
+                                    <TableCell colSpan={daysInMonth.length + 7} className="text-center py-10 text-slate-400 text-sm">
                                         No active drivers found for this month
                                     </TableCell>
                                 </TableRow>
@@ -580,10 +610,10 @@ function OverviewGrid({ planningData, daysInMonth, onSetDayStatus, onClearDaySta
                                     <TableRow
                                         key={driver.driverName}
                                         className={`border-b border-slate-100 transition-colors ${driver.isOverworked
-                                                ? 'bg-red-50/60 hover:bg-red-50'
-                                                : idx % 2 === 0
-                                                    ? 'bg-white hover:bg-slate-50/60'
-                                                    : 'bg-slate-50/30 hover:bg-slate-50/60'
+                                            ? 'bg-red-50/60 hover:bg-red-50'
+                                            : idx % 2 === 0
+                                                ? 'bg-white hover:bg-slate-50/60'
+                                                : 'bg-slate-50/30 hover:bg-slate-50/60'
                                             }`}
                                     >
                                         <TableCell
@@ -642,12 +672,15 @@ function OverviewGrid({ planningData, daysInMonth, onSetDayStatus, onClearDaySta
                                         <TableCell className="text-center font-medium text-sky-600 text-[11px] py-1.5">
                                             {driver.daysOnLeave}
                                         </TableCell>
+                                        <TableCell className="text-center font-medium text-purple-500 text-[11px] py-1.5">
+                                            {driver.daysOffDay}
+                                        </TableCell>
                                         <TableCell className="text-center text-slate-400 text-[11px] py-1.5">
                                             {driver.daysOff}
                                         </TableCell>
                                         <TableCell className="text-center py-1.5">
                                             <Badge
-                                                variant={driver.maxConsecutiveWorkingDays >= 14 ? 'destructive' : 'outline'}
+                                                variant={driver.maxConsecutiveWorkingDays >= 26 ? 'destructive' : 'outline'}
                                                 className="text-[10px] px-1.5 py-0 h-4 font-medium"
                                             >
                                                 {driver.maxConsecutiveWorkingDays}d

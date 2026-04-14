@@ -41,6 +41,7 @@ const DAY_STATUS_COLORS: Record<DayStatus, string> = {
     on_trip: 'bg-green-500',
     leave: 'bg-blue-500',
     off: 'bg-gray-200',
+    off_day: 'bg-purple-300',
 };
 
 const DAY_STATUS_LABELS: Record<DayStatus, string> = {
@@ -48,6 +49,7 @@ const DAY_STATUS_LABELS: Record<DayStatus, string> = {
     on_trip: 'On Trip',
     leave: 'On Leave',
     off: 'Off',
+    off_day: 'Off Day',
 };
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
@@ -99,6 +101,7 @@ export default function DriverActivityModal({
                 ['Days At Work', driverData.daysAtWork],
                 ['Trip Days (incl. in Work)', driverData.daysOnTrip],
                 ['Days On Leave', driverData.daysOnLeave],
+                ['Off Days (unapplied)', driverData.daysOffDay],
                 ['Days Off', driverData.daysOff],
                 ['Max Consecutive Working Days', driverData.maxConsecutiveWorkingDays],
                 ['Overworked?', driverData.isOverworked ? 'YES' : 'No'],
@@ -186,6 +189,7 @@ export default function DriverActivityModal({
                 ['Days At Work', String(driverData.daysAtWork)],
                 ['Trip Days (incl. in Work)', String(driverData.daysOnTrip)],
                 ['Days On Leave', String(driverData.daysOnLeave)],
+                ['Off Days (unapplied)', String(driverData.daysOffDay)],
                 ['Days Off', String(driverData.daysOff)],
                 ['Max Consecutive Working Days', String(driverData.maxConsecutiveWorkingDays)],
                 ['Overworked?', driverData.isOverworked ? 'YES' : 'No'],
@@ -293,7 +297,7 @@ export default function DriverActivityModal({
 
                 <div className="space-y-6 mt-2">
                     {/* Summary Stats */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                         <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
                             <span className="text-sm text-amber-700">At Work</span>
                             <span className="text-lg font-bold text-amber-700">{driverData.daysAtWork}</span>
@@ -313,13 +317,17 @@ export default function DriverActivityModal({
                             <span className="text-sm text-gray-600">Off</span>
                             <span className="text-lg font-bold text-gray-600">{driverData.daysOff}</span>
                         </div>
+                        <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
+                            <span className="text-sm text-purple-600">Off Days</span>
+                            <span className="text-lg font-bold text-purple-600">{driverData.daysOffDay}</span>
+                        </div>
                     </div>
 
                     {driverData.isOverworked && (
                         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700">
                             <AlertTriangle className="w-4 h-4 shrink-0" />
                             <span>
-                                This driver may be overworked ({driverData.maxConsecutiveWorkingDays} consecutive working days).
+                                This driver may be overworked ({driverData.maxConsecutiveWorkingDays} consecutive working days, excl. Mutare).
                                 Consider scheduling leave.
                             </span>
                         </div>
@@ -373,6 +381,10 @@ export default function DriverActivityModal({
                                 <div className="flex items-center gap-1">
                                     <div className="w-2.5 h-2.5 rounded-sm bg-blue-500" />
                                     Leave
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <div className="w-2.5 h-2.5 rounded-sm bg-purple-300" />
+                                    Off Day
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <div className="w-2.5 h-2.5 rounded-sm bg-gray-200 border" />
