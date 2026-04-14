@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useClientActiveLoads } from '@/hooks/useClientLoads';
 import { useCustomLocations } from '@/hooks/useCustomLocations';
 import type { Load } from '@/hooks/useTrips';
-import { DEPOTS, customLocationToDepot, type Depot } from '@/lib/depots';
+import { DEPOTS, customLocationToDepot, isWithinDepot, type Depot } from '@/lib/depots';
 import { calculateRoute, decodePolyline } from '@/lib/routing';
 import {
   formatLastConnected,
