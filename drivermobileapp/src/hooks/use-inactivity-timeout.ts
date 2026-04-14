@@ -77,7 +77,16 @@ export function useInactivityTimeout() {
 
         const onVisibility = () => {
             if (document.visibilityState === "visible") {
+                // App returned to foreground — restart the full timer
                 resetTimer();
+            } else {
+                // App went to background — pause the timer.
+                // Background time should NOT count toward the inactivity limit,
+                // because the user simply switched apps / locked their phone.
+                if (timerRef.current) {
+                    clearTimeout(timerRef.current);
+                    timerRef.current = null;
+                }
             }
         };
 

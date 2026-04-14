@@ -18,6 +18,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useRef, useCal
 import { useQueryClient } from "@tanstack/react-query";
 
 const PROFILE_CACHE_KEY = "mata-driver-profile";
+const SESSION_BACKUP_KEY = "mata-driver-session-backup";
 
 /** Persist profile in localStorage so it survives page refreshes */
 function cacheProfile(p: Profile | null) {
@@ -36,6 +37,36 @@ function loadCachedProfile(): Profile | null {
     if (raw) return JSON.parse(raw) as Profile;
   } catch { /* corrupted / blocked */ }
   return null;
+}
+
+/** Backup session tokens to a separate key the SDK doesn't touch.
+ *  Only the refresh_token + access_token are needed for recovery. */
+function backupSession(s: Session | null) {
+  try {
+    if (s?.refresh_token && s?.access_token) {
+      localStorage.setItem(SESSION_BACKUP_KEY, JSON.stringify({
+        access_token: s.access_token,
+        refresh_token: s.refresh_token,
+      }));
+    } else {
+      localStorage.removeItem(SESSION_BACKUP_KEY);
+    }
+  } catch { /* storage full / blocked */ }
+}
+
+function loadBackupSession(): { access_token: string; refresh_token: string } | null {
+  try {
+    const raw = localStorage.getItem(SESSION_BACKUP_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.access_token && parsed?.refresh_token) return parsed;
+    }
+  } catch { /* corrupted */ }
+  return null;
+}
+
+function clearBackupSession() {
+  try { localStorage.removeItem(SESSION_BACKUP_KEY); } catch { /* ignore */ }
 }
 
 // Define the shape of the user data returned from Supabase
@@ -103,6 +134,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mountedRef = useRef(true);
   const fetchVersionRef = useRef(0);
   const isLoadingRef = useRef(true);
+  const isSigningOutRef = useRef(false);
+  const recoveryInProgressRef = useRef(false);
 
   // Keep isLoadingRef in sync
   isLoadingRef.current = isLoading;
@@ -243,15 +276,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!mountedRef.current) return;
 
-      // On explicit sign-out, clear everything.
-      // For TOKEN_REFRESHED with no session, only clear if sign-out was intentional.
-      // Transient refresh failures should NOT wipe the cache — the SDK will retry
-      // or fire SIGNED_OUT if the refresh is truly dead.
+      // ── SIGNED_OUT ───────────────────────────────────────────────
+      // Only wipe state on INTENTIONAL sign-out.  The SDK fires
+      // SIGNED_OUT on failed token refreshes (common when a mobile
+      // PWA resumes from background with a brief network gap).
+      // For those spurious events, attempt to recover the session
+      // from our backup instead of wiping the entire app state.
       if (event === "SIGNED_OUT") {
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        queryClient.clear();
+        if (isSigningOutRef.current) {
+          // Intentional sign-out — clear everything
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          queryClient.clear();
+          clearBackupSession();
+          finishInit();
+          return;
+        }
+
+        // Unexpected SIGNED_OUT — likely a failed token refresh on mobile resume.
+        // Try to recover from our backup session.
+        console.warn("Unexpected SIGNED_OUT — attempting session recovery");
+        const backup = loadBackupSession();
+        if (backup && !recoveryInProgressRef.current) {
+          recoveryInProgressRef.current = true;
+          // Defer to avoid re-entrance in onAuthStateChange
+          setTimeout(async () => {
+            try {
+              const { error: restoreError } = await supabase.auth.setSession({
+                access_token: backup.access_token,
+                refresh_token: backup.refresh_token,
+              });
+              if (restoreError) {
+                console.error("Session recovery failed:", restoreError.message);
+                if (mountedRef.current) {
+                  setSession(null);
+                  setUser(null);
+                  setProfile(null);
+                  queryClient.clear();
+                  clearBackupSession();
+                }
+              }
+              // If successful, onAuthStateChange will fire with the new session
+            } catch (err) {
+              console.error("Session recovery exception:", err);
+              if (mountedRef.current) {
+                setSession(null);
+                setUser(null);
+                setProfile(null);
+                queryClient.clear();
+                clearBackupSession();
+              }
+            } finally {
+              recoveryInProgressRef.current = false;
+            }
+          }, 200);
+        } else if (!backup) {
+          // No backup to recover from — truly signed out
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          queryClient.clear();
+          clearBackupSession();
+        }
         finishInit();
         return;
       }
@@ -269,6 +356,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (newSession?.user) {
         setSession(newSession);
         setUser(newSession.user);
+        // Backup session tokens for recovery after spurious mobile SIGNED_OUT
+        backupSession(newSession);
         // Mark init as done — we have a valid session from the SDK
         finishInit();
 
@@ -359,11 +448,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [supabase, fetchProfile, queryClient, setProfile]); // Keep these dependencies
 
+  // ── Visibility-based session recovery ──────────────────────────
+  // When the app comes back from background on mobile, proactively
+  // refresh the session.  This ensures the token is valid before any
+  // data-fetching queries fire, and catches cases where the SDK's
+  // internal auto-refresh already failed and emitted SIGNED_OUT.
+  useEffect(() => {
+    if (!supabase) return;
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== "visible") return;
+      if (isSigningOutRef.current || !mountedRef.current) return;
+
+      // Check if we still have a session — if the SDK already wiped it,
+      // attempt recovery from backup.
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+
+      if (currentSession) {
+        // Session present — proactively refresh to ensure the access token is fresh.
+        // The SDK may skip its own refresh if the access token hasn't expired,
+        // but on mobile resume the token may be very close to expiry.
+        return;
+      }
+
+      // No current session — the SDK may have wiped it.  Try our backup.
+      if (recoveryInProgressRef.current) return;
+      const backup = loadBackupSession();
+      if (backup) {
+        console.warn("No session on foreground resume — restoring from backup");
+        recoveryInProgressRef.current = true;
+        try {
+          const { error: restoreError } = await supabase.auth.setSession({
+            access_token: backup.access_token,
+            refresh_token: backup.refresh_token,
+          });
+          if (restoreError) {
+            console.error("Foreground session restore failed:", restoreError.message);
+            // Don't wipe state here — let the SIGNED_OUT handler deal with it
+          }
+        } catch (err) {
+          console.error("Foreground session restore exception:", err);
+        } finally {
+          recoveryInProgressRef.current = false;
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [supabase]);
+
   const signIn = useCallback(async (email: string, password: string) => {
     if (!supabase) return { error: new Error("Authentication service not available") };
 
     fetchVersionRef.current++;
     setIsSigningOut(false);
+    isSigningOutRef.current = false;
 
     // Clear any stale cache from previous session
     queryClient.clear();
@@ -382,6 +522,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.user && data.session && mountedRef.current) {
         setUser(data.user);
         setSession(data.session);
+        backupSession(data.session);
         const p = await fetchProfile(data.user.email, data.user);
         if (mountedRef.current) setProfile(p);
       }
@@ -396,12 +537,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     fetchVersionRef.current++;
     setIsSigningOut(true);
+    isSigningOutRef.current = true;
 
     if (!supabase) {
       setUser(null);
       setSession(null);
       setProfile(null);
       setIsLoading(false);
+      clearBackupSession();
       return;
     }
 
@@ -428,6 +571,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       queryClient.clear();
       // Ensure auth storage is cleared even if signOut() timed out,
       // so the stale session doesn't persist on next app open.
+      clearBackupSession();
       try { localStorage.removeItem('mata-driver-auth'); } catch { /* ignore */ }
     }
   }, [supabase, queryClient, setProfile]);
