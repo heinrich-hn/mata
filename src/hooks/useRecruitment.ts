@@ -1,15 +1,14 @@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
-import
-  {
-    CandidateStatus,
-    DriverCandidate,
-    DriverCandidateInsert,
-    DriverCandidateUpdate,
-    EvaluationResult,
-    EvaluationStep,
-  } from '@/types/recruitment';
+import {
+CandidateStatus,
+DriverCandidate,
+DriverCandidateInsert,
+DriverCandidateUpdate,
+EvaluationResult,
+EvaluationStep,
+} from '@/types/recruitment';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
@@ -90,7 +89,7 @@ export const useRecruitment = () => {
           status: candidate.status || 'new',
           current_step: candidate.current_step || 'interview',
           notes: candidate.notes || null,
-          candidate_number: `CND-${new Date().getFullYear()}-TEMP`,
+          candidate_number: '',
         }])
         .select()
         .single();

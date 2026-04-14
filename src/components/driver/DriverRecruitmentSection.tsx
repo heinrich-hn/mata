@@ -1,82 +1,81 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
 import {
-Dialog,
-DialogContent,
-DialogDescription,
-DialogFooter,
-DialogHeader,
-DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import {
-DropdownMenu,
-DropdownMenuContent,
-DropdownMenuItem,
-DropdownMenuSeparator,
-DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-Select,
-SelectContent,
-SelectItem,
-SelectTrigger,
-SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import {
-Table,
-TableBody,
-TableCell,
-TableHead,
-TableHeader,
-TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useRecruitment } from '@/hooks/useRecruitment';
 import { supabase } from '@/integrations/supabase/client';
 import {
-generateCandidateListPDF,
-generateRecruitmentSummaryPDF,
-generateSingleCandidatePDF,
+  generateCandidateListPDF,
+  generateRecruitmentSummaryPDF,
+  generateSingleCandidatePDF,
 } from '@/lib/recruitmentExport';
 import {
-CANDIDATE_STATUS_LABELS,
-CandidateStatus,
-DriverCandidate,
-DriverCandidateInsert,
-EVALUATION_STEPS,
-EvaluationResult,
-EvaluationStatus,
-EvaluationStep,
+  CANDIDATE_STATUS_LABELS,
+  CandidateStatus,
+  DriverCandidate,
+  DriverCandidateInsert,
+  EVALUATION_STEPS,
+  EvaluationResult,
+  EvaluationStatus,
+  EvaluationStep,
 } from '@/types/recruitment';
 import {
-AlertTriangle,
-CheckCircle2,
-ChevronRight,
-ClipboardCheck,
-Clock,
-Download,
-Edit,
-ExternalLink,
-FileText,
-Loader2,
-Mail,
-MoreVertical,
-Phone,
-Plus,
-Route,
-Search,
-Trash2,
-Truck,
-Upload,
-User,
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock,
+  Download,
+  Edit,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Mail,
+  MoreVertical,
+  Phone,
+  Plus,
+  Route,
+  Search,
+  Trash2,
+  Truck,
+  Upload,
+  User,
 
-Users,
-XCircle
+  Users,
+  XCircle
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
@@ -132,7 +131,6 @@ const DriverRecruitmentSection = () => {
   const {
     candidates,
     isLoading,
-    stats,
     createCandidate,
     updateCandidate,
     deleteCandidate,
@@ -426,68 +424,11 @@ const DriverRecruitmentSection = () => {
 
   return (
     <div className="space-y-6">
-      {/* Recruitment Pipeline Visualization */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Recruitment Pipeline</CardTitle>
-          <CardDescription>Three-step evaluation process for driver candidates</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between gap-4">
-            {EVALUATION_STEPS.map((step, index) => (
-              <div key={step.value} className="flex-1">
-                <div className="flex items-center">
-                  <div
-                    className={`flex-1 flex flex-col items-center p-4 rounded-lg border-2 ${index === 0
-                        ? 'border-purple-300 bg-purple-50'
-                        : index === 1
-                          ? 'border-amber-300 bg-amber-50'
-                          : 'border-orange-300 bg-orange-50'
-                      }`}
-                  >
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${index === 0
-                          ? 'bg-purple-200 text-purple-700'
-                          : index === 1
-                            ? 'bg-amber-200 text-amber-700'
-                            : 'bg-orange-200 text-orange-700'
-                        }`}
-                    >
-                      {index === 0 ? (
-                        <ClipboardCheck className="w-5 h-5" />
-                      ) : index === 1 ? (
-                        <Truck className="w-5 h-5" />
-                      ) : (
-                        <Route className="w-5 h-5" />
-                      )}
-                    </div>
-                    <p className="font-medium text-sm text-center">{step.label}</p>
-                    <p className="text-xs text-gray-500 text-center mt-1">{step.description}</p>
-                    <Badge variant="secondary" className="mt-2">
-                      {step.value === 'interview'
-                        ? stats.atInterview
-                        : step.value === 'yard_test'
-                          ? stats.atYardTest
-                          : stats.atRoadTest}{' '}
-                      candidates
-                    </Badge>
-                  </div>
-                  {index < EVALUATION_STEPS.length - 1 && (
-                    <ChevronRight className="w-6 h-6 text-gray-400 mx-2 flex-shrink-0" />
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Candidates List */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Driver Candidates</CardTitle>
               <CardDescription>
                 Manage potential drivers through the recruitment process
               </CardDescription>
@@ -621,12 +562,12 @@ const DriverRecruitmentSection = () => {
                           <div className="flex items-center gap-1">
                             <div
                               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${candidate.interview_result?.status === 'passed'
-                                  ? 'bg-green-100 text-green-700'
-                                  : candidate.interview_result?.status === 'failed'
-                                    ? 'bg-red-100 text-red-700'
-                                    : candidate.current_step === 'interview'
-                                      ? 'bg-purple-100 text-purple-700'
-                                      : 'bg-gray-100 text-gray-400'
+                                ? 'bg-green-100 text-green-700'
+                                : candidate.interview_result?.status === 'failed'
+                                  ? 'bg-red-100 text-red-700'
+                                  : candidate.current_step === 'interview'
+                                    ? 'bg-purple-100 text-purple-700'
+                                    : 'bg-gray-100 text-gray-400'
                                 }`}
                             >
                               1
@@ -634,12 +575,12 @@ const DriverRecruitmentSection = () => {
                             <div className="w-4 h-0.5 bg-gray-200" />
                             <div
                               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${candidate.yard_test_result?.status === 'passed'
-                                  ? 'bg-green-100 text-green-700'
-                                  : candidate.yard_test_result?.status === 'failed'
-                                    ? 'bg-red-100 text-red-700'
-                                    : candidate.current_step === 'yard_test'
-                                      ? 'bg-amber-100 text-amber-700'
-                                      : 'bg-gray-100 text-gray-400'
+                                ? 'bg-green-100 text-green-700'
+                                : candidate.yard_test_result?.status === 'failed'
+                                  ? 'bg-red-100 text-red-700'
+                                  : candidate.current_step === 'yard_test'
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-gray-100 text-gray-400'
                                 }`}
                             >
                               2
@@ -647,12 +588,12 @@ const DriverRecruitmentSection = () => {
                             <div className="w-4 h-0.5 bg-gray-200" />
                             <div
                               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${candidate.road_test_result?.status === 'passed'
-                                  ? 'bg-green-100 text-green-700'
-                                  : candidate.road_test_result?.status === 'failed'
-                                    ? 'bg-red-100 text-red-700'
-                                    : candidate.current_step === 'road_test'
-                                      ? 'bg-orange-100 text-orange-700'
-                                      : 'bg-gray-100 text-gray-400'
+                                ? 'bg-green-100 text-green-700'
+                                : candidate.road_test_result?.status === 'failed'
+                                  ? 'bg-red-100 text-red-700'
+                                  : candidate.current_step === 'road_test'
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : 'bg-gray-100 text-gray-400'
                                 }`}
                             >
                               3
