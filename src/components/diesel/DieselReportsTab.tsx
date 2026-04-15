@@ -520,6 +520,8 @@ const DieselReportsTab = ({
             default: fromDate = '1900-01-01';
           }
           if (dateStr < fromDate) return;
+          const todayStr = now.toISOString().split('T')[0];
+          if (dateStr > todayStr) return;
         }
       }
       const weekStart = getWeekStart(recordDate);
