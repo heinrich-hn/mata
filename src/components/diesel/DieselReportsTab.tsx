@@ -1623,7 +1623,9 @@ const DieselReportsTab = ({
                                   <td className="p-3">Week Total</td>
                                   <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
                                   <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
-                                  <td className="p-3 text-right">—</td>
+                                  <td className="p-3 text-right">
+                                    {week.totals.totalLitres > 0 ? formatCurrency(week.totals.totalCost / week.totals.totalLitres) + '/L' : '—'}
+                                  </td>
                                   <td className="p-3 text-right">{week.totals.fillCount}</td>
                                   <td className="p-3"></td>
                                 </tr>
@@ -1682,7 +1684,9 @@ const DieselReportsTab = ({
                         <td className="p-3 text-right">
                           <div>{formatCurrency(stationReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                         </td>
-                        <td className="p-3 text-right">—</td>
+                        <td className="p-3 text-right">
+                          {(() => { const tl = stationReports.reduce((s, r) => s + r.totalLitres, 0); const tc = stationReports.reduce((s, r) => s + r.totalCost, 0); return tl > 0 ? formatCurrency(tc / tl) + '/L' : '—'; })()}
+                        </td>
                         <td className="p-3 text-right">{stationReports.reduce((s, r) => s + r.fillCount, 0)}</td>
                         <td className="p-3"></td>
                       </tr>
@@ -1815,7 +1819,9 @@ const DieselReportsTab = ({
                                     <td className="p-3">Week Total</td>
                                     <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
                                     <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
-                                    <td className="p-3 text-right">—</td>
+                                    <td className="p-3 text-right">
+                                      {week.totals.totalHoursOperated > 0 ? <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">{formatNumber(week.totals.totalLitres / week.totals.totalHoursOperated, 2)} L/hr</Badge> : '—'}
+                                    </td>
                                     <td className="p-3 text-right">{formatNumber(week.totals.totalHoursOperated)} hrs</td>
                                     <td className="p-3 text-right">{week.totals.fillCount}</td>
                                     <td className="p-3"></td>
@@ -1891,7 +1897,9 @@ const DieselReportsTab = ({
                           <td className="p-3 text-right">
                             <div>{formatCurrency(reeferFleetReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                           </td>
-                          <td className="p-3 text-right">—</td>
+                          <td className="p-3 text-right">
+                            {(() => { const tl = reeferFleetReports.reduce((s, r) => s + r.totalLitres, 0); const th = reeferFleetReports.reduce((s, r) => s + r.totalHoursOperated, 0); return th > 0 ? <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">{formatNumber(tl / th, 2)} L/hr</Badge> : '—'; })()}
+                          </td>
                           <td className="p-3 text-right">
                             {formatNumber(reeferFleetReports.reduce((s, r) => s + r.totalHoursOperated, 0))} hrs
                           </td>
@@ -1971,7 +1979,9 @@ const DieselReportsTab = ({
                                     <td className="p-3">Week Total</td>
                                     <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
                                     <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
-                                    <td className="p-3 text-right">—</td>
+                                    <td className="p-3 text-right">
+                                      {week.totals.totalHoursOperated > 0 ? <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">{formatNumber(week.totals.totalLitres / week.totals.totalHoursOperated, 2)} L/hr</Badge> : '—'}
+                                    </td>
                                     <td className="p-3 text-right">{week.totals.fillCount}</td>
                                     <td className="p-3"></td>
                                     <td className="p-3"></td>
@@ -2045,7 +2055,9 @@ const DieselReportsTab = ({
                           <td className="p-3 text-right">
                             <div>{formatCurrency(reeferDriverReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                           </td>
-                          <td className="p-3 text-right">—</td>
+                          <td className="p-3 text-right">
+                            {(() => { const tl = reeferDriverReports.reduce((s, r) => s + r.totalLitres, 0); const th = reeferDriverReports.reduce((s, r) => s + r.totalHoursOperated, 0); return th > 0 ? <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">{formatNumber(tl / th, 2)} L/hr</Badge> : '—'; })()}
+                          </td>
                           <td className="p-3 text-right">{reeferDriverReports.reduce((s, r) => s + r.fillCount, 0)}</td>
                           <td className="p-3"></td>
                           <td className="p-3"></td>
@@ -2119,7 +2131,9 @@ const DieselReportsTab = ({
                                     <td className="p-3">Week Total</td>
                                     <td className="p-3 text-right">{formatNumber(week.totals.totalLitres)} L</td>
                                     <td className="p-3 text-right">{formatCurrency(week.totals.totalCost)}</td>
-                                    <td className="p-3 text-right">—</td>
+                                    <td className="p-3 text-right">
+                                      {week.totals.totalLitres > 0 ? formatCurrency(week.totals.totalCost / week.totals.totalLitres) + '/L' : '—'}
+                                    </td>
                                     <td className="p-3 text-right">{week.totals.fillCount}</td>
                                     <td className="p-3"></td>
                                   </tr>
@@ -2184,7 +2198,9 @@ const DieselReportsTab = ({
                           <td className="p-3 text-right">
                             <div>{formatCurrency(reeferStationReports.reduce((s, r) => s + r.totalCost, 0))}</div>
                           </td>
-                          <td className="p-3 text-right">—</td>
+                          <td className="p-3 text-right">
+                            {(() => { const tl = reeferStationReports.reduce((s, r) => s + r.totalLitres, 0); const tc = reeferStationReports.reduce((s, r) => s + r.totalCost, 0); return tl > 0 ? formatCurrency(tc / tl) + '/L' : '—'; })()}
+                          </td>
                           <td className="p-3 text-right">{reeferStationReports.reduce((s, r) => s + r.fillCount, 0)}</td>
                           <td className="p-3"></td>
                         </tr>
