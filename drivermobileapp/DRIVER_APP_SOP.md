@@ -102,7 +102,9 @@ Tap **Diesel**, **Trips**, or **Fuel Cost** cards to jump directly to those page
 
 ### Refreshing Data
 
-- **Swipe down** from the top of the page to refresh all data
+- **Tap the refresh button** (circular arrow icon) in the top-right corner of the page to reload all data
+- **Swipe down** from the top of the page to pull-to-refresh (works on every page)
+- **Switching tabs** (Home, Diesel, Trips, Profile) automatically refreshes the data on that page — no manual action needed
 
 ---
 
@@ -334,7 +336,7 @@ Shows 6 document types with expiry status:
 | 4 | **Complete all 6 Cycle Tracker phases** before marking a trip complete |
 | 5 | **Check document expiry** regularly — expired documents block operations |
 | 6 | **Do not share your login** — activity is tracked per driver account |
-| 7 | **Swipe down to refresh** if data looks outdated |
+| 7 | **Tap the refresh button or swipe down** if data looks outdated — switching tabs also auto-refreshes |
 | 8 | **Save entries promptly** — don't wait until end of day to log diesel or expenses |
 
 ---
@@ -346,14 +348,15 @@ Shows 6 document types with expiry status:
 | App won't load | Check your internet connection. Close and reopen the app. |
 | "Authenticating…" hangs | Check your internet. Try closing the app and logging in again. |
 | Signed out unexpectedly | Normal after 5 minutes of inactivity. Re-enter your password. |
+| Data disappeared after switching apps | Tap the **refresh button** (↻) or swipe down on any page. The app auto-recovers your session — your data is not lost. |
 | "No Vehicle Assigned" | Contact your supervisor to assign a vehicle to your account. |
 | Can't upload photos | Check file size is under 10 MB. Try a different photo. |
 | Diesel entry flagged | Consumption below 2.0 km/L — visit the office for debriefing. |
 | Document shows "Expired" | Contact your fleet manager to update the document. |
-| Data not updating | Swipe down to refresh. Check your internet connection. |
-| App looks outdated | Close the app completely, reopen it — updates install automatically. |
+| Data not updating | Tap the **refresh button** (↻) at the top of the page, or swipe down to pull-to-refresh. Switching to another tab and back also refreshes data. Check your internet connection if the problem persists. |
+| App looks outdated | Tap the refresh button first. If that doesn't help, close the app completely and reopen it — updates install automatically. |
 | Can't find a trip | Change the month filter or use the Custom date range. |
 
 ---
 
-*Matanuska Fleet Management — Driver Mobile App v2.1.0*
+*Matanuska Fleet Management — Driver Mobile App v2.2.0*

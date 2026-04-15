@@ -843,6 +843,21 @@ const DieselReportsTab = ({
   }, [filteredReeferRecords]);
 
 
+  const getExportDateRange = (): { from: string; to: string } | undefined => {
+    if (reportPeriod === 'all') return undefined;
+    if (reportPeriod === 'custom') return { from: reportDateFrom, to: reportDateTo };
+    const now = new Date();
+    let fromDate: string;
+    switch (reportPeriod) {
+      case '1month': fromDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).toISOString().split('T')[0]; break;
+      case '3months': fromDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()).toISOString().split('T')[0]; break;
+      case '6months': fromDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()).toISOString().split('T')[0]; break;
+      case '1year': fromDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
+      default: return undefined;
+    }
+    return { from: fromDate, to: todayStr };
+  };
+
   const buildExportInput = () => ({
     driverReports,
     reeferDriverReports,
@@ -851,8 +866,9 @@ const DieselReportsTab = ({
     stationReports,
     reeferStationReports,
     weeklyReports,
-    truckRecords: truckRecords as unknown as DieselExportRecord[],
-    reeferRecords: reeferRecords as unknown as DieselExportRecord[],
+    truckRecords: filteredTruckRecords as unknown as DieselExportRecord[],
+    reeferRecords: filteredReeferRecords as unknown as DieselExportRecord[],
+    dateRange: getExportDateRange(),
   });
 
   const handleExport = async () => {

@@ -807,6 +807,8 @@ export interface ComprehensiveDieselExcelInput {
   weeklyReports: DieselWeeklyReport[];
   truckRecords: DieselExportRecord[];
   reeferRecords: DieselExportRecord[];
+  /** Optional reporting period – shown in headers/subtitles of exports */
+  dateRange?: { from: string; to: string; label?: string };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -854,10 +856,14 @@ export const generateComprehensiveDieselExcel = ({
   weeklyReports,
   truckRecords,
   reeferRecords,
+  dateRange,
 }: ComprehensiveDieselExcelInput): void => {
   const wb = XLSX.utils.book_new();
   const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
   const dateStamp = format(new Date(), 'yyyy-MM-dd');
+  const periodLabel = dateRange
+    ? `Period: ${format(new Date(dateRange.from), 'MMM dd, yyyy')} – ${format(new Date(dateRange.to), 'MMM dd, yyyy')}`
+    : 'Period: All Time';
 
   // ── 1. Overview ──────────────────────────────────────────────────────────
   {
@@ -871,6 +877,7 @@ export const generateComprehensiveDieselExcel = ({
     const data: AoaRow[] = [
       ['CAR CRAFT CO — DIESEL CONSUMPTION REPORT'],
       [`Generated: ${generatedOn}`],
+      [periodLabel],
       [],
       ['TRUCK FLEET SUMMARY', null, null, null],
       ['Metric', 'Value'],
@@ -1446,7 +1453,10 @@ export const generateStyledDieselExcel = async (
   wb.created = new Date();
   const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
   const dateStamp = format(new Date(), 'yyyy-MM-dd');
-  const sub = `Generated: ${generatedOn}`;
+  const periodStr = input.dateRange
+    ? `Period: ${format(new Date(input.dateRange.from), 'MMM dd, yyyy')} – ${format(new Date(input.dateRange.to), 'MMM dd, yyyy')}`
+    : 'Period: All Time';
+  const sub = `Generated: ${generatedOn}  |  ${periodStr}`;
 
   const xlSum = <T>(arr: T[], key: keyof T) => arr.reduce((s, r) => s + (Number(r[key]) || 0), 0);
 
@@ -1695,6 +1705,9 @@ export const generateComprehensiveDieselPDF = (
   const MR = 14;
   const dateStamp = format(new Date(), 'yyyy-MM-dd');
   const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
+  const periodStr = input.dateRange
+    ? `Period: ${format(new Date(input.dateRange.from), 'MMM dd, yyyy')} – ${format(new Date(input.dateRange.to), 'MMM dd, yyyy')}`
+    : 'Period: All Time';
 
   const HEAD = [30, 58, 95] as [number, number, number];
   const CYAN = [8, 145, 178] as [number, number, number];
@@ -1711,7 +1724,7 @@ export const generateComprehensiveDieselPDF = (
     doc.text('CAR CRAFT CO — DIESEL CONSUMPTION REPORT', ML, 10.5);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`Generated: ${generatedOn}`, PW - MR, 10.5, { align: 'right' });
+    doc.text(`${periodStr}  |  Generated: ${generatedOn}`, PW - MR, 10.5, { align: 'right' });
     doc.setTextColor(0, 0, 0);
   };
 
