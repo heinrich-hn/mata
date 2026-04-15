@@ -56,7 +56,10 @@ export default function LoginPage() {
           title: "Welcome!",
           description: "Signing you in...",
         });
-        navigate("/", { replace: true });
+        // Don't navigate here — the useEffect above will navigate to "/"
+        // once React commits the auth state change.  Navigating before the
+        // AuthContext re-renders causes HomePage to mount while the old
+        // context value (user=null) is still active, leading to crashes.
       }
     } catch (err) {
       console.error("Login error:", err);

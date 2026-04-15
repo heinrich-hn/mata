@@ -23,10 +23,20 @@ let lockPromise: Promise<unknown> = Promise.resolve();
 
 function inMemoryLock<T>(
   _name: string,
-  _acquireTimeout: number,
+  acquireTimeout: number,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const current = lockPromise.then(fn, fn);
+  // Wait for previous lock OR timeout, whichever comes first.
+  // Without the timeout a stuck token refresh blocks every Supabase REST
+  // call that needs getSession(), deadlocking the entire app.
+  const timeout = acquireTimeout > 0 ? acquireTimeout : 5000;
+
+  const waitForPrevious = Promise.race([
+    lockPromise,
+    new Promise<void>((resolve) => setTimeout(resolve, timeout)),
+  ]);
+
+  const current = waitForPrevious.then(fn, fn);
   // Keep the chain going; swallow errors so the next caller isn't blocked.
   lockPromise = current.catch(() => { });
   return current;
@@ -39,7 +49,7 @@ const customStorage = {
       // Try localStorage first (faster)
       const localValue = localStorage.getItem(key);
       if (localValue) return localValue;
-      
+
       // Fallback to IndexedDB
       const indexedDBValue = await loadSessionFromIndexedDB();
       if (indexedDBValue) {
@@ -48,19 +58,19 @@ const customStorage = {
         localStorage.setItem(key, valueString);
         return valueString;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Storage getItem error:', error);
       return null;
     }
   },
-  
+
   setItem: async (key: string, value: string): Promise<void> => {
     try {
       // Store in localStorage
       localStorage.setItem(key, value);
-      
+
       // Also store in IndexedDB for redundancy
       const session = JSON.parse(value);
       await persistSessionToIndexedDB(session);
@@ -68,7 +78,7 @@ const customStorage = {
       console.error('Storage setItem error:', error);
     }
   },
-  
+
   removeItem: async (key: string): Promise<void> => {
     try {
       localStorage.removeItem(key);

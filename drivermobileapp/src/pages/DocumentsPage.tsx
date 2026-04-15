@@ -58,18 +58,19 @@ export default function DocumentsPage() {
       if (!user) return null;
       // Try auth_user_id first
       if (user.id) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("drivers")
           .select("id, first_name, last_name, email")
           .eq("auth_user_id", user.id)
           .eq("status", "active")
           .limit(1)
           .maybeSingle();
+        if (error) throw error;
         if (data) return data as Driver | null;
       }
       // Fallback: match by email
       if (user.email) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("drivers")
           .select("id, first_name, last_name, email")
           .eq("email", user.email)
@@ -77,6 +78,7 @@ export default function DocumentsPage() {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
+        if (error) throw error;
         if (data) return data as Driver | null;
       }
       return null;

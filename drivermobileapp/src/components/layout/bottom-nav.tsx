@@ -1,6 +1,29 @@
 import { cn } from "@/lib/utils";
 import { Droplets, LayoutGrid, Route, User, type LucideIcon } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import { useEffect, useRef } from "react";
+
+const DEBUG_MODE = process.env.NODE_ENV === 'development';
+
+// Debug logger with proper typing
+const debugLog = {
+  info: (message: string, data?: Record<string, unknown>) => {
+    if (!DEBUG_MODE) return;
+    console.log(`🧭 [BOTTOM_NAV][INFO] ${message}`, data || '');
+  },
+  error: (message: string, data?: Record<string, unknown>) => {
+    if (!DEBUG_MODE) return;
+    console.error(`❌ [BOTTOM_NAV][ERROR] ${message}`, data || '');
+  },
+  warn: (message: string, data?: Record<string, unknown>) => {
+    if (!DEBUG_MODE) return;
+    console.warn(`⚠️ [BOTTOM_NAV][WARN] ${message}`, data || '');
+  },
+  debug: (message: string, data?: Record<string, unknown>) => {
+    if (!DEBUG_MODE) return;
+    console.debug(`🐛 [BOTTOM_NAV][DEBUG] ${message}`, data || '');
+  }
+};
 
 interface NavItem {
   href: string;
@@ -33,6 +56,44 @@ const navItems: NavItem[] = [
 
 export function BottomNav() {
   const { pathname } = useLocation();
+  const renderCountRef = useRef(0);
+  const lastPathRef = useRef(pathname);
+  
+  // Track render count for debugging
+  renderCountRef.current++;
+  
+  // Log navigation changes
+  useEffect(() => {
+    if (lastPathRef.current !== pathname) {
+      debugLog.info('Navigation changed', {
+        from: lastPathRef.current,
+        to: pathname,
+        renderCount: renderCountRef.current
+      });
+      lastPathRef.current = pathname;
+    }
+  }, [pathname]);
+  
+  // Log component mount
+  useEffect(() => {
+    debugLog.info('BottomNav mounted', {
+      initialPath: pathname,
+      navItemsCount: navItems.length,
+      navItems: navItems.map(item => item.href)
+    });
+    
+    return () => {
+      debugLog.info('BottomNav unmounting');
+    };
+  }, [pathname]);
+  
+  // Log active route on each render (only in debug mode)
+  if (DEBUG_MODE) {
+    debugLog.debug('Rendering BottomNav', {
+      activePath: pathname,
+      renderCount: renderCountRef.current
+    });
+  }
 
   return (
     <nav className="fixed bottom-4 left-4 right-4 z-50 safe-area-bottom">
@@ -43,10 +104,21 @@ export function BottomNav() {
             const isActive = pathname === item.href;
             const Icon = item.icon;
 
+            // Log when a nav item is clicked (via onClick)
+            const handleClick = () => {
+              debugLog.info('Navigation item clicked', {
+                href: item.href,
+                label: item.label,
+                currentPath: pathname,
+                isActive
+              });
+            };
+
             return (
               <Link
                 key={item.href}
                 to={item.href}
+                onClick={handleClick}
                 aria-label={item.label}
                 className={cn(
                   "relative flex flex-col items-center justify-center flex-1 h-full gap-1 transition-all duration-200 no-select",

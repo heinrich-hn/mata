@@ -8,11 +8,11 @@ import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Calendar, CalendarRange, Clock, MapPin } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+const DEBUG_MODE = process.env.NODE_ENV === 'development';
 
 const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
-const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
 
 interface Vehicle {
   id: string;
@@ -110,9 +110,22 @@ const MONTH_OPTIONS = (() => {
 })();
 
 export default function TripsPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
+  const debugLoggedRef = useRef(false);
+
+  // Debug logging on mount (only once)
+  if (DEBUG_MODE && !debugLoggedRef.current) {
+    console.group('🚛 TripsPage Debug Info');
+    console.log('User:', { id: user?.id, email: user?.email });
+    console.log('Session:', session ? 'Active' : 'None');
+    if (session?.expires_at) {
+      console.log('Session expires:', new Date(session.expires_at * 1000).toLocaleString());
+    }
+    debugLoggedRef.current = true;
+    console.groupEnd();
+  }
 
   // Date filter state
   const [selectedMonth, setSelectedMonth] = useState(MONTH_OPTIONS[0].value);
@@ -138,22 +151,31 @@ export default function TripsPage() {
     return { dateFrom: customFrom, dateTo: customTo, dateRangeLabel: `${customFrom} → ${customTo}` };
   }, [selectedMonth, filterMode, customFrom, customTo]);
 
+  // Log date range changes
+  useEffect(() => {
+    if (DEBUG_MODE) {
+      console.log('📅 TripsPage: Date range changed', { dateFrom, dateTo, filterMode });
+    }
+  }, [dateFrom, dateTo, filterMode]);
+
   // Refresh Handler
   const handleRefresh = useCallback(async () => {
+    console.log('🔄 TripsPage: Pull to refresh triggered');
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["assigned-vehicle"] }),
       queryClient.invalidateQueries({ queryKey: ["monthly-trips"] }),
       queryClient.invalidateQueries({ queryKey: ["freight-details"] }),
       queryClient.invalidateQueries({ queryKey: ["cycle-tracker-exists"] }),
     ]);
+    console.log('✅ TripsPage: Refresh complete');
   }, [queryClient]);
 
   // Fetch assigned vehicle (truck) from driver_vehicle_assignments
-  // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID)
-  const { data: assignedVehicle, isLoading: isLoadingVehicle } = useQuery({
+  const { data: assignedVehicle, isLoading: isLoadingVehicle, error: vehicleError } = useQuery({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
-      if (!user?.id) return { truck: null as Vehicle | null, reefer: null as Vehicle | null };
+      console.log('🔍 TripsPage: Fetching assigned vehicle for user:', user?.id);
+      if (!user?.id) return null;
 
       const { data, error } = await supabase
         .from("driver_vehicle_assignments")
@@ -173,8 +195,15 @@ export default function TripsPage() {
         .eq("is_active", true)
         .order("assigned_at", { ascending: false });
 
-      if (error) throw error;
-      if (!data || data.length === 0) return { truck: null, reefer: null };
+      if (error) {
+        console.error('❌ TripsPage: Error fetching vehicle assignments:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.log('⚠️ TripsPage: No vehicle assignments found');
+        return null;
+      }
 
       type AssignmentRow = { vehicles: Vehicle | Vehicle[] };
       const rows = data as unknown as AssignmentRow[];
@@ -183,25 +212,24 @@ export default function TripsPage() {
       }));
 
       const truckRow = normalizedRows.find(r => !r.vehicles.vehicle_type || TRUCK_TYPES.includes(r.vehicles.vehicle_type));
-      const reeferRow = normalizedRows.find(r => r.vehicles.vehicle_type && TRAILER_TYPES.includes(r.vehicles.vehicle_type));
 
-      return {
-        truck: truckRow?.vehicles || null,
-        reefer: reeferRow?.vehicles || null,
-      };
+      console.log('🚛 TripsPage: Truck assignment found:', truckRow?.vehicles?.fleet_number || 'None');
+      return truckRow?.vehicles || null;
     },
-    select: (data) => data?.truck ?? null,
     enabled: !!user?.id,
     staleTime: 10 * 60 * 1000,
   });
 
-
-
-  // Fetch trips for current month
+  // Fetch trips for selected date range
   const { data: monthlyTrips = [], isLoading: isLoadingTrips } = useQuery<TripEntry[]>({
     queryKey: ["monthly-trips", assignedVehicle?.id, dateFrom, dateTo],
     queryFn: async () => {
-      if (!assignedVehicle?.id) return [];
+      if (!assignedVehicle?.id) {
+        console.log('⚠️ TripsPage: No assigned vehicle ID, skipping trips fetch');
+        return [];
+      }
+
+      console.log('🔍 TripsPage: Fetching trips for vehicle:', assignedVehicle.id, 'date range:', dateFrom, 'to', dateTo);
 
       const { data, error } = await supabase
         .from("trips")
@@ -230,22 +258,24 @@ export default function TripsPage() {
         .order("departure_date", { ascending: false });
 
       if (error) {
+        console.error('❌ TripsPage: Error fetching trips:', error);
         throw error;
       }
 
+      console.log(`📊 TripsPage: Found ${data?.length || 0} trips for date range`);
       return (data || []) as TripEntry[];
     },
     enabled: !!assignedVehicle?.id,
-    staleTime: 5 * 60 * 1000, // 5 min — realtime handles updates
+    staleTime: 5 * 60 * 1000,
   });
-
-
 
   // Check which trips have loads linked via the loads table
   const { data: freightDetails = [], isLoading: isLoadingFreight } = useQuery<FreightDetail[]>({
     queryKey: ["freight-details", assignedVehicle?.id, user?.id],
     queryFn: async () => {
       if (!assignedVehicle?.id || !user?.id) return [];
+
+      console.log('🔍 TripsPage: Fetching freight details for vehicle:', assignedVehicle.id);
 
       const { data, error } = await supabase
         .from("loads")
@@ -254,9 +284,11 @@ export default function TripsPage() {
         .not("assigned_trip_id", "is", null);
 
       if (error) {
-        console.warn("loads query for freight check failed:", error.message);
+        console.warn("⚠️ TripsPage: loads query failed:", error.message);
         return [];
       }
+
+      console.log(`📊 TripsPage: Found ${data?.length || 0} freight details`);
       return (data || []).map((row: { id: string; assigned_trip_id: string }) => ({
         id: row.id,
         trip_id: row.assigned_trip_id,
@@ -267,27 +299,31 @@ export default function TripsPage() {
     retry: false,
   });
 
-
-
   // Fetch cycle tracker existence for all trips
   const tripIds = monthlyTrips.map(t => t.id);
   const { data: trackerRecords = [] } = useQuery<TrackerRecord[]>({
     queryKey: ["cycle-tracker-exists", tripIds],
     queryFn: async () => {
       if (tripIds.length === 0) return [];
+
+      console.log('🔍 TripsPage: Fetching cycle tracker for', tripIds.length, 'trips');
+
       const { data, error } = await supabase
         .from("trip_cycle_tracker")
         .select("trip_id, current_phase, is_completed")
         .in("trip_id", tripIds);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ TripsPage: Error fetching cycle tracker:', error);
+        throw error;
+      }
+
+      console.log(`📊 TripsPage: Found ${data?.length || 0} tracker records`);
       return (data || []) as TrackerRecord[];
     },
     enabled: tripIds.length > 0,
     staleTime: 5 * 60 * 1000,
   });
-
-
 
   // Create tracker map for quick lookup — memoized
   const trackerMap = useMemo(() =>
@@ -314,21 +350,45 @@ export default function TripsPage() {
     completedTrips: monthlyTrips.filter(t => t.status === 'completed').length,
   }), [monthlyTrips]);
 
+  // Log stats when they change
+  useEffect(() => {
+    if (DEBUG_MODE && (totalTrips > 0 || totalDistanceKm > 0 || completedTrips > 0)) {
+      console.log('📊 TripsPage: Stats updated', { totalTrips, totalDistanceKm, completedTrips });
+    }
+  }, [totalTrips, totalDistanceKm, completedTrips]);
+
   // Handler to open trip detail — memoized
   const handleOpenTripDetail = useCallback((trip: TripEntry) => {
+    console.log('🔍 TripsPage: Opening trip detail:', trip.trip_number);
     setSelectedTrip(trip);
   }, []);
 
   const isLoading = isLoadingVehicle || isLoadingTrips || isLoadingFreight;
 
+  // Log loading state
+  useEffect(() => {
+    if (DEBUG_MODE) {
+      console.log('⏳ TripsPage: Loading states', {
+        isLoadingVehicle,
+        isLoadingTrips,
+        isLoadingFreight,
+        isLoading: isLoading
+      });
+    }
+  }, [isLoadingVehicle, isLoadingTrips, isLoadingFreight, isLoading]);
+
   // No vehicle assigned state
   if (!isLoading && !assignedVehicle) {
+    console.log('⚠️ TripsPage: No vehicle assigned to user', vehicleError?.message || '');
     return (
       <MobileShell>
         <div className="p-5 space-y-6 min-h-screen flex flex-col items-center justify-center text-center">
           <EmptyState
             title="No Vehicle Assigned"
-            description="Please contact your administrator to get a vehicle assigned."
+            description={vehicleError
+              ? `Could not load vehicle: ${vehicleError.message}. Pull down to retry.`
+              : "Please contact your administrator to get a vehicle assigned."
+            }
           />
         </div>
       </MobileShell>
@@ -421,7 +481,7 @@ export default function TripsPage() {
         </div>
       </PullToRefresh>
 
-      {/* Trip Detail Sheet - Fixed to use 'trip' prop instead of 'tripId' */}
+      {/* Trip Detail Sheet */}
       {selectedTrip && (
         <TripDetailSheet
           trip={selectedTrip}

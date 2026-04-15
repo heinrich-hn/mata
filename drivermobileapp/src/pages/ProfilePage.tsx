@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircle,
   Bell,
   Car,
   ChevronRight,
@@ -25,9 +26,10 @@ import {
   Truck,
   User
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+const DEBUG_MODE = process.env.NODE_ENV === 'development';
 
 interface Vehicle {
   id: string;
@@ -49,52 +51,83 @@ interface Driver {
   phone: string | null;
   status: string;
   license_number?: string | null;
+  auth_user_id?: string | null;
 }
 
 const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
 const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
 
 export default function ProfilePage() {
-  const { user, profile, signOut: _signOut } = useAuth();
+  const { user, profile, signOut: _signOut, session } = useAuth();
   const { toast } = useToast();
   const supabase = createClient();
   const _queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const debugLoggedRef = useRef(false);
+
+  // Debug logging on mount (only once)
+  if (DEBUG_MODE && !debugLoggedRef.current) {
+    console.group('👤 ProfilePage Debug Info');
+    console.log('User:', { id: user?.id, email: user?.email });
+    console.log('Session:', session ? 'Active' : 'None');
+    if (session?.expires_at) {
+      console.log('Session expires:', new Date(session.expires_at * 1000).toLocaleString());
+    }
+    console.log('Profile:', profile);
+    debugLoggedRef.current = true;
+    console.groupEnd();
+  }
 
   // Find driver by auth_user_id (primary) or email (fallback)
-  const { data: driver, isLoading: _driverLoading } = useQuery<Driver | null>({
+  const { data: driver, isLoading: driverLoading, error: driverError } = useQuery<Driver | null>({
     queryKey: ["driver-by-email-docs", user?.id, user?.email],
     queryFn: async () => {
+      console.log('🔍 ProfilePage: Fetching driver record for user:', { userId: user?.id, email: user?.email });
       if (!user) return null;
-      try {
-        // Try auth_user_id first (set by Dashboard when creating driver auth profile)
-        if (user.id) {
-          const { data } = await supabase
-            .from("drivers")
-            .select("*")
-            .eq("auth_user_id", user.id)
-            .eq("status", "active")
-            .limit(1)
-            .maybeSingle();
-          if (data) return data as Driver;
+
+      // Try auth_user_id first (set by Dashboard when creating driver auth profile)
+      if (user.id) {
+        const { data, error } = await supabase
+          .from("drivers")
+          .select("*")
+          .eq("auth_user_id", user.id)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle();
+        if (error) {
+          console.error('❌ ProfilePage: Error fetching driver by auth_user_id:', error);
+          throw error;
         }
-        // Fallback: match by email
-        if (user.email) {
-          const { data } = await supabase
-            .from("drivers")
-            .select("*")
-            .eq("email", user.email)
-            .eq("status", "active")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (data) return data as Driver;
+        if (data) {
+          console.log('✅ ProfilePage: Driver found by auth_user_id:', data.driver_number);
+          return data as Driver;
         }
-        return null;
-      } catch {
-        return null;
       }
+
+      // Fallback: match by email
+      if (user.email) {
+        const { data, error } = await supabase
+          .from("drivers")
+          .select("*")
+          .eq("email", user.email)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) {
+          console.error('❌ ProfilePage: Error fetching driver by email:', error);
+          throw error;
+        }
+        if (data) {
+          console.log('✅ ProfilePage: Driver found by email:', data.driver_number);
+          return data as Driver;
+        }
+      }
+
+      console.log('⚠️ ProfilePage: No driver found for user');
+      return null;
     },
     enabled: !!user,
     staleTime: 10 * 60 * 1000,
@@ -104,10 +137,13 @@ export default function ProfilePage() {
   // NOT drivers.id. Use user.id for assignment queries.
 
   // Fetch all active driver assignments (assigned by admin from dashboard)
-  const { data: vehicleAssignments, isLoading: assignmentLoading } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
-    queryKey: ["driver-assignment", user?.id],
+  // Uses same query key as HomePage/TripPage/DieselPage so all pages share the cache.
+  const { data: vehicleAssignments, isLoading: assignmentLoading, error: assignmentError } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
+    queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
+      console.log('🔍 ProfilePage: Fetching vehicle assignments for user:', user?.id);
       if (!user?.id) return { truck: null, reefer: null };
+
       try {
         const { data, error } = await supabase
           .from("driver_vehicle_assignments")
@@ -131,7 +167,12 @@ export default function ProfilePage() {
           .eq("is_active", true)
           .order("assigned_at", { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ ProfilePage: Error fetching assignments:', error);
+          throw error;
+        }
+
+        console.log('📊 ProfilePage: Assignments found:', data?.length || 0);
         if (!data || data.length === 0) return { truck: null, reefer: null };
 
         type AssignmentRow = { vehicles: Vehicle };
@@ -139,11 +180,15 @@ export default function ProfilePage() {
         const truckRow = rows.find(r => !r.vehicles.vehicle_type || TRUCK_TYPES.includes(r.vehicles.vehicle_type));
         const reeferRow = rows.find(r => r.vehicles.vehicle_type && TRAILER_TYPES.includes(r.vehicles.vehicle_type));
 
+        console.log('🚛 ProfilePage: Truck assignment:', truckRow?.vehicles?.fleet_number || 'None');
+        console.log('❄️ ProfilePage: Reefer assignment:', reeferRow?.vehicles?.fleet_number || 'None');
+
         return {
           truck: truckRow?.vehicles || null,
           reefer: reeferRow?.vehicles || null,
         };
-      } catch {
+      } catch (err) {
+        console.error('❌ ProfilePage: Exception fetching assignments:', err);
         return { truck: null, reefer: null };
       }
     },
@@ -151,6 +196,7 @@ export default function ProfilePage() {
   });
 
   const handleSignOut = async () => {
+    console.log('🚪 ProfilePage: Signing out...');
     setIsSigningOut(true);
 
     // Save email before clearing anything
@@ -159,8 +205,9 @@ export default function ProfilePage() {
     try {
       // signOut() handles clearing queryClient internally
       await _signOut();
+      console.log('✅ ProfilePage: Sign out successful');
     } catch (err) {
-      console.error("Sign out error:", err);
+      console.error("❌ ProfilePage: Sign out error:", err);
     }
 
     // Restore saved email so login page pre-fills
@@ -251,6 +298,69 @@ export default function ProfilePage() {
   return (
     <MobileShell>
       <div className="p-5 space-y-6">
+        {/* Debug Button */}
+        {DEBUG_MODE && (
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="fixed top-20 right-5 bg-black/80 text-white text-xs px-2 py-1 rounded-full z-50"
+          >
+            🐛 Debug
+          </button>
+        )}
+
+        {/* Debug Panel */}
+        {showDebug && DEBUG_MODE && (
+          <Card className="bg-black/90 text-white mb-4">
+            <CardContent className="p-4 space-y-2 text-xs font-mono">
+              <div className="font-bold text-green-400">🔍 Debug Info</div>
+              <div className="border-t border-gray-700 pt-2">
+                <div>User ID: {user?.id}</div>
+                <div>User Email: {user?.email}</div>
+                <div>Session: {session ? '✅ Active' : '❌ None'}</div>
+                {session?.expires_at && (
+                  <div>Expires: {new Date(session.expires_at * 1000).toLocaleString()}</div>
+                )}
+              </div>
+              <div className="border-t border-gray-700 pt-2">
+                <div>Driver ID: {driver?.id || 'None'}</div>
+                <div>Driver Number: {driver?.driver_number || 'None'}</div>
+                <div>Driver auth_user_id: {driver?.auth_user_id || 'None'}</div>
+                <div>Match: {driver?.auth_user_id === user?.id ? '✅' : '❌'}</div>
+              </div>
+              <div className="border-t border-gray-700 pt-2">
+                <div>Truck: {assignedTruck?.fleet_number || 'None'}</div>
+                <div>Reefer: {assignedReefer?.fleet_number || 'None'}</div>
+                <div>Assignment Loading: {assignmentLoading ? 'Yes' : 'No'}</div>
+              </div>
+              <div className="border-t border-gray-700 pt-2">
+                <div>Storage Keys: {Object.keys(localStorage).filter(k => k.includes('mata') || k.includes('supabase')).join(', ') || 'None'}</div>
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  window.location.href = '/login';
+                }}
+                className="bg-red-600 text-white px-2 py-1 rounded text-xs mt-2 w-full"
+              >
+                Clear All & Logout
+              </button>
+              <button
+                onClick={() => {
+                  navigator.serviceWorker?.getRegistrations().then(regs => {
+                    regs.forEach(reg => reg.unregister());
+                    console.log('Service workers unregistered');
+                    window.location.reload();
+                  });
+                }}
+                className="bg-orange-600 text-white px-2 py-1 rounded text-xs mt-2 w-full"
+              >
+                Clear Service Workers
+              </button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Avatar & Name */}
         <div className="flex flex-col items-center py-6">
           <Avatar className="h-20 w-20 ring-4 ring-background shadow-xl mb-4">
@@ -268,29 +378,39 @@ export default function ProfilePage() {
           </Badge>
         </div>
 
-        {/* Debug Info (dev only) */}
+        {/* Debug Info (dev only) - Enhanced */}
         {process.env.NODE_ENV === "development" && (
           <Card className="bg-muted/50">
             <CardContent className="p-4">
-              <p className="text-xs font-mono mb-2">Debug Info:</p>
+              <p className="text-xs font-mono mb-2">🔧 Debug Info:</p>
+              <p className="text-xs">User ID: {user?.id || "None"}</p>
               <p className="text-xs">User Email: {user?.email || "None"}</p>
+              <p className="text-xs">Session Active: {session ? "Yes" : "No"}</p>
               <p className="text-xs">
                 Driver: {driver ? `${driver.first_name} ${driver.last_name}` : "Not found"}
               </p>
               <p className="text-xs">Driver ID: {driver?.id || "None"}</p>
+              <p className="text-xs">Driver auth_user_id: {driver?.auth_user_id || "None"}</p>
+              <p className="text-xs">Auth Link: {driver?.auth_user_id === user?.id ? "✅ Match" : "❌ Mismatch"}</p>
               <p className="text-xs">Assignment: {vehicleAssignments?.truck || vehicleAssignments?.reefer ? "Active" : "None"}</p>
+              <p className="text-xs">Driver Error: {driverError?.message || "None"}</p>
+              <p className="text-xs">Assignment Error: {assignmentError?.message || "None"}</p>
+              <p className="text-xs">Driver Loading: {driverLoading ? "Yes" : "No"}</p>
               <p className="text-xs">
                 Truck: {vehicleAssignments?.truck?.fleet_number || "None"}
               </p>
               <p className="text-xs">
                 Reefer: {vehicleAssignments?.reefer?.fleet_number || "None"}
               </p>
+              <p className="text-xs">
+                Assignment Count: {(vehicleAssignments?.truck ? 1 : 0) + (vehicleAssignments?.reefer ? 1 : 0)}
+              </p>
             </CardContent>
           </Card>
         )}
 
         {/* Driver Profile */}
-        {driver && (
+        {driver ? (
           <Card>
             <CardContent className="p-0">
               <div className="p-4 border-b border-border/50">
@@ -335,7 +455,23 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : !driverLoading ? (
+          <Card className="border-warning/50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Driver Profile Not Found</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {driverError
+                      ? `Error: ${driverError.message}`
+                      : "Your login account is not linked to a driver record. Contact your administrator."}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Account Contact */}
         <Card>
@@ -430,9 +566,16 @@ export default function ProfilePage() {
                 )}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                No vehicle assigned — contact your administrator
-              </p>
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  No vehicle assigned — contact your administrator
+                </p>
+                {assignmentError && (
+                  <p className="text-xs text-destructive mt-1">
+                    Error: {assignmentError.message}
+                  </p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

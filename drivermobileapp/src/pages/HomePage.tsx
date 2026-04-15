@@ -7,7 +7,7 @@ import { useDriverDocuments } from "@/hooks/use-driver-documents";
 import { useDriverRecord } from "@/hooks/use-driver-record";
 import {
   useDieselRealtimeSync,
-  useFreightRealtimeSync,
+  useTripsRealtimeSync,
   useVehicleAssignmentSubscription,
 } from "@/hooks/use-realtime";
 import { createClient } from "@/lib/supabase/client";
@@ -25,10 +25,11 @@ import {
   Truck
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
 const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
+const DEBUG_MODE = process.env.NODE_ENV === 'development';
 
 interface Vehicle {
   id: string;
@@ -37,6 +38,18 @@ interface Vehicle {
   make?: string;
   model?: string;
   vehicle_type?: string;
+}
+
+// Driver record interface
+interface DriverRecord {
+  id: string;
+  first_name: string;
+  last_name: string;
+  auth_user_id: string | null;
+  driver_number?: string;
+  email?: string | null;
+  phone?: string | null;
+  status?: string;
 }
 
 // Diesel records from main dashboard (diesel_records table)
@@ -70,13 +83,39 @@ interface Trip {
   driver_name: string | null;
   client_name: string | null;
   vehicle_id: string | null;
-  fleet_vehicle_id: string | null; // Direct link to vehicles table
+  fleet_vehicle_id: string | null;
+}
+
+// Assignment row type
+interface AssignmentVehicle {
+  id: string;
+  fleet_number: string;
+  registration_number: string;
+  make?: string;
+  model?: string;
+  vehicle_type?: string;
+}
+
+interface AssignmentRow {
+  vehicles: AssignmentVehicle | AssignmentVehicle[];
 }
 
 export default function HomePage() {
   const { user, profile } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
+
+  // Use ref for debug info to avoid re-renders
+  const debugLoggedRef = useRef(false);
+
+  // Log debug info once on mount (not in useEffect that causes re-renders)
+  if (DEBUG_MODE && !debugLoggedRef.current) {
+    console.group('🏠 HomePage Debug Info');
+    console.log('User:', { id: user?.id, email: user?.email });
+    console.log('Profile:', profile);
+    debugLoggedRef.current = true;
+    console.groupEnd();
+  }
 
   // Get driver name with multiple fallbacks — memoized
   const driverName = useMemo(() => {
@@ -93,27 +132,21 @@ export default function HomePage() {
   }, [profile?.full_name, profile?.name, user?.user_metadata, user?.email]);
 
   // Find driver by auth_user_id (primary) or email (fallback)
-  const { data: driverRecord } = useDriverRecord();
+  const { data: driverRecord } = useDriverRecord() as { data: DriverRecord | undefined };
 
   // The driver's DB id (from the drivers table), used for document lookups only.
-  // NOTE: driver_vehicle_assignments.driver_id references auth.users(id) (Auth UUID),
-  // NOT drivers.id. Use user.id for assignment queries.
   const driverId = driverRecord?.id ?? undefined;
 
   // Document expiry alerts
   const { alerts, expiredCount, expiringCount, hasAlerts } = useDriverDocuments(driverId);
 
-  // Real-time subscriptions for dashboard data
-  // (diesel sync moved below vehicle query to pass fleet_number filter)
-  useFreightRealtimeSync(user?.id);
+  // Real-time subscriptions
   useVehicleAssignmentSubscription(user?.id);
 
   // Pull-to-refresh handler — memoized
   const handleRefresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["assigned-vehicle"] }),
-      queryClient.invalidateQueries({ queryKey: ["assigned-vehicles"] }),
-      queryClient.invalidateQueries({ queryKey: ["driver-assignment"] }),
       queryClient.invalidateQueries({ queryKey: ["monthly-diesel-records"] }),
       queryClient.invalidateQueries({ queryKey: ["monthly-trips"] }),
       queryClient.invalidateQueries({ queryKey: ["recent-diesel-records"] }),
@@ -133,8 +166,7 @@ export default function HomePage() {
   }, []);
 
   // Fetch all active vehicle assignments — split into truck + reefer
-  // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID)
-  const { data: vehicleAssignments, isLoading: vehicleLoading } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
+  const { data: vehicleAssignments, isLoading: vehicleLoading, error: vehicleError } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
     queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
       if (!user?.id) return { truck: null, reefer: null };
@@ -157,10 +189,13 @@ export default function HomePage() {
         .eq("is_active", true)
         .order("assigned_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ HomePage: Assignment query error:', error.message);
+        throw error;
+      }
+      console.log('📊 HomePage: Assignments found:', data?.length || 0, 'for driver_id:', user.id);
       if (!data || data.length === 0) return { truck: null, reefer: null };
 
-      type AssignmentRow = { vehicles: Vehicle | Vehicle[] };
       const rows = data as unknown as AssignmentRow[];
       const normalizedRows = rows.map(r => ({
         vehicles: Array.isArray(r.vehicles) ? r.vehicles[0] : r.vehicles,
@@ -183,13 +218,12 @@ export default function HomePage() {
   const vehicle = vehicleAssignments?.truck ?? null;
   const reefer = vehicleAssignments?.reefer ?? null;
 
-  // Diesel realtime sync — needs fleet_number so placed after vehicle query
+  // Diesel realtime sync
   useDieselRealtimeSync(user?.id, vehicle?.fleet_number);
+  // Trips realtime sync
+  useTripsRealtimeSync(vehicle?.id);
 
-  // Note: fleet_vehicle_id column directly links trips to vehicles table
-  // No need for wialon_vehicles lookup anymore
-
-  // Fetch ALL diesel records for this month (from diesel_records table - main dashboard)
+  // Fetch ALL diesel records for this month
   const { data: monthlyDiesel = [] } = useQuery({
     queryKey: ["monthly-diesel-records", vehicle?.fleet_number, firstDayOfMonth],
     queryFn: async () => {
@@ -206,10 +240,10 @@ export default function HomePage() {
       return (data || []) as DieselRecord[];
     },
     enabled: !!vehicle?.fleet_number,
-    staleTime: 5 * 60 * 1000, // 5 min
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch ALL trips for this month - linked directly to vehicles via fleet_vehicle_id
+  // Fetch ALL trips for this month
   const { data: monthlyTrips = [] } = useQuery({
     queryKey: ["monthly-trips", vehicle?.id, firstDayOfMonth],
     queryFn: async () => {
@@ -230,10 +264,10 @@ export default function HomePage() {
       return (data || []) as Trip[];
     },
     enabled: !!vehicle?.id,
-    staleTime: 5 * 60 * 1000, // 5 min
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch recent diesel records (last 5 for activity feed) - from diesel_records table
+  // Fetch recent diesel records
   const { data: recentDiesel = [] } = useQuery({
     queryKey: ["recent-diesel-records", vehicle?.fleet_number],
     queryFn: async () => {
@@ -249,10 +283,10 @@ export default function HomePage() {
       return (data || []) as DieselRecord[];
     },
     enabled: !!vehicle?.fleet_number,
-    staleTime: 5 * 60 * 1000, // 5 min
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch recent trips (last 5 for activity feed) - linked directly via fleet_vehicle_id
+  // Fetch recent trips
   const { data: recentTrips = [] } = useQuery({
     queryKey: ["recent-trips", vehicle?.id],
     queryFn: async () => {
@@ -272,7 +306,7 @@ export default function HomePage() {
       return (data || []) as Trip[];
     },
     enabled: !!vehicle?.id,
-    staleTime: 5 * 60 * 1000, // 5 min
+    staleTime: 5 * 60 * 1000,
   });
 
   // Memoized monthly stats
@@ -299,7 +333,6 @@ export default function HomePage() {
       totalDieselCost: dieselCost,
       totalTrips: trips,
       completedTrips: completed,
-      totalDistanceKm: distanceKm,
       kmTraveled: km,
       consumption: cons,
     };
@@ -432,7 +465,9 @@ export default function HomePage() {
                 </div>
                 <p className="font-semibold">No Vehicle Assigned</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Contact your supervisor
+                  {vehicleError
+                    ? `Could not load vehicle: ${vehicleError.message}`
+                    : "Contact your supervisor"}
                 </p>
               </div>
             </div>
@@ -517,14 +552,11 @@ export default function HomePage() {
           <div className="animate-fade-up stagger-3">
             <p className="section-title mb-3">Recent Activity</p>
             <div className="space-y-2">
-              {/* Show recent trips */}
               {recentTrips.slice(0, 3).map((trip) => (
                 <Link to="/trip" key={trip.id} className="block">
                   <div className="rounded-2xl border border-border bg-card shadow-sm p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
-                    <div className={`icon-container icon-container-sm ${trip.status === "completed" ? "bg-success/10" : "bg-warning/10"
-                      }`}>
-                      <MapPin className={`w-4 h-4 ${trip.status === "completed" ? "text-success" : "text-warning"
-                        }`} strokeWidth={2} />
+                    <div className={`icon-container icon-container-sm ${trip.status === "completed" ? "bg-success/10" : "bg-warning/10"}`}>
+                      <MapPin className={`w-4 h-4 ${trip.status === "completed" ? "text-success" : "text-warning"}`} strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
@@ -538,7 +570,6 @@ export default function HomePage() {
                 </Link>
               ))}
 
-              {/* Show recent diesel */}
               {recentDiesel.slice(0, 2).map((entry) => (
                 <Link to="/diesel" key={entry.id} className="block">
                   <div className="rounded-2xl border border-border bg-card shadow-sm p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
@@ -572,8 +603,6 @@ export default function HomePage() {
               )}
             </div>
           </div>
-
-
         </div>
       </PullToRefresh>
     </MobileShell>

@@ -40,6 +40,21 @@ interface InvoiceTrip {
   destination: string | null;
 }
 
+// Clients that do not require invoicing — their completed trips are excluded
+// from the "Ready to Invoice" / pending invoicing views.
+const INVOICE_EXEMPT_CLIENTS = ['marketing', 'bv', 'bulawayo'];
+const isInvoiceExemptClient = (clientName: string | null | undefined): boolean => {
+  if (!clientName) return false;
+  return INVOICE_EXEMPT_CLIENTS.includes(clientName.toLowerCase().trim());
+};
+
+// Clients completely hidden from the Invoice page (all statuses).
+const INVOICE_HIDDEN_CLIENTS = ['nyamagay', 'marketing export', 'marketing', 'burma valley', 'empty km'];
+const isInvoiceHiddenClient = (clientName: string | null | undefined): boolean => {
+  if (!clientName) return false;
+  return INVOICE_HIDDEN_CLIENTS.includes(clientName.toLowerCase().trim());
+};
+
 const InvoicingDashboard = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -64,7 +79,8 @@ const InvoicingDashboard = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as InvoiceTrip[];
+      // Completely exclude hidden clients from the invoice page
+      return ((data || []) as InvoiceTrip[]).filter(t => !isInvoiceHiddenClient(t.client_name));
     },
   });
 
@@ -181,6 +197,8 @@ const InvoicingDashboard = () => {
       const amount = trip.base_revenue || 0;
 
       if (trip.status === "completed") {
+        // Skip invoice-exempt clients from pending invoicing
+        if (isInvoiceExemptClient(trip.client_name)) return;
         summary.toPay += amount;
         summary.toInvoiceTrips.push(trip);
       } else if (trip.status === "invoiced") {
@@ -205,7 +223,9 @@ const InvoicingDashboard = () => {
 
     trips.forEach((trip) => {
       if (trip.status === "completed") {
-        ready.push(trip);
+        if (!isInvoiceExemptClient(trip.client_name)) {
+          ready.push(trip);
+        }
       } else if (trip.status === "invoiced") {
         sent.push(trip);
       } else if (trip.status === "paid") {

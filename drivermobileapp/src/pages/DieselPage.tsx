@@ -31,7 +31,29 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
-import { useCallback, useMemo, useState, lazy, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
+
+const DEBUG_MODE = process.env.NODE_ENV === 'development';
+
+// Debug logger
+const debugLog = {
+  info: (message: string, data?: unknown) => {
+    if (!DEBUG_MODE) return;
+    console.log(`⛽ [DIESEL][INFO] ${message}`, data || '');
+  },
+  error: (message: string, data?: unknown) => {
+    if (!DEBUG_MODE) return;
+    console.error(`❌ [DIESEL][ERROR] ${message}`, data || '');
+  },
+  warn: (message: string, data?: unknown) => {
+    if (!DEBUG_MODE) return;
+    console.warn(`⚠️ [DIESEL][WARN] ${message}`, data || '');
+  },
+  debug: (message: string, data?: unknown) => {
+    if (!DEBUG_MODE) return;
+    console.debug(`🐛 [DIESEL][DEBUG] ${message}`, data || '');
+  }
+};
 
 // Lazy load heavy components
 const SearchableSelectLazy = lazy(() => import("@/components/ui/select").then(mod => ({ default: mod.SearchableSelect })));
@@ -405,11 +427,23 @@ const ReeferEntryCard = ({ entry }: { entry: ReeferDieselEntry }) => (
 export default function DieselPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [fuelTarget, setFuelTarget] = useState<FuelTarget>("truck");
-  const { user, profile } = useAuth();
+  const { user, profile, session } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const debugLoggedRef = useRef(false);
+
+  // Debug logging on mount
+  if (DEBUG_MODE && !debugLoggedRef.current) {
+    debugLog.info('DieselPage mounted', {
+      userId: user?.id,
+      userEmail: user?.email,
+      sessionActive: !!session
+    });
+    debugLoggedRef.current = true;
+  }
 
   // Month selector state - auto-load current month
   const [selectedMonth, setSelectedMonth] = useState<string>(() => MONTH_OPTIONS[0].value);
@@ -430,8 +464,12 @@ export default function DieselPage() {
     [selectedMonthData]
   );
 
+  // Log date range changes
+  useEffect(() => {
+    debugLog.debug('Date range changed', { selectedMonth, dateRange, monthName });
+  }, [selectedMonth, dateRange, monthName]);
+
   // Real-time subscriptions - only if user exists
-  // Diesel sync moved below vehicle query to pass fleet_number filter
   useVehicleAssignmentSubscription(user?.id);
 
   const [formData, setFormData] = useState({
@@ -458,6 +496,8 @@ export default function DieselPage() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    debugLog.debug(`Photo selected for ${target}`, { count: files.length });
+
     const currentFiles = target === "slip" ? slipFiles : pumpFiles;
     const maxFiles = target === "slip" ? 3 : 2;
     const newFiles: File[] = [];
@@ -466,6 +506,7 @@ export default function DieselPage() {
     Array.from(files).forEach((file: File) => {
       if (currentFiles.length + newFiles.length >= maxFiles) return;
       if (file.size > 10 * 1024 * 1024) {
+        debugLog.warn(`File too large: ${file.name}`, { size: file.size });
         toast({
           title: "File too large",
           description: `${file.name} exceeds 10MB limit`,
@@ -492,6 +533,7 @@ export default function DieselPage() {
   }, [slipFiles, pumpFiles, toast]);
 
   const removePhoto = useCallback((index: number, target: "slip" | "pump"): void => {
+    debugLog.debug(`Removing photo ${index} from ${target}`);
     if (target === "slip") {
       if (slipPreviews[index]) URL.revokeObjectURL(slipPreviews[index]);
       setSlipFiles((prev: File[]) => prev.filter((_: File, i: number) => i !== index));
@@ -504,8 +546,6 @@ export default function DieselPage() {
   }, [slipPreviews, pumpPreviews]);
 
   // Upload photos to Supabase Storage
-  // Diesel slip photos must be attached via a cost_entries row (cost_attachments
-  // has a FK to cost_entries, NOT to diesel_records).
   const uploadDieselPhotos = useCallback(async (
     dieselRecordId: string,
     dieselData: { fleet_number: string; date: string; total_cost: number; currency: string; litres_filled: number; fuel_station: string },
@@ -516,11 +556,11 @@ export default function DieselPage() {
     ];
     if (allUploads.length === 0) return;
 
+    debugLog.info(`Uploading ${allUploads.length} photos for diesel record ${dieselRecordId}`);
     setIsUploadingPhotos(true);
     let failedCount = 0;
     try {
-      // 1. Create a cost_entries row linked to this diesel record so we have
-      //    a valid cost_id for the cost_attachments FK constraint.
+      // 1. Create a cost_entries row linked to this diesel record
       const { data: costEntry, error: costError } = await supabase
         .from("cost_entries")
         .insert({
@@ -538,9 +578,7 @@ export default function DieselPage() {
         .single();
 
       if (costError || !costEntry) {
-        console.error("Failed to create cost_entries row for attachments:", costError?.message);
-        // Still record the diesel entry — just skip photos
-        setIsUploadingPhotos(false);
+        debugLog.error("Failed to create cost_entries row for attachments", costError?.message);
         toast({
           title: "Photo Upload Issue",
           description: "Could not link photos to this entry. The diesel record was saved.",
@@ -550,6 +588,7 @@ export default function DieselPage() {
       }
 
       const costId = costEntry.id;
+      debugLog.debug(`Created cost entry with ID: ${costId}`);
 
       // 2. Upload each file and create cost_attachments rows
       for (const item of allUploads) {
@@ -562,7 +601,7 @@ export default function DieselPage() {
           .upload(filePath, item.file);
 
         if (uploadError) {
-          console.error(`Failed to upload ${item.type} photo:`, uploadError.message);
+          debugLog.error(`Failed to upload ${item.type} photo`, uploadError.message);
           failedCount++;
           continue;
         }
@@ -582,10 +621,13 @@ export default function DieselPage() {
             file_type: item.file.type,
             uploaded_by: user?.email || "Driver",
           } as never);
+
+        debugLog.debug(`Uploaded ${item.type} photo: ${fileName}`);
       }
     } finally {
       setIsUploadingPhotos(false);
       if (failedCount > 0) {
+        debugLog.warn(`${failedCount} of ${allUploads.length} photos failed to upload`);
         toast({
           title: "Photo Upload Issue",
           description: `${failedCount} of ${allUploads.length} photo${allUploads.length > 1 ? "s" : ""} failed to upload. The diesel entry was saved.`,
@@ -595,11 +637,11 @@ export default function DieselPage() {
     }
   }, [slipFiles, pumpFiles, supabase, user?.email, toast]);
 
-  // Query 1: All active vehicle assignments — split into truck + reefer client-side
-  // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID)
+  // Query 1: All active vehicle assignments
   const { data: vehicleAssignments, isLoading: _isLoadingVehicle } = useQuery<{ truck: Vehicle | null; reefer: Vehicle | null }>({
-    queryKey: ["assigned-vehicles", user?.id],
+    queryKey: ["assigned-vehicle", user?.id],
     queryFn: async () => {
+      debugLog.info("Fetching vehicle assignments for user", { userId: user?.id });
       if (!user?.id) return { truck: null, reefer: null };
 
       const { data, error } = await supabase
@@ -619,7 +661,12 @@ export default function DieselPage() {
         .eq("is_active", true)
         .order("assigned_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        debugLog.error("Error fetching vehicle assignments", error);
+        throw error;
+      }
+
+      debugLog.debug("Vehicle assignments query result", { count: data?.length || 0 });
       if (!data || data.length === 0) return { truck: null, reefer: null };
 
       type AssignmentData = {
@@ -631,6 +678,11 @@ export default function DieselPage() {
       const truckRow = rows.find(r => !r.vehicles.vehicle_type || TRUCK_TYPES.includes(r.vehicles.vehicle_type));
       const reeferRow = rows.find(r => r.vehicles.vehicle_type && TRAILER_TYPES.includes(r.vehicles.vehicle_type));
 
+      debugLog.info("Assignments resolved", {
+        truck: truckRow?.vehicles?.fleet_number || null,
+        reefer: reeferRow?.vehicles?.fleet_number || null
+      });
+
       return {
         truck: truckRow?.vehicles || null,
         reefer: reeferRow?.vehicles || null,
@@ -639,26 +691,42 @@ export default function DieselPage() {
     enabled: !!user?.id,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
   });
 
   const assignedVehicle = vehicleAssignments?.truck ?? null;
   const assignedReefer = vehicleAssignments?.reefer ?? null;
 
-  // Diesel realtime sync — needs fleet_number so placed after vehicle query
+  // Log vehicle assignment state
+  useEffect(() => {
+    debugLog.debug("Vehicle assignment state", {
+      hasTruck: !!assignedVehicle,
+      truckFleet: assignedVehicle?.fleet_number,
+      hasReefer: !!assignedReefer,
+      reeferFleet: assignedReefer?.fleet_number
+    });
+  }, [assignedVehicle, assignedReefer]);
+
+  // Diesel realtime sync
   useDieselRealtimeSync(user?.id, assignedVehicle?.fleet_number);
 
-  // Query 2: Diesel records - ONLY when user selects a month
+  // Query 2: Diesel records
   const {
     data: allDieselRecords = [],
     isLoading: isLoadingRecords,
-    refetch: refetchRecords
+    refetch: refetchRecords,
+    error: dieselRecordsError
   } = useQuery<DieselEntry[]>({
     queryKey: ["diesel-records", assignedVehicle?.fleet_number, selectedMonth],
     queryFn: async () => {
-      if (!assignedVehicle?.fleet_number) return [];
+      if (!assignedVehicle?.fleet_number) {
+        debugLog.warn("No fleet number available, skipping diesel records fetch");
+        return [];
+      }
+
+      debugLog.info("Fetching diesel records", {
+        fleetNumber: assignedVehicle.fleet_number,
+        dateRange: dateRange
+      });
 
       const { data, error } = await supabase
         .from("diesel_records")
@@ -667,26 +735,47 @@ export default function DieselPage() {
         .gte("date", dateRange.from)
         .lte("date", dateRange.to)
         .order("date", { ascending: false })
-        .limit(50); // Add limit for performance
+        .limit(50);
 
-      if (error) throw error;
+      if (error) {
+        debugLog.error("Error fetching diesel records", error);
+        throw error;
+      }
+
+      debugLog.info(`Found ${data?.length || 0} diesel records`);
       return (data || []) as DieselEntry[];
     },
     enabled: !!assignedVehicle?.fleet_number,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
+
+  // Log diesel records error
+  useEffect(() => {
+    if (dieselRecordsError) {
+      debugLog.error("Diesel records query error", dieselRecordsError);
+    }
+  }, [dieselRecordsError]);
 
   // Query 2b: Reefer diesel records
   const {
     data: allReeferRecords = [],
     isLoading: _isLoadingReeferRecords,
-    refetch: refetchReeferRecords
+    refetch: refetchReeferRecords,
+    error: reeferRecordsError
   } = useQuery<ReeferDieselEntry[]>({
     queryKey: ["reefer-diesel-records", assignedReefer?.fleet_number, selectedMonth],
     queryFn: async () => {
-      if (!assignedReefer?.fleet_number) return [];
+      if (!assignedReefer?.fleet_number) {
+        debugLog.warn("No reefer fleet number available, skipping reefer records fetch");
+        return [];
+      }
+
+      debugLog.info("Fetching reefer diesel records", {
+        reeferUnit: assignedReefer.fleet_number,
+        dateRange: dateRange
+      });
 
       const { data, error } = await supabase
         .from("reefer_diesel_records")
@@ -697,7 +786,12 @@ export default function DieselPage() {
         .order("date", { ascending: false })
         .limit(50);
 
-      if (error) throw error;
+      if (error) {
+        debugLog.error("Error fetching reefer records", error);
+        throw error;
+      }
+
+      debugLog.info(`Found ${data?.length || 0} reefer records`);
       return (data || []) as ReeferDieselEntry[];
     },
     enabled: !!assignedReefer?.fleet_number,
@@ -706,33 +800,57 @@ export default function DieselPage() {
     refetchOnWindowFocus: false,
   });
 
-  // Query 3: Fuel stations - cached long time
-  const { data: savedStations = [] } = useQuery<FuelStation[]>({
+  // Log reefer records error
+  useEffect(() => {
+    if (reeferRecordsError) {
+      debugLog.error("Reefer records query error", reeferRecordsError);
+    }
+  }, [reeferRecordsError]);
+
+  // Query 3: Fuel stations
+  const { data: savedStations = [], error: stationsError } = useQuery<FuelStation[]>({
     queryKey: ["fuel-stations"],
     queryFn: async () => {
+      debugLog.info("Fetching fuel stations");
       const { data, error } = await supabase
         .from("fuel_stations")
         .select("id, name, location, price_per_litre, currency, is_active")
         .eq("is_active", true)
         .order("name");
-      if (error) return [];
+      if (error) {
+        debugLog.error("Error fetching fuel stations", error);
+        return [];
+      }
+      debugLog.info(`Found ${data?.length || 0} fuel stations`);
       return (data || []) as FuelStation[];
     },
-    staleTime: 30 * 60 * 1000, // 30 minutes
+    staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
 
-  // Query 4: Historical stations - cached long time
+  // Log stations error
+  useEffect(() => {
+    if (stationsError) {
+      debugLog.error("Fuel stations query error", stationsError);
+    }
+  }, [stationsError]);
+
+  // Query 4: Historical stations
   const { data: historicalStations = [] } = useQuery<string[]>({
     queryKey: ["historical-fuel-stations"],
     queryFn: async () => {
+      debugLog.info("Fetching historical fuel stations");
       const { data, error } = await supabase
         .from("diesel_records")
         .select("fuel_station")
         .not("fuel_station", "is", null)
         .order("fuel_station");
-      if (error) return [];
+      if (error) {
+        debugLog.error("Error fetching historical stations", error);
+        return [];
+      }
       const unique = [...new Set((data || []).map((d: { fuel_station: string }) => d.fuel_station).filter(Boolean))];
+      debugLog.info(`Found ${unique.length} unique historical stations`);
       return unique as string[];
     },
     staleTime: 30 * 60 * 1000,
@@ -781,7 +899,7 @@ export default function DieselPage() {
     [allDieselRecords]
   );
 
-  // Memoized stats (truck only — km/L)
+  // Memoized stats
   const stats = useMemo(() => {
     const recordsWithDistance = entries.filter((r: DieselEntry) => r.distance_travelled && r.litres_filled);
     const totalKmTravelled = recordsWithDistance.reduce((sum: number, r: DieselEntry) => sum + (r.distance_travelled || 0), 0);
@@ -789,6 +907,8 @@ export default function DieselPage() {
     const avgKmPerLitre = totalLitresForCalc > 0 ? totalKmTravelled / totalLitresForCalc : 0;
     const totalLitres = entries.reduce((sum: number, e: DieselEntry) => sum + (e.litres_filled || 0), 0);
     const flaggedEntries = entries.filter((e: DieselEntry) => e.requires_debriefing && !e.debriefed);
+
+    debugLog.debug("Stats computed", { totalLitres, avgKmPerLitre, flaggedCount: flaggedEntries.length });
 
     return {
       totalLitres,
@@ -799,7 +919,7 @@ export default function DieselPage() {
     };
   }, [entries]);
 
-  // Memoized reefer stats (L/hr — separate from vehicle km/L)
+  // Memoized reefer stats
   const reeferStats = useMemo(() => {
     if (allReeferRecords.length === 0) return null;
     const recordsWithHours = allReeferRecords.filter((r: ReeferDieselEntry) => r.hours_operated && r.hours_operated > 0 && r.litres_filled);
@@ -815,9 +935,10 @@ export default function DieselPage() {
     };
   }, [allReeferRecords]);
 
-  // Add diesel entry mutation - FIXED with type assertion
+  // Add diesel entry mutation
   const addMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      debugLog.info("Adding diesel entry", { data });
       if (!user?.id) throw new Error("Authentication required");
       if (!assignedVehicle) throw new Error("No vehicle assigned. Please contact your admin.");
 
@@ -841,21 +962,29 @@ export default function DieselPage() {
         currency: stationMatch?.currency || "USD",
       };
 
-      // FIX: Add type assertion to bypass TypeScript strict checking
+      debugLog.debug("Inserting diesel record", insertData);
+
       const { data: result, error } = await supabase
         .from("diesel_records")
         .insert(insertData as never)
         .select("id")
         .single();
 
-      if (error) throw error;
+      if (error) {
+        debugLog.error("Error inserting diesel record", error);
+        throw error;
+      }
+
+      debugLog.info("Diesel record inserted successfully", { id: result.id });
       return { ...result, _dieselData: { fleet_number: insertData.fleet_number, date: insertData.date, total_cost: totalCost, currency: insertData.currency, litres_filled: litresFilled, fuel_station: insertData.fuel_station } };
     },
     onSuccess: async (data: { id: string; _dieselData: { fleet_number: string; date: string; total_cost: number; currency: string; litres_filled: number; fuel_station: string } }) => {
+      debugLog.info("Diesel mutation onSuccess", { id: data.id, photoCount: slipFiles.length + pumpFiles.length });
       if (data?.id && (slipFiles.length > 0 || pumpFiles.length > 0)) {
         try {
           await uploadDieselPhotos(data.id, data._dieselData);
-        } catch {
+        } catch (err) {
+          debugLog.error("Photo upload failed after mutation", err);
           toast({
             title: "Photos failed",
             description: "Diesel entry saved but photo upload failed",
@@ -864,7 +993,6 @@ export default function DieselPage() {
         }
       }
 
-      // Only invalidate current month's data
       queryClient.invalidateQueries({
         queryKey: ["diesel-records", assignedVehicle?.fleet_number, selectedMonth]
       });
@@ -885,6 +1013,7 @@ export default function DieselPage() {
       });
     },
     onError: (error: Error) => {
+      debugLog.error("Diesel mutation error", error);
       toast({
         title: "Error",
         description: error.message,
@@ -896,6 +1025,7 @@ export default function DieselPage() {
   // Add reefer diesel entry mutation
   const addReeferMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      debugLog.info("Adding reefer diesel entry", { data });
       if (!user?.id) throw new Error("Authentication required");
       if (!assignedReefer) throw new Error("No reefer/trailer assigned. Please contact your admin.");
 
@@ -921,20 +1051,29 @@ export default function DieselPage() {
         linked_horse_id: assignedVehicle?.id || null,
       };
 
+      debugLog.debug("Inserting reefer record", insertData);
+
       const { data: result, error } = await supabase
         .from("reefer_diesel_records")
         .insert(insertData as never)
         .select("id")
         .single();
 
-      if (error) throw error;
+      if (error) {
+        debugLog.error("Error inserting reefer record", error);
+        throw error;
+      }
+
+      debugLog.info("Reefer record inserted successfully", { id: result.id });
       return { ...result, _dieselData: { fleet_number: assignedReefer.fleet_number, date: insertData.date, total_cost: totalCost, currency: insertData.currency, litres_filled: litresFilled, fuel_station: insertData.fuel_station } };
     },
     onSuccess: async (data: { id: string; _dieselData: { fleet_number: string; date: string; total_cost: number; currency: string; litres_filled: number; fuel_station: string } }) => {
+      debugLog.info("Reefer mutation onSuccess", { id: data.id });
       if (data?.id && (slipFiles.length > 0 || pumpFiles.length > 0)) {
         try {
           await uploadDieselPhotos(data.id, data._dieselData);
-        } catch {
+        } catch (err) {
+          debugLog.error("Photo upload failed after reefer mutation", err);
           toast({
             title: "Photos failed",
             description: "Reefer diesel entry saved but photo upload failed",
@@ -961,6 +1100,7 @@ export default function DieselPage() {
       });
     },
     onError: (error: Error) => {
+      debugLog.error("Reefer mutation error", error);
       toast({
         title: "Error",
         description: error.message,
@@ -970,6 +1110,7 @@ export default function DieselPage() {
   });
 
   const resetForm = useCallback((): void => {
+    debugLog.debug("Resetting form");
     setFormData({
       date: new Date().toISOString().split("T")[0],
       odometer_reading: "",
@@ -988,6 +1129,7 @@ export default function DieselPage() {
 
   const handleSubmit = useCallback((e: React.FormEvent): void => {
     e.preventDefault();
+    debugLog.info("Form submitted", { fuelTarget, formData });
     if (fuelTarget === "reefer") {
       addReeferMutation.mutate(formData);
     } else {
@@ -996,14 +1138,17 @@ export default function DieselPage() {
   }, [formData, addMutation, addReeferMutation, fuelTarget]);
 
   const handleMonthChange = useCallback((value: string) => {
+    debugLog.info("Month changed", { from: selectedMonth, to: value });
     setSelectedMonth(value);
-  }, []);
+  }, [selectedMonth]);
 
   const handleRefresh = useCallback(async (): Promise<void> => {
+    debugLog.info("Pull to refresh triggered");
     const promises: Promise<unknown>[] = [];
     if (assignedVehicle?.fleet_number) promises.push(refetchRecords());
     if (assignedReefer?.fleet_number) promises.push(refetchReeferRecords());
     await Promise.all(promises);
+    debugLog.info("Refresh complete");
   }, [assignedVehicle?.fleet_number, assignedReefer?.fleet_number, refetchRecords, refetchReeferRecords]);
 
   // Success view
@@ -1029,7 +1174,7 @@ export default function DieselPage() {
             <h1 className="text-lg font-semibold">New Diesel Entry</h1>
           </div>
 
-          {/* Truck / Reefer toggle — only shown if a reefer is assigned */}
+          {/* Truck / Reefer toggle */}
           {assignedReefer && (
             <div className="flex gap-2 p-1 bg-muted/50 rounded-lg">
               <button
@@ -1273,6 +1418,53 @@ export default function DieselPage() {
     <MobileShell>
       <PullToRefresh onRefresh={handleRefresh}>
         <div className="p-5 space-y-6 min-h-screen">
+          {/* Debug Button */}
+          {DEBUG_MODE && (
+            <div className="fixed bottom-20 right-4 z-50">
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="bg-black/80 text-white text-xs px-3 py-2 rounded-full shadow-lg"
+              >
+                🐛 Debug
+              </button>
+              {showDebug && (
+                <div className="absolute bottom-12 right-0 bg-black/90 text-white p-4 rounded-lg w-80 text-xs font-mono space-y-2 max-h-96 overflow-auto">
+                  <div className="font-bold mb-2">⛽ Diesel Debug Info</div>
+                  <div className="border-t border-gray-700 pt-2">
+                    <div>User ID: {user?.id}</div>
+                    <div>User Email: {user?.email}</div>
+                    <div>Session: {session ? '✅' : '❌'}</div>
+                  </div>
+                  <div className="border-t border-gray-700 pt-2">
+                    <div>Truck: {assignedVehicle?.fleet_number || 'None'}</div>
+                    <div>Reefer: {assignedReefer?.fleet_number || 'None'}</div>
+                  </div>
+                  <div className="border-t border-gray-700 pt-2">
+                    <div>Selected Month: {monthName}</div>
+                    <div>Date Range: {dateRange.from} → {dateRange.to}</div>
+                    <div>Diesel Records: {allDieselRecords.length}</div>
+                    <div>Reefer Records: {allReeferRecords.length}</div>
+                  </div>
+                  <div className="border-t border-gray-700 pt-2">
+                    <div>Total Litres: {stats.totalLitres.toFixed(1)}</div>
+                    <div>Avg km/L: {stats.avgKmPerLitre.toFixed(2)}</div>
+                    <div>Flagged: {stats.flaggedCount}</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      localStorage.clear();
+                      sessionStorage.clear();
+                      window.location.reload();
+                    }}
+                    className="bg-red-600 text-white px-3 py-1 rounded text-xs mt-3 w-full"
+                  >
+                    Clear Storage & Reload
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <h1 className="text-xl font-semibold">Diesel Log</h1>

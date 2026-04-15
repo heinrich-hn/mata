@@ -1,12 +1,9 @@
-import CustomerRetentionDashboard from "@/components/analytics/CustomerRetentionDashboard";
 import Layout from "@/components/Layout";
 import MissedLoadsTracker from "@/components/operations/MissedLoadsTracker";
-import YearToDateKPIs from "@/components/reports/YearToDateKPIs";
 import ActiveTrips from "@/components/trips/ActiveTrips";
 import AddTripDialog from "@/components/trips/AddTripDialog";
 import CompletedTrips from "@/components/trips/CompletedTrips";
 import EditTripDialog from "@/components/trips/EditTripDialog";
-import InvoicingDashboard from "@/components/trips/InvoicingDashboard";
 import LoadImportModal from "@/components/trips/LoadImportModal";
 import OperationalCostsTab from "@/components/trips/OperationalCostsTab";
 import TripDetailsModal from "@/components/trips/TripDetailsModal";
@@ -37,6 +34,7 @@ const extractFleetNumberFromName = (name: string | null): string | null => {
 };
 
 const TripManagement = () => {
+  const [activeTab, setActiveTab] = useState("active");
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
@@ -169,8 +167,7 @@ const TripManagement = () => {
         };
       });
     },
-    // Auto-refresh every 30 seconds for background updates
-    refetchInterval: 30000,
+    // Realtime subscription handles live updates — no polling needed
     // Keep previous data while refetching to prevent UI flicker
     placeholderData: (previousData) => previousData,
     // Don't show error toast on background refetch failures
@@ -228,12 +225,12 @@ const TripManagement = () => {
     };
   }, [debouncedRefetch]);
 
-  const handleEdit = (trip: Trip) => {
+  const handleEdit = useCallback((trip: Trip) => {
     setEditingTrip(trip);
     setShowEditDialog(true);
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     try {
       const { error } = await supabase
         .from('trips')
@@ -258,12 +255,15 @@ const TripManagement = () => {
         variant: 'destructive',
       });
     }
-  };
+  }, [toast, queryClient]);
 
-  const handleView = (trip: Trip) => {
+  const handleView = useCallback((trip: Trip) => {
     setSelectedTrip(trip);
     setShowTripDetails(true);
-  };
+  }, []);
+
+  const handleAddTrip = useCallback(() => setIsAddDialogOpen(true), []);
+  const handleImport = useCallback(() => setIsImportModalOpen(true), []);
 
   if (loading) {
     return (
@@ -278,7 +278,7 @@ const TripManagement = () => {
   return (
     <Layout>
       <div className="space-y-5">
-        <Tabs defaultValue="active" className="space-y-5">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
           <div className="bg-card/80 backdrop-blur-sm border border-border/60 rounded-xl p-1.5 shadow-sm">
             <TabsList className="inline-flex w-full bg-transparent gap-2 h-auto p-1 flex-wrap">
               <TabsTrigger value="active" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
@@ -295,15 +295,6 @@ const TripManagement = () => {
               <TabsTrigger value="reports" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
                 Reports
               </TabsTrigger>
-              <TabsTrigger value="invoices" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
-                Invoices
-              </TabsTrigger>
-              <TabsTrigger value="analytics" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
-                Analytics
-              </TabsTrigger>
-              <TabsTrigger value="ytd" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
-                YTD
-              </TabsTrigger>
               <TabsTrigger value="missed-loads" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
                 Missed Loads
               </TabsTrigger>
@@ -313,64 +304,63 @@ const TripManagement = () => {
             </TabsList>
           </div>
 
+          {/* Lazy tab rendering: only mount child when its tab is active */}
           <TabsContent value="active">
-            <ActiveTrips
-              trips={activeTrips}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onView={handleView}
-              onAddTrip={() => setIsAddDialogOpen(true)}
-              onImport={() => setIsImportModalOpen(true)}
-            />
+            {activeTab === "active" && (
+              <ActiveTrips
+                trips={activeTrips}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onView={handleView}
+                onAddTrip={handleAddTrip}
+                onImport={handleImport}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="completed">
-            <CompletedTrips
-              trips={completedTrips}
-              onView={handleView}
-              onRefresh={fetchTrips}
-            />
+            {activeTab === "completed" && (
+              <CompletedTrips
+                trips={completedTrips}
+                onView={handleView}
+                onRefresh={fetchTrips}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="expenses">
-            <TripExpensesSection
-              trips={[...activeTrips, ...completedTrips]}
-              onViewTrip={handleView}
-            />
+            {activeTab === "expenses" && (
+              <TripExpensesSection
+                trips={[...activeTrips, ...completedTrips]}
+                onViewTrip={handleView}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="reports">
-            <TripReportsSection
-              trips={[...activeTrips, ...completedTrips]}
-              costEntries={costEntries}
-            />
-          </TabsContent>
-
-          <TabsContent value="invoices">
-            <InvoicingDashboard />
-          </TabsContent>
-
-          <TabsContent value="analytics">
-            <CustomerRetentionDashboard
-              trips={[...activeTrips, ...completedTrips]}
-            />
-          </TabsContent>
-
-          <TabsContent value="ytd">
-            <YearToDateKPIs trips={[...activeTrips, ...completedTrips]} />
+            {activeTab === "reports" && (
+              <TripReportsSection
+                trips={[...activeTrips, ...completedTrips]}
+                costEntries={costEntries}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="missed-loads">
-            <MissedLoadsTracker
-              missedLoads={missedLoads}
-              onAddMissedLoad={addMissedLoad}
-              onUpdateMissedLoad={updateMissedLoad}
-              onDeleteMissedLoad={deleteMissedLoad}
-            />
+            {activeTab === "missed-loads" && (
+              <MissedLoadsTracker
+                missedLoads={missedLoads}
+                onAddMissedLoad={addMissedLoad}
+                onUpdateMissedLoad={updateMissedLoad}
+                onDeleteMissedLoad={deleteMissedLoad}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="operational-costs">
-            <OperationalCostsTab />
+            {activeTab === "operational-costs" && (
+              <OperationalCostsTab />
+            )}
           </TabsContent>
         </Tabs>
 
