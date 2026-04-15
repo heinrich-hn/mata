@@ -1,7 +1,9 @@
 import { MobileShell } from "@/components/layout";
 import { DocumentExpiryBanner } from "@/components/document-expiry-banner";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus";
 import { useAuth } from "@/contexts/auth-context";
 import { useDriverDocuments } from "@/hooks/use-driver-documents";
 import { useDriverRecord } from "@/hooks/use-driver-record";
@@ -142,6 +144,16 @@ export default function HomePage() {
 
   // Real-time subscriptions
   useVehicleAssignmentSubscription(user?.id);
+
+  // Auto-refresh data when navigating to this tab
+  useRefreshOnFocus([
+    ["assigned-vehicle"],
+    ["monthly-diesel-records"],
+    ["monthly-trips"],
+    ["recent-diesel-records"],
+    ["recent-trips"],
+    ["driver-documents"],
+  ]);
 
   // Pull-to-refresh handler — memoized
   const handleRefresh = useCallback(async () => {
@@ -369,12 +381,15 @@ export default function HomePage() {
                 {driverName}
               </h1>
             </div>
-            <Avatar className="h-12 w-12 ring-2 ring-border">
-              <AvatarImage src={profile?.avatar_url || undefined} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
-                {getInitials(driverName)}
-              </AvatarFallback>
-            </Avatar>
+            <div className="flex items-center gap-2">
+              <RefreshButton onRefresh={handleRefresh} />
+              <Avatar className="h-12 w-12 ring-2 ring-border">
+                <AvatarImage src={profile?.avatar_url || undefined} />
+                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
+                  {getInitials(driverName)}
+                </AvatarFallback>
+              </Avatar>
+            </div>
           </div>
 
           {/* Assigned Vehicle Cards */}

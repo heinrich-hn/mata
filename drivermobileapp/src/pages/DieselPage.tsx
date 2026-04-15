@@ -5,9 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { BottomSheetSelect } from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth-context";
 import { useDieselRealtimeSync, useVehicleAssignmentSubscription } from "@/hooks/use-realtime";
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
@@ -1151,6 +1153,13 @@ export default function DieselPage() {
     debugLog.info("Refresh complete");
   }, [assignedVehicle?.fleet_number, assignedReefer?.fleet_number, refetchRecords, refetchReeferRecords]);
 
+  // Auto-refresh data when navigating to this tab
+  useRefreshOnFocus([
+    ["assigned-vehicle"],
+    ["diesel-records"],
+    ["reefer-diesel-records"],
+  ]);
+
   // Success view
   if (showSuccess) {
     return <SuccessView />;
@@ -1477,15 +1486,18 @@ export default function DieselPage() {
                 className="h-7 w-auto text-xs text-muted-foreground border-none px-0 py-0 bg-transparent"
               />
             </div>
-            <Button
-              onClick={() => setViewMode("add")}
-              size="sm"
-              aria-label="Add new entry"
-              disabled={!assignedVehicle && !assignedReefer}
-            >
-              <Plus className="w-4 h-4 mr-1.5" strokeWidth={2} />
-              Add
-            </Button>
+            <div className="flex items-center gap-2">
+              <RefreshButton onRefresh={handleRefresh} />
+              <Button
+                onClick={() => setViewMode("add")}
+                size="sm"
+                aria-label="Add new entry"
+                disabled={!assignedVehicle && !assignedReefer}
+              >
+                <Plus className="w-4 h-4 mr-1.5" strokeWidth={2} />
+                Add
+              </Button>
+            </div>
           </div>
 
           {stats.hasFlagged && <FlaggedEntriesAlert count={stats.flaggedCount} />}

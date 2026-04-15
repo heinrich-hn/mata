@@ -1,9 +1,11 @@
 import { MobileShell } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { PullToRefresh } from "@/components/ui/pull-to-refresh";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { Input } from "@/components/ui/input";
 import { BottomSheetSelect } from "@/components/ui/select";
 import { useAuth } from "@/contexts/auth-context";
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -169,6 +171,14 @@ export default function TripsPage() {
     ]);
     console.log('✅ TripsPage: Refresh complete');
   }, [queryClient]);
+
+  // Auto-refresh data when navigating to this tab
+  useRefreshOnFocus([
+    ["assigned-vehicle"],
+    ["monthly-trips"],
+    ["freight-details"],
+    ["cycle-tracker-exists"],
+  ]);
 
   // Fetch assigned vehicle (truck) from driver_vehicle_assignments
   const { data: assignedVehicle, isLoading: isLoadingVehicle, error: vehicleError } = useQuery({
@@ -402,13 +412,16 @@ export default function TripsPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-semibold">Trips</h1>
-              <button
-                onClick={() => setFilterMode(filterMode === "month" ? "custom" : "month")}
-                className="flex items-center gap-1.5 text-xs text-primary font-medium px-2.5 py-1.5 rounded-md bg-primary/10 active:bg-primary/20 transition-colors"
-              >
-                <CalendarRange className="w-3.5 h-3.5" />
-                {filterMode === "month" ? "Custom Range" : "By Month"}
-              </button>
+              <div className="flex items-center gap-2">
+                <RefreshButton onRefresh={handleRefresh} />
+                <button
+                  onClick={() => setFilterMode(filterMode === "month" ? "custom" : "month")}
+                  className="flex items-center gap-1.5 text-xs text-primary font-medium px-2.5 py-1.5 rounded-md bg-primary/10 active:bg-primary/20 transition-colors"
+                >
+                  <CalendarRange className="w-3.5 h-3.5" />
+                  {filterMode === "month" ? "Custom Range" : "By Month"}
+                </button>
+              </div>
             </div>
 
             {filterMode === "month" ? (

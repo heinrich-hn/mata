@@ -25,6 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PullToRefresh } from "@/components/ui/pull-to-refresh";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { SearchableSelect, BottomSheetSelect } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -34,6 +36,7 @@ import { COST_CATEGORIES, HIGH_RISK_CATEGORIES } from "@/constants/cost-categori
 
 // Hooks & Context
 import { useAuth } from "@/contexts/auth-context";
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus";
 import { useToast } from "@/hooks/use-toast";
 
 // Utils & Clients
@@ -288,6 +291,24 @@ export default function ExpensesPage(): JSX.Element {
   const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
   const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
 
+  // Refresh handler — shared by PullToRefresh and RefreshButton
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["assigned-vehicle"] }),
+      queryClient.invalidateQueries({ queryKey: ["driver-trips"] }),
+      queryClient.invalidateQueries({ queryKey: ["vehicle-trip-ids"] }),
+      queryClient.invalidateQueries({ queryKey: ["expense-entries"] }),
+    ]);
+  }, [queryClient]);
+
+  // Auto-refresh data when navigating to this tab
+  useRefreshOnFocus([
+    ["assigned-vehicle"],
+    ["driver-trips"],
+    ["vehicle-trip-ids"],
+    ["expense-entries"],
+  ]);
+
   // Fetch driver's assigned vehicle (truck) first
   // NOTE: driver_vehicle_assignments.driver_id = auth.users.id (Auth UUID)
   const { data: assignedVehicle } = useQuery({
@@ -502,7 +523,7 @@ export default function ExpensesPage(): JSX.Element {
 
   // Start editing an entry
   const startEdit = useCallback((entry: CostEntry): void => {
-    
+
     const amount = entry.amount.toString();
     const currency = entry.currency || 'USD';
 
@@ -1084,95 +1105,100 @@ export default function ExpensesPage(): JSX.Element {
   // List View
   return (
     <MobileShell>
-      <div className="p-5 space-y-6 pb-24">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Expenses</h1>
-            <p className="text-sm text-muted-foreground">Track and record trip costs</p>
-          </div>
-          <Button onClick={() => setViewMode("add")} size="lg" className="gap-2" aria-label="Add new expense">
-            <Plus className="w-4 h-4" />
-            Add Expense
-          </Button>
-        </div>
-
-        {/* Error State */}
-        {entriesError && (
-          <Alert variant="destructive">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-              <AlertDescription>
-                Failed to load expenses. Please try again.
-              </AlertDescription>
+      <PullToRefresh onRefresh={handleRefresh}>
+        <div className="p-5 space-y-6 pb-24">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Expenses</h1>
+              <p className="text-sm text-muted-foreground">Track and record trip costs</p>
             </div>
-          </Alert>
-        )}
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                <Receipt className="w-4 h-4" />
-                <span className="text-xs font-medium">Total Entries</span>
-              </div>
-              <p className="text-2xl font-bold">{entries.length}</p>
-              <p className="text-xs text-muted-foreground mt-1">expenses recorded</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                <Flag className="w-4 h-4" />
-                <span className="text-xs font-medium">Flagged</span>
-              </div>
-              <p className="text-2xl font-bold text-warning">{flaggedCount}</p>
-              <p className="text-xs text-muted-foreground">require review</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Expenses */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Recent Expenses</h2>
-            {entries.length > 0 && (
-              <Badge variant="outline" className="text-xs">
-                {entries.length} total
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              <RefreshButton onRefresh={handleRefresh} />
+              <Button onClick={() => setViewMode("add")} size="lg" className="gap-2" aria-label="Add new expense">
+                <Plus className="w-4 h-4" />
+                Add Expense
+              </Button>
+            </div>
           </div>
 
-          {entriesLoading ? (
-            <LoadingSkeleton />
-          ) : entries.length === 0 ? (
+          {/* Error State */}
+          {entriesError && (
+            <Alert variant="destructive">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                <AlertDescription>
+                  Failed to load expenses. Please try again.
+                </AlertDescription>
+              </div>
+            </Alert>
+          )}
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 gap-3">
             <Card>
-              <CardContent className="p-8 text-center">
-                <div className="flex flex-col items-center gap-3">
-                  <Receipt className="w-12 h-12 text-muted-foreground/50" />
-                  <div>
-                    <p className="text-muted-foreground mb-2">No expenses recorded yet</p>
-                    <p className="text-sm text-muted-foreground/70">
-                      Start by adding your first expense
-                    </p>
-                  </div>
-                  <Button onClick={() => setViewMode("add")} className="mt-2">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add First Expense
-                  </Button>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                  <Receipt className="w-4 h-4" />
+                  <span className="text-xs font-medium">Total Entries</span>
                 </div>
+                <p className="text-2xl font-bold">{entries.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">expenses recorded</p>
               </CardContent>
             </Card>
-          ) : (
-            <div className="space-y-3">
-              {entries.map((entry: CostEntry) => (
-                <ExpenseCard key={entry.id} entry={entry} onEdit={startEdit} />
-              ))}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                  <Flag className="w-4 h-4" />
+                  <span className="text-xs font-medium">Flagged</span>
+                </div>
+                <p className="text-2xl font-bold text-warning">{flaggedCount}</p>
+                <p className="text-xs text-muted-foreground">require review</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent Expenses */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Recent Expenses</h2>
+              {entries.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  {entries.length} total
+                </Badge>
+              )}
             </div>
-          )}
+
+            {entriesLoading ? (
+              <LoadingSkeleton />
+            ) : entries.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <Receipt className="w-12 h-12 text-muted-foreground/50" />
+                    <div>
+                      <p className="text-muted-foreground mb-2">No expenses recorded yet</p>
+                      <p className="text-sm text-muted-foreground/70">
+                        Start by adding your first expense
+                      </p>
+                    </div>
+                    <Button onClick={() => setViewMode("add")} className="mt-2">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add First Expense
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {entries.map((entry: CostEntry) => (
+                  <ExpenseCard key={entry.id} entry={entry} onEdit={startEdit} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </PullToRefresh>
     </MobileShell>
   );
 }

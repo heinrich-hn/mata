@@ -3,8 +3,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PullToRefresh } from "@/components/ui/pull-to-refresh";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { useAuth } from "@/contexts/auth-context";
 import { useDriverDocuments } from "@/hooks/use-driver-documents";
+import { useRefreshOnFocus } from "@/hooks/use-refresh-on-focus";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,7 +29,7 @@ import {
   Truck,
   User
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const DEBUG_MODE = process.env.NODE_ENV === 'development';
@@ -61,7 +64,7 @@ export default function ProfilePage() {
   const { user, profile, signOut: _signOut, session } = useAuth();
   const { toast } = useToast();
   const supabase = createClient();
-  const _queryClient = useQueryClient();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
@@ -295,350 +298,369 @@ export default function ProfilePage() {
   const assignedReefer = vehicleAssignments?.reefer;
   const hasAssignment = !!assignedTruck || !!assignedReefer;
 
+  // Refresh handler — shared by PullToRefresh and RefreshButton
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["driver-by-email-docs"] }),
+      queryClient.invalidateQueries({ queryKey: ["assigned-vehicle"] }),
+    ]);
+  }, [queryClient]);
+
+  // Auto-refresh data when navigating to this tab
+  useRefreshOnFocus([
+    ["driver-by-email-docs"],
+    ["assigned-vehicle"],
+  ]);
+
   return (
     <MobileShell>
-      <div className="p-5 space-y-6">
-        {/* Debug Button */}
-        {DEBUG_MODE && (
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            className="fixed top-20 right-5 bg-black/80 text-white text-xs px-2 py-1 rounded-full z-50"
-          >
-            🐛 Debug
-          </button>
-        )}
+      <PullToRefresh onRefresh={handleRefresh}>
+        <div className="p-5 space-y-6">
+          {/* Debug Button */}
+          {DEBUG_MODE && (
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="fixed top-20 right-5 bg-black/80 text-white text-xs px-2 py-1 rounded-full z-50"
+            >
+              🐛 Debug
+            </button>
+          )}
 
-        {/* Debug Panel */}
-        {showDebug && DEBUG_MODE && (
-          <Card className="bg-black/90 text-white mb-4">
-            <CardContent className="p-4 space-y-2 text-xs font-mono">
-              <div className="font-bold text-green-400">🔍 Debug Info</div>
-              <div className="border-t border-gray-700 pt-2">
-                <div>User ID: {user?.id}</div>
-                <div>User Email: {user?.email}</div>
-                <div>Session: {session ? '✅ Active' : '❌ None'}</div>
-                {session?.expires_at && (
-                  <div>Expires: {new Date(session.expires_at * 1000).toLocaleString()}</div>
-                )}
-              </div>
-              <div className="border-t border-gray-700 pt-2">
-                <div>Driver ID: {driver?.id || 'None'}</div>
-                <div>Driver Number: {driver?.driver_number || 'None'}</div>
-                <div>Driver auth_user_id: {driver?.auth_user_id || 'None'}</div>
-                <div>Match: {driver?.auth_user_id === user?.id ? '✅' : '❌'}</div>
-              </div>
-              <div className="border-t border-gray-700 pt-2">
-                <div>Truck: {assignedTruck?.fleet_number || 'None'}</div>
-                <div>Reefer: {assignedReefer?.fleet_number || 'None'}</div>
-                <div>Assignment Loading: {assignmentLoading ? 'Yes' : 'No'}</div>
-              </div>
-              <div className="border-t border-gray-700 pt-2">
-                <div>Storage Keys: {Object.keys(localStorage).filter(k => k.includes('mata') || k.includes('supabase')).join(', ') || 'None'}</div>
-              </div>
-              <button
-                onClick={() => {
-                  localStorage.clear();
-                  sessionStorage.clear();
-                  window.location.href = '/login';
-                }}
-                className="bg-red-600 text-white px-2 py-1 rounded text-xs mt-2 w-full"
-              >
-                Clear All & Logout
-              </button>
-              <button
-                onClick={() => {
-                  navigator.serviceWorker?.getRegistrations().then(regs => {
-                    regs.forEach(reg => reg.unregister());
-                    console.log('Service workers unregistered');
-                    window.location.reload();
-                  });
-                }}
-                className="bg-orange-600 text-white px-2 py-1 rounded text-xs mt-2 w-full"
-              >
-                Clear Service Workers
-              </button>
-            </CardContent>
-          </Card>
-        )}
+          {/* Debug Panel */}
+          {showDebug && DEBUG_MODE && (
+            <Card className="bg-black/90 text-white mb-4">
+              <CardContent className="p-4 space-y-2 text-xs font-mono">
+                <div className="font-bold text-green-400">🔍 Debug Info</div>
+                <div className="border-t border-gray-700 pt-2">
+                  <div>User ID: {user?.id}</div>
+                  <div>User Email: {user?.email}</div>
+                  <div>Session: {session ? '✅ Active' : '❌ None'}</div>
+                  {session?.expires_at && (
+                    <div>Expires: {new Date(session.expires_at * 1000).toLocaleString()}</div>
+                  )}
+                </div>
+                <div className="border-t border-gray-700 pt-2">
+                  <div>Driver ID: {driver?.id || 'None'}</div>
+                  <div>Driver Number: {driver?.driver_number || 'None'}</div>
+                  <div>Driver auth_user_id: {driver?.auth_user_id || 'None'}</div>
+                  <div>Match: {driver?.auth_user_id === user?.id ? '✅' : '❌'}</div>
+                </div>
+                <div className="border-t border-gray-700 pt-2">
+                  <div>Truck: {assignedTruck?.fleet_number || 'None'}</div>
+                  <div>Reefer: {assignedReefer?.fleet_number || 'None'}</div>
+                  <div>Assignment Loading: {assignmentLoading ? 'Yes' : 'No'}</div>
+                </div>
+                <div className="border-t border-gray-700 pt-2">
+                  <div>Storage Keys: {Object.keys(localStorage).filter(k => k.includes('mata') || k.includes('supabase')).join(', ') || 'None'}</div>
+                </div>
+                <button
+                  onClick={() => {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    window.location.href = '/login';
+                  }}
+                  className="bg-red-600 text-white px-2 py-1 rounded text-xs mt-2 w-full"
+                >
+                  Clear All & Logout
+                </button>
+                <button
+                  onClick={() => {
+                    navigator.serviceWorker?.getRegistrations().then(regs => {
+                      regs.forEach(reg => reg.unregister());
+                      console.log('Service workers unregistered');
+                      window.location.reload();
+                    });
+                  }}
+                  className="bg-orange-600 text-white px-2 py-1 rounded text-xs mt-2 w-full"
+                >
+                  Clear Service Workers
+                </button>
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Avatar & Name */}
-        <div className="flex flex-col items-center py-6">
-          <Avatar className="h-20 w-20 ring-4 ring-background shadow-xl mb-4">
-            <AvatarImage src={profile?.avatar_url || undefined} />
-            <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground text-xl font-semibold">
-              {getInitials(profile?.full_name)}
-            </AvatarFallback>
-          </Avatar>
-          <h1 className="text-xl font-semibold">
-            {driver ? `${driver.first_name} ${driver.last_name}` : profile?.full_name || user?.email?.split("@")[0] || "Driver"}
-          </h1>
-          <Badge variant="secondary" className="mt-2">
-            <Shield className="w-3 h-3 mr-1" strokeWidth={1.5} />
-            {profile?.role || "Driver"}
-          </Badge>
-        </div>
+          {/* Avatar & Name */}
+          <div className="flex flex-col items-center py-6">
+            <div className="flex items-center gap-2 self-end">
+              <RefreshButton onRefresh={handleRefresh} />
+            </div>
+            <Avatar className="h-20 w-20 ring-4 ring-background shadow-xl mb-4">
+              <AvatarImage src={profile?.avatar_url || undefined} />
+              <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground text-xl font-semibold">
+                {getInitials(profile?.full_name)}
+              </AvatarFallback>
+            </Avatar>
+            <h1 className="text-xl font-semibold">
+              {driver ? `${driver.first_name} ${driver.last_name}` : profile?.full_name || user?.email?.split("@")[0] || "Driver"}
+            </h1>
+            <Badge variant="secondary" className="mt-2">
+              <Shield className="w-3 h-3 mr-1" strokeWidth={1.5} />
+              {profile?.role || "Driver"}
+            </Badge>
+          </div>
 
-        {/* Debug Info (dev only) - Enhanced */}
-        {process.env.NODE_ENV === "development" && (
-          <Card className="bg-muted/50">
-            <CardContent className="p-4">
-              <p className="text-xs font-mono mb-2">🔧 Debug Info:</p>
-              <p className="text-xs">User ID: {user?.id || "None"}</p>
-              <p className="text-xs">User Email: {user?.email || "None"}</p>
-              <p className="text-xs">Session Active: {session ? "Yes" : "No"}</p>
-              <p className="text-xs">
-                Driver: {driver ? `${driver.first_name} ${driver.last_name}` : "Not found"}
-              </p>
-              <p className="text-xs">Driver ID: {driver?.id || "None"}</p>
-              <p className="text-xs">Driver auth_user_id: {driver?.auth_user_id || "None"}</p>
-              <p className="text-xs">Auth Link: {driver?.auth_user_id === user?.id ? "✅ Match" : "❌ Mismatch"}</p>
-              <p className="text-xs">Assignment: {vehicleAssignments?.truck || vehicleAssignments?.reefer ? "Active" : "None"}</p>
-              <p className="text-xs">Driver Error: {driverError?.message || "None"}</p>
-              <p className="text-xs">Assignment Error: {assignmentError?.message || "None"}</p>
-              <p className="text-xs">Driver Loading: {driverLoading ? "Yes" : "No"}</p>
-              <p className="text-xs">
-                Truck: {vehicleAssignments?.truck?.fleet_number || "None"}
-              </p>
-              <p className="text-xs">
-                Reefer: {vehicleAssignments?.reefer?.fleet_number || "None"}
-              </p>
-              <p className="text-xs">
-                Assignment Count: {(vehicleAssignments?.truck ? 1 : 0) + (vehicleAssignments?.reefer ? 1 : 0)}
-              </p>
-            </CardContent>
-          </Card>
-        )}
+          {/* Debug Info (dev only) - Enhanced */}
+          {process.env.NODE_ENV === "development" && (
+            <Card className="bg-muted/50">
+              <CardContent className="p-4">
+                <p className="text-xs font-mono mb-2">🔧 Debug Info:</p>
+                <p className="text-xs">User ID: {user?.id || "None"}</p>
+                <p className="text-xs">User Email: {user?.email || "None"}</p>
+                <p className="text-xs">Session Active: {session ? "Yes" : "No"}</p>
+                <p className="text-xs">
+                  Driver: {driver ? `${driver.first_name} ${driver.last_name}` : "Not found"}
+                </p>
+                <p className="text-xs">Driver ID: {driver?.id || "None"}</p>
+                <p className="text-xs">Driver auth_user_id: {driver?.auth_user_id || "None"}</p>
+                <p className="text-xs">Auth Link: {driver?.auth_user_id === user?.id ? "✅ Match" : "❌ Mismatch"}</p>
+                <p className="text-xs">Assignment: {vehicleAssignments?.truck || vehicleAssignments?.reefer ? "Active" : "None"}</p>
+                <p className="text-xs">Driver Error: {driverError?.message || "None"}</p>
+                <p className="text-xs">Assignment Error: {assignmentError?.message || "None"}</p>
+                <p className="text-xs">Driver Loading: {driverLoading ? "Yes" : "No"}</p>
+                <p className="text-xs">
+                  Truck: {vehicleAssignments?.truck?.fleet_number || "None"}
+                </p>
+                <p className="text-xs">
+                  Reefer: {vehicleAssignments?.reefer?.fleet_number || "None"}
+                </p>
+                <p className="text-xs">
+                  Assignment Count: {(vehicleAssignments?.truck ? 1 : 0) + (vehicleAssignments?.reefer ? 1 : 0)}
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Driver Profile */}
-        {driver ? (
+          {/* Driver Profile */}
+          {driver ? (
+            <Card>
+              <CardContent className="p-0">
+                <div className="p-4 border-b border-border/50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <User className="w-4 h-4 text-primary" strokeWidth={1.5} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm text-muted-foreground">Driver Profile</p>
+                      <p className="text-sm font-semibold">
+                        {driver.first_name} {driver.last_name}
+                      </p>
+                      <Badge variant="outline" className="mt-1 text-xs">
+                        {driver.driver_number}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {driver.phone && (
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-muted rounded-lg">
+                          <Phone className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">Driver Phone</p>
+                          <p className="text-sm text-muted-foreground">{driver.phone}</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-muted rounded-lg">
+                        <Badge variant="secondary" className="text-xs">
+                          ID
+                        </Badge>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">Driver Number</p>
+                        <p className="text-sm text-muted-foreground">{driver.driver_number}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : !driverLoading ? (
+            <Card className="border-warning/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Driver Profile Not Found</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {driverError
+                        ? `Error: ${driverError.message}`
+                        : "Your login account is not linked to a driver record. Contact your administrator."}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* Account Contact */}
           <Card>
             <CardContent className="p-0">
               <div className="p-4 border-b border-border/50">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <User className="w-4 h-4 text-primary" strokeWidth={1.5} />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm text-muted-foreground">Driver Profile</p>
-                    <p className="text-sm font-semibold">
-                      {driver.first_name} {driver.last_name}
-                    </p>
-                    <Badge variant="outline" className="mt-1 text-xs">
-                      {driver.driver_number}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {driver.phone && (
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-muted rounded-lg">
-                        <Phone className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">Driver Phone</p>
-                        <p className="text-sm text-muted-foreground">{driver.phone}</p>
-                      </div>
-                    </div>
-                  )}
+                <p className="font-medium text-sm mb-3 text-muted-foreground">Account Contact</p>
+                <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-muted rounded-lg">
-                      <Badge variant="secondary" className="text-xs">
-                        ID
-                      </Badge>
+                      <Mail className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">Driver Number</p>
-                      <p className="text-sm text-muted-foreground">{driver.driver_number}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : !driverLoading ? (
-          <Card className="border-warning/50">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Driver Profile Not Found</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {driverError
-                      ? `Error: ${driverError.message}`
-                      : "Your login account is not linked to a driver record. Contact your administrator."}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* Account Contact */}
-        <Card>
-          <CardContent className="p-0">
-            <div className="p-4 border-b border-border/50">
-              <p className="font-medium text-sm mb-3 text-muted-foreground">Account Contact</p>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-muted rounded-lg">
-                    <Mail className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">Email</p>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {profile?.email || user?.email || "Not set"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-muted rounded-lg">
-                    <Phone className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">Phone</p>
-                    <p className="text-sm text-muted-foreground">
-                      {profile?.phone || "Not set"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Assigned Vehicles (read-only — assigned by admin from dashboard) */}
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Truck className="w-4 h-4 text-primary" strokeWidth={1.5} />
-              </div>
-              <p className="text-sm font-medium">Assigned Vehicles</p>
-            </div>
-            {assignmentLoading ? (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Loading...
-              </span>
-            ) : hasAssignment ? (
-              <div className="space-y-3">
-                {assignedTruck && (
-                  <div className="pl-2 border-l-2 border-primary/30">
-                    <div className="flex items-center gap-2 text-sm">
-                      {getVehicleTypeIcon(assignedTruck.vehicle_type)}
-                      <span className="font-semibold">
-                        {assignedTruck.fleet_number || "Unknown"}
-                      </span>
-                      <span className="text-muted-foreground">—</span>
-                      <span className="text-muted-foreground">
-                        {assignedTruck.registration_number || assignedTruck.registration || "Unknown"}
-                      </span>
-                    </div>
-                    {(assignedTruck.make || assignedTruck.vehicle_type) && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {[assignedTruck.vehicle_type, assignedTruck.make, assignedTruck.model]
-                          .filter(Boolean)
-                          .join(" · ")}
+                      <p className="text-sm font-medium">Email</p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {profile?.email || user?.email || "Not set"}
                       </p>
-                    )}
-                  </div>
-                )}
-                {assignedReefer && (
-                  <div className="pl-2 border-l-2 border-blue-400/30">
-                    <div className="flex items-center gap-2 text-sm">
-                      {getVehicleTypeIcon(assignedReefer.vehicle_type)}
-                      <span className="font-semibold">
-                        {assignedReefer.fleet_number || "Unknown"}
-                      </span>
-                      <span className="text-muted-foreground">—</span>
-                      <span className="text-muted-foreground">
-                        {assignedReefer.registration_number || assignedReefer.registration || "Unknown"}
-                      </span>
                     </div>
-                    {(assignedReefer.make || assignedReefer.vehicle_type) && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {[assignedReefer.vehicle_type, assignedReefer.make, assignedReefer.model]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    )}
                   </div>
-                )}
-              </div>
-            ) : (
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  No vehicle assigned — contact your administrator
-                </p>
-                {assignmentError && (
-                  <p className="text-xs text-destructive mt-1">
-                    Error: {assignmentError.message}
-                  </p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Menu Items */}
-        <Card>
-          <CardContent className="p-0">
-            {menuItems.map((item, index) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  type="button"
-                  key={item.label}
-                  onClick={item.onClick}
-                  className={`w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors ${index !== menuItems.length - 1 ? "border-b border-border/50" : ""
-                    }`}
-                >
                   <div className="flex items-center gap-3">
-                    <div className="relative p-2 bg-muted rounded-lg">
-                      <Icon className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                      {item.badge && item.badgeCount > 0 && (
-                        <span
-                          className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white ${item.badge === "destructive" ? "bg-destructive" : "bg-warning"
-                            }`}
-                        >
-                          {item.badgeCount}
+                    <div className="p-2 bg-muted rounded-lg">
+                      <Phone className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">Phone</p>
+                      <p className="text-sm text-muted-foreground">
+                        {profile?.phone || "Not set"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Assigned Vehicles (read-only — assigned by admin from dashboard) */}
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Truck className="w-4 h-4 text-primary" strokeWidth={1.5} />
+                </div>
+                <p className="text-sm font-medium">Assigned Vehicles</p>
+              </div>
+              {assignmentLoading ? (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading...
+                </span>
+              ) : hasAssignment ? (
+                <div className="space-y-3">
+                  {assignedTruck && (
+                    <div className="pl-2 border-l-2 border-primary/30">
+                      <div className="flex items-center gap-2 text-sm">
+                        {getVehicleTypeIcon(assignedTruck.vehicle_type)}
+                        <span className="font-semibold">
+                          {assignedTruck.fleet_number || "Unknown"}
                         </span>
+                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">
+                          {assignedTruck.registration_number || assignedTruck.registration || "Unknown"}
+                        </span>
+                      </div>
+                      {(assignedTruck.make || assignedTruck.vehicle_type) && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {[assignedTruck.vehicle_type, assignedTruck.make, assignedTruck.model]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
                       )}
                     </div>
-                    <div className="text-left">
-                      <p className="text-sm font-medium">{item.label}</p>
-                      <p className="text-xs text-muted-foreground">{item.description}</p>
+                  )}
+                  {assignedReefer && (
+                    <div className="pl-2 border-l-2 border-blue-400/30">
+                      <div className="flex items-center gap-2 text-sm">
+                        {getVehicleTypeIcon(assignedReefer.vehicle_type)}
+                        <span className="font-semibold">
+                          {assignedReefer.fleet_number || "Unknown"}
+                        </span>
+                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">
+                          {assignedReefer.registration_number || assignedReefer.registration || "Unknown"}
+                        </span>
+                      </div>
+                      {(assignedReefer.make || assignedReefer.vehicle_type) && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {[assignedReefer.vehicle_type, assignedReefer.make, assignedReefer.model]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                </button>
-              );
-            })}
-          </CardContent>
-        </Card>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    No vehicle assigned — contact your administrator
+                  </p>
+                  {assignmentError && (
+                    <p className="text-xs text-destructive mt-1">
+                      Error: {assignmentError.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Sign Out */}
-        <Button
-          variant="outline"
-          className="w-full h-12 border-destructive/30 hover:border-destructive hover:bg-destructive/10"
-          onClick={handleSignOut}
-          disabled={isSigningOut}
-        >
-          {isSigningOut ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <LogOut className="w-4 h-4 mr-2" strokeWidth={1.5} />
-          )}
-          {isSigningOut ? "Signing out..." : "Sign Out"}
-        </Button>
+          {/* Menu Items */}
+          <Card>
+            <CardContent className="p-0">
+              {menuItems.map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    type="button"
+                    key={item.label}
+                    onClick={item.onClick}
+                    className={`w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors ${index !== menuItems.length - 1 ? "border-b border-border/50" : ""
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="relative p-2 bg-muted rounded-lg">
+                        <Icon className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                        {item.badge && item.badgeCount > 0 && (
+                          <span
+                            className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white ${item.badge === "destructive" ? "bg-destructive" : "bg-warning"
+                              }`}
+                          >
+                            {item.badgeCount}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-medium">{item.label}</p>
+                        <p className="text-xs text-muted-foreground">{item.description}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                  </button>
+                );
+              })}
+            </CardContent>
+          </Card>
 
-        <p className="text-center text-xs text-muted-foreground pt-2">
-          Matanuska Fleet Management •{" "}
-          {assignedTruck || assignedReefer
-            ? `Assigned: ${[assignedTruck?.fleet_number, assignedReefer?.fleet_number].filter(Boolean).join(" + ") || "Unknown"}`
-            : "No assignment"}
-        </p>
-      </div>
+          {/* Sign Out */}
+          <Button
+            variant="outline"
+            className="w-full h-12 border-destructive/30 hover:border-destructive hover:bg-destructive/10"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+          >
+            {isSigningOut ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4 mr-2" strokeWidth={1.5} />
+            )}
+            {isSigningOut ? "Signing out..." : "Sign Out"}
+          </Button>
+
+          <p className="text-center text-xs text-muted-foreground pt-2">
+            Matanuska Fleet Management •{" "}
+            {assignedTruck || assignedReefer
+              ? `Assigned: ${[assignedTruck?.fleet_number, assignedReefer?.fleet_number].filter(Boolean).join(" + ") || "Unknown"}`
+              : "No assignment"}
+          </p>
+        </div>
+      </PullToRefresh>
     </MobileShell>
   );
 }
