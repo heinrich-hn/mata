@@ -113,7 +113,7 @@ export default function DocumentsPage() {
   const getStatusBadge = (expiryDate: string | null | undefined): ReactNode => {
     if (!expiryDate) {
       return (
-        <Badge variant="outline" className="text-[10px]">
+        <Badge variant="outline" className="text-[11px]">
           No date
         </Badge>
       );
@@ -123,7 +123,7 @@ export default function DocumentsPage() {
     switch (status) {
       case "expired":
         return (
-          <Badge variant="destructive" className="text-[10px]">
+          <Badge variant="destructive" className="text-[11px]">
             Expired {Math.abs(daysUntil)}d ago
           </Badge>
         );
@@ -131,7 +131,7 @@ export default function DocumentsPage() {
         return (
           <Badge
             variant="secondary"
-            className="text-[10px] bg-warning/10 text-warning border-warning/20"
+            className="text-[11px] bg-warning/10 text-warning border-warning/20"
           >
             {daysUntil}d left
           </Badge>
@@ -140,14 +140,14 @@ export default function DocumentsPage() {
         return (
           <Badge
             variant="secondary"
-            className="text-[10px] bg-success/10 text-success border-success/20"
+            className="text-[11px] bg-success/10 text-success border-success/20"
           >
             Valid
           </Badge>
         );
       default:
         return (
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-[11px]">
             No date
           </Badge>
         );
@@ -176,7 +176,7 @@ export default function DocumentsPage() {
           <div className="flex items-center gap-3">
             <Link
               to="/profile"
-              className="p-2 rounded-xl bg-muted hover:bg-muted/70 transition-colors"
+              className="p-3 rounded-xl bg-muted hover:bg-muted/70 active:bg-muted transition-colors"
               aria-label="Go back to profile"
             >
               <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
@@ -191,14 +191,14 @@ export default function DocumentsPage() {
             {alerts.length > 0 && (
               <div className="flex items-center gap-1">
                 {expiredCount > 0 && (
-                  <Badge variant="destructive" className="text-[10px]">
+                  <Badge variant="destructive" className="text-[11px]">
                     {expiredCount}
                   </Badge>
                 )}
                 {expiringCount > 0 && (
                   <Badge
                     variant="secondary"
-                    className="text-[10px] bg-warning/10 text-warning"
+                    className="text-[11px] bg-warning/10 text-warning"
                   >
                     {expiringCount}
                   </Badge>
@@ -308,7 +308,7 @@ export default function DocumentsPage() {
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-semibold">{docType.label}</p>
                               {doc ? getStatusBadge(doc.expiry_date) : (
-                                <Badge variant="outline" className="text-[10px]">
+                                <Badge variant="outline" className="text-[11px]">
                                   Not uploaded
                                 </Badge>
                               )}

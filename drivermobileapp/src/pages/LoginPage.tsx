@@ -121,7 +121,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                      className="text-xs text-muted-foreground hover:text-primary active:text-primary/80 transition-colors min-h-[44px] flex items-center px-2"
                     >
                       {showPassword ? "Hide" : "Show"}
                     </button>
@@ -173,7 +173,7 @@ export default function LoginPage() {
                   description: "Please contact your administrator for assistance",
                 });
               }}
-              className="text-primary hover:text-primary/80 font-medium transition-colors"
+              className="text-primary hover:text-primary/80 active:text-primary/70 font-medium transition-colors py-2 px-1"
             >
               Contact Support
             </button>

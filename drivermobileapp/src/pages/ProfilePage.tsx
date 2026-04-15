@@ -611,7 +611,7 @@ export default function ProfilePage() {
                     type="button"
                     key={item.label}
                     onClick={item.onClick}
-                    className={`w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors ${index !== menuItems.length - 1 ? "border-b border-border/50" : ""
+                    className={`w-full flex items-center justify-between p-4 hover:bg-muted/50 active:bg-muted active:scale-[0.99] transition-colors ${index !== menuItems.length - 1 ? "border-b border-border/50" : ""
                       }`}
                   >
                     <div className="flex items-center gap-3">

@@ -397,7 +397,7 @@ export default function HomePage() {
             <div className="rounded-2xl border border-border bg-card shadow-sm p-5 animate-fade-up stagger-1">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-1.5 h-1.5 rounded-full bg-muted animate-pulse" />
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                   Loading Vehicles...
                 </p>
               </div>
@@ -417,7 +417,7 @@ export default function HomePage() {
                 <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                    <p className="text-[10px] font-bold text-success uppercase tracking-widest">
+                    <p className="text-[11px] font-bold text-success uppercase tracking-widest">
                       Active Vehicle
                     </p>
                   </div>
@@ -446,7 +446,7 @@ export default function HomePage() {
                 <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                    <p className="text-[11px] font-bold text-blue-400 uppercase tracking-widest">
                       Active Reefer
                     </p>
                   </div>

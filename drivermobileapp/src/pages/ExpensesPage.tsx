@@ -1011,7 +1011,7 @@ export default function ExpensesPage(): JSX.Element {
                   <button
                     type="button"
                     onClick={() => handleInputChange("is_flagged", !formData.is_flagged)}
-                    className="flex items-center justify-center w-6 h-6 rounded-md border-2 transition-all"
+                    className="flex items-center justify-center w-8 h-8 rounded-md border-2 transition-all active:scale-90"
                     style={{
                       backgroundColor: formData.is_flagged ? "oklch(0.69 0.19 148.89)" : "transparent",
                       borderColor: formData.is_flagged ? "oklch(0.69 0.19 148.89)" : "var(--border)",

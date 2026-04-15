@@ -69,7 +69,7 @@ export function DocumentExpiryBanner({ alerts, expiredCount, expiringCount }: Do
                   </span>
                   <Badge
                     variant={alert.status === "expired" ? "destructive" : "secondary"}
-                    className="text-[10px] px-1.5 py-0 h-4 shrink-0"
+                    className="text-[11px] px-1.5 py-0 h-4 shrink-0"
                   >
                     {alert.status === "expired"
                       ? `Expired ${Math.abs(alert.daysUntilExpiry)}d ago`
@@ -78,7 +78,7 @@ export function DocumentExpiryBanner({ alerts, expiredCount, expiringCount }: Do
                 </div>
               ))}
               {alerts.length > 3 && (
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-[11px] text-muted-foreground mt-1">
                   +{alerts.length - 3} more document{alerts.length - 3 > 1 ? "s" : ""}
                 </p>
               )}
@@ -86,12 +86,12 @@ export function DocumentExpiryBanner({ alerts, expiredCount, expiringCount }: Do
 
             <div className="mt-2 flex gap-2">
               {expiredCount > 0 && (
-                <Badge variant="destructive" className="text-[10px]">
+                <Badge variant="destructive" className="text-[11px]">
                   {expiredCount} expired
                 </Badge>
               )}
               {expiringCount > 0 && (
-                <Badge variant="secondary" className="text-[10px] bg-warning/10 text-warning border-warning/20">
+                <Badge variant="secondary" className="text-[11px] bg-warning/10 text-warning border-warning/20">
                   {expiringCount} expiring
                 </Badge>
               )}

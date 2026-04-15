@@ -71,6 +71,16 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     overscroll-behavior-y: contain;
   }
+
+  /* Eliminate 300ms tap delay on interactive elements */
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    touch-action: manipulation;
+  }
 }
 
 @layer components {

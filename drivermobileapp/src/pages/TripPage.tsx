@@ -416,7 +416,7 @@ export default function TripsPage() {
                 <RefreshButton onRefresh={handleRefresh} />
                 <button
                   onClick={() => setFilterMode(filterMode === "month" ? "custom" : "month")}
-                  className="flex items-center gap-1.5 text-xs text-primary font-medium px-2.5 py-1.5 rounded-md bg-primary/10 active:bg-primary/20 transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-primary font-medium px-3 py-2.5 rounded-md bg-primary/10 active:bg-primary/20 transition-colors"
                 >
                   <CalendarRange className="w-3.5 h-3.5" />
                   {filterMode === "month" ? "Custom Range" : "By Month"}
@@ -436,7 +436,7 @@ export default function TripsPage() {
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1 block">From</label>
+                  <label className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1 block">From</label>
                   <Input
                     type="date"
                     value={customFrom}
@@ -446,7 +446,7 @@ export default function TripsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1 block">To</label>
+                  <label className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1 block">To</label>
                   <Input
                     type="date"
                     value={customTo}
@@ -534,7 +534,7 @@ const TripCard = memo(function TripCard({
           <div className="flex items-center gap-2 min-w-0">
             <p className="font-medium text-sm truncate">{entry.client_name || entry.trip_number || "Trip"}</p>
             {tracker && (
-              <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${tracker.is_completed
+              <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] font-medium ${tracker.is_completed
                 ? "bg-success/10 text-success"
                 : "bg-info/10 text-info"
                 }`}>

@@ -512,7 +512,7 @@ export function CycleTrackerForm({ trip, open, onOpenChange }: CycleTrackerFormP
               </div>
             </div>
             {formData.is_completed && (
-              <Badge variant="outline" className="text-[10px] shrink-0 border-success text-success">
+              <Badge variant="outline" className="text-[11px] shrink-0 border-success text-success">
                 Complete
               </Badge>
             )}
@@ -766,7 +766,7 @@ function Phase1Preparation({
         <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
           Pre-trip Inspection
         </p>
-        <p className="text-[10px] text-muted-foreground">Target: Maximum 45 minutes</p>
+        <p className="text-[11px] text-muted-foreground">Target: Maximum 45 minutes</p>
         <div className="grid grid-cols-2 gap-3">
           <TimeField
             label="Start Time"
@@ -791,7 +791,7 @@ function Phase1Preparation({
         <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
           Refuelling
         </p>
-        <p className="text-[10px] text-muted-foreground">If required — Target: Maximum 60 minutes</p>
+        <p className="text-[11px] text-muted-foreground">If required — Target: Maximum 60 minutes</p>
         <div className="grid grid-cols-2 gap-3">
           <TimeField
             label="Start Time"
@@ -817,7 +817,7 @@ function Phase1Preparation({
           <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
             Reefer Pre-cooling
           </p>
-          <p className="text-[10px] text-muted-foreground">Minimum 60 minutes before departure</p>
+          <p className="text-[11px] text-muted-foreground">Minimum 60 minutes before departure</p>
           <TimeField
             label="Reefer Unit Started"
             value={data.p1_reefer_start_time}
@@ -848,7 +848,7 @@ function Phase1Preparation({
         <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
           Departure from Yard
         </p>
-        <p className="text-[10px] text-muted-foreground">Total preparation target: Maximum 3 hours</p>
+        <p className="text-[11px] text-muted-foreground">Total preparation target: Maximum 3 hours</p>
         <TimeField
           label="Actual Departure Time"
           value={data.p1_yard_departure}
@@ -879,7 +879,7 @@ function Phase2FarmLoading({
         <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
           Farm Arrival & Loading
         </p>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           Target: Arrive 15:00 | Depart 17:00 — Strict 2-hour window
         </p>
 
@@ -1006,7 +1006,7 @@ function Phase3Transit({
         <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
           In-Transit Stop Log
         </p>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           Log every stop/delay &gt;10 minutes during the trip
         </p>
 
@@ -1030,7 +1030,7 @@ function Phase3Transit({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label className="text-[10px] font-medium mb-1 block">Location</Label>
+                    <Label className="text-[11px] font-medium mb-1 block">Location</Label>
                     <Input
                       value={stop.location}
                       onChange={(e) => onUpdate(index, "location", e.target.value)}
@@ -1040,7 +1040,7 @@ function Phase3Transit({
                     />
                   </div>
                   <div>
-                    <Label className="text-[10px] font-medium mb-1 block">Reason</Label>
+                    <Label className="text-[11px] font-medium mb-1 block">Reason</Label>
                     <Input
                       value={stop.reason}
                       onChange={(e) => onUpdate(index, "reason", e.target.value)}
@@ -1052,7 +1052,7 @@ function Phase3Transit({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label className="text-[10px] font-medium mb-1 block">Time In</Label>
+                    <Label className="text-[11px] font-medium mb-1 block">Time In</Label>
                     <Input
                       type="datetime-local"
                       value={stop.time_in || ""}
@@ -1062,7 +1062,7 @@ function Phase3Transit({
                     />
                   </div>
                   <div>
-                    <Label className="text-[10px] font-medium mb-1 block">Time Out</Label>
+                    <Label className="text-[11px] font-medium mb-1 block">Time Out</Label>
                     <Input
                       type="datetime-local"
                       value={stop.time_out || ""}
@@ -1073,7 +1073,7 @@ function Phase3Transit({
                   </div>
                 </div>
                 {stop.duration_mins != null && (
-                  <p className="text-[10px] text-muted-foreground text-right tabular-nums">
+                  <p className="text-[11px] text-muted-foreground text-right tabular-nums">
                     Duration: {stop.duration_mins} min
                   </p>
                 )}
@@ -1130,7 +1130,7 @@ function Phase4Depot({
         <p className="text-xs font-bold text-muted-foreground/80 uppercase tracking-[0.15em]">
           Depot Arrival & Offloading
         </p>
-        <p className="text-[10px] text-muted-foreground">{routeInfo}</p>
+        <p className="text-[11px] text-muted-foreground">{routeInfo}</p>
 
         <TimeField
           label="Arrival at Depot Gate"
@@ -1434,7 +1434,7 @@ function DurationBadge({
       </span>
       <span className={cn("text-sm font-bold tabular-nums", overTarget ? "text-warning" : "text-success")}>
         {mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`}
-        {target && <span className="text-[10px] font-normal ml-1 opacity-70">(target: {target}m)</span>}
+        {target && <span className="text-[11px] font-normal ml-1 opacity-70">(target: {target}m)</span>}
       </span>
     </div>
   );

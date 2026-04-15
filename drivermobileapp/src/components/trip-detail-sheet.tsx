@@ -377,7 +377,7 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
   // ─── Start Edit Handler ─────────────────────────────────────────────
 
   const startEdit = useCallback((entry: CostEntry) => {
-    
+
     const amount = entry.amount.toString();
     const currency = entry.currency || 'USD';
 
@@ -610,7 +610,7 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
                   <span className="truncate">{trip.destination || "N/A"}</span>
                 </div>
               </div>
-              <Badge variant="outline" className="text-[10px] shrink-0">
+              <Badge variant="outline" className="text-[11px] shrink-0">
                 {trip.status || "pending"}
               </Badge>
             </div>
@@ -624,7 +624,7 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
                 {trip.departure_date ? formatDate(trip.departure_date) : "No date"}
               </span>
               {trip.client_name && (
-                <Badge variant="secondary" className="text-[10px]">
+                <Badge variant="secondary" className="text-[11px]">
                   {trip.client_name}
                 </Badge>
               )}
@@ -747,7 +747,7 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
               {/* Pre-configured (system-generated) expenses */}
               {systemExpenses.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                  <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
                     Pre-configured Route Costs
                   </p>
                   <div className="space-y-1.5 opacity-70">
@@ -783,7 +783,7 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
               ) : tripExpenses.length > 0 ? (
                 <div className="space-y-1.5">
                   {systemExpenses.length > 0 && (
-                    <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                    <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
                       Your Expenses
                     </p>
                   )}
@@ -1121,12 +1121,12 @@ function ExpenseRow({ entry, attachmentCount = 0, isSystem = false, onTap }: { e
         <div className="flex items-center gap-2 min-w-0">
           <Badge
             variant={isSystem ? "outline" : entry.is_flagged ? "destructive" : "secondary"}
-            className="text-[10px] shrink-0"
+            className="text-[11px] shrink-0"
           >
             {entry.category}
           </Badge>
           {isSystem && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
               Auto
             </span>
           )}
@@ -1134,7 +1134,7 @@ function ExpenseRow({ entry, attachmentCount = 0, isSystem = false, onTap }: { e
             <Flag className="w-3 h-3 text-warning shrink-0" />
           )}
           {attachmentCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px] text-primary/80">
+            <span className="flex items-center gap-0.5 text-[11px] text-primary/80">
               <Paperclip className="w-3 h-3" />
               {attachmentCount}
             </span>
@@ -1150,7 +1150,7 @@ function ExpenseRow({ entry, attachmentCount = 0, isSystem = false, onTap }: { e
       {entry.sub_category && (
         <p className="text-xs text-muted-foreground truncate">{entry.sub_category}</p>
       )}
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
+      <div className="flex items-center gap-3 text-[11px] text-muted-foreground/70">
         <span className="flex items-center gap-1">
           <Calendar className="w-2.5 h-2.5" />
           {formatDate(entry.date)}
@@ -1163,7 +1163,7 @@ function ExpenseRow({ entry, attachmentCount = 0, isSystem = false, onTap }: { e
         )}
       </div>
       {entry.notes && (
-        <p className="text-[10px] text-muted-foreground/60 line-clamp-1 flex items-center gap-1">
+        <p className="text-[11px] text-muted-foreground/60 line-clamp-1 flex items-center gap-1">
           <FileText className="w-2.5 h-2.5 shrink-0" />
           {entry.notes}
         </p>
