@@ -465,7 +465,7 @@ const Procurement = () => {
           return;
         }
         const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path);
-        const vendorName = vendors.find(v => v.id === cashManagerForm.vendor_id)?.vendor_name ?? "";
+        const vendorName = vendors.find(v => v.id === (cashManagerForm.vendor_id || selectedRequest.vendor_id))?.vendor_name ?? "";
         const quote: QuoteAttachment = {
           file_url: publicUrl,
           file_name: file.name,
@@ -3207,7 +3207,7 @@ const Procurement = () => {
             </div>
           )}
 
-          {/* Show vendor/price/quote fields when missing from Start Procurement */}
+          {/* Show vendor/price fields when missing from Start Procurement */}
           {selectedRequest && (!selectedRequest.vendor_id || !selectedRequest.unit_price) && (
             <div className="border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20 rounded-lg p-4 space-y-3 mb-2">
               <div className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-400">
@@ -3265,50 +3265,72 @@ const Procurement = () => {
                   />
                 </div>
               )}
+            </div>
+          )}
 
-              {(!selectedRequest.quotes || selectedRequest.quotes.length === 0) && (
-                <div className="grid gap-2">
-                  <Label className="text-xs">Quote / Invoice (PDF, JPG, PNG — max 5 MB) *</Label>
-                  {cashManagerForm.quoteFile ? (
-                    <div className="flex items-center gap-2 text-xs p-2 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded">
+          {/* Quote upload — always available */}
+          {selectedRequest && (
+            <div className="space-y-2 mb-2">
+              <Label className="text-xs">Quote / Invoice (PDF, JPG, PNG — max 5 MB)</Label>
+
+              {/* Show existing quotes */}
+              {selectedRequest.quotes && selectedRequest.quotes.length > 0 && (
+                <div className="space-y-1">
+                  {selectedRequest.quotes.map((q, idx) => (
+                    <a
+                      key={idx}
+                      href={q.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs p-2 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded hover:bg-green-100 dark:hover:bg-green-950/30 transition-colors"
+                    >
                       <FileText className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                      <span className="truncate flex-1">{cashManagerForm.quoteFile.name}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0"
-                        onClick={() => setCashManagerForm({ ...cashManagerForm, quoteFile: null })}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <label className="flex items-center gap-2 cursor-pointer border border-dashed rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted/30 transition-colors">
-                      <Upload className="h-3.5 w-3.5 shrink-0" />
-                      <span>Click to upload quote</span>
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            if (file.size > 5 * 1024 * 1024) {
-                              toast({ variant: "destructive", title: "File Too Large", description: "Max 5 MB per file" });
-                              return;
-                            }
-                            if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
-                              toast({ variant: "destructive", title: "Invalid File Type", description: "PDF, JPG or PNG only" });
-                              return;
-                            }
-                            setCashManagerForm({ ...cashManagerForm, quoteFile: file });
-                          }
-                        }}
-                      />
-                    </label>
-                  )}
+                      <span className="truncate flex-1">{q.file_name}</span>
+                      {q.vendor_name && <span className="text-muted-foreground shrink-0">{q.vendor_name}</span>}
+                    </a>
+                  ))}
                 </div>
+              )}
+
+              {/* Upload new quote */}
+              {cashManagerForm.quoteFile ? (
+                <div className="flex items-center gap-2 text-xs p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded">
+                  <FileText className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                  <span className="truncate flex-1">{cashManagerForm.quoteFile.name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 w-5 p-0"
+                    onClick={() => setCashManagerForm({ ...cashManagerForm, quoteFile: null })}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 cursor-pointer border border-dashed rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted/30 transition-colors">
+                  <Upload className="h-3.5 w-3.5 shrink-0" />
+                  <span>{selectedRequest.quotes && selectedRequest.quotes.length > 0 ? "Upload another quote" : "Click to upload quote"}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                          toast({ variant: "destructive", title: "File Too Large", description: "Max 5 MB per file" });
+                          return;
+                        }
+                        if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+                          toast({ variant: "destructive", title: "Invalid File Type", description: "PDF, JPG or PNG only" });
+                          return;
+                        }
+                        setCashManagerForm({ ...cashManagerForm, quoteFile: file });
+                      }
+                    }}
+                  />
+                </label>
               )}
             </div>
           )}
