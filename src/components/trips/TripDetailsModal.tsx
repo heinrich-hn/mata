@@ -361,6 +361,18 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
       return;
     }
 
+    // Check for unverified costs (all non-system costs must be verified)
+    const unverifiedCosts = costs.filter(c => !c.is_system_generated && c.investigation_status !== 'resolved');
+
+    if (unverifiedCosts.length > 0) {
+      toast({
+        title: 'Cannot Complete Trip — Unverified Costs',
+        description: `There are ${unverifiedCosts.length} cost(s) that have not been verified. Please verify all expenses before completing the trip.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const flaggedCosts = costs.filter(c => c.is_flagged);
 
     try {
@@ -373,6 +385,8 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
             flags_checked_at: new Date().toISOString(),
             flags_resolved_count: flaggedCosts.length,
             unresolved_flags_at_completion: 0,
+            costs_verified_count: costs.filter(c => !c.is_system_generated).length,
+            all_costs_verified: true,
             validated_by: 'system',
             ...(kmOverride && kmValidation.hasMismatch ? {
               km_override: true,
@@ -426,8 +440,9 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
 
   const flaggedCosts = costs.filter(c => c.is_flagged);
   const unresolvedFlags = flaggedCosts.filter(c => c.investigation_status !== 'resolved');
+  const unverifiedCosts = costs.filter(c => !c.is_system_generated && c.investigation_status !== 'resolved');
   const totalCosts = costs.reduce((sum, c) => sum + c.amount, 0);
-  const canComplete = trip.status === 'active' && unresolvedFlags.length === 0 && (!kmValidation.hasMismatch || kmOverride);
+  const canComplete = trip.status === 'active' && unresolvedFlags.length === 0 && unverifiedCosts.length === 0 && (!kmValidation.hasMismatch || kmOverride);
 
   return (
     <>
@@ -464,11 +479,15 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="costs">
                 Costs
-                {flaggedCosts.length > 0 && (
+                {unresolvedFlags.length > 0 ? (
                   <Badge variant="destructive" className="ml-2">
-                    {unresolvedFlags.length}
+                    {unresolvedFlags.length} flagged
                   </Badge>
-                )}
+                ) : unverifiedCosts.length > 0 ? (
+                  <Badge variant="outline" className="ml-2 bg-orange-50 text-orange-700 border-orange-200">
+                    {unverifiedCosts.length} unverified
+                  </Badge>
+                ) : null}
               </TabsTrigger>
               <TabsTrigger value="system-costs">System Costs</TabsTrigger>
               <TabsTrigger value="cycle-tracker">
@@ -489,6 +508,25 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
                         </p>
                         <p className="text-sm text-amber-700">
                           Resolve all flags before completing this trip
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Unverified Costs Warning */}
+              {unverifiedCosts.length > 0 && unresolvedFlags.length === 0 && (
+                <Card className="border-orange-200 bg-orange-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-orange-600" />
+                      <div>
+                        <p className="font-medium text-orange-900">
+                          {unverifiedCosts.length} Unverified Cost{unverifiedCosts.length !== 1 ? 's' : ''}
+                        </p>
+                        <p className="text-sm text-orange-700">
+                          All cost entries must be verified before completing this trip. Go to the Costs tab to verify each entry.
                         </p>
                       </div>
                     </div>

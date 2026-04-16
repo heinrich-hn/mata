@@ -7,7 +7,6 @@ import EditTripDialog from "@/components/trips/EditTripDialog";
 import LoadImportModal from "@/components/trips/LoadImportModal";
 import OperationalCostsTab from "@/components/trips/OperationalCostsTab";
 import TripDetailsModal from "@/components/trips/TripDetailsModal";
-import TripExpensesSection from "@/components/trips/TripExpensesSection";
 import TripReportsSection from "@/components/trips/TripReportsSection";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -289,9 +288,6 @@ const TripManagement = () => {
                 Completed
                 {completedTrips.length > 0 && <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-bold rounded-full">{completedTrips.length}</Badge>}
               </TabsTrigger>
-              <TabsTrigger value="expenses" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
-                Expenses
-              </TabsTrigger>
               <TabsTrigger value="reports" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
                 Reports
               </TabsTrigger>
@@ -324,15 +320,6 @@ const TripManagement = () => {
                 trips={completedTrips}
                 onView={handleView}
                 onRefresh={fetchTrips}
-              />
-            )}
-          </TabsContent>
-
-          <TabsContent value="expenses">
-            {activeTab === "expenses" && (
-              <TripExpensesSection
-                trips={[...activeTrips, ...completedTrips]}
-                onViewTrip={handleView}
               />
             )}
           </TabsContent>

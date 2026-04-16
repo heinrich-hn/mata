@@ -239,6 +239,44 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
             return;
           }
         }
+
+        // Block completion if there are unresolved flags or unverified costs
+        const { data: existingCosts, error: costsError } = await supabase
+          .from('cost_entries')
+          .select('id, is_flagged, investigation_status, is_system_generated')
+          .eq('trip_id', trip.id);
+
+        if (costsError) {
+          console.error('Error checking costs:', costsError);
+          toast({
+            title: 'Error',
+            description: 'Failed to verify cost entries. Cannot complete trip.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        if (existingCosts && existingCosts.length > 0) {
+          const unresolvedFlags = existingCosts.filter(c => c.is_flagged && c.investigation_status !== 'resolved');
+          if (unresolvedFlags.length > 0) {
+            toast({
+              title: 'Cannot Complete Trip',
+              description: `There are ${unresolvedFlags.length} unresolved flag(s). Please resolve all flags before completing the trip.`,
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          const unverifiedCosts = existingCosts.filter(c => !c.is_system_generated && c.investigation_status !== 'resolved');
+          if (unverifiedCosts.length > 0) {
+            toast({
+              title: 'Cannot Complete Trip — Unverified Costs',
+              description: `There are ${unverifiedCosts.length} cost(s) that have not been verified. Please verify all expenses before completing the trip.`,
+              variant: 'destructive',
+            });
+            return;
+          }
+        }
       }
 
       const { error } = await supabase
