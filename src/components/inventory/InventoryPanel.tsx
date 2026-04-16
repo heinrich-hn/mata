@@ -9,7 +9,7 @@ import { useCreateReplenishmentRequest } from "@/hooks/useProcurement";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { differenceInDays, parseISO } from "date-fns";
-import { AlertTriangle, CheckSquare, Edit, FileText, Package, Plus, Search, Shield, ShieldAlert, ShieldCheck, ShoppingCart, Trash2, TrendingUp, Truck, Upload, X } from "lucide-react";
+import { AlertTriangle, CheckSquare, Edit, FileText, Package, Plus, Search, Shield, ShieldAlert, ShieldCheck, ShoppingCart, Trash2, TrendingUp, Upload, X } from "lucide-react";
 import { useState } from "react";
 import AddInventoryItemDialog from "../dialogs/AddInventoryItemDialog";
 import AddWarrantyItemDialog from "../dialogs/AddWarrantyItemDialog";
@@ -70,7 +70,7 @@ interface WarrantyItemRecord {
   supplier: string | null;
   invoice_number: string | null;
   job_card_id: string | null;
-  vehicle_id?: string | null;  // Optional until migration is applied
+  vehicle_id?: string | null;
   inventory_id: string | null;
   status: string;
   created_at: string | null;
@@ -193,7 +193,6 @@ const InventoryPanel = () => {
     item.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Query for standalone warranty items
   const { data: standaloneWarrantyItems = [], refetch: refetchWarrantyItems } = useQuery({
     queryKey: ["warranty-items"],
     queryFn: async () => {
@@ -205,9 +204,7 @@ const InventoryPanel = () => {
         `)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      // Fetch vehicle data separately until FK migration is applied
       const items = (data || []) as unknown as WarrantyItemRecord[];
-      // Try to enrich with vehicle data if vehicle_id exists
       for (const item of items) {
         if (item.vehicle_id) {
           const { data: vehicle } = await supabase
@@ -229,7 +226,6 @@ const InventoryPanel = () => {
   const totalValue = filteredInventory.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const pendingRequestedCount = requestedPartsServices.filter((item) => item.status?.toLowerCase() === "pending").length;
 
-  // Warranty calculations for inventory items
   const inventoryWarrantyItems = filteredInventory.filter(item => item.hasWarranty);
   const getWarrantyStatus = (item: InventoryItem) => {
     if (!item.hasWarranty || !item.warrantyEndDate) return "no_warranty";
@@ -239,7 +235,6 @@ const InventoryPanel = () => {
     return "active";
   };
 
-  // Warranty status for standalone items
   const getStandaloneWarrantyStatus = (item: WarrantyItemRecord) => {
     if (item.status === "claimed" || item.status === "void") return item.status;
     if (!item.warranty_end_date) return "unknown";
@@ -249,7 +244,6 @@ const InventoryPanel = () => {
     return "active";
   };
 
-  // Combined warranty stats
   const invActiveCount = inventoryWarrantyItems.filter(item => getWarrantyStatus(item) === "active").length;
   const invExpiringSoonCount = inventoryWarrantyItems.filter(item => getWarrantyStatus(item) === "expiring_soon").length;
   const invExpiredCount = inventoryWarrantyItems.filter(item => getWarrantyStatus(item) === "expired").length;
@@ -263,7 +257,6 @@ const InventoryPanel = () => {
   const expiringSoonCount = invExpiringSoonCount + standaloneExpiringSoonCount;
   const expiredCount = invExpiredCount + standaloneExpiredCount;
 
-  // Multi-select helpers
   const toggleInventorySelection = (id: string) => {
     setSelectedInventoryIds(prev => {
       const next = new Set(prev);
@@ -478,7 +471,6 @@ const InventoryPanel = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {/* Selection bar */}
               {selectedInventoryIds.size > 0 && (
                 <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -501,7 +493,6 @@ const InventoryPanel = () => {
                 </div>
               )}
 
-              {/* Select all toggle */}
               {filteredInventory.length > 0 && (
                 <div className="mb-3 flex items-center gap-2">
                   <Checkbox
@@ -514,87 +505,88 @@ const InventoryPanel = () => {
                 </div>
               )}
 
-              <div className="space-y-3">
+              {/* COMPACT INVENTORY LIST */}
+              <div className="space-y-2">
                 {filteredInventory.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     No inventory items found. Add items to get started.
                   </div>
                 ) : (
                   filteredInventory.map((item) => (
-                    <Card key={item.id} className={`shadow-sm ${selectedInventoryIds.has(item.id) ? "ring-2 ring-primary" : ""}`}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-start gap-3">
-                          <Checkbox
-                            checked={selectedInventoryIds.has(item.id)}
-                            onCheckedChange={() => toggleInventorySelection(item.id)}
-                            className="mt-1"
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-foreground">{item.name}</h3>
-                              {isLowStock(item) && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Low Stock
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                              <div>
-                                <p className="text-muted-foreground">Part Number</p>
-                                <p className="font-medium font-mono">{item.partNumber}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">Category</p>
-                                <p className="font-medium">{item.category}</p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">Quantity</p>
-                                <p className={`font-medium ${isLowStock(item) ? "text-warning" : ""}`}>
-                                  {item.quantity} units
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-muted-foreground">Location</p>
-                                <p className="font-medium">{item.location}</p>
-                              </div>
-                            </div>
-                            <div className="mt-3 flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">
-                                Unit Price: <span className="font-semibold text-foreground">${item.unitPrice.toFixed(2)}</span>
-                                {item.hasWarranty && (
-                                  <Badge variant="outline" className="ml-2 text-blue-600 border-blue-300">
-                                    <ShieldCheck className="h-3 w-3 mr-1" />
-                                    Warranty
-                                  </Badge>
-                                )}
+                    <div 
+                      key={item.id} 
+                      className={`border rounded-lg p-3 hover:bg-muted/30 transition-colors ${
+                        selectedInventoryIds.has(item.id) ? "ring-2 ring-primary bg-primary/5" : ""
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={selectedInventoryIds.has(item.id)}
+                          onCheckedChange={() => toggleInventorySelection(item.id)}
+                          className="mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            <h3 className="font-semibold text-sm truncate">{item.name}</h3>
+                            <span className="text-xs text-muted-foreground font-mono">{item.partNumber}</span>
+                            {isLowStock(item) && (
+                              <Badge variant="destructive" className="text-xs py-0 h-5">
+                                Low Stock
+                              </Badge>
+                            )}
+                            {item.hasWarranty && (
+                              <Badge variant="outline" className="text-blue-600 border-blue-300 text-xs py-0 h-5">
+                                <ShieldCheck className="h-3 w-3 mr-0.5" />
+                                Warranty
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-4 text-xs mb-2">
+                            <span className="text-muted-foreground">
+                              Category: <span className="font-medium text-foreground">{item.category}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Qty: <span className={`font-medium ${isLowStock(item) ? "text-warning" : "text-foreground"}`}>
+                                {item.quantity} units
                               </span>
-                              <div className="flex gap-2 flex-wrap">
-                                <Button
-                                  size="sm"
-                                  variant={isLowStock(item) ? "default" : "outline"}
-                                  onClick={() => handleReorderItem(item)}
-                                  className={isLowStock(item) ? "bg-orange-600 hover:bg-orange-700" : ""}
-                                >
-                                  <ShoppingCart className="h-4 w-4 mr-1" />
-                                  Reorder
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => handleManageWarranty(item)}>
-                                  <Shield className="h-4 w-4 mr-1" />
-                                  Warranty
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => handleEditItem(item)}>
-                                  <Edit className="h-4 w-4 mr-1" />
-                                  Edit
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => handleUpdateStock(item)}>
-                                  Update Stock
-                                </Button>
-                              </div>
-                            </div>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Min: <span className="font-medium text-foreground">{item.minQuantity}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Location: <span className="font-medium text-foreground">{item.location}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Price: <span className="font-semibold text-foreground">${item.unitPrice.toFixed(2)}</span>
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant={isLowStock(item) ? "default" : "ghost"}
+                              onClick={() => handleReorderItem(item)}
+                              className={`h-7 text-xs px-2 ${isLowStock(item) ? "bg-orange-600 hover:bg-orange-700" : ""}`}
+                            >
+                              <ShoppingCart className="h-3.5 w-3.5 mr-1" />
+                              Reorder
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleManageWarranty(item)} className="h-7 text-xs px-2">
+                              <Shield className="h-3.5 w-3.5 mr-1" />
+                              Warranty
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} className="h-7 text-xs px-2">
+                              <Edit className="h-3.5 w-3.5 mr-1" />
+                              Edit
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleUpdateStock(item)} className="h-7 text-xs px-2">
+                              Update Stock
+                            </Button>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))
                 )}
               </div>
@@ -602,58 +594,59 @@ const InventoryPanel = () => {
           </Card>
 
           <Card className="shadow-card mt-4">
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>Requested Parts & Services</CardTitle>
               <CardDescription>
                 Requests created from job cards for external parts and service work (requires IR number).
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {requestedPartsServices.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-6 text-muted-foreground text-sm">
                     No requested external parts/services found.
                   </div>
                 ) : (
                   requestedPartsServices.slice(0, 20).map((request) => (
-                    <Card key={request.id} className="shadow-sm">
-                      <CardContent className="pt-6">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-semibold">{request.part_name}</h4>
-                              <Badge variant="outline" className={request.is_service ? "text-purple-700 border-purple-300" : "text-orange-700 border-orange-300"}>
-                                {request.is_service ? "Service" : "External Part"}
-                              </Badge>
-                              <Badge variant="outline">Qty {request.quantity}</Badge>
-                              <Badge variant={request.status?.toLowerCase() === "pending" ? "secondary" : "default"}>
-                                {request.status}
-                              </Badge>
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                IR {request.ir_number || "N/A"}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                              Vendor: <span className="font-medium text-foreground">{request.vendors?.name || "Not assigned"}</span>
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Job Card: <span className="font-medium text-foreground">{request.job_cards?.job_number || "N/A"}</span>
-                              {request.job_cards?.title ? ` — ${request.job_cards.title}` : ""}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Requested: {request.created_at ? new Date(request.created_at).toLocaleString() : "Unknown"}
-                            </p>
+                    <div key={request.id} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                            <h4 className="font-semibold text-sm truncate">{request.part_name}</h4>
+                            <Badge variant="outline" className={`text-xs py-0 h-5 ${request.is_service ? "text-purple-700 border-purple-300" : "text-orange-700 border-orange-300"}`}>
+                              {request.is_service ? "Service" : "External Part"}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs py-0 h-5">Qty {request.quantity}</Badge>
+                            <Badge variant={request.status?.toLowerCase() === "pending" ? "secondary" : "default"} className="text-xs py-0 h-5">
+                              {request.status}
+                            </Badge>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs py-0 h-5">
+                              IR {request.ir_number || "N/A"}
+                            </Badge>
                           </div>
-                          <div className="text-right text-sm">
-                            <p className="text-muted-foreground">Total</p>
-                            <p className="font-semibold">${(request.total_price || 0).toFixed(2)}</p>
-                            {request.unit_price && (
-                              <p className="text-xs text-muted-foreground">${request.unit_price.toFixed(2)} each</p>
-                            )}
+                          
+                          <div className="flex items-center gap-4 text-xs">
+                            <span className="text-muted-foreground">
+                              Vendor: <span className="font-medium text-foreground">{request.vendors?.name || "Not assigned"}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Job Card: <span className="font-medium text-foreground">{request.job_cards?.job_number || "N/A"}</span>
+                              {request.job_cards?.title && <span className="text-muted-foreground ml-1">— {request.job_cards.title}</span>}
+                            </span>
+                            <span className="text-muted-foreground">
+                              Requested: {request.created_at ? new Date(request.created_at).toLocaleDateString() : "Unknown"}
+                            </span>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                        
+                        <div className="text-right text-xs shrink-0">
+                          <p className="font-semibold">${(request.total_price || 0).toFixed(2)}</p>
+                          {request.unit_price && (
+                            <p className="text-muted-foreground">${request.unit_price.toFixed(2)} ea</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   ))
                 )}
               </div>
@@ -676,8 +669,7 @@ const InventoryPanel = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                {/* Warranty Stats Summary */}
+              <div className="space-y-4">
                 {totalWarrantyItems > 0 && (
                   <div className="flex gap-4 flex-wrap">
                     <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg px-4 py-2">
@@ -694,9 +686,9 @@ const InventoryPanel = () => {
                     </div>
                   </div>
                 )}
-                {/* Standalone Warranty Items Section */}
+                
                 {standaloneWarrantyItems.length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                       Manual Warranty Items ({standaloneWarrantyItems.length})
                     </h3>
@@ -707,116 +699,79 @@ const InventoryPanel = () => {
                         : null;
 
                       return (
-                        <Card key={item.id} className="shadow-sm border-l-4 border-l-blue-500">
-                          <CardContent className="pt-6">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                  <h3 className="font-semibold text-foreground">{item.name}</h3>
-                                  {status === "active" && (
-                                    <Badge variant="outline" className="text-green-600 border-green-300">
-                                      <ShieldCheck className="h-3 w-3 mr-1" />
-                                      Active
-                                    </Badge>
-                                  )}
-                                  {status === "expiring_soon" && (
-                                    <Badge variant="outline" className="text-orange-600 border-orange-300">
-                                      <ShieldAlert className="h-3 w-3 mr-1" />
-                                      Expiring Soon
-                                    </Badge>
-                                  )}
-                                  {status === "expired" && (
-                                    <Badge variant="destructive">
-                                      <AlertTriangle className="h-3 w-3 mr-1" />
-                                      Expired
-                                    </Badge>
-                                  )}
-                                  {status === "claimed" && (
-                                    <Badge variant="secondary">Claimed</Badge>
-                                  )}
-                                  {item.job_card && (
-                                    <Badge variant="outline" className="text-purple-600 border-purple-300">
-                                      <FileText className="h-3 w-3 mr-1" />
-                                      {item.job_card.job_number} - {item.job_card.status}
-                                    </Badge>
-                                  )}
-                                  {item.vehicle && (
-                                    <Badge variant="outline" className="text-blue-600 border-blue-300">
-                                      <Truck className="h-3 w-3 mr-1" />
-                                      {item.vehicle.fleet_number || item.vehicle.registration_number}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                  <div>
-                                    <p className="text-muted-foreground">Part / Serial #</p>
-                                    <p className="font-medium font-mono">{item.part_number || item.serial_number || "N/A"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">Warranty Provider</p>
-                                    <p className="font-medium">{item.warranty_provider || "Not specified"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">Period</p>
-                                    <p className="font-medium">{item.warranty_period_months ? `${item.warranty_period_months} months` : "N/A"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">Expires</p>
-                                    <p className={`font-medium ${status === "expired" ? "text-red-600" : status === "expiring_soon" ? "text-orange-600" : ""}`}>
-                                      {item.warranty_end_date || "N/A"}
-                                      {daysUntilExpiry !== null && daysUntilExpiry >= 0 && (
-                                        <span className="text-xs text-muted-foreground ml-1">({daysUntilExpiry} days)</span>
-                                      )}
-                                    </p>
-                                  </div>
-                                </div>
+                        <div key={item.id} className="border rounded-lg p-3 border-l-4 border-l-blue-500 hover:bg-muted/30 transition-colors">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                                <h3 className="font-semibold text-sm truncate">{item.name}</h3>
+                                {status === "active" && (
+                                  <Badge variant="outline" className="text-green-600 border-green-300 text-xs py-0 h-5">
+                                    <ShieldCheck className="h-3 w-3 mr-0.5" />
+                                    Active
+                                  </Badge>
+                                )}
+                                {status === "expiring_soon" && (
+                                  <Badge variant="outline" className="text-orange-600 border-orange-300 text-xs py-0 h-5">
+                                    <ShieldAlert className="h-3 w-3 mr-0.5" />
+                                    Expiring Soon
+                                  </Badge>
+                                )}
+                                {status === "expired" && (
+                                  <Badge variant="destructive" className="text-xs py-0 h-5">
+                                    <AlertTriangle className="h-3 w-3 mr-0.5" />
+                                    Expired
+                                  </Badge>
+                                )}
+                                {status === "claimed" && (
+                                  <Badge variant="secondary" className="text-xs py-0 h-5">Claimed</Badge>
+                                )}
                                 {item.job_card && (
-                                  <div className="mt-2 text-sm">
-                                    <p className="text-muted-foreground">Linked Job Card:</p>
-                                    <p className="font-medium">{item.job_card.job_number} - {item.job_card.title}</p>
-                                  </div>
+                                  <Badge variant="outline" className="text-purple-600 border-purple-300 text-xs py-0 h-5">
+                                    <FileText className="h-3 w-3 mr-0.5" />
+                                    {item.job_card.job_number}
+                                  </Badge>
                                 )}
-                                {item.vehicle && (
-                                  <div className="mt-2 text-sm">
-                                    <p className="text-muted-foreground">Linked Vehicle:</p>
-                                    <p className="font-medium">
-                                      {item.vehicle.fleet_number && <span className="font-mono mr-2">[{item.vehicle.fleet_number}]</span>}
-                                      {item.vehicle.registration_number} - {item.vehicle.make} {item.vehicle.model}
-                                    </p>
-                                  </div>
-                                )}
-                                {item.purchase_price && (
-                                  <div className="mt-2 text-sm text-muted-foreground">
-                                    Purchase Price: <span className="font-medium text-foreground">${item.purchase_price.toFixed(2)}</span>
-                                    {item.supplier && <span className="ml-2">from {item.supplier}</span>}
-                                  </div>
-                                )}
-                                <div className="mt-3 flex items-center justify-between">
-                                  <span className="text-sm text-muted-foreground">
-                                    Contact: <span className="font-medium text-foreground">{item.warranty_claim_contact || "Not provided"}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-4 text-xs mb-2">
+                                <span className="text-muted-foreground">
+                                  Part/Serial: <span className="font-medium text-foreground font-mono">{item.part_number || item.serial_number || "N/A"}</span>
+                                </span>
+                                <span className="text-muted-foreground">
+                                  Provider: <span className="font-medium text-foreground">{item.warranty_provider || "Not specified"}</span>
+                                </span>
+                                <span className="text-muted-foreground">
+                                  Period: <span className="font-medium text-foreground">{item.warranty_period_months ? `${item.warranty_period_months} mo` : "N/A"}</span>
+                                </span>
+                                <span className="text-muted-foreground">
+                                  Expires: <span className={`font-medium ${status === "expired" ? "text-red-600" : status === "expiring_soon" ? "text-orange-600" : "text-foreground"}`}>
+                                    {item.warranty_end_date || "N/A"}
+                                    {daysUntilExpiry !== null && daysUntilExpiry >= 0 && (
+                                      <span className="text-muted-foreground ml-1">({daysUntilExpiry}d)</span>
+                                    )}
                                   </span>
-                                  <div className="flex gap-2">
-                                    <Button size="sm" variant="outline" onClick={() => handleEditWarrantyItem(item)}>
-                                      <Edit className="h-4 w-4 mr-1" />
-                                      Edit
-                                    </Button>
-                                    <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => handleDeleteWarrantyItem(item)}>
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-1">
+                                <Button size="sm" variant="ghost" onClick={() => handleEditWarrantyItem(item)} className="h-7 text-xs px-2">
+                                  <Edit className="h-3.5 w-3.5 mr-1" />
+                                  Edit
+                                </Button>
+                                <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700 h-7 text-xs px-2" onClick={() => handleDeleteWarrantyItem(item)}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
                 )}
 
-                {/* Inventory Warranty Items Section */}
                 {inventoryWarrantyItems.length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                       Inventory Items with Warranty ({inventoryWarrantyItems.length})
                     </h3>
@@ -827,83 +782,67 @@ const InventoryPanel = () => {
                         : null;
 
                       return (
-                        <Card key={item.id} className="shadow-sm">
-                          <CardContent className="pt-6">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h3 className="font-semibold text-foreground">{item.name}</h3>
-                                  <Badge variant="outline" className="text-gray-500 border-gray-300">
-                                    <Package className="h-3 w-3 mr-1" />
-                                    Inventory
+                        <div key={item.id} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                                <h3 className="font-semibold text-sm truncate">{item.name}</h3>
+                                <Badge variant="outline" className="text-gray-500 border-gray-300 text-xs py-0 h-5">
+                                  <Package className="h-3 w-3 mr-0.5" />
+                                  Inventory
+                                </Badge>
+                                {status === "active" && (
+                                  <Badge variant="outline" className="text-green-600 border-green-300 text-xs py-0 h-5">
+                                    <ShieldCheck className="h-3 w-3 mr-0.5" />
+                                    Active
                                   </Badge>
-                                  {status === "active" && (
-                                    <Badge variant="outline" className="text-green-600 border-green-300">
-                                      <ShieldCheck className="h-3 w-3 mr-1" />
-                                      Active
-                                    </Badge>
-                                  )}
-                                  {status === "expiring_soon" && (
-                                    <Badge variant="outline" className="text-orange-600 border-orange-300">
-                                      <ShieldAlert className="h-3 w-3 mr-1" />
-                                      Expiring Soon
-                                    </Badge>
-                                  )}
-                                  {status === "expired" && (
-                                    <Badge variant="destructive">
-                                      <AlertTriangle className="h-3 w-3 mr-1" />
-                                      Expired
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                  <div>
-                                    <p className="text-muted-foreground">Part Number</p>
-                                    <p className="font-medium font-mono">{item.partNumber}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">Warranty Provider</p>
-                                    <p className="font-medium">{item.warrantyProvider || "Not specified"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">Period</p>
-                                    <p className="font-medium">{item.warrantyPeriodMonths ? `${item.warrantyPeriodMonths} months` : "N/A"}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-muted-foreground">Expires</p>
-                                    <p className={`font-medium ${status === "expired" ? "text-red-600" : status === "expiring_soon" ? "text-orange-600" : ""}`}>
-                                      {item.warrantyEndDate || "N/A"}
-                                      {daysUntilExpiry !== null && daysUntilExpiry >= 0 && (
-                                        <span className="text-xs text-muted-foreground ml-1">({daysUntilExpiry} days)</span>
-                                      )}
-                                    </p>
-                                  </div>
-                                </div>
-                                {item.warrantyTerms && (
-                                  <div className="mt-2 text-sm text-muted-foreground">
-                                    <p className="font-medium">Terms:</p>
-                                    <p>{item.warrantyTerms}</p>
-                                  </div>
                                 )}
-                                <div className="mt-3 flex items-center justify-between">
-                                  <span className="text-sm text-muted-foreground">
-                                    Contact: <span className="font-medium text-foreground">{item.warrantyClaimContact || "Not provided"}</span>
-                                  </span>
-                                  <Button size="sm" variant="outline" onClick={() => handleManageWarranty(item)}>
-                                    <Edit className="h-4 w-4 mr-1" />
-                                    Edit Warranty
-                                  </Button>
-                                </div>
+                                {status === "expiring_soon" && (
+                                  <Badge variant="outline" className="text-orange-600 border-orange-300 text-xs py-0 h-5">
+                                    <ShieldAlert className="h-3 w-3 mr-0.5" />
+                                    Expiring Soon
+                                  </Badge>
+                                )}
+                                {status === "expired" && (
+                                  <Badge variant="destructive" className="text-xs py-0 h-5">
+                                    <AlertTriangle className="h-3 w-3 mr-0.5" />
+                                    Expired
+                                  </Badge>
+                                )}
                               </div>
+                              
+                              <div className="flex items-center gap-4 text-xs mb-2">
+                                <span className="text-muted-foreground">
+                                  Part #: <span className="font-medium text-foreground font-mono">{item.partNumber}</span>
+                                </span>
+                                <span className="text-muted-foreground">
+                                  Provider: <span className="font-medium text-foreground">{item.warrantyProvider || "Not specified"}</span>
+                                </span>
+                                <span className="text-muted-foreground">
+                                  Period: <span className="font-medium text-foreground">{item.warrantyPeriodMonths ? `${item.warrantyPeriodMonths} mo` : "N/A"}</span>
+                                </span>
+                                <span className="text-muted-foreground">
+                                  Expires: <span className={`font-medium ${status === "expired" ? "text-red-600" : status === "expiring_soon" ? "text-orange-600" : "text-foreground"}`}>
+                                    {item.warrantyEndDate || "N/A"}
+                                    {daysUntilExpiry !== null && daysUntilExpiry >= 0 && (
+                                      <span className="text-muted-foreground ml-1">({daysUntilExpiry}d)</span>
+                                    )}
+                                  </span>
+                                </span>
+                              </div>
+                              
+                              <Button size="sm" variant="ghost" onClick={() => handleManageWarranty(item)} className="h-7 text-xs px-2">
+                                <Edit className="h-3.5 w-3.5 mr-1" />
+                                Edit Warranty
+                              </Button>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
                 )}
 
-                {/* Empty State */}
                 {totalWarrantyItems === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -937,13 +876,11 @@ const InventoryPanel = () => {
         open={requestPartsOpen}
         onOpenChange={setRequestPartsOpen}
       />
-
       <InventoryImportModal
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
         onImportComplete={refetch}
       />
-
       <WarrantyDialog
         open={warrantyDialogOpen}
         onOpenChange={setWarrantyDialogOpen}
@@ -962,14 +899,12 @@ const InventoryPanel = () => {
         } : null}
         onUpdate={refetch}
       />
-
       <AddWarrantyItemDialog
         open={addWarrantyItemDialogOpen}
         onOpenChange={handleWarrantyItemDialogClose}
         onSuccess={refetchWarrantyItems}
         editItem={editWarrantyItem}
       />
-
       <ProcurementFromInventoryDialog
         open={procurementDialogOpen}
         onOpenChange={setProcurementDialogOpen}

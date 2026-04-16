@@ -55,6 +55,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   type LowStockItem,
   type PartsRequest,
+  type QuoteAttachment,
   useAllocateToJobCard,
   useAssignVendor,
   useCashManagerRequests,
@@ -75,6 +76,7 @@ import {
   useVendors
 } from "@/hooks/useProcurement";
 import StartProcurementDialog from "@/components/dialogs/StartProcurementDialog";
+import { supabase } from "@/integrations/supabase/client";
 import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
@@ -101,6 +103,7 @@ import {
   Store,
   Trash2,
   Truck,
+  Upload,
   Wrench,
   X
 } from "lucide-react";
@@ -210,6 +213,9 @@ const Procurement = () => {
   const [cashManagerForm, setCashManagerForm] = useState({
     cash_manager_reference: "",
     cash_manager_approved_by: "",
+    vendor_id: "",
+    unit_price: "",
+    quoteFile: null as File | null,
   });
   const [receiveForm, setReceiveForm] = useState({
     received_quantity: "",
@@ -362,6 +368,9 @@ const Procurement = () => {
     setCashManagerForm({
       cash_manager_reference: request.cash_manager_reference || "",
       cash_manager_approved_by: "",
+      vendor_id: request.vendor_id || "",
+      unit_price: request.unit_price?.toString() || "",
+      quoteFile: null,
     });
     setCashManagerDialogOpen(true);
   };
@@ -430,6 +439,47 @@ const Procurement = () => {
   const handleCashManagerApproval = async () => {
     if (!selectedRequest || !cashManagerForm.cash_manager_reference) return;
 
+    // If vendor/price/quote were provided in the Cash Manager dialog, update them first
+    const needsVendorUpdate = cashManagerForm.vendor_id && !selectedRequest.vendor_id;
+    const needsPriceUpdate = cashManagerForm.unit_price && !selectedRequest.unit_price;
+    const needsQuoteUpdate = cashManagerForm.quoteFile;
+
+    if (needsVendorUpdate || needsPriceUpdate || needsQuoteUpdate) {
+      const updateData: Partial<Parameters<typeof updateRequest.mutateAsync>[0]> & { id: string } = { id: selectedRequest.id };
+
+      if (needsVendorUpdate) {
+        updateData.vendor_id = cashManagerForm.vendor_id;
+      }
+      if (needsPriceUpdate) {
+        updateData.unit_price = parseFloat(cashManagerForm.unit_price);
+      }
+      if (needsQuoteUpdate && cashManagerForm.quoteFile) {
+        // Upload quote file
+        const file = cashManagerForm.quoteFile;
+        const ext = file.name.split(".").pop();
+        const irNum = selectedRequest.ir_number || "no-ir";
+        const path = `procurement-quotes/cm-${irNum}-${selectedRequest.id}-${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from("documents").upload(path, file);
+        if (uploadErr) {
+          toast({ variant: "destructive", title: "Upload Failed", description: uploadErr.message });
+          return;
+        }
+        const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path);
+        const vendorName = vendors.find(v => v.id === cashManagerForm.vendor_id)?.vendor_name ?? "";
+        const quote: QuoteAttachment = {
+          file_url: publicUrl,
+          file_name: file.name,
+          vendor_name: vendorName,
+          price: cashManagerForm.unit_price ? parseFloat(cashManagerForm.unit_price) : null,
+          uploaded_at: new Date().toISOString(),
+        };
+        const existingQuotes = selectedRequest.quotes ?? [];
+        updateData.quotes = [...existingQuotes, quote];
+      }
+
+      await updateRequest.mutateAsync(updateData);
+    }
+
     await updateCashManager.mutateAsync({
       id: selectedRequest.id,
       cash_manager_reference: cashManagerForm.cash_manager_reference,
@@ -438,7 +488,7 @@ const Procurement = () => {
 
     setCashManagerDialogOpen(false);
     setSelectedRequest(null);
-    setCashManagerForm({ cash_manager_reference: "", cash_manager_approved_by: "" });
+    setCashManagerForm({ cash_manager_reference: "", cash_manager_approved_by: "", vendor_id: "", unit_price: "", quoteFile: null });
   };
 
   const handlePlaceOrder = async () => {
@@ -2051,6 +2101,14 @@ const Procurement = () => {
                                           {request.vendor.vendor_name}
                                         </div>
                                       )}
+                                      {(!request.vendor_id || !request.unit_price) && !request.cash_manager_approval_date && (
+                                        <div className="mt-1">
+                                          <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400">
+                                            <AlertTriangle className="h-3 w-3 mr-1" />
+                                            {!request.vendor_id && !request.unit_price ? "Needs vendor & price" : !request.vendor_id ? "Needs vendor" : "Needs price"}
+                                          </Badge>
+                                        </div>
+                                      )}
                                       {request.urgency_level && (
                                         <div className="mt-1">
                                           {getUrgencyBadge(request.urgency_level)}
@@ -2276,6 +2334,14 @@ const Procurement = () => {
                                           <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                                             <Store className="h-3 w-3" />
                                             {request.vendor.vendor_name}
+                                          </div>
+                                        )}
+                                        {(!request.vendor_id || !request.unit_price) && !request.cash_manager_approval_date && (
+                                          <div className="mt-1">
+                                            <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400">
+                                              <AlertTriangle className="h-3 w-3 mr-1" />
+                                              {!request.vendor_id && !request.unit_price ? "Needs vendor & price" : !request.vendor_id ? "Needs vendor" : "Needs price"}
+                                            </Badge>
                                           </div>
                                         )}
                                         {request.urgency_level && (
@@ -3119,7 +3185,7 @@ const Procurement = () => {
 
       {/* Cash Manager Approval Dialog */}
       <Dialog open={cashManagerDialogOpen} onOpenChange={setCashManagerDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Cash Manager Approval</DialogTitle>
             <DialogDescription>
@@ -3140,6 +3206,113 @@ const Procurement = () => {
               )}
             </div>
           )}
+
+          {/* Show vendor/price/quote fields when missing from Start Procurement */}
+          {selectedRequest && (!selectedRequest.vendor_id || !selectedRequest.unit_price) && (
+            <div className="border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20 rounded-lg p-4 space-y-3 mb-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-400">
+                <AlertTriangle className="h-4 w-4" />
+                Vendor &amp; pricing details required
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These were not provided when procurement was started. Please provide them now.
+              </p>
+
+              {!selectedRequest.vendor_id && (
+                <div className="grid gap-2">
+                  <Label htmlFor="cm_vendor" className="text-xs flex items-center gap-1">
+                    <Store className="h-3 w-3" />
+                    Vendor *
+                  </Label>
+                  <Select
+                    value={cashManagerForm.vendor_id || "__none__"}
+                    onValueChange={(v) => setCashManagerForm({ ...cashManagerForm, vendor_id: v === "__none__" ? "" : v })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select vendor…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        <span className="text-muted-foreground">No vendor selected</span>
+                      </SelectItem>
+                      {vendors.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.vendor_name}
+                          {v.contact_person && (
+                            <span className="text-xs text-muted-foreground ml-2">
+                              · {v.contact_person}
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {!selectedRequest.unit_price && (
+                <div className="grid gap-2">
+                  <Label htmlFor="cm_price" className="text-xs">Unit Price (quoted) *</Label>
+                  <Input
+                    id="cm_price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={cashManagerForm.unit_price}
+                    onChange={(e) => setCashManagerForm({ ...cashManagerForm, unit_price: e.target.value })}
+                    className="h-9"
+                  />
+                </div>
+              )}
+
+              {(!selectedRequest.quotes || selectedRequest.quotes.length === 0) && (
+                <div className="grid gap-2">
+                  <Label className="text-xs">Quote / Invoice (PDF, JPG, PNG — max 5 MB) *</Label>
+                  {cashManagerForm.quoteFile ? (
+                    <div className="flex items-center gap-2 text-xs p-2 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded">
+                      <FileText className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                      <span className="truncate flex-1">{cashManagerForm.quoteFile.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 w-5 p-0"
+                        onClick={() => setCashManagerForm({ ...cashManagerForm, quoteFile: null })}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-2 cursor-pointer border border-dashed rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted/30 transition-colors">
+                      <Upload className="h-3.5 w-3.5 shrink-0" />
+                      <span>Click to upload quote</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            if (file.size > 5 * 1024 * 1024) {
+                              toast({ variant: "destructive", title: "File Too Large", description: "Max 5 MB per file" });
+                              return;
+                            }
+                            if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+                              toast({ variant: "destructive", title: "Invalid File Type", description: "PDF, JPG or PNG only" });
+                              return;
+                            }
+                            setCashManagerForm({ ...cashManagerForm, quoteFile: file });
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="cash_ref">Cash Manager Reference *</Label>
@@ -3166,9 +3339,15 @@ const Procurement = () => {
             </Button>
             <Button
               onClick={handleCashManagerApproval}
-              disabled={updateCashManager.isPending || !cashManagerForm.cash_manager_reference}
+              disabled={
+                updateCashManager.isPending ||
+                updateRequest.isPending ||
+                !cashManagerForm.cash_manager_reference ||
+                (!!selectedRequest && !selectedRequest.vendor_id && !cashManagerForm.vendor_id) ||
+                (!!selectedRequest && !selectedRequest.unit_price && !cashManagerForm.unit_price)
+              }
             >
-              {updateCashManager.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {(updateCashManager.isPending || updateRequest.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Record Approval
             </Button>
           </DialogFooter>

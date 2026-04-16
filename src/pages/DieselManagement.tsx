@@ -15,6 +15,7 @@ import Layout from '@/components/Layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,7 +24,7 @@ import { useVehicles } from '@/hooks/useVehicles';
 import { useReeferConsumptionSummary, useReeferDieselRecords, type ReeferDieselRecordRow } from '@/hooks/useReeferDiesel';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/formatters';
 import type { DieselConsumptionRecord, DieselNorms } from '@/types/operations';
-import { AlertCircle, CheckCircle, ChevronDown, ChevronRight, DollarSign, Edit, Eye, FileSpreadsheet, FileText, Fuel, Link, Plus, Settings, Snowflake, Trash2, Truck, User } from 'lucide-react';
+import { AlertCircle, CheckCircle, ChevronDown, ChevronRight, DollarSign, Edit, Eye, FileSpreadsheet, FileText, Fuel, Link, List, Plus, Settings, Snowflake, Trash2, Truck, User } from 'lucide-react';
 import { type ComponentProps, useCallback, useEffect, useMemo, useState } from 'react';
 import BatchDebriefModal, { type BatchDebriefData } from '@/components/diesel/BatchDebriefModal';
 
@@ -39,6 +40,8 @@ const getWeekNumberForDateString = (dateStr: string): number => {
 
 const DieselManagement = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [viewMode, setViewMode] = useState<'grouped' | 'list'>('grouped');
+  const [listFleetFilter, setListFleetFilter] = useState<string>('all');
   const [fleetFilter, _setFleetFilter] = useState<string>('');
   const [weekFilter, _setWeekFilter] = useState<string>('');
   const {
@@ -768,7 +771,7 @@ const DieselManagement = () => {
 
           <TabsContent value="dashboard">
             {/* Action Buttons */}
-            <div className="flex flex-wrap gap-2 mb-6">
+            <div className="flex flex-wrap items-center gap-2 mb-6">
               <Button
                 className="gap-2"
                 onClick={() => {
@@ -797,6 +800,30 @@ const DieselManagement = () => {
                 <FileSpreadsheet className="h-4 w-4" />
                 Export All to Excel
               </Button>
+              {viewMode === 'list' && (
+                <Select value={listFleetFilter} onValueChange={setListFleetFilter}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SelectValue placeholder="Filter by fleet" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Fleets</SelectItem>
+                    {[...uniqueFleetNumbers, ...reeferFleetNumbers].sort().map(fleet => (
+                      <SelectItem key={fleet} value={fleet}>{fleet}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <div className="ml-auto">
+                <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grouped' | 'list')}>
+                  <TabsList className="h-9">
+                    <TabsTrigger value="grouped" className="text-xs px-3">Grouped View</TabsTrigger>
+                    <TabsTrigger value="list" className="text-xs px-3">
+                      <List className="h-3.5 w-3.5 mr-1" />
+                      List View
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             </div>
 
             {/* Pending Cost Alert Banner */}
@@ -835,329 +862,680 @@ const DieselManagement = () => {
 
             {/* TRUCKS section */}
             <h2 className="text-2xl font-bold mt-2 mb-4">TRUCKS</h2>
-            {sortedFleets.length > 0 ? (
-              <div className="space-y-6">
-                {sortedFleets.map((fleet) => {
-                  const fleetTotals = getFleetTotals(truckRecordsGroupedByFleetAndWeek, fleet);
-                  const isFleetExpanded = expandedFleets.has(fleet);
-                  const fleetWeeks = Object.keys(truckRecordsGroupedByFleetAndWeek[fleet])
-                    .map(w => parseInt(w))
-                    .sort((a, b) => b - a); // Most recent weeks first
+            {viewMode === 'list' ? (
+              /* ── Flat list view ── */
+              truckRecords.length > 0 ? (
+                <Card className="overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Date</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Fleet</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Driver</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Station</th>
+                            <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Litres</th>
+                            <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cost</th>
+                            <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">KM Reading</th>
+                            <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">km/L</th>
+                            <th className="text-center px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Status</th>
+                            <th className="text-center px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                          {[...truckRecords].filter(r => listFleetFilter === 'all' || r.fleet_number === listFleetFilter).sort((a, b) => b.date.localeCompare(a.date)).map((record, idx) => {
+                            const kmPerLitre = calculateKmPerLitre(record);
+                            const norm = getNormForFleet(record.fleet_number);
+                            const outsideNorm = kmPerLitre && norm ? isOutsideNorm(kmPerLitre, norm) : false;
+                            const hasLinkedReefer = allReeferRecords.some(r => r.linked_diesel_record_id === record.id);
+                            const hasPendingCost = !record.cost_per_litre || record.cost_per_litre === 0;
 
-                  return (
-                    <Card key={fleet} className="overflow-hidden">
-                      {/* Fleet Header */}
-                      <Collapsible open={isFleetExpanded} onOpenChange={() => toggleFleetExpanded(fleet)}>
-                        <CollapsibleTrigger asChild>
-                          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                {isFleetExpanded ? (
-                                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                                ) : (
-                                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                                )}
-                                <div>
-                                  <CardTitle className="text-xl">{fleet}</CardTitle>
-                                  <CardDescription>
-                                    {fleetTotals.count} transactions across {fleetWeeks.length} week(s)
-                                  </CardDescription>
+                            return (
+                              <tr
+                                key={record.id}
+                                className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/30'}`}
+                              >
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="font-medium">{formatDate(record.date)}</span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="font-semibold">{record.fleet_number}</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-4 w-4 text-muted-foreground" />
+                                    <span>{record.driver_name || <span className="text-muted-foreground italic">No driver</span>}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <Fuel className="h-4 w-4 text-muted-foreground" />
+                                    <span>{record.fuel_station || <span className="text-muted-foreground italic">Unknown</span>}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  <span className="font-semibold">{formatNumber(record.litres_filled)}</span>
+                                  <span className="text-muted-foreground ml-1">L</span>
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  {hasPendingCost ? (
+                                    <span
+                                      className="text-amber-600 dark:text-amber-400 font-semibold cursor-pointer hover:underline"
+                                      onClick={() => openEditRecord(record)}
+                                      title="Click to add cost"
+                                    >
+                                      Pending
+                                    </span>
+                                  ) : (
+                                    <span className="font-semibold">
+                                      {formatCurrency(record.total_cost)}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  <div>
+                                    <span className="font-semibold">{formatNumber(record.km_reading)}</span>
+                                    {record.previous_km_reading && (
+                                      <span className="text-xs text-muted-foreground block">
+                                        +{formatNumber(record.km_reading - record.previous_km_reading)} km
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className={`px-4 py-3 text-right font-mono ${outsideNorm ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                  {kmPerLitre ? (
+                                    <span>{formatNumber(kmPerLitre, 2)}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap items-center justify-center gap-1">
+                                    {hasPendingCost && (
+                                      <Badge variant="outline" className="text-xs whitespace-nowrap bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300">
+                                        <DollarSign className="h-3 w-3 mr-1" />
+                                        Pending Cost
+                                      </Badge>
+                                    )}
+                                    {outsideNorm && !record.debrief_signed && (
+                                      <Badge variant="outline" className="text-xs whitespace-nowrap bg-rose-50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300">
+                                        <AlertCircle className="h-3 w-3 mr-1" />
+                                        Debrief
+                                      </Badge>
+                                    )}
+                                    {record.debrief_signed && (
+                                      <Badge variant="outline" className="text-xs whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300">
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        Debriefed
+                                      </Badge>
+                                    )}
+                                    {record.probe_verified && (
+                                      <Badge variant="outline" className="text-xs whitespace-nowrap bg-sky-50 dark:bg-sky-950/20 border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300">
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        Probe OK
+                                      </Badge>
+                                    )}
+                                    {!record.probe_verified && (
+                                      <Badge variant="outline" className="text-xs whitespace-nowrap bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-300">
+                                        Probe Pending
+                                      </Badge>
+                                    )}
+                                    {hasLinkedReefer && (
+                                      <Badge variant="outline" className="text-xs whitespace-nowrap bg-teal-50 dark:bg-teal-950/20 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300">
+                                        <Snowflake className="h-3 w-3 mr-1" />
+                                        Reefer
+                                      </Badge>
+                                    )}
+                                    {record.trip_id && (
+                                      <Badge variant="outline" className="text-xs whitespace-nowrap bg-violet-50 dark:bg-violet-950/20 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">
+                                        <Link className="h-3 w-3 mr-1" />
+                                        Trip Linked
+                                      </Badge>
+                                    )}
+                                    {record.linked_trailers && record.linked_trailers.length > 0 && (
+                                      <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                        <Truck className="h-3 w-3 mr-1" />
+                                        +{record.linked_trailers.length} Trailer
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="outline" size="sm" className="h-8 px-2">
+                                        <Settings className="h-4 w-4 mr-1" />
+                                        <ChevronDown className="h-3 w-3" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48">
+                                      {hasPendingCost && (
+                                        <DropdownMenuItem onClick={() => openEditRecord(record)} className="text-amber-600">
+                                          <DollarSign className="h-4 w-4 mr-2" />
+                                          Add Cost
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem onClick={() => openViewModal(record)}>
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View Details
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openEditRecord(record)}>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        Edit Record
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openTripLinkage(record)}>
+                                        <Link className="h-4 w-4 mr-2" />
+                                        {record.trip_id ? 'Change Trip' : 'Link to Trip'}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openReeferLinkage(record)}>
+                                        <Snowflake className="h-4 w-4 mr-2" />
+                                        {hasLinkedReefer ? 'Manage Reefer' : 'Link Reefer'}
+                                      </DropdownMenuItem>
+                                      {!record.probe_verified && (
+                                        <DropdownMenuItem onClick={() => openProbeVerification(record)}>
+                                          <CheckCircle className="h-4 w-4 mr-2" />
+                                          Verify Probe
+                                        </DropdownMenuItem>
+                                      )}
+                                      {(outsideNorm || record.requires_debrief) && !record.debrief_signed && (
+                                        <DropdownMenuItem onClick={() => openDebrief(record)} className="text-destructive">
+                                          <FileText className="h-4 w-4 mr-2" />
+                                          Debrief Required
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem
+                                        onClick={() => handleDeleteRecord(record.id)}
+                                        className="text-destructive"
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Delete Record
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="py-12">
+                    <div className="text-center">
+                      <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <h3 className="text-lg font-medium mb-2">No Diesel Records</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Start by adding diesel records manually or import from a CSV file.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            ) : (
+              sortedFleets.length > 0 ? (
+                <div className="space-y-6">
+                  {sortedFleets.map((fleet) => {
+                    const fleetTotals = getFleetTotals(truckRecordsGroupedByFleetAndWeek, fleet);
+                    const isFleetExpanded = expandedFleets.has(fleet);
+                    const fleetWeeks = Object.keys(truckRecordsGroupedByFleetAndWeek[fleet])
+                      .map(w => parseInt(w))
+                      .sort((a, b) => b - a); // Most recent weeks first
+
+                    return (
+                      <Card key={fleet} className="overflow-hidden">
+                        {/* Fleet Header */}
+                        <Collapsible open={isFleetExpanded} onOpenChange={() => toggleFleetExpanded(fleet)}>
+                          <CollapsibleTrigger asChild>
+                            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  {isFleetExpanded ? (
+                                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                                  )}
+                                  <div>
+                                    <CardTitle className="text-xl">{fleet}</CardTitle>
+                                    <CardDescription>
+                                      {fleetTotals.count} transactions across {fleetWeeks.length} week(s)
+                                    </CardDescription>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-6 text-sm">
+                                  <div className="text-right">
+                                    <p className="text-muted-foreground">Total Litres</p>
+                                    <p className="font-semibold">{formatNumber(fleetTotals.totalLitres)} L</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-muted-foreground">Total Cost</p>
+                                    <p className="font-semibold">
+                                      {fleetTotals.totalCost > 0 && formatCurrency(fleetTotals.totalCost)}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-muted-foreground">Avg km/L</p>
+                                    <p className="font-semibold">{formatNumber(fleetTotals.avgKmL, 2)}</p>
+                                  </div>
+                                  {fleetTotals.pendingDebrief > 0 && (
+                                    <Badge variant="destructive" className="ml-2">
+                                      {fleetTotals.pendingDebrief} Debrief
+                                    </Badge>
+                                  )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-6 text-sm">
-                                <div className="text-right">
-                                  <p className="text-muted-foreground">Total Litres</p>
-                                  <p className="font-semibold">{formatNumber(fleetTotals.totalLitres)} L</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-muted-foreground">Total Cost</p>
-                                  <p className="font-semibold">
-                                    {fleetTotals.totalCost > 0 && formatCurrency(fleetTotals.totalCost)}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-muted-foreground">Avg km/L</p>
-                                  <p className="font-semibold">{formatNumber(fleetTotals.avgKmL, 2)}</p>
-                                </div>
-                                {fleetTotals.pendingDebrief > 0 && (
-                                  <Badge variant="destructive" className="ml-2">
-                                    {fleetTotals.pendingDebrief} Debrief
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </CardHeader>
-                        </CollapsibleTrigger>
+                            </CardHeader>
+                          </CollapsibleTrigger>
 
-                        <CollapsibleContent>
-                          <CardContent className="pt-0">
-                            {/* Week sections within fleet */}
-                            <div className="space-y-3">
-                              {fleetWeeks.map((week) => {
-                                const weekKey = `${fleet}-${week}`;
-                                const isWeekExpanded = expandedWeeks.has(weekKey);
-                                const weekRecords = truckRecordsGroupedByFleetAndWeek[fleet][week];
-                                const weekTotals = getWeekTotals(weekRecords);
+                          <CollapsibleContent>
+                            <CardContent className="pt-0">
+                              {/* Week sections within fleet */}
+                              <div className="space-y-3">
+                                {fleetWeeks.map((week) => {
+                                  const weekKey = `${fleet}-${week}`;
+                                  const isWeekExpanded = expandedWeeks.has(weekKey);
+                                  const weekRecords = truckRecordsGroupedByFleetAndWeek[fleet][week];
+                                  const weekTotals = getWeekTotals(weekRecords);
 
-                                return (
-                                  <Collapsible key={weekKey} open={isWeekExpanded} onOpenChange={() => toggleWeekExpanded(weekKey)}>
-                                    <div className="border rounded-lg">
-                                      <CollapsibleTrigger asChild>
-                                        <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/30 transition-colors">
-                                          <div className="flex items-center gap-2">
-                                            {isWeekExpanded ? (
-                                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                            ) : (
-                                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                            )}
-                                            <span className="font-medium">
-                                              Week {week}{week === currentWeek ? ' (Current)' : ''}
-                                            </span>
-                                            <span className="text-sm text-muted-foreground">
-                                              ({getWeekDateRange(week)})
-                                            </span>
-                                            <Badge variant="secondary" className="ml-2">
-                                              {weekRecords.length} transaction{weekRecords.length !== 1 ? 's' : ''}
-                                            </Badge>
-                                          </div>
-                                          <div className="flex items-center gap-4 text-sm">
-                                            <span>{formatNumber(weekTotals.totalLitres)} L</span>
-                                            <span>
-                                              {weekTotals.totalCost > 0 && formatCurrency(weekTotals.totalCost)}
-                                            </span>
-                                            <span className="font-medium">{formatNumber(weekTotals.avgKmL, 2)} km/L</span>
-                                            {weekTotals.pendingDebrief > 0 && (
-                                              <Badge variant="destructive" className="text-xs">
-                                                {weekTotals.pendingDebrief} Debrief
+                                  return (
+                                    <Collapsible key={weekKey} open={isWeekExpanded} onOpenChange={() => toggleWeekExpanded(weekKey)}>
+                                      <div className="border rounded-lg">
+                                        <CollapsibleTrigger asChild>
+                                          <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                                            <div className="flex items-center gap-2">
+                                              {isWeekExpanded ? (
+                                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                              ) : (
+                                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                              )}
+                                              <span className="font-medium">
+                                                Week {week}{week === currentWeek ? ' (Current)' : ''}
+                                              </span>
+                                              <span className="text-sm text-muted-foreground">
+                                                ({getWeekDateRange(week)})
+                                              </span>
+                                              <Badge variant="secondary" className="ml-2">
+                                                {weekRecords.length} transaction{weekRecords.length !== 1 ? 's' : ''}
                                               </Badge>
-                                            )}
+                                            </div>
+                                            <div className="flex items-center gap-4 text-sm">
+                                              <span>{formatNumber(weekTotals.totalLitres)} L</span>
+                                              <span>
+                                                {weekTotals.totalCost > 0 && formatCurrency(weekTotals.totalCost)}
+                                              </span>
+                                              <span className="font-medium">{formatNumber(weekTotals.avgKmL, 2)} km/L</span>
+                                              {weekTotals.pendingDebrief > 0 && (
+                                                <Badge variant="destructive" className="text-xs">
+                                                  {weekTotals.pendingDebrief} Debrief
+                                                </Badge>
+                                              )}
+                                            </div>
                                           </div>
-                                        </div>
-                                      </CollapsibleTrigger>
+                                        </CollapsibleTrigger>
 
-                                      <CollapsibleContent>
-                                        <div className="border-t bg-background">
-                                          {/* Professional Transaction table */}
-                                          <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                              <thead className="bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700">
-                                                <tr>
-                                                  <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Date</th>
-                                                  <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Driver</th>
-                                                  <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Station</th>
-                                                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Litres</th>
-                                                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cost</th>
-                                                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">KM Reading</th>
-                                                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">km/L</th>
-                                                  <th className="text-center px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Status</th>
-                                                  <th className="text-center px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Actions</th>
-                                                </tr>
-                                              </thead>
-                                              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                                                {weekRecords.map((record, idx) => {
-                                                  const kmPerLitre = calculateKmPerLitre(record);
-                                                  const norm = getNormForFleet(record.fleet_number);
-                                                  const outsideNorm = kmPerLitre && norm ? isOutsideNorm(kmPerLitre, norm) : false;
-                                                  const hasLinkedReefer = allReeferRecords.some(r => r.linked_diesel_record_id === record.id);
-                                                  const hasPendingCost = !record.cost_per_litre || record.cost_per_litre === 0;
+                                        <CollapsibleContent>
+                                          <div className="border-t bg-background">
+                                            {/* Professional Transaction table */}
+                                            <div className="overflow-x-auto">
+                                              <table className="w-full text-sm">
+                                                <thead className="bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700">
+                                                  <tr>
+                                                    <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Date</th>
+                                                    <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Driver</th>
+                                                    <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Station</th>
+                                                    <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Litres</th>
+                                                    <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cost</th>
+                                                    <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">KM Reading</th>
+                                                    <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">km/L</th>
+                                                    <th className="text-center px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Status</th>
+                                                    <th className="text-center px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Actions</th>
+                                                  </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                                                  {weekRecords.map((record, idx) => {
+                                                    const kmPerLitre = calculateKmPerLitre(record);
+                                                    const norm = getNormForFleet(record.fleet_number);
+                                                    const outsideNorm = kmPerLitre && norm ? isOutsideNorm(kmPerLitre, norm) : false;
+                                                    const hasLinkedReefer = allReeferRecords.some(r => r.linked_diesel_record_id === record.id);
+                                                    const hasPendingCost = !record.cost_per_litre || record.cost_per_litre === 0;
 
-                                                  return (
-                                                    <tr
-                                                      key={record.id}
-                                                      className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/30'}`}
-                                                    >
-                                                      <td className="px-4 py-3 whitespace-nowrap">
-                                                        <span className="font-medium">{formatDate(record.date)}</span>
-                                                      </td>
-                                                      <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
-                                                          <User className="h-4 w-4 text-muted-foreground" />
-                                                          <span>{record.driver_name || <span className="text-muted-foreground italic">No driver</span>}</span>
-                                                        </div>
-                                                      </td>
-                                                      <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
-                                                          <Fuel className="h-4 w-4 text-muted-foreground" />
-                                                          <span>{record.fuel_station || <span className="text-muted-foreground italic">Unknown</span>}</span>
-                                                        </div>
-                                                      </td>
-                                                      <td className="px-4 py-3 text-right font-mono">
-                                                        <span className="font-semibold">{formatNumber(record.litres_filled)}</span>
-                                                        <span className="text-muted-foreground ml-1">L</span>
-                                                      </td>
-                                                      <td className="px-4 py-3 text-right font-mono">
-                                                        {hasPendingCost ? (
-                                                          <span
-                                                            className="text-amber-600 dark:text-amber-400 font-semibold cursor-pointer hover:underline"
-                                                            onClick={() => openEditRecord(record)}
-                                                            title="Click to add cost"
-                                                          >
-                                                            Pending
-                                                          </span>
-                                                        ) : (
-                                                          <span className="font-semibold">
-                                                            {formatCurrency(record.total_cost)}
-                                                          </span>
-                                                        )}
-                                                      </td>
-                                                      <td className="px-4 py-3 text-right font-mono">
-                                                        <div>
-                                                          <span className="font-semibold">{formatNumber(record.km_reading)}</span>
-                                                          {record.previous_km_reading && (
-                                                            <span className="text-xs text-muted-foreground block">
-                                                              +{formatNumber(record.km_reading - record.previous_km_reading)} km
+                                                    return (
+                                                      <tr
+                                                        key={record.id}
+                                                        className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/30'}`}
+                                                      >
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                          <span className="font-medium">{formatDate(record.date)}</span>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                          <div className="flex items-center gap-2">
+                                                            <User className="h-4 w-4 text-muted-foreground" />
+                                                            <span>{record.driver_name || <span className="text-muted-foreground italic">No driver</span>}</span>
+                                                          </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                          <div className="flex items-center gap-2">
+                                                            <Fuel className="h-4 w-4 text-muted-foreground" />
+                                                            <span>{record.fuel_station || <span className="text-muted-foreground italic">Unknown</span>}</span>
+                                                          </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-mono">
+                                                          <span className="font-semibold">{formatNumber(record.litres_filled)}</span>
+                                                          <span className="text-muted-foreground ml-1">L</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-mono">
+                                                          {hasPendingCost ? (
+                                                            <span
+                                                              className="text-amber-600 dark:text-amber-400 font-semibold cursor-pointer hover:underline"
+                                                              onClick={() => openEditRecord(record)}
+                                                              title="Click to add cost"
+                                                            >
+                                                              Pending
+                                                            </span>
+                                                          ) : (
+                                                            <span className="font-semibold">
+                                                              {formatCurrency(record.total_cost)}
                                                             </span>
                                                           )}
-                                                        </div>
-                                                      </td>
-                                                      <td className={`px-4 py-3 text-right font-mono ${outsideNorm ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                                        {kmPerLitre ? (
-                                                          <span>{formatNumber(kmPerLitre, 2)}</span>
-                                                        ) : (
-                                                          <span className="text-muted-foreground">—</span>
-                                                        )}
-                                                      </td>
-                                                      <td className="px-4 py-3">
-                                                        <div className="flex flex-wrap items-center justify-center gap-1">
-                                                          {hasPendingCost && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300">
-                                                              <DollarSign className="h-3 w-3 mr-1" />
-                                                              Pending Cost
-                                                            </Badge>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-mono">
+                                                          <div>
+                                                            <span className="font-semibold">{formatNumber(record.km_reading)}</span>
+                                                            {record.previous_km_reading && (
+                                                              <span className="text-xs text-muted-foreground block">
+                                                                +{formatNumber(record.km_reading - record.previous_km_reading)} km
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                        </td>
+                                                        <td className={`px-4 py-3 text-right font-mono ${outsideNorm ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                          {kmPerLitre ? (
+                                                            <span>{formatNumber(kmPerLitre, 2)}</span>
+                                                          ) : (
+                                                            <span className="text-muted-foreground">—</span>
                                                           )}
-                                                          {outsideNorm && !record.debrief_signed && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-rose-50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300">
-                                                              <AlertCircle className="h-3 w-3 mr-1" />
-                                                              Debrief
-                                                            </Badge>
-                                                          )}
-                                                          {record.debrief_signed && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300">
-                                                              <CheckCircle className="h-3 w-3 mr-1" />
-                                                              Debriefed
-                                                            </Badge>
-                                                          )}
-                                                          {record.probe_verified && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-sky-50 dark:bg-sky-950/20 border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300">
-                                                              <CheckCircle className="h-3 w-3 mr-1" />
-                                                              Probe OK
-                                                            </Badge>
-                                                          )}
-                                                          {!record.probe_verified && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-300">
-                                                              Probe Pending
-                                                            </Badge>
-                                                          )}
-                                                          {hasLinkedReefer && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-teal-50 dark:bg-teal-950/20 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300">
-                                                              <Snowflake className="h-3 w-3 mr-1" />
-                                                              Reefer
-                                                            </Badge>
-                                                          )}
-                                                          {record.trip_id && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap bg-violet-50 dark:bg-violet-950/20 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">
-                                                              <Link className="h-3 w-3 mr-1" />
-                                                              Trip Linked
-                                                            </Badge>
-                                                          )}
-                                                          {record.linked_trailers && record.linked_trailers.length > 0 && (
-                                                            <Badge variant="outline" className="text-xs whitespace-nowrap">
-                                                              <Truck className="h-3 w-3 mr-1" />
-                                                              +{record.linked_trailers.length} Trailer
-                                                            </Badge>
-                                                          )}
-                                                        </div>
-                                                      </td>
-                                                      <td className="px-4 py-3 text-center">
-                                                        <DropdownMenu>
-                                                          <DropdownMenuTrigger asChild>
-                                                            <Button variant="outline" size="sm" className="h-8 px-2">
-                                                              <Settings className="h-4 w-4 mr-1" />
-                                                              <ChevronDown className="h-3 w-3" />
-                                                            </Button>
-                                                          </DropdownMenuTrigger>
-                                                          <DropdownMenuContent align="end" className="w-48">
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                          <div className="flex flex-wrap items-center justify-center gap-1">
                                                             {hasPendingCost && (
-                                                              <DropdownMenuItem onClick={() => openEditRecord(record)} className="text-amber-600">
-                                                                <DollarSign className="h-4 w-4 mr-2" />
-                                                                Add Cost
-                                                              </DropdownMenuItem>
+                                                              <Badge variant="outline" className="text-xs whitespace-nowrap bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300">
+                                                                <DollarSign className="h-3 w-3 mr-1" />
+                                                                Pending Cost
+                                                              </Badge>
                                                             )}
-                                                            <DropdownMenuItem onClick={() => openViewModal(record)}>
-                                                              <Eye className="h-4 w-4 mr-2" />
-                                                              View Details
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => openEditRecord(record)}>
-                                                              <Edit className="h-4 w-4 mr-2" />
-                                                              Edit Record
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => openTripLinkage(record)}>
-                                                              <Link className="h-4 w-4 mr-2" />
-                                                              {record.trip_id ? 'Change Trip' : 'Link to Trip'}
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => openReeferLinkage(record)}>
-                                                              <Snowflake className="h-4 w-4 mr-2" />
-                                                              {hasLinkedReefer ? 'Manage Reefer' : 'Link Reefer'}
-                                                            </DropdownMenuItem>
+                                                            {outsideNorm && !record.debrief_signed && (
+                                                              <Badge variant="outline" className="text-xs whitespace-nowrap bg-rose-50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300">
+                                                                <AlertCircle className="h-3 w-3 mr-1" />
+                                                                Debrief
+                                                              </Badge>
+                                                            )}
+                                                            {record.debrief_signed && (
+                                                              <Badge variant="outline" className="text-xs whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300">
+                                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                                Debriefed
+                                                              </Badge>
+                                                            )}
+                                                            {record.probe_verified && (
+                                                              <Badge variant="outline" className="text-xs whitespace-nowrap bg-sky-50 dark:bg-sky-950/20 border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300">
+                                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                                Probe OK
+                                                              </Badge>
+                                                            )}
                                                             {!record.probe_verified && (
-                                                              <DropdownMenuItem onClick={() => openProbeVerification(record)}>
-                                                                <CheckCircle className="h-4 w-4 mr-2" />
-                                                                Verify Probe
-                                                              </DropdownMenuItem>
+                                                              <Badge variant="outline" className="text-xs whitespace-nowrap bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-300">
+                                                                Probe Pending
+                                                              </Badge>
                                                             )}
-                                                            {(outsideNorm || record.requires_debrief) && !record.debrief_signed && (
-                                                              <DropdownMenuItem onClick={() => openDebrief(record)} className="text-destructive">
-                                                                <FileText className="h-4 w-4 mr-2" />
-                                                                Debrief Required
-                                                              </DropdownMenuItem>
+                                                            {hasLinkedReefer && (
+                                                              <Badge variant="outline" className="text-xs whitespace-nowrap bg-teal-50 dark:bg-teal-950/20 border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300">
+                                                                <Snowflake className="h-3 w-3 mr-1" />
+                                                                Reefer
+                                                              </Badge>
                                                             )}
-                                                            <DropdownMenuItem
-                                                              onClick={() => handleDeleteRecord(record.id)}
-                                                              className="text-destructive"
-                                                            >
-                                                              <Trash2 className="h-4 w-4 mr-2" />
-                                                              Delete Record
-                                                            </DropdownMenuItem>
-                                                          </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                      </td>
-                                                    </tr>
-                                                  );
-                                                })}
-                                              </tbody>
-                                            </table>
+                                                            {record.trip_id && (
+                                                              <Badge variant="outline" className="text-xs whitespace-nowrap bg-violet-50 dark:bg-violet-950/20 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300">
+                                                                <Link className="h-3 w-3 mr-1" />
+                                                                Trip Linked
+                                                              </Badge>
+                                                            )}
+                                                            {record.linked_trailers && record.linked_trailers.length > 0 && (
+                                                              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                                                <Truck className="h-3 w-3 mr-1" />
+                                                                +{record.linked_trailers.length} Trailer
+                                                              </Badge>
+                                                            )}
+                                                          </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                          <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                              <Button variant="outline" size="sm" className="h-8 px-2">
+                                                                <Settings className="h-4 w-4 mr-1" />
+                                                                <ChevronDown className="h-3 w-3" />
+                                                              </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-48">
+                                                              {hasPendingCost && (
+                                                                <DropdownMenuItem onClick={() => openEditRecord(record)} className="text-amber-600">
+                                                                  <DollarSign className="h-4 w-4 mr-2" />
+                                                                  Add Cost
+                                                                </DropdownMenuItem>
+                                                              )}
+                                                              <DropdownMenuItem onClick={() => openViewModal(record)}>
+                                                                <Eye className="h-4 w-4 mr-2" />
+                                                                View Details
+                                                              </DropdownMenuItem>
+                                                              <DropdownMenuItem onClick={() => openEditRecord(record)}>
+                                                                <Edit className="h-4 w-4 mr-2" />
+                                                                Edit Record
+                                                              </DropdownMenuItem>
+                                                              <DropdownMenuItem onClick={() => openTripLinkage(record)}>
+                                                                <Link className="h-4 w-4 mr-2" />
+                                                                {record.trip_id ? 'Change Trip' : 'Link to Trip'}
+                                                              </DropdownMenuItem>
+                                                              <DropdownMenuItem onClick={() => openReeferLinkage(record)}>
+                                                                <Snowflake className="h-4 w-4 mr-2" />
+                                                                {hasLinkedReefer ? 'Manage Reefer' : 'Link Reefer'}
+                                                              </DropdownMenuItem>
+                                                              {!record.probe_verified && (
+                                                                <DropdownMenuItem onClick={() => openProbeVerification(record)}>
+                                                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                                                  Verify Probe
+                                                                </DropdownMenuItem>
+                                                              )}
+                                                              {(outsideNorm || record.requires_debrief) && !record.debrief_signed && (
+                                                                <DropdownMenuItem onClick={() => openDebrief(record)} className="text-destructive">
+                                                                  <FileText className="h-4 w-4 mr-2" />
+                                                                  Debrief Required
+                                                                </DropdownMenuItem>
+                                                              )}
+                                                              <DropdownMenuItem
+                                                                onClick={() => handleDeleteRecord(record.id)}
+                                                                className="text-destructive"
+                                                              >
+                                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                                Delete Record
+                                                              </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                          </DropdownMenu>
+                                                        </td>
+                                                      </tr>
+                                                    );
+                                                  })}
+                                                </tbody>
+                                              </table>
+                                            </div>
                                           </div>
-                                        </div>
-                                      </CollapsibleContent>
-                                    </div>
-                                  </Collapsible>
-                                );
-                              })}
-                            </div>
-                          </CardContent>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </Card>
-                  );
-                })}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="py-12">
-                  <div className="text-center">
-                    <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No Diesel Records</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Start by adding diesel records manually or import from a CSV file.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+                                        </CollapsibleContent>
+                                      </div>
+                                    </Collapsible>
+                                  );
+                                })}
+                              </div>
+                            </CardContent>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      </Card>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-12">
+                    <div className="text-center">
+                      <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <h3 className="text-lg font-medium mb-2">No Diesel Records</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Start by adding diesel records manually or import from a CSV file.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
             )}
 
-            {sortedReeferFleets.length > 0 && (
-              <>
-                <h2 className="text-2xl font-bold mt-6 mb-4">REEFERS</h2>
+            {/* REEFERS section */}
+            {(viewMode === 'list' ? reeferRecords.length > 0 : sortedReeferFleets.length > 0) && (
+              <h2 className="text-2xl font-bold mt-6 mb-4">REEFERS</h2>
+            )}
+            {viewMode === 'list' ? (
+              reeferRecords.length > 0 && (
+                <Card className="overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Date</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Fleet</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Driver</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Station</th>
+                            <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Litres</th>
+                            <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cost</th>
+                            <th className="text-right px-4 py-3 font-semibold text-cyan-600 dark:text-cyan-400">L/hr</th>
+                            <th className="text-left px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Linked Vehicle</th>
+                            <th className="text-center px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                          {[...reeferRecords].filter(r => listFleetFilter === 'all' || r.fleet_number === listFleetFilter).sort((a, b) => b.date.localeCompare(a.date)).map((record, idx) => {
+                            const recordLph = record.litres_per_hour;
+                            const fleetLhr = reeferLhrMap.get(record.fleet_number);
+                            const reeferPendingCost = !record.cost_per_litre || record.cost_per_litre === 0;
+                            return (
+                              <tr
+                                key={record.id}
+                                className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/30'}`}
+                              >
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="font-medium">{formatDate(record.date)}</span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <span className="font-semibold">{record.fleet_number}</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-4 w-4 text-muted-foreground" />
+                                    <span>{record.driver_name || <span className="text-muted-foreground italic">No driver</span>}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <Fuel className="h-4 w-4 text-muted-foreground" />
+                                    <span>{record.fuel_station || <span className="text-muted-foreground italic">Unknown</span>}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  <span className="font-semibold">{formatNumber(record.litres_filled)}</span>
+                                  <span className="text-muted-foreground ml-1">L</span>
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  {reeferPendingCost ? (
+                                    <span
+                                      className="text-amber-600 dark:text-amber-400 font-semibold cursor-pointer hover:underline"
+                                      onClick={() => openEditRecord(record)}
+                                      title="Click to add cost"
+                                    >
+                                      Pending
+                                    </span>
+                                  ) : (
+                                    <span className="font-semibold">
+                                      {formatCurrency(record.total_cost)}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  {(recordLph ?? fleetLhr?.avgLitresPerHour) ? (
+                                    <span className="font-semibold text-cyan-600">{(recordLph ?? fleetLhr?.avgLitresPerHour ?? 0).toFixed(2)}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground italic text-xs">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {(() => {
+                                    const reeferRec = allReeferRecords.find(r => r.id === record.id);
+                                    if (reeferRec?.linked_horse) {
+                                      return (
+                                        <div className="flex items-center gap-1.5">
+                                          <Truck className="h-3.5 w-3.5 text-emerald-600" />
+                                          <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{reeferRec.linked_horse}</span>
+                                        </div>
+                                      );
+                                    }
+                                    return <span className="text-xs text-muted-foreground italic">Not linked</span>;
+                                  })()}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="outline" size="sm" className="h-8 px-2">
+                                        <Settings className="h-4 w-4 mr-1" />
+                                        <ChevronDown className="h-3 w-3" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48">
+                                      {reeferPendingCost && (
+                                        <DropdownMenuItem onClick={() => openEditRecord(record)} className="text-amber-600">
+                                          <DollarSign className="h-4 w-4 mr-2" />
+                                          Add Cost
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem onClick={() => openViewModal(record)}>
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View Details
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openEditRecord(record)}>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        Edit Record
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openReeferVehicleLink(record)}>
+                                        <Truck className="h-4 w-4 mr-2" />
+                                        {allReeferRecords.find(r => r.id === record.id)?.linked_diesel_record_id ? 'Change Vehicle' : 'Link to Vehicle'}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleDeleteReeferRecord(record.id)}
+                                        className="text-destructive"
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Delete Record
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            ) : (
+              sortedReeferFleets.length > 0 && (
                 <div className="space-y-6">
                   {sortedReeferFleets.map((fleet) => {
                     const fleetTotals = getFleetTotals(reeferRecordsGroupedByFleetAndWeek, fleet);
@@ -1380,7 +1758,7 @@ const DieselManagement = () => {
                     );
                   })}
                 </div>
-              </>
+              )
             )}
 
           </TabsContent>
@@ -1573,7 +1951,7 @@ const DieselManagement = () => {
         }}
       />
 
-    </Layout>
+    </Layout >
   );
 };
 
