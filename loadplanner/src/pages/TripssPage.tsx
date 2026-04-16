@@ -45,7 +45,9 @@ export default function LoadsPage() {
   // Keep selectedLoad in sync with fresh query data so dialogs always show latest values
   const selectedLoadFresh = (selectedLoad && loads.find(l => l.id === selectedLoad.id)) ?? selectedLoad;
 
+  // Exclude third-party loads (TP- prefix) — those are managed on the Third Party Loads page
   const filteredLoads = loads.filter((load) => {
+    if (load.load_id.startsWith("TP-")) return false;
     const matchesSearch =
       !searchQuery ||
       load.load_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
