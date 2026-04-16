@@ -9,6 +9,8 @@ import {
     AlertTriangle,
     Calendar,
     Car,
+    ChevronDown,
+    ChevronRight,
     ClipboardList,
     FileSpreadsheet,
     FileText,
@@ -190,6 +192,51 @@ const Reports = () => {
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState("");
     const [loadingKey, setLoadingKey] = useState<string | null>(null);
+    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+    // ── Toggle section collapse state ──────────────────────────────────────────
+    const toggleSection = (sectionTitle: string) => {
+        setExpandedSections(prev => {
+            const next = new Set(prev);
+            if (next.has(sectionTitle)) {
+                next.delete(sectionTitle);
+            } else {
+                next.add(sectionTitle);
+            }
+            return next;
+        });
+    };
+
+    // ── Expand/Collapse all sections in a category ─────────────────────────────
+    const toggleAllWorkshop = (expand: boolean) => {
+        const workshopTitles = sections.filter(s => s.badge === "Workshop").map(s => s.title);
+        setExpandedSections(prev => {
+            const next = new Set(prev);
+            workshopTitles.forEach(title => {
+                if (expand) {
+                    next.add(title);
+                } else {
+                    next.delete(title);
+                }
+            });
+            return next;
+        });
+    };
+
+    const toggleAllOperations = (expand: boolean) => {
+        const opsTitles = sections.filter(s => s.badge === "Operations").map(s => s.title);
+        setExpandedSections(prev => {
+            const next = new Set(prev);
+            opsTitles.forEach(title => {
+                if (expand) {
+                    next.add(title);
+                } else {
+                    next.delete(title);
+                }
+            });
+            return next;
+        });
+    };
 
     // ── Helper: wrap export call with loading & toast ──────────────────────────
     const runExport = async (id: string, fmt: "excel" | "pdf", fn: () => Promise<void>) => {
@@ -206,6 +253,7 @@ const Reports = () => {
     };
 
     // ── Data fetchers (called on demand) ───────────────────────────────────────
+    // ... (all fetch functions remain exactly the same) ...
 
     const fetchTyres = async () => {
         const { data, error } = await supabase.from("tyres").select("*");
@@ -411,6 +459,7 @@ const Reports = () => {
     };
 
     // ── Report Sections ────────────────────────────────────────────────────────
+    // ... (sections array remains exactly the same) ...
 
     const sections: ReportSection[] = [
         // ── WORKSHOP MANAGEMENT ──────────────────────────────────────────────────
@@ -647,8 +696,6 @@ const Reports = () => {
                 },
             ],
         },
-
-        // ── WORKSHOP: Fleet Vehicles ─────────────────────────────────────────
         {
             title: "Fleet Vehicles",
             icon: Car,
@@ -686,8 +733,6 @@ const Reports = () => {
                 },
             ],
         },
-
-        // ── WORKSHOP: Work Orders ────────────────────────────────────────────
         {
             title: "Work Orders",
             icon: Wrench,
@@ -731,8 +776,6 @@ const Reports = () => {
                 },
             ],
         },
-
-        // ── WORKSHOP: Incidents ──────────────────────────────────────────────
         {
             title: "Incidents & Accidents",
             icon: AlertTriangle,
@@ -772,8 +815,6 @@ const Reports = () => {
                 },
             ],
         },
-
-        // ── OPERATIONS ───────────────────────────────────────────────────────────
         {
             title: "Trip Management",
             icon: Truck,
@@ -787,8 +828,6 @@ const Reports = () => {
                     formats: ["excel", "pdf"],
                     onExport: async (fmt) => {
                         const trips = await fetchTripsWithFleet();
-
-                        // Sort by fleet then departure for gap calculation
                         const sortedByFleet = [...trips].sort((a, b) => {
                             const fa = a.fleet_number || '';
                             const fb = b.fleet_number || '';
@@ -797,8 +836,6 @@ const Reports = () => {
                             const db = new Date(b.departure_date || b.planned_departure_date || '').getTime() || 0;
                             return da - db;
                         });
-
-                        // Build a map of tripId → gap days from previous trip on same fleet
                         const gapMap = new Map<string, number>();
                         const prevArrivalByFleet = new Map<string, Date>();
                         for (const t of sortedByFleet) {
@@ -814,7 +851,6 @@ const Reports = () => {
                             }
                             if (fn && arr) prevArrivalByFleet.set(fn, new Date(arr));
                         }
-
                         const headers = ["Trip #", "Fleet", "Driver", "Origin", "Destination", "Status", "Start Date", "End Date", "Revenue", "Additional Revenue", "Gap Days", "Actual Cost"];
                         const rows = trips.map((t: Trip) => [
                             t.trip_number || t.id?.slice(0, 8),
@@ -862,13 +898,9 @@ const Reports = () => {
                     formats: ["excel"],
                     onExport: async () => {
                         const trips = await fetchTripsWithFleet();
-
-                        // Only trips with fleet_number and at least one date
                         const dated = trips.filter(
                             (t) => t.fleet_number && (t.departure_date || t.planned_departure_date) && (t.arrival_date || t.planned_arrival_date),
                         );
-
-                        // Group by fleet_number, sorted by departure date
                         const byFleet = new Map<string, Trip[]>();
                         for (const t of dated) {
                             const fn = t.fleet_number!;
@@ -882,8 +914,6 @@ const Reports = () => {
                                 return da - db;
                             });
                         }
-
-                        // Compute per-trip gap: days between previous trip's arrival and this trip's departure
                         type GapRow = { fleet: string; tripNumber: string; prevTripNumber: string; prevArrival: string; nextDeparture: string; gapDays: number };
                         const gapRows: GapRow[] = [];
                         for (const [fleet, fleetTrips] of byFleet.entries()) {
@@ -903,8 +933,6 @@ const Reports = () => {
                                 });
                             }
                         }
-
-                        // --- Weekly summary per fleet ---
                         const weekKey = (d: Date) => {
                             const jan1 = new Date(d.getFullYear(), 0, 1);
                             const weekNum = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
@@ -925,8 +953,6 @@ const Reports = () => {
                                 return [fleet, week, v.count, v.totalGap, v.count > 0 ? (v.totalGap / v.count).toFixed(1) : "0"];
                             })
                             .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
-
-                        // --- Monthly summary per fleet ---
                         const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
                         const monthlyMap = new Map<string, { totalGap: number; count: number }>();
                         for (const r of gapRows) {
@@ -943,33 +969,23 @@ const Reports = () => {
                                 return [fleet, month, v.count, v.totalGap, v.count > 0 ? (v.totalGap / v.count).toFixed(1) : "0"];
                             })
                             .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
-
-                        // Build Excel workbook
                         const wb = createWorkbook();
-
-                        // Tab 1: Detail
                         addStyledSheet(wb, "Gap Details", {
                             title: "FLEET GAP DAYS — DETAIL",
                             subtitle: "Days between last offloading (arrival) and next loading (departure) per fleet",
                             headers: ["Fleet", "Prev Trip #", "Prev Arrival", "Next Trip #", "Next Departure", "Gap Days"],
                             rows: gapRows.map((r) => [r.fleet, r.prevTripNumber, r.prevArrival, r.tripNumber, r.nextDeparture, r.gapDays]),
                         });
-
-                        // Tab 2: Weekly
                         addStyledSheet(wb, "Weekly", {
                             title: "FLEET GAP DAYS — WEEKLY",
                             headers: ["Fleet", "Week", "Gaps", "Total Gap Days", "Avg Gap Days"],
                             rows: weeklyRows,
                         });
-
-                        // Tab 3: Monthly
                         addStyledSheet(wb, "Monthly", {
                             title: "FLEET GAP DAYS — MONTHLY",
                             headers: ["Fleet", "Month", "Gaps", "Total Gap Days", "Avg Gap Days"],
                             rows: monthlyRows,
                         });
-
-                        // Tab 4: Summary
                         const totalGapDays = gapRows.reduce((s, r) => s + r.gapDays, 0);
                         const fleetsWithGaps = new Set(gapRows.filter((r) => r.gapDays > 0).map((r) => r.fleet)).size;
                         addSummarySheet(wb, "Summary", {
@@ -982,7 +998,6 @@ const Reports = () => {
                                 ["Fleets with Gaps > 0", fleetsWithGaps],
                             ],
                         });
-
                         await saveWorkbook(wb, `Fleet_Gap_Days_${new Date().toISOString().split("T")[0]}.xlsx`);
                     },
                 },
@@ -1110,8 +1125,6 @@ const Reports = () => {
                 },
             ],
         },
-
-        // ── OPERATIONS: Invoicing ────────────────────────────────────────────
         {
             title: "Invoicing",
             icon: Receipt,
@@ -1167,8 +1180,6 @@ const Reports = () => {
                 },
             ],
         },
-
-        // ── OPERATIONS: Fuel Bunkers ─────────────────────────────────────────
         {
             title: "Fuel Bunkers",
             icon: Fuel,
@@ -1226,6 +1237,9 @@ const Reports = () => {
 
     const totalReports = sections.reduce((s, sec) => s + sec.reports.length, 0);
 
+    const workshopExpandedCount = workshopSections.filter(s => expandedSections.has(s.title)).length;
+    const operationsExpandedCount = operationsSections.filter(s => expandedSections.has(s.title)).length;
+
     return (
         <Layout>
             <div className="space-y-6">
@@ -1251,29 +1265,57 @@ const Reports = () => {
                 {/* Workshop Management */}
                 {workshopSections.length > 0 && (
                     <>
-                        <div className="flex items-center gap-2">
-                            <Wrench className="h-5 w-5 text-muted-foreground" />
-                            <h2 className="text-lg font-semibold">Workshop Management</h2>
-                            <Badge variant="secondary" className="ml-1">{workshopSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Wrench className="h-5 w-5 text-muted-foreground" />
+                                <h2 className="text-lg font-semibold">Workshop Management</h2>
+                                <Badge variant="secondary" className="ml-1">{workshopSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
+                            </div>
+                            <div className="flex gap-1">
+                                <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="h-7 text-xs"
+                                    onClick={() => toggleAllWorkshop(workshopExpandedCount < workshopSections.length)}
+                                >
+                                    {workshopExpandedCount < workshopSections.length ? "Expand All" : "Collapse All"}
+                                </Button>
+                            </div>
                         </div>
                         <div className="space-y-2">
                             {workshopSections.map((section) => {
                                 const Icon = section.icon;
+                                const isExpanded = expandedSections.has(section.title);
                                 return (
                                     <div key={section.title} className="space-y-1">
-                                        <div className="flex items-center gap-2 px-1 pt-2">
-                                            <Icon className="h-4 w-4 text-primary" />
+                                        <button
+                                            onClick={() => toggleSection(section.title)}
+                                            className="flex items-center gap-2 px-1 pt-2 w-full text-left hover:bg-muted/30 rounded transition-colors"
+                                        >
+                                            {isExpanded ? (
+                                                <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                            ) : (
+                                                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                            )}
+                                            <Icon className="h-4 w-4 text-primary flex-shrink-0" />
                                             <span className="text-sm font-semibold">{section.title}</span>
                                             <span className="text-xs text-muted-foreground">— {section.description}</span>
-                                        </div>
-                                        {section.reports.map((report) => (
-                                            <ReportRow
-                                                key={report.id}
-                                                report={report}
-                                                loadingKey={loadingKey}
-                                                onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
-                                            />
-                                        ))}
+                                            <Badge variant="outline" className="ml-auto text-[10px] h-5">
+                                                {section.reports.length}
+                                            </Badge>
+                                        </button>
+                                        {isExpanded && (
+                                            <div className="ml-7 space-y-1">
+                                                {section.reports.map((report) => (
+                                                    <ReportRow
+                                                        key={report.id}
+                                                        report={report}
+                                                        loadingKey={loadingKey}
+                                                        onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -1286,29 +1328,57 @@ const Reports = () => {
                 {/* Operations */}
                 {operationsSections.length > 0 && (
                     <>
-                        <div className="flex items-center gap-2">
-                            <Truck className="h-5 w-5 text-muted-foreground" />
-                            <h2 className="text-lg font-semibold">Operations</h2>
-                            <Badge variant="secondary" className="ml-1">{operationsSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Truck className="h-5 w-5 text-muted-foreground" />
+                                <h2 className="text-lg font-semibold">Operations</h2>
+                                <Badge variant="secondary" className="ml-1">{operationsSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
+                            </div>
+                            <div className="flex gap-1">
+                                <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="h-7 text-xs"
+                                    onClick={() => toggleAllOperations(operationsExpandedCount < operationsSections.length)}
+                                >
+                                    {operationsExpandedCount < operationsSections.length ? "Expand All" : "Collapse All"}
+                                </Button>
+                            </div>
                         </div>
                         <div className="space-y-2">
                             {operationsSections.map((section) => {
                                 const Icon = section.icon;
+                                const isExpanded = expandedSections.has(section.title);
                                 return (
                                     <div key={section.title} className="space-y-1">
-                                        <div className="flex items-center gap-2 px-1 pt-2">
-                                            <Icon className="h-4 w-4 text-primary" />
+                                        <button
+                                            onClick={() => toggleSection(section.title)}
+                                            className="flex items-center gap-2 px-1 pt-2 w-full text-left hover:bg-muted/30 rounded transition-colors"
+                                        >
+                                            {isExpanded ? (
+                                                <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                            ) : (
+                                                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                            )}
+                                            <Icon className="h-4 w-4 text-primary flex-shrink-0" />
                                             <span className="text-sm font-semibold">{section.title}</span>
                                             <span className="text-xs text-muted-foreground">— {section.description}</span>
-                                        </div>
-                                        {section.reports.map((report) => (
-                                            <ReportRow
-                                                key={report.id}
-                                                report={report}
-                                                loadingKey={loadingKey}
-                                                onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
-                                            />
-                                        ))}
+                                            <Badge variant="outline" className="ml-auto text-[10px] h-5">
+                                                {section.reports.length}
+                                            </Badge>
+                                        </button>
+                                        {isExpanded && (
+                                            <div className="ml-7 space-y-1">
+                                                {section.reports.map((report) => (
+                                                    <ReportRow
+                                                        key={report.id}
+                                                        report={report}
+                                                        loadingKey={loadingKey}
+                                                        onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}

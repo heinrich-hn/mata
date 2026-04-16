@@ -21,8 +21,9 @@ import {
 } from '@/lib/dieselFleetExport';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/formatters';
 import type { DieselConsumptionRecord, DieselNorms } from '@/types/operations';
-import { BarChart3, Calendar, CalendarRange, ChevronDown, ChevronRight, Download, FileSpreadsheet, FileText, Fuel, Snowflake, Truck, User } from 'lucide-react';
+import { BarChart3, Calendar, CalendarRange, ChevronDown, ChevronRight, Download, FileSpreadsheet, FileText, Fuel, Snowflake, TrendingUp, Truck, User } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import DieselConsumptionCharts from '@/components/diesel/DieselConsumptionCharts';
 
 // Report data types
 interface DriverReport {
@@ -154,7 +155,7 @@ const DieselReportsTab = ({
   const getNormForFleet = (fleetNumber: string): DieselNorms | undefined => {
     return dieselNorms.find(norm => norm.fleet_number === fleetNumber);
   };
-  const [reportType, setReportType] = useState<'driver' | 'fleet' | 'station' | 'weekly' | 'reefer'>('fleet');
+  const [reportType, setReportType] = useState<'driver' | 'fleet' | 'station' | 'weekly' | 'reefer' | 'charts'>('fleet');
   const [reportPeriod, setReportPeriod] = useState<string>('3months');
   const todayStr = new Date().toISOString().split('T')[0];
   const thirtyDaysAgoStr = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
@@ -203,6 +204,8 @@ const DieselReportsTab = ({
       case '3months': fromDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()).toISOString().split('T')[0]; break;
       case '6months': fromDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()).toISOString().split('T')[0]; break;
       case '1year': fromDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
+      case '2years': fromDate = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
+      case '3years': fromDate = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
       default: return records;
     }
     return records.filter(r => r.date >= fromDate && r.date <= todayStr);
@@ -517,6 +520,8 @@ const DieselReportsTab = ({
             case '3months': fromDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()).toISOString().split('T')[0]; break;
             case '6months': fromDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()).toISOString().split('T')[0]; break;
             case '1year': fromDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
+            case '2years': fromDate = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
+            case '3years': fromDate = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
             default: fromDate = '1900-01-01';
           }
           if (dateStr < fromDate) return;
@@ -855,6 +860,8 @@ const DieselReportsTab = ({
       case '3months': fromDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()).toISOString().split('T')[0]; break;
       case '6months': fromDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()).toISOString().split('T')[0]; break;
       case '1year': fromDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
+      case '2years': fromDate = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
+      case '3years': fromDate = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate()).toISOString().split('T')[0]; break;
       default: return undefined;
     }
     return { from: fromDate, to: todayStr };
@@ -972,6 +979,8 @@ const DieselReportsTab = ({
                       <SelectItem value="3months">Last 3 Months</SelectItem>
                       <SelectItem value="6months">Last 6 Months</SelectItem>
                       <SelectItem value="1year">Last Year</SelectItem>
+                      <SelectItem value="2years">Last 2 Years</SelectItem>
+                      <SelectItem value="3years">Last 3 Years</SelectItem>
                       <SelectItem value="all">All Time</SelectItem>
                       <SelectItem value="custom">
                         <span className="flex items-center gap-1.5">
@@ -1031,6 +1040,14 @@ const DieselReportsTab = ({
               >
                 <BarChart3 className="h-4 w-4" />
                 Weekly Consumption
+              </Button>
+              <Button
+                variant={reportType === 'charts' ? 'default' : 'outline'}
+                onClick={() => setReportType('charts')}
+                className="gap-2"
+              >
+                <TrendingUp className="h-4 w-4" />
+                Consumption Charts
               </Button>
               <Button
                 variant={reportType === 'reefer' ? 'default' : 'outline'}
@@ -2211,6 +2228,16 @@ const DieselReportsTab = ({
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Consumption Charts */}
+        {reportType === 'charts' && (
+          <DieselConsumptionCharts
+            filteredTruckRecords={filteredTruckRecords}
+            filteredReeferRecords={filteredReeferRecords}
+            dieselNorms={dieselNorms}
+            reeferLhrMap={reeferLhrMap}
+          />
         )}
 
         {/* Weekly Consumption Report */}
