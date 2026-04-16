@@ -29,6 +29,7 @@ import {
   Download,
   Edit,
   Eye,
+  FileSpreadsheet,
   Filter,
   FilterX,
   Gauge,
@@ -45,6 +46,7 @@ import {
 import React, { useMemo, useState } from 'react';
 import CompletedTripEditModal from './CompletedTripEditModal';
 import TripExpenseInline from './TripExpenseInline';
+import TripExpenseExportDialog from './TripExpenseExportDialog';
 import TripExportDialog from './TripExportDialog';
 
 // Helper function to get week key (Monday of the week)
@@ -137,6 +139,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grouped' | 'list'>('grouped');
   const [showMissingRevenueOnly, setShowMissingRevenueOnly] = useState<boolean>(false);
+  const [showFlaggedOnly, setShowFlaggedOnly] = useState<boolean>(false);
 
   // Expanded state
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
@@ -148,6 +151,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
 
   // Export dialog state
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isExpenseExportDialogOpen, setIsExpenseExportDialogOpen] = useState(false);
 
   // Inline expense expansion state
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
@@ -215,6 +219,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
       if (driverFilter !== 'all' && trip.driver_name !== driverFilter) return false;
       if (clientFilter !== 'all' && trip.client_name !== clientFilter) return false;
       if (showMissingRevenueOnly && trip.base_revenue && trip.base_revenue > 0) return false;
+      if (showFlaggedOnly && !trip.hasFlaggedCosts) return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
@@ -229,7 +234,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
       }
       return true;
     });
-  }, [trips, fleetFilter, driverFilter, clientFilter, searchQuery, showMissingRevenueOnly]);
+  }, [trips, fleetFilter, driverFilter, clientFilter, searchQuery, showMissingRevenueOnly, showFlaggedOnly]);
 
   // Group trips by week
   const tripsByWeek = useMemo(() => {
@@ -258,7 +263,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
     return sorted;
   }, [filteredTrips]);
 
-  const hasActiveFilters = fleetFilter !== 'all' || driverFilter !== 'all' || clientFilter !== 'all' || searchQuery !== '' || showMissingRevenueOnly;
+  const hasActiveFilters = fleetFilter !== 'all' || driverFilter !== 'all' || clientFilter !== 'all' || searchQuery !== '' || showMissingRevenueOnly || showFlaggedOnly;
 
   const clearFilters = () => {
     setFleetFilter('all');
@@ -266,6 +271,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
     setClientFilter('all');
     setSearchQuery('');
     setShowMissingRevenueOnly(false);
+    setShowFlaggedOnly(false);
   };
 
   // Detect duplicate POD numbers
@@ -456,6 +462,29 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
           </div>
         )}
 
+        {/* Flagged Costs Banner Alert */}
+        {stats.tripsWithFlaggedCosts > 0 && (
+          <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-4 flex items-start gap-3">
+            <div className="h-9 w-9 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-destructive">Flagged Expenses in Completed Trips</p>
+              <p className="text-sm text-destructive/70 mt-0.5">
+                {stats.tripsWithFlaggedCosts} completed trip{stats.tripsWithFlaggedCosts === 1 ? '' : 's'} still {stats.tripsWithFlaggedCosts === 1 ? 'has' : 'have'} unresolved flagged expenses that require attention.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFlaggedOnly(true)}
+              className="bg-white border-destructive/20 text-destructive hover:bg-destructive/5"
+            >
+              View Flagged
+            </Button>
+          </div>
+        )}
+
         {/* Premium Toolbar */}
         <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
           <div className="flex items-center justify-end gap-2 p-3 bg-muted/30 border-b">
@@ -477,6 +506,11 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
             <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)} className="h-9 gap-2">
               <Download className="h-4 w-4" />
               Export
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={() => setIsExpenseExportDialogOpen(true)} className="h-9 gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              Export Expenses
             </Button>
           </div>
 
@@ -556,6 +590,16 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                   <DollarSign className="h-4 w-4" />
                   {showMissingRevenueOnly ? 'Showing Missing Revenue' : 'Show Missing Revenue'}
                 </Button>
+
+                <Button
+                  variant={showFlaggedOnly ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowFlaggedOnly(!showFlaggedOnly)}
+                  className={`h-10 gap-2 ${showFlaggedOnly ? 'bg-destructive hover:bg-destructive/90 text-white' : ''}`}
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  {showFlaggedOnly ? 'Showing Flagged' : 'Show Flagged'}
+                </Button>
               </div>
             </div>
 
@@ -588,6 +632,12 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                       <Badge variant="secondary" className="text-xs gap-1 bg-amber-100 text-amber-700">
                         <DollarSign className="h-2.5 w-2.5" />
                         Missing Revenue
+                      </Badge>
+                    )}
+                    {showFlaggedOnly && (
+                      <Badge variant="secondary" className="text-xs gap-1 bg-destructive/10 text-destructive">
+                        <AlertTriangle className="h-2.5 w-2.5" />
+                        Flagged Costs
                       </Badge>
                     )}
                     {searchQuery && (
@@ -1244,6 +1294,13 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
           onClose={() => setIsExportDialogOpen(false)}
           trips={trips}
           tripType="completed"
+        />
+
+        {/* Expense Export Dialog */}
+        <TripExpenseExportDialog
+          isOpen={isExpenseExportDialogOpen}
+          onClose={() => setIsExpenseExportDialogOpen(false)}
+          trips={filteredTrips}
         />
       </div>
     </TooltipProvider >

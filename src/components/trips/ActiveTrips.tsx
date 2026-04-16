@@ -44,6 +44,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import TripExpenseInline from './TripExpenseInline';
+import TripExpenseExportDialog from './TripExpenseExportDialog';
 import TripExportDialog from './TripExportDialog';
 import { compareTripNumbers } from '@/hooks/useTripKmValidation';
 
@@ -214,6 +215,7 @@ const ActiveTrips = ({
 
   // Export dialog state
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isExpenseExportDialogOpen, setIsExpenseExportDialogOpen] = useState(false);
 
   // Inline expense expansion state
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
@@ -496,6 +498,11 @@ const ActiveTrips = ({
             <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)} className="h-9 gap-2">
               <Download className="h-4 w-4" />
               Export
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={() => setIsExpenseExportDialogOpen(true)} className="h-9 gap-2">
+              <Download className="h-4 w-4" />
+              Export Expenses
             </Button>
 
             <Button variant="outline" size="sm" onClick={onImport} className="h-9 gap-2">
@@ -1299,6 +1306,13 @@ const ActiveTrips = ({
           onClose={() => setIsExportDialogOpen(false)}
           trips={trips}
           tripType="active"
+        />
+
+        {/* Expense Export Dialog */}
+        <TripExpenseExportDialog
+          isOpen={isExpenseExportDialogOpen}
+          onClose={() => setIsExpenseExportDialogOpen(false)}
+          trips={filteredTrips}
         />
       </div>
     </TooltipProvider >
