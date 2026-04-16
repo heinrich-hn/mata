@@ -196,6 +196,7 @@ const Procurement = () => {
     unit_price: "",
     notes: "",
     requested_by: "",
+    quoteFile: null as File | null,
   });
   const [vendorAssignment, setVendorAssignment] = useState({
     vendor_id: "",
@@ -340,6 +341,7 @@ const Procurement = () => {
       unit_price: request.unit_price?.toString() || "",
       notes: request.notes || "",
       requested_by: request.requested_by || "",
+      quoteFile: null,
     });
     setEditDialogOpen(true);
   };
@@ -398,6 +400,30 @@ const Procurement = () => {
   const handleEditRequest = async () => {
     if (!selectedRequest || !editForm.part_name || !editForm.quantity) return;
 
+    let quotes: QuoteAttachment[] | undefined;
+    if (editForm.quoteFile) {
+      const file = editForm.quoteFile;
+      const ext = file.name.split(".").pop();
+      const irNum = selectedRequest.ir_number || "req";
+      const path = `procurement-quotes/edit-${irNum}-${selectedRequest.id}-${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("documents").upload(path, file);
+      if (uploadErr) {
+        toast({ variant: "destructive", title: "Upload Failed", description: uploadErr.message });
+        return;
+      }
+      const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path);
+      const vendorName = vendors.find(v => v.id === editForm.vendor_id)?.vendor_name ?? "";
+      const newQuote: QuoteAttachment = {
+        file_url: publicUrl,
+        file_name: file.name,
+        vendor_name: vendorName,
+        price: editForm.unit_price ? parseFloat(editForm.unit_price) : null,
+        uploaded_at: new Date().toISOString(),
+      };
+      const existing = selectedRequest.quotes ?? [];
+      quotes = [...existing, newQuote];
+    }
+
     await updateRequest.mutateAsync({
       id: selectedRequest.id,
       part_name: editForm.part_name,
@@ -407,6 +433,7 @@ const Procurement = () => {
       unit_price: editForm.unit_price ? parseFloat(editForm.unit_price) : null,
       notes: editForm.notes || null,
       requested_by: editForm.requested_by || null,
+      ...(quotes ? { quotes } : {}),
     });
 
     setEditDialogOpen(false);
@@ -3084,6 +3111,71 @@ const Procurement = () => {
                 value={editForm.notes}
                 onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
               />
+            </div>
+
+            {/* Quote upload */}
+            <div className="grid gap-2">
+              <Label className="text-sm">Quote / Invoice (PDF, JPG, PNG — max 5 MB)</Label>
+
+              {/* Existing quotes */}
+              {selectedRequest?.quotes && selectedRequest.quotes.length > 0 && (
+                <div className="space-y-1">
+                  {selectedRequest.quotes.map((q, idx) => (
+                    <a
+                      key={idx}
+                      href={q.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs p-2 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded hover:bg-green-100 dark:hover:bg-green-950/30 transition-colors"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                      <span className="truncate flex-1">{q.file_name}</span>
+                      {q.vendor_name && <span className="text-muted-foreground shrink-0">{q.vendor_name}</span>}
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload new */}
+              {editForm.quoteFile ? (
+                <div className="flex items-center gap-2 text-xs p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded">
+                  <FileText className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                  <span className="truncate flex-1">{editForm.quoteFile.name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 w-5 p-0"
+                    onClick={() => setEditForm({ ...editForm, quoteFile: null })}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 cursor-pointer border border-dashed rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted/30 transition-colors">
+                  <Upload className="h-3.5 w-3.5 shrink-0" />
+                  <span>{selectedRequest?.quotes && selectedRequest.quotes.length > 0 ? "Upload another quote" : "Click to upload quote"}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                          toast({ variant: "destructive", title: "File Too Large", description: "Max 5 MB per file" });
+                          return;
+                        }
+                        if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+                          toast({ variant: "destructive", title: "Invalid File Type", description: "PDF, JPG or PNG only" });
+                          return;
+                        }
+                        setEditForm({ ...editForm, quoteFile: file });
+                      }
+                    }}
+                  />
+                </label>
+              )}
             </div>
           </div>
           <DialogFooter>
