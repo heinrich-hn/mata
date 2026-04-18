@@ -40,8 +40,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useActiveSuppliers } from "@/hooks/useSuppliers";
-import { useDrivers } from "@/hooks/useDrivers";
-import { useFleetVehicles } from "@/hooks/useFleetVehicles";
 import {
     generateLoadId,
     useCreateLoad,
@@ -206,7 +204,7 @@ const formSchema = z.object({
     offloadingPlannedArrival: z.string().min(1, "Planned arrival time is required"),
     offloadingPlannedDeparture: z.string().min(1, "Planned departure time is required"),
     cargoDescription: z.string().min(1, "Cargo description is required"),
-    fleetVehicleId: z.string().min(1, "Vehicle is required"),
+    fleetVehicleId: z.string().optional(),
     driverId: z.string().optional(),
     notes: z.string(),
 });
@@ -236,8 +234,6 @@ export default function SubcontractorTripsPage() {
 
     const { data: loads = [], isLoading } = useLoads();
     const { data: suppliers = [] } = useActiveSuppliers();
-    const { data: fleetVehicles = [] } = useFleetVehicles();
-    const { data: drivers = [] } = useDrivers();
     const { data: customLocations = [] } = useCustomLocations();
     const createLoad = useCreateLoad();
     const _updateLoad = useUpdateLoad();
@@ -375,7 +371,7 @@ export default function SubcontractorTripsPage() {
                 cargo_type: "Retail",
                 priority: data.priority,
                 status: "scheduled",
-                fleet_vehicle_id: data.fleetVehicleId,
+                fleet_vehicle_id: data.fleetVehicleId || null,
                 driver_id: data.driverId || null,
                 time_window: JSON.stringify(timeData),
                 notes: data.notes,
@@ -391,8 +387,8 @@ export default function SubcontractorTripsPage() {
 
     return (
         <>
-            <div className="p-6 space-y-6 animate-fade-in">
-                <div className="flex items-center justify-between">
+            <div className="space-y-6 animate-fade-in">
+                <header className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <Button
                             variant="outline"
@@ -425,13 +421,13 @@ export default function SubcontractorTripsPage() {
                         </DropdownMenu>
                         <Button
                             onClick={openCreateDialog}
-                            className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+                            className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
                         >
                             <Plus className="h-4 w-4" />
                             Create Subcontractor Trip
                         </Button>
                     </div>
-                </div>
+                </header>
 
                 <QuickFilters
                     onSearch={setSearchQuery}
@@ -454,7 +450,7 @@ export default function SubcontractorTripsPage() {
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <Truck className="h-5 w-5 text-purple-600" />
+                            <Truck className="h-5 w-5 text-accent" />
                             Create Subcontractor Trip
                         </DialogTitle>
                         <DialogDescription>
@@ -761,56 +757,7 @@ export default function SubcontractorTripsPage() {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="fleetVehicleId"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel htmlFor="fleetVehicleId">Assign Vehicle</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger id="fleetVehicleId">
-                                                        <SelectValue placeholder="Select vehicle" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    {fleetVehicles.map((vehicle) => (
-                                                        <SelectItem key={vehicle.id} value={vehicle.id}>
-                                                            {vehicle.vehicle_id} - {vehicle.type ?? "Unknown Type"}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="driverId"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel htmlFor="driverId">Driver (Optional)</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger id="driverId">
-                                                        <SelectValue placeholder="Auto-assign from vehicle" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    {drivers.map((driver) => (
-                                                        <SelectItem key={driver.id} value={driver.id}>
-                                                            {driver.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
+
 
                             <FormField
                                 control={form.control}
@@ -843,7 +790,7 @@ export default function SubcontractorTripsPage() {
                                 <Button
                                     type="submit"
                                     disabled={createLoad.isPending || !form.watch("supplierId")}
-                                    className="bg-purple-600 hover:bg-purple-700"
+                                    className="bg-accent hover:bg-accent/90 text-accent-foreground"
                                 >
                                     {createLoad.isPending && (
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />

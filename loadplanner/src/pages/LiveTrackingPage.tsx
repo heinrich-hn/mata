@@ -29,7 +29,6 @@ import {
   formatLastConnected,
   getAssetsWithPositions,
   getGeofences,
-  getStatusColor,
   isAuthenticated,
   type TelematicsAsset,
   type TelematicsGeofence,
@@ -37,7 +36,7 @@ import {
 import { formatDistance } from "@/lib/waypoints";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Circle,
   Polygon as LeafletPolygon,
@@ -140,179 +139,144 @@ function calculateETA(
   };
 }
 
-// Professional vehicle marker with clean design
+// Professional vehicle marker — refined corporate design
 function createVehicleIcon(
   asset: TelematicsAsset,
   hasActiveLoad = false,
 ): L.DivIcon {
   const isMoving = asset.speedKmH >= 5;
-  const color = isMoving ? "#16a34a" : "#dc2626";
   const rotation = asset.heading || 0;
   const fleetNumber = asset.name || asset.code || `${asset.id}`;
   const displayNumber =
     fleetNumber.length > 8 ? fleetNumber.substring(0, 7) + "…" : fleetNumber;
 
-  // Stopped: plain red dot. Moving: green circle with directional arrow.
-  const markerHtml = isMoving
-    ? `
-    <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+  // Palette: moving = teal-600, stopped = slate-500, load indicator = indigo
+  const bgColor = isMoving ? "#0d9488" : "#64748b";
+  const ringColor = isMoving ? "rgba(13,148,136,0.25)" : "rgba(100,116,139,0.2)";
+  const labelBg = isMoving ? "#0f766e" : "#475569";
+
+  const markerHtml = `
+    <div class="fleet-vehicle-marker" style="position:relative;display:flex;flex-direction:column;align-items:center;">
+      ${isMoving ? `<div style="
+        position:absolute;top:50%;left:50%;width:32px;height:32px;
+        transform:translate(-50%,-50%);
+        border-radius:50%;background:${ringColor};
+        animation:fleet-pulse 2s ease-out infinite;
+      "></div>` : ''}
       <div style="
-        width: 20px;
-        height: 20px;
-        background: ${color};
-        border-radius: 50%;
-        border: 2px solid white;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transform: rotate(${rotation}deg);
+        position:relative;z-index:2;
+        width:24px;height:24px;
+        background:${bgColor};
+        border-radius:${isMoving ? '6px' : '50%'};
+        border:2px solid rgba(255,255,255,0.95);
+        box-shadow:0 1px 3px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.08);
+        display:flex;align-items:center;justify-content:center;
+        ${isMoving ? `transform:rotate(${rotation}deg);` : ''}
+        transition:transform 0.3s ease;
       ">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2L12 22M12 2L5 9M12 2L19 9" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        ${isMoving ? `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+          <path d="M12 4L12 20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M12 4L7 10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M12 4L17 10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
+        ` : `
+        <div style="width:6px;height:6px;background:white;border-radius:50%;opacity:0.9;"></div>
+        `}
       </div>
       <div style="
-        position: absolute;
-        top: 22px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.75);
-        color: white;
-        font-size: 9px;
-        font-weight: 600;
-        padding: 1px 4px;
-        border-radius: 3px;
-        white-space: nowrap;
-        font-family: system-ui, -apple-system, sans-serif;
-        line-height: 1.2;
-      ">
-        ${displayNumber}
-      </div>
+        position:absolute;top:${isMoving ? '28' : '26'}px;left:50%;
+        transform:translateX(-50%);z-index:3;
+        background:${labelBg};color:white;
+        font-size:10px;font-weight:600;letter-spacing:0.02em;
+        padding:2px 6px;border-radius:4px;
+        white-space:nowrap;
+        font-family:'Inter',system-ui,-apple-system,sans-serif;
+        line-height:1.3;
+        box-shadow:0 1px 2px rgba(0,0,0,0.1);
+      ">${displayNumber}</div>
       ${hasActiveLoad ? `
       <div style="
-        position: absolute;
-        top: -4px;
-        right: -4px;
-        background: #7c3aed;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        border: 1.5px solid white;
-      "></div>
-      ` : ''}
-    </div>
-  `
-    : `
-    <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
-      <div style="
-        width: 14px;
-        height: 14px;
-        background: ${color};
-        border-radius: 50%;
-        border: 2px solid white;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-      "></div>
-      <div style="
-        position: absolute;
-        top: 16px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.75);
-        color: white;
-        font-size: 9px;
-        font-weight: 600;
-        padding: 1px 4px;
-        border-radius: 3px;
-        white-space: nowrap;
-        font-family: system-ui, -apple-system, sans-serif;
-        line-height: 1.2;
-      ">
-        ${displayNumber}
-      </div>
-      ${hasActiveLoad ? `
-      <div style="
-        position: absolute;
-        top: -4px;
-        right: -4px;
-        background: #7c3aed;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        border: 1.5px solid white;
-      "></div>
-      ` : ''}
-    </div>
-  `;
+        position:absolute;top:-3px;right:-3px;z-index:4;
+        background:linear-gradient(135deg,#6366f1,#4f46e5);width:10px;height:10px;
+        border-radius:50%;border:2px solid white;
+        box-shadow:0 0 0 1px rgba(99,102,241,0.3);
+      "></div>` : ''}
+    </div>`;
 
   return L.divIcon({
     html: markerHtml,
-    className: "vehicle-marker",
-    iconSize: isMoving ? [28, 36] : [22, 30],
-    iconAnchor: isMoving ? [14, 18] : [11, 15],
-    popupAnchor: [0, isMoving ? -18 : -15],
+    className: "fleet-vehicle-marker-wrapper",
+    iconSize: [32, 44],
+    iconAnchor: [16, 22],
+    popupAnchor: [0, -22],
   });
 }
 
-// Depot marker with professional styling
+// Depot marker — refined corporate icon set
 function createDepotIcon(type: string): L.DivIcon {
-  const colors: Record<string, string> = {
-    depot: "#059669",
-    warehouse: "#0284c7",
-    market: "#dc2626",
-    default: "#9333ea",
+  const config: Record<string, { bg: string; icon: string }> = {
+    depot: {
+      bg: "#047857",
+      icon: `<path d="M3 21h18M4 18h16M6 18V10l6-5 6 5v8" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="rgba(255,255,255,0.15)"/><path d="M10 18v-4h4v4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+    },
+    warehouse: {
+      bg: "#0369a1",
+      icon: `<rect x="3" y="8" width="18" height="13" rx="1" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.15)"/><path d="M3 8L12 3L21 8" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h8M8 17h5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>`,
+    },
+    market: {
+      bg: "#b91c1c",
+      icon: `<path d="M3 3h18l-2 9H5L3 3z" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.15)"/><circle cx="9" cy="18" r="2" stroke="white" stroke-width="1.5"/><circle cx="17" cy="18" r="2" stroke="white" stroke-width="1.5"/>`,
+    },
+    default: {
+      bg: "#7c3aed",
+      icon: `<circle cx="12" cy="10" r="7" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.15)"/><path d="M12 17L12 21" stroke="white" stroke-width="1.5" stroke-linecap="round"/><path d="M9 21h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>`,
+    },
   };
-  const color = colors[type] || colors.default;
+  const { bg, icon } = config[type] || config.default;
 
   return L.divIcon({
     html: `
-      <div style="
-        width: 28px;
-        height: 28px;
-        background: ${color};
-        border-radius: 8px;
-        border: 2px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      <div class="fleet-depot-marker" style="
+        width:30px;height:30px;
+        background:${bg};
+        border-radius:8px;
+        border:2px solid rgba(255,255,255,0.95);
+        box-shadow:0 1px 3px rgba(0,0,0,0.12),0 2px 6px rgba(0,0,0,0.08);
+        display:flex;align-items:center;justify-content:center;
       ">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M3 9L12 3L21 9L12 15L3 9Z" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.3)"/>
-          <path d="M12 15V21M8 18H16" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">${icon}</svg>
       </div>
     `,
-    className: "depot-marker",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    className: "fleet-depot-marker-wrapper",
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
   });
 }
 
-// Custom location marker
+// Custom location marker — map-pin style
 const createCustomLocationIcon = (): L.DivIcon => {
   return L.divIcon({
     html: `
-      <div style="
-        width: 26px;
-        height: 26px;
-        background: #f97316;
-        border-radius: 50%;
-        border: 2px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      <div class="fleet-custom-marker" style="
+        position:relative;display:flex;flex-direction:column;align-items:center;
       ">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="8" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.3)"/>
-          <circle cx="12" cy="12" r="3" fill="white"/>
-        </svg>
+        <div style="
+          width:26px;height:26px;
+          background:linear-gradient(135deg,#f97316,#ea580c);
+          border-radius:50% 50% 50% 4px;
+          transform:rotate(-45deg);
+          border:2px solid rgba(255,255,255,0.95);
+          box-shadow:0 1px 3px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.08);
+          display:flex;align-items:center;justify-content:center;
+        ">
+          <div style="width:8px;height:8px;background:white;border-radius:50%;transform:rotate(45deg);"></div>
+        </div>
       </div>
     `,
-    className: "custom-location-marker",
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
+    className: "fleet-custom-marker-wrapper",
+    iconSize: [26, 34],
+    iconAnchor: [13, 30],
   });
 };
 
@@ -345,6 +309,18 @@ function FitBounds({ assets }: { assets: TelematicsAsset[] }) {
 
   return null;
 }
+
+function FlyToVehicle({ target }: { target: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target && map) {
+      map.flyTo([target.lat, target.lng], 14, { duration: 1 });
+    }
+  }, [target, map]);
+  return null;
+}
+
+type SidebarFilter = "all" | "moving" | "idle" | "loaded";
 
 // ============================================================================
 // Main Component
@@ -388,6 +364,12 @@ export default function LiveTrackingPage() {
   // Trip history dialog state
   const [tripHistoryAsset, setTripHistoryAsset] = useState<TelematicsAsset | null>(null);
   const [tripHistoryLoads, setTripHistoryLoads] = useState<Record<string, unknown>[]>([]);
+
+  // Sidebar search & filter state
+  const [vehicleSearch, setVehicleSearch] = useState("");
+  const [sidebarFilter, setSidebarFilter] = useState<SidebarFilter>("all");
+  const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
+  const markerRefs = useRef<Map<number, L.Marker>>(new Map());
 
   // Auth form state
   const [username, setUsername] = useState(
@@ -493,6 +475,49 @@ export default function LiveTrackingPage() {
     },
     [assetToLoadMap],
   );
+
+  // Status counts for quick summary
+  const statusCounts = useMemo(() => {
+    let moving = 0, idle = 0, loaded = 0;
+    for (const asset of assets) {
+      if (asset.speedKmH >= 5) moving++; else idle++;
+      if (getLoadForAsset(asset)) loaded++;
+    }
+    return { moving, idle, loaded, total: assets.length };
+  }, [assets, getLoadForAsset]);
+
+  // Filtered + sorted sidebar assets
+  const filteredSidebarAssets = useMemo(() => {
+    const query = vehicleSearch.toLowerCase().trim();
+    return assets
+      .filter((asset) => {
+        const name = (asset.name || asset.code || `Vehicle ${asset.id}`).toLowerCase();
+        if (query && !name.includes(query)) return false;
+        if (sidebarFilter === "moving") return asset.speedKmH >= 5;
+        if (sidebarFilter === "idle") return asset.speedKmH < 5;
+        if (sidebarFilter === "loaded") return !!getLoadForAsset(asset);
+        return true;
+      })
+      .sort((a, b) => {
+        // Moving first, then by name
+        const aMoving = a.speedKmH >= 5 ? 0 : 1;
+        const bMoving = b.speedKmH >= 5 ? 0 : 1;
+        if (aMoving !== bMoving) return aMoving - bMoving;
+        return (a.name || a.code || "").localeCompare(b.name || b.code || "");
+      });
+  }, [assets, vehicleSearch, sidebarFilter, getLoadForAsset]);
+
+  // Fly to vehicle on sidebar click, then open popup
+  const handleVehicleClick = useCallback((asset: TelematicsAsset) => {
+    if (asset.lastLatitude != null && asset.lastLongitude != null) {
+      setFlyTarget({ lat: asset.lastLatitude, lng: asset.lastLongitude });
+      // Open popup after fly animation
+      setTimeout(() => {
+        const marker = markerRefs.current.get(asset.id);
+        if (marker) marker.openPopup();
+      }, 1100);
+    }
+  }, []);
 
   const openTripHistory = useCallback(async (asset: TelematicsAsset) => {
     setTripHistoryAsset(asset);
@@ -918,7 +943,7 @@ export default function LiveTrackingPage() {
                         scrollWheelZoom
                       >
                         <TileLayer
-                          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                           attribution='&copy; <a href="https://carto.com/">Carto</a>'
                         />
 
@@ -934,11 +959,11 @@ export default function LiveTrackingPage() {
                                 key={geofence.id}
                                 center={[lat, lng]}
                                 radius={radius}
-                                pathOptions={{ color: "#8b5cf6", fillColor: "#8b5cf6", fillOpacity: 0.1, weight: 1.5 }}
+                                pathOptions={{ color: "#7c3aed", fillColor: "#8b5cf6", fillOpacity: 0.06, weight: 1, dashArray: "4,4" }}
                               >
                                 <Tooltip permanent={false} direction="top">
-                                  <div className="text-sm font-medium">{geofence.name}</div>
-                                  {geofence.description && <div className="text-xs text-muted-foreground">{geofence.description}</div>}
+                                  <div className="text-xs font-semibold tracking-tight">{geofence.name}</div>
+                                  {geofence.description && <div className="text-[10px] text-muted-foreground mt-0.5">{geofence.description}</div>}
                                 </Tooltip>
                               </Circle>
                             );
@@ -947,27 +972,27 @@ export default function LiveTrackingPage() {
                         {/* Depots */}
                         {showDepots &&
                           DEPOTS.map((depot) => {
-                            const color = depot.type === 'depot' ? '#059669' : depot.type === 'warehouse' ? '#0284c7' : '#9333ea';
+                            const color = depot.type === 'depot' ? '#047857' : depot.type === 'warehouse' ? '#0369a1' : '#7c3aed';
                             return (
                               <React.Fragment key={depot.id}>
                                 {depot.polygon && depot.polygon.length >= 3 ? (
                                   <LeafletPolygon
                                     positions={depot.polygon.map(([lat, lng]) => [lat, lng] as [number, number])}
-                                    pathOptions={{ color, fillColor: color, fillOpacity: 0.15, weight: 1.5 }}
+                                    pathOptions={{ color, fillColor: color, fillOpacity: 0.08, weight: 1 }}
                                   />
                                 ) : (
                                   <Circle
                                     center={[depot.latitude, depot.longitude]}
                                     radius={depot.radius}
-                                    pathOptions={{ color, fillColor: color, fillOpacity: 0.1, weight: 1.5, dashArray: '5, 5' }}
+                                    pathOptions={{ color, fillColor: color, fillOpacity: 0.06, weight: 1, dashArray: '4,4' }}
                                   />
                                 )}
                                 <Marker position={[depot.latitude, depot.longitude]} icon={depotIcon(depot.type)}>
                                   <Popup>
-                                    <div className="p-1 min-w-[160px]">
-                                      <div className="font-semibold text-sm">{depot.name}</div>
-                                      <div className="text-xs text-muted-foreground mt-0.5">
-                                        {depot.type.charAt(0).toUpperCase() + depot.type.slice(1)} • {depot.country}
+                                    <div className="fleet-popup p-1.5 min-w-[180px]">
+                                      <div className="font-semibold text-sm tracking-tight">{depot.name}</div>
+                                      <div className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wider font-medium">
+                                        {depot.type.charAt(0).toUpperCase() + depot.type.slice(1)} &middot; {depot.country}
                                       </div>
                                     </div>
                                   </Popup>
@@ -990,24 +1015,32 @@ export default function LiveTrackingPage() {
                           </React.Fragment>
                         ))}
 
-                        {/* Route Polyline */}
+                        {/* Route Polyline — refined dashed route line */}
                         {routeCoords.length > 0 && (
-                          <Polyline
-                            positions={routeCoords}
-                            pathOptions={{ color: "#4f46e5", weight: 3, opacity: 0.7 }}
-                          >
-                            <Tooltip permanent direction="center">
-                              <div className="text-xs bg-background/90 px-2 py-1 rounded shadow-sm">
-                                {etaResult ? (
-                                  <>
-                                    <div>{etaResult.distanceFormatted}</div>
-                                    <div className="text-primary">ETA: {etaResult.etaFormatted}</div>
-                                  </>
-                                ) : "Calculating route..."}
-                              </div>
-                            </Tooltip>
-                          </Polyline>
+                          <>
+                            <Polyline
+                              positions={routeCoords}
+                              pathOptions={{ color: "#818cf8", weight: 5, opacity: 0.2, lineCap: "round", lineJoin: "round" }}
+                            />
+                            <Polyline
+                              positions={routeCoords}
+                              pathOptions={{ color: "#4f46e5", weight: 3, opacity: 0.8, dashArray: "8,6", lineCap: "round", lineJoin: "round" }}
+                            >
+                              <Tooltip permanent direction="center">
+                                <div className="fleet-route-tooltip">
+                                  {etaResult ? (
+                                    <>
+                                      <span className="font-semibold">{etaResult.distanceFormatted}</span>
+                                      <span className="text-indigo-600 dark:text-indigo-400 font-semibold"> &middot; ETA {etaResult.etaFormatted}</span>
+                                    </>
+                                  ) : "Calculating..."}
+                                </div>
+                              </Tooltip>
+                            </Polyline>
+                          </>
                         )}
+
+                        <FlyToVehicle target={flyTarget} />
 
                         {/* Vehicle Markers */}
                         {assets.map((asset) => {
@@ -1018,44 +1051,58 @@ export default function LiveTrackingPage() {
                               key={asset.id}
                               position={[asset.lastLatitude, asset.lastLongitude]}
                               icon={createVehicleIcon(asset, !!load)}
+                              ref={(ref) => {
+                                if (ref) markerRefs.current.set(asset.id, ref);
+                              }}
                             >
                               <Popup>
-                                <div className="min-w-[240px]">
-                                  <div className="font-semibold text-base mb-2">
-                                    {asset.name || asset.code || `Vehicle ${asset.id}`}
+                                <div className="fleet-popup min-w-[260px]">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <span className="text-sm font-semibold tracking-tight">
+                                      {asset.name || asset.code || `Vehicle ${asset.id}`}
+                                    </span>
+                                    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${asset.speedKmH >= 5
+                                      ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
+                                      : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                      }`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${asset.speedKmH >= 5 ? 'bg-teal-500' : 'bg-slate-400'}`}></span>
+                                      {asset.speedKmH >= 5 ? 'Moving' : 'Idle'}
+                                    </span>
                                   </div>
                                   {load && (
-                                    <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-md border border-purple-200 dark:border-purple-800">
-                                      <div className="flex items-center gap-1 text-purple-700 dark:text-purple-400 font-medium text-xs mb-1">
-                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                    <div className="mb-3 p-2.5 bg-indigo-50/80 dark:bg-indigo-950/20 rounded-lg border border-indigo-100 dark:border-indigo-900/40">
+                                      <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400 font-semibold text-[10px] uppercase tracking-wider mb-1.5">
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                                         </svg>
                                         Active Delivery
                                       </div>
-                                      <div className="text-xs space-y-0.5">
-                                        <div><span className="font-medium">Load:</span> {load.load_id}</div>
-                                        <div><span className="font-medium">To:</span> {load.destination || "N/A"}</div>
+                                      <div className="text-xs space-y-1 text-slate-700 dark:text-slate-300">
+                                        <div className="flex justify-between"><span className="text-muted-foreground">Load</span><span className="font-medium">{load.load_id}</span></div>
+                                        <div className="flex justify-between"><span className="text-muted-foreground">Destination</span><span className="font-medium">{load.destination || "N/A"}</span></div>
                                       </div>
                                     </div>
                                   )}
-                                  <div className="space-y-1 text-sm">
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Speed:</span>
-                                      <span className="font-medium">{Math.round(asset.speedKmH)} km/h</span>
+                                  <div className="space-y-2 text-xs">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-muted-foreground">Speed</span>
+                                      <span className="font-semibold tabular-nums">{Math.round(asset.speedKmH)} km/h</span>
                                     </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Last seen:</span>
-                                      <span className="text-xs">{formatLastConnected(asset.lastConnectedUtc)}</span>
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-muted-foreground">Last update</span>
+                                      <span className="font-medium text-muted-foreground">{formatLastConnected(asset.lastConnectedUtc)}</span>
                                     </div>
-                                    <button
-                                      onClick={() => openTripHistory(asset)}
-                                      className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 rounded text-xs font-medium transition-colors"
-                                    >
-                                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                      Trip History
-                                    </button>
+                                    <div className="pt-1.5 border-t">
+                                      <button
+                                        onClick={() => openTripHistory(asset)}
+                                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-md text-xs font-medium transition-colors"
+                                      >
+                                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        View Trip History
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </Popup>
@@ -1074,48 +1121,131 @@ export default function LiveTrackingPage() {
             {authenticated && assets.length > 0 && (
               <div className="w-80 shrink-0">
                 <Card className="shadow-sm">
-                  <CardHeader className="py-3 px-4 border-b">
-                    <CardTitle className="text-sm font-medium">Fleet Vehicles</CardTitle>
-                    <CardDescription className="text-xs">{assets.length} active vehicles</CardDescription>
+                  <CardHeader className="py-3 px-4 border-b space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm font-medium">Fleet Vehicles</CardTitle>
+                        <CardDescription className="text-xs">{assets.length} active vehicles</CardDescription>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-semibold gap-1 border-teal-200 text-teal-700 dark:border-teal-800 dark:text-teal-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                          {statusCounts.moving}
+                        </Badge>
+                        <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-semibold gap-1 border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                          {statusCounts.idle}
+                        </Badge>
+                        {statusCounts.loaded > 0 && (
+                          <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-semibold gap-1 border-indigo-200 text-indigo-600 dark:border-indigo-800 dark:text-indigo-400">
+                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                            {statusCounts.loaded}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    {/* Search */}
+                    <div className="relative">
+                      <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <Input
+                        placeholder="Search vehicles..."
+                        value={vehicleSearch}
+                        onChange={(e) => setVehicleSearch(e.target.value)}
+                        className="h-8 pl-8 text-xs"
+                      />
+                      {vehicleSearch && (
+                        <button
+                          onClick={() => setVehicleSearch("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    {/* Filter tabs */}
+                    <div className="flex gap-1">
+                      {(["all", "moving", "idle", "loaded"] as SidebarFilter[]).map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => setSidebarFilter(f)}
+                          className={`flex-1 text-[10px] font-medium py-1 rounded-md transition-colors capitalize ${sidebarFilter === f
+                              ? "bg-primary text-primary-foreground shadow-sm"
+                              : "text-muted-foreground hover:bg-muted"
+                            }`}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <ScrollArea className="h-[calc(600px-57px)]">
-                      <div className="divide-y">
-                        {assets.map((asset) => {
-                          const load = getLoadForAsset(asset);
-                          const isStationary = asset.speedKmH < 5 && !asset.inTrip;
-                          return (
-                            <div
-                              key={asset.id}
-                              className={`flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors ${load ? "bg-purple-50/50 dark:bg-purple-900/5" : ""}`}
-                              onClick={() => openTripHistory(asset)}
-                            >
+                    <ScrollArea className="h-[calc(600px-160px)]">
+                      {filteredSidebarAssets.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                          <svg className="w-8 h-8 mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                          <p className="text-xs">No vehicles match</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-border/50">
+                          {filteredSidebarAssets.map((asset) => {
+                            const load = getLoadForAsset(asset);
+                            const isMoving = asset.speedKmH >= 5;
+                            return (
                               <div
-                                className="w-2.5 h-2.5 rounded-full"
-                                style={{ backgroundColor: isStationary ? "#dc2626" : getStatusColor(asset) }}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">
-                                  {asset.name || asset.code || `Vehicle ${asset.id}`}
-                                </p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-xs text-muted-foreground">
-                                    {Math.round(asset.speedKmH)} km/h
-                                  </span>
-                                  {load && (
-                                    <Badge variant="secondary" className="h-4 px-1.5 text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                                      LOAD
-                                    </Badge>
+                                key={asset.id}
+                                className={`group flex items-center gap-3 px-4 py-3 hover:bg-muted/40 cursor-pointer transition-all duration-150 ${load ? "bg-indigo-50/40 dark:bg-indigo-950/10" : ""}`}
+                                onClick={() => handleVehicleClick(asset)}
+                              >
+                                <div className="relative flex-shrink-0">
+                                  <div
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: isMoving ? "#0d9488" : "#94a3b8" }}
+                                  />
+                                  {isMoving && (
+                                    <div className="absolute inset-0 w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: "#0d9488", opacity: 0.4 }} />
                                   )}
                                 </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate tracking-tight">
+                                    {asset.name || asset.code || `Vehicle ${asset.id}`}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-xs tabular-nums text-muted-foreground">
+                                      {Math.round(asset.speedKmH)} km/h
+                                    </span>
+                                    {load && (
+                                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-0">
+                                        LOAD
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); openTripHistory(asset); }}
+                                    className="p-1 rounded hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
+                                    title="View trip history"
+                                  >
+                                    <svg className="w-3.5 h-3.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </button>
+                                  <svg className="w-3.5 h-3.5 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                  </svg>
+                                </div>
                               </div>
-                              <svg className="w-3 h-3 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </ScrollArea>
                   </CardContent>
                 </Card>

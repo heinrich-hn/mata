@@ -202,7 +202,10 @@ export default function DeliveriesDashboardPage() {
       const currentLoadId = currentLoadByVehicle.get(originKey);
       const isCurrentLoad = currentLoadId === load.id;
       const isInTransit = load.status === "in-transit";
-      const isTrackingActive = isInTransit || (isCurrentLoad && load.isAtLoadOrigin);
+      // Only the current load in sequence should be considered "at origin".
+      // Other loads from the same origin must wait for earlier ones to complete.
+      const effectiveIsAtLoadOrigin = isCurrentLoad && load.isAtLoadOrigin;
+      const isTrackingActive = isInTransit || effectiveIsAtLoadOrigin;
       let progressData = null;
       let truckPosition = null;
       const originDepot = findDepotByName(load.origin, extraDepots);
@@ -268,6 +271,7 @@ export default function DeliveriesDashboardPage() {
       }
       return {
         ...load,
+        isAtLoadOrigin: effectiveIsAtLoadOrigin,
         progressData,
         truckPosition,
         isTrackingActive,

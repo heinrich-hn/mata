@@ -66,7 +66,15 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { useCustomLocations, type CustomLocation } from "@/hooks/useCustomLocations";
 import { DEPOTS } from "@/lib/depots";
+
+interface LocationItem {
+  id: string;
+  name: string;
+  type: string;
+  isCustom?: boolean;
+}
 
 const formSchema = z.object({
   priority: z.enum(["high", "medium", "low"]),
@@ -102,22 +110,36 @@ interface EditThirdPartyLoadDialogProps {
   load: Load | null;
 }
 
-// === DEPOT COMBOBOX COMPONENT (reused from Add dialog) ===
+// === DEPOT COMBOBOX COMPONENT (includes custom locations) ===
 const DepotCombobox: React.FC<{
   value: string;
   onChange: (value: string) => void;
-}> = ({ value, onChange }) => {
+  customLocations?: CustomLocation[];
+}> = ({ value, onChange, customLocations = [] }) => {
   const [open, setOpen] = useState(false);
 
-  const depotsByCountry = useMemo(() => {
-    const map: Record<string, typeof DEPOTS> = {};
+  const locationsByCountry = useMemo(() => {
+    const map: Record<string, LocationItem[]> = {};
     DEPOTS.forEach((depot) => {
       const key = depot.country;
       if (!map[key]) map[key] = [];
-      map[key].push(depot);
+      map[key].push({ id: depot.id, name: depot.name, type: depot.type });
+    });
+    customLocations.forEach((loc) => {
+      const key = loc.country ?? "Other";
+      if (!map[key]) map[key] = [];
+      map[key].push({ id: loc.id, name: loc.name, type: loc.type ?? "custom", isCustom: true });
     });
     return map;
-  }, []);
+  }, [customLocations]);
+
+  const allLocations = useMemo(() => {
+    const all: LocationItem[] = DEPOTS.map((d) => ({ id: d.id, name: d.name, type: d.type }));
+    customLocations.forEach((loc) => {
+      all.push({ id: loc.id, name: loc.name, type: loc.type ?? "custom", isCustom: true });
+    });
+    return all;
+  }, [customLocations]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -129,40 +151,40 @@ const DepotCombobox: React.FC<{
           className="w-full justify-between font-normal"
         >
           {value
-            ? DEPOTS.find((depot) => depot.name === value)?.name ?? value
+            ? allLocations.find((loc) => loc.name === value)?.name ?? value
             : "Select a depot..."}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 max-w-[--radix-popover-trigger-width]">
         <Command>
-          <CommandInput placeholder="Search depots..." />
+          <CommandInput placeholder="Search locations..." />
           <CommandList>
-            <CommandEmpty>No depot found.</CommandEmpty>
-            {Object.keys(depotsByCountry)
+            <CommandEmpty>No location found.</CommandEmpty>
+            {Object.keys(locationsByCountry)
               .sort()
               .map((country) => (
                 <CommandGroup key={country} heading={country}>
-                  {depotsByCountry[country]
+                  {locationsByCountry[country]
                     .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((depot) => (
+                    .map((loc) => (
                       <CommandItem
-                        key={depot.id}
-                        value={depot.name}
+                        key={loc.id}
+                        value={loc.name}
                         onSelect={() => {
-                          onChange(depot.name);
+                          onChange(loc.name);
                           setOpen(false);
                         }}
                       >
                         <Check
                           className={cn(
                             "mr-2 h-4 w-4",
-                            value === depot.name ? "opacity-100" : "opacity-0"
+                            value === loc.name ? "opacity-100" : "opacity-0"
                           )}
                         />
-                        {depot.name}
-                        <span className="ml-auto text-sm text-muted-foreground">
-                          {depot.type}
+                        {loc.name}
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {loc.isCustom ? `★ ${loc.type}` : loc.type}
                         </span>
                       </CommandItem>
                     ))}
@@ -185,6 +207,7 @@ export function EditThirdPartyLoadDialog({
   const { data: clients = [] } = useClients();
   const { data: fleetVehicles = [] } = useFleetVehicles();
   const { data: drivers = [] } = useDrivers();
+  const { data: customLocations = [] } = useCustomLocations();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -511,7 +534,7 @@ export function EditThirdPartyLoadDialog({
                       <FormItem>
                         <FormLabel>Depot</FormLabel>
                         <FormControl>
-                          <DepotCombobox value={field.value} onChange={field.onChange} />
+                          <DepotCombobox value={field.value} onChange={field.onChange} customLocations={customLocations} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -581,7 +604,7 @@ export function EditThirdPartyLoadDialog({
                       <FormItem>
                         <FormLabel>Depot</FormLabel>
                         <FormControl>
-                          <DepotCombobox value={field.value} onChange={field.onChange} />
+                          <DepotCombobox value={field.value} onChange={field.onChange} customLocations={customLocations} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

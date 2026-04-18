@@ -1,3 +1,14 @@
+import { useMemo, useState, useCallback } from "react";
+import { ChevronDown, Clock, FileSpreadsheet, Plus } from "lucide-react";
+import {
+  startOfWeek,
+  endOfWeek,
+  startOfDay,
+  parseISO,
+  isWithinInterval,
+  getWeek,
+} from "date-fns";
+
 import { CreateLoadDialog } from "@/components/trips/CreateTripDialog";
 import { DeliveryConfirmationDialog } from "@/components/trips/DeliveryConfirmationDialog";
 import { EditLoadDialog } from "@/components/trips/EditTripDialog";
@@ -10,6 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
 import type { Load } from "@/hooks/useTrips";
 import { useLoads } from "@/hooks/useTrips";
 import { exportTimeComparisonToExcel } from "@/lib/exportTimeComparisonToExcel";
@@ -17,176 +29,221 @@ import {
   exportLoadsToExcel,
   exportLoadsToExcelSimplified,
 } from "@/lib/exportTripsToExcel";
-import { endOfWeek, getWeek, isWithinInterval, parseISO, startOfDay, startOfWeek } from "date-fns";
-import { ChevronDown, Clock, FileSpreadsheet, Plus } from "lucide-react";
-import { useState } from "react";
+
+// Types
+interface WeekFilter {
+  start: Date | null;
+  end: Date | null;
+}
+
+type DialogState = {
+  create: boolean;
+  edit: boolean;
+  delivery: boolean;
+};
+
+type FilterState = {
+  search: string;
+  status: string;
+  origin: string;
+};
+
+const INITIAL_FILTERS: FilterState = {
+  search: "",
+  status: "all",
+  origin: "all",
+};
+
+const WEEK_OPTIONS = { weekStartsOn: 1 as const };
+
+// Helper functions
+const getInitialWeekFilter = (): WeekFilter => {
+  const now = new Date();
+  return {
+    start: startOfWeek(now, WEEK_OPTIONS),
+    end: endOfWeek(now, WEEK_OPTIONS),
+  };
+};
+
+const isThirdPartyLoad = (loadId: string) => loadId.startsWith("TP-");
+const isSubcontractorLoad = (loadId: string) => loadId.startsWith("SC-");
+
+const matchesSearchQuery = (load: Load, query: string): boolean => {
+  if (!query) return true;
+
+  const searchLower = query.toLowerCase();
+  return (
+    load.load_id.toLowerCase().includes(searchLower) ||
+    load.driver?.name?.toLowerCase().includes(searchLower) ||
+    load.origin.toLowerCase().includes(searchLower)
+  );
+};
+
+const matchesWeekFilter = (load: Load, weekFilter: WeekFilter): boolean => {
+  if (!weekFilter.start || !weekFilter.end) return true;
+
+  try {
+    const loadDate = startOfDay(parseISO(load.loading_date));
+    return isWithinInterval(loadDate, {
+      start: startOfDay(weekFilter.start),
+      end: weekFilter.end,
+    });
+  } catch {
+    return false;
+  }
+};
+
+// Custom hook for filter logic
+const useFilteredLoads = (loads: Load[], filters: FilterState, weekFilter: WeekFilter) => {
+  return useMemo(() => {
+    return loads.filter((load) => {
+      if (isThirdPartyLoad(load.load_id)) return false;
+      if (isSubcontractorLoad(load.load_id)) return false;
+
+      const searchMatch = matchesSearchQuery(load, filters.search);
+      const statusMatch = filters.status === "all" || load.status === filters.status;
+      const originMatch = filters.origin === "all" || load.origin === filters.origin;
+      const weekMatch = matchesWeekFilter(load, weekFilter);
+
+      return searchMatch && statusMatch && originMatch && weekMatch;
+    });
+  }, [loads, filters, weekFilter]);
+};
 
 export default function LoadsPage() {
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false);
-  const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [originFilter, setOriginFilter] = useState("all");
-  const [weekFilter, setWeekFilter] = useState<{
-    start: Date | null;
-    end: Date | null;
-  }>(() => {
-    const now = new Date();
-    return {
-      start: startOfWeek(now, { weekStartsOn: 1 }),
-      end: endOfWeek(now, { weekStartsOn: 1 }),
-    };
+  // State
+  const [dialogs, setDialogs] = useState<DialogState>({
+    create: false,
+    edit: false,
+    delivery: false,
   });
 
+  const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
+  const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
+  const [weekFilter, setWeekFilter] = useState<WeekFilter>(getInitialWeekFilter);
+
+  // Data
   const { data: loads = [], isLoading } = useLoads();
 
-  // Keep selectedLoad in sync with fresh query data so dialogs always show latest values
-  const selectedLoadFresh = (selectedLoad && loads.find(l => l.id === selectedLoad.id)) ?? selectedLoad;
+  // Computed values
+  const filteredLoads = useFilteredLoads(loads, filters, weekFilter);
 
-  // Exclude third-party loads (TP- prefix) — those are managed on the Third Party Loads page
-  const filteredLoads = loads.filter((load) => {
-    if (load.load_id.startsWith("TP-")) return false;
-    const matchesSearch =
-      !searchQuery ||
-      load.load_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      load.driver?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      load.origin.toLowerCase().includes(searchQuery.toLowerCase());
+  const selectedLoadFresh = useMemo(() => {
+    if (!selectedLoad) return null;
+    return loads.find(l => l.id === selectedLoad.id) ?? selectedLoad;
+  }, [selectedLoad, loads]);
 
-    const matchesStatus =
-      statusFilter === "all" || load.status === statusFilter;
-    const matchesOrigin =
-      originFilter === "all" || load.origin === originFilter;
+  // Handlers
+  const updateDialog = useCallback((key: keyof DialogState, value: boolean) => {
+    setDialogs(prev => ({ ...prev, [key]: value }));
+  }, []);
 
-    // Week filter
-    let matchesWeek = true;
-    if (weekFilter.start && weekFilter.end) {
-      try {
-        const loadDate = startOfDay(parseISO(load.loading_date));
-        matchesWeek = isWithinInterval(loadDate, {
-          start: startOfDay(weekFilter.start),
-          end: weekFilter.end,
-        });
-      } catch {
-        matchesWeek = false;
-      }
-    }
+  const handleLoadAction = useCallback((load: Load, dialog: keyof DialogState) => {
+    setSelectedLoad(load);
+    updateDialog(dialog, true);
+  }, [updateDialog]);
 
-    return matchesSearch && matchesStatus && matchesOrigin && matchesWeek;
-  });
-
-  const handleWeekFilter = (weekStart: Date | null, weekEnd: Date | null) => {
+  const handleWeekFilter = useCallback((weekStart: Date | null, weekEnd: Date | null) => {
     setWeekFilter({ start: weekStart, end: weekEnd });
-  };
+  }, []);
 
-  const handleEditLoad = (load: Load) => {
-    setSelectedLoad(load);
-    setEditDialogOpen(true);
-  };
-
-  const handleConfirmDelivery = (load: Load) => {
-    setSelectedLoad(load);
-    setDeliveryDialogOpen(true);
-  };
-
-  const handleLoadClick = (load: Load) => {
-    // Default click behavior - open edit dialog
-    setSelectedLoad(load);
-    setEditDialogOpen(true);
-  };
-
-  const handleExportExcel = (simplified = false) => {
-    const weekOpts = { weekStartsOn: 1 as const };
+  const getWeekInfo = useCallback(() => {
     const refDate = weekFilter.start ?? new Date();
-    const weekNumber = getWeek(refDate, weekOpts);
-    const year = refDate.getFullYear();
-    const exportOptions = { weekNumber, year };
-    if (simplified) {
-      exportLoadsToExcelSimplified(filteredLoads, exportOptions);
-    } else {
-      exportLoadsToExcel(filteredLoads, exportOptions);
-    }
-  };
+    return {
+      weekNumber: getWeek(refDate, WEEK_OPTIONS),
+      year: refDate.getFullYear(),
+    };
+  }, [weekFilter.start]);
 
-  const handleExportTimeComparison = () => {
-    const weekOpts = { weekStartsOn: 1 as const };
-    const refDate = weekFilter.start ?? new Date();
-    const weekNumber = getWeek(refDate, weekOpts);
-    const year = refDate.getFullYear();
-    exportTimeComparisonToExcel(filteredLoads, { weekNumber, year });
-  };
+  const handleExportExcel = useCallback((simplified = false) => {
+    const exportOptions = getWeekInfo();
+    const exportFn = simplified ? exportLoadsToExcelSimplified : exportLoadsToExcel;
+    exportFn(filteredLoads, exportOptions);
+  }, [filteredLoads, getWeekInfo]);
+
+  const handleExportTimeComparison = useCallback(() => {
+    exportTimeComparisonToExcel(filteredLoads, getWeekInfo());
+  }, [filteredLoads, getWeekInfo]);
+
+  // Render helpers
+  const exportMenuItems = [
+    { label: "Full Export (All Columns)", onClick: () => handleExportExcel(false) },
+    { label: "Simplified Export", onClick: () => handleExportExcel(true) },
+    {
+      label: "Time Comparison (Planned vs Actual)",
+      onClick: handleExportTimeComparison,
+      icon: Clock,
+    },
+  ];
 
   return (
     <>
       <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+        <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   className="gap-2"
-                  disabled={filteredLoads.length === 0}
+                  disabled={!filteredLoads.length}
                 >
                   <FileSpreadsheet className="h-4 w-4" />
                   Export to Excel
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
+
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleExportExcel(false)}>
-                  Full Export (All Columns)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExportExcel(true)}>
-                  Simplified Export
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportTimeComparison}>
-                  <Clock className="h-4 w-4 mr-2" />
-                  Time Comparison (Planned vs Actual)
-                </DropdownMenuItem>
+                {exportMenuItems.map((item) => (
+                  <DropdownMenuItem key={item.label} onClick={item.onClick}>
+                    {item.icon && <item.icon className="h-4 w-4 mr-2" />}
+                    {item.label}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
+
             <Button
-              onClick={() => setCreateDialogOpen(true)}
+              onClick={() => updateDialog("create", true)}
               className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
             >
               <Plus className="h-4 w-4" />
               Create New Load
             </Button>
           </div>
-        </div>
+        </header>
 
         <QuickFilters
-          onSearch={setSearchQuery}
-          onStatusFilter={setStatusFilter}
-          onOriginFilter={setOriginFilter}
+          onSearch={(search) => setFilters(prev => ({ ...prev, search }))}
+          onStatusFilter={(status) => setFilters(prev => ({ ...prev, status }))}
+          onOriginFilter={(origin) => setFilters(prev => ({ ...prev, origin }))}
           onWeekFilter={handleWeekFilter}
         />
 
         <LoadsTable
           loads={filteredLoads}
           isLoading={isLoading}
-          onLoadClick={handleLoadClick}
-          onEditLoad={handleEditLoad}
-          onConfirmDelivery={handleConfirmDelivery}
+          onLoadClick={(load) => handleLoadAction(load, "edit")}
+          onEditLoad={(load) => handleLoadAction(load, "edit")}
+          onConfirmDelivery={(load) => handleLoadAction(load, "delivery")}
         />
       </div>
 
       <CreateLoadDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
+        open={dialogs.create}
+        onOpenChange={(open) => updateDialog("create", open)}
       />
 
       <EditLoadDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
+        open={dialogs.edit}
+        onOpenChange={(open) => updateDialog("edit", open)}
         load={selectedLoadFresh}
       />
 
       <DeliveryConfirmationDialog
-        open={deliveryDialogOpen}
-        onOpenChange={setDeliveryDialogOpen}
+        open={dialogs.delivery}
+        onOpenChange={(open) => updateDialog("delivery", open)}
         load={selectedLoadFresh}
       />
     </>
