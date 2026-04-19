@@ -45,10 +45,23 @@ export interface TimeWindowSection {
   address?: string;
 }
 
+export type WaypointType = 'pickup' | 'delivery' | 'border' | 'stop' | 'other';
+
+export interface Waypoint {
+  id: string;
+  placeName: string;
+  address?: string;
+  type: WaypointType;
+  plannedArrival?: string;
+  plannedDeparture?: string;
+  notes?: string;
+}
+
 export interface TimeWindowData {
   origin: TimeWindowSection;
   destination: TimeWindowSection;
   backload?: BackloadInfo | null;
+  waypoints?: Waypoint[];
 }
 
 export interface Load {
@@ -72,7 +85,7 @@ export interface Load {
   status: LoadStatus;
   created_at: string;
   updated_at: string;
-  
+
   // Actual geofence-triggered times
   actual_loading_arrival?: string | null;
   actual_loading_arrival_verified?: boolean;
@@ -86,7 +99,7 @@ export interface Load {
   actual_offloading_departure?: string | null;
   actual_offloading_departure_verified?: boolean;
   actual_offloading_departure_source?: TimeSource;
-  
+
   // Joined data
   driver?: { id: string; name: string; contact: string } | null;
   fleet_vehicle?: { id: string; vehicle_id: string; type: string; telematics_asset_id?: string | null } | null;
@@ -138,7 +151,7 @@ export interface KPIData {
 }
 
 // Geofence event types
-export type GeofenceEventType = 
+export type GeofenceEventType =
   | 'loading_arrival'
   | 'loading_departure'
   | 'offloading_arrival'

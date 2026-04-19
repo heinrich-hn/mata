@@ -697,6 +697,17 @@ function DeliveryRow({ load }: { load: LoadWithETA }) {
               <MapPin className="h-3 w-3 text-success flex-shrink-0" />
               <span className="truncate text-muted-foreground">{destination}</span>
             </div>
+            {timeWindow.waypoints && timeWindow.waypoints.length > 0 && (
+              <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                <span className="text-[10px] text-orange-600 dark:text-orange-400 font-medium">via</span>
+                {timeWindow.waypoints.map((wp, i) => (
+                  <span key={wp.id || i} className="text-[10px] text-muted-foreground">
+                    {i > 0 && <span className="mx-0.5">·</span>}
+                    {getLocationDisplayName(wp.placeName)}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-1.5 mt-0.5">
               <Calendar className="h-3 w-3 text-muted-foreground flex-shrink-0" />
               <span className="text-[11px] text-muted-foreground">
@@ -826,6 +837,7 @@ function DeliveryRow({ load }: { load: LoadWithETA }) {
 function LoadRow({ load, clientId, feedback }: { load: Load; clientId: string; feedback: ClientFeedback | null }) {
   const origin = getLocationDisplayName(load.origin);
   const destination = getLocationDisplayName(load.destination);
+  const timeWindow = parseTimeWindow(load.time_window);
 
   return (
     <TableRow className="hover:bg-muted/30">
@@ -841,6 +853,17 @@ function LoadRow({ load, clientId, feedback }: { load: Load; clientId: string; f
           <span className="text-muted-foreground">→</span>
           <span>{destination}</span>
         </div>
+        {timeWindow.waypoints && timeWindow.waypoints.length > 0 && (
+          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+            <span className="text-[10px] text-orange-600 font-medium">via</span>
+            {timeWindow.waypoints.map((wp, i) => (
+              <span key={wp.id || i} className="text-[10px] text-muted-foreground">
+                {i > 0 && <span className="mx-0.5">·</span>}
+                {getLocationDisplayName(wp.placeName)}
+              </span>
+            ))}
+          </div>
+        )}
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-1.5 text-sm">
@@ -885,6 +908,7 @@ function LoadRow({ load, clientId, feedback }: { load: Load; clientId: string; f
 function MobileLoadCard({ load, clientId, feedback }: { load: Load; clientId: string; feedback: ClientFeedback | null }) {
   const origin = getLocationDisplayName(load.origin);
   const destination = getLocationDisplayName(load.destination);
+  const timeWindow = parseTimeWindow(load.time_window);
 
   return (
     <div className="px-6 py-4 space-y-3">
@@ -898,6 +922,17 @@ function MobileLoadCard({ load, clientId, feedback }: { load: Load; clientId: st
       <div className="text-sm text-muted-foreground truncate">
         {origin} → {destination}
       </div>
+      {timeWindow.waypoints && timeWindow.waypoints.length > 0 && (
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-[10px] text-orange-600 font-medium">via</span>
+          {timeWindow.waypoints.map((wp, i) => (
+            <span key={wp.id || i} className="text-[10px] text-muted-foreground">
+              {i > 0 && <span className="mx-0.5">·</span>}
+              {getLocationDisplayName(wp.placeName)}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
           <Calendar className="h-3 w-3" />

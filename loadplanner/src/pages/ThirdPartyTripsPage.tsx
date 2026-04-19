@@ -22,6 +22,7 @@ import {
 // Components
 import { CreateClientDialog } from "@/components/trips/CreateClientDialog";
 import { DeliveryConfirmationDialog } from "@/components/trips/DeliveryConfirmationDialog";
+import { WaypointsSection } from "@/components/trips/WaypointsSection";
 import { EditThirdPartyLoadDialog } from "@/components/trips/EditThirdPartyLoadDialog";
 import { LoadsTable } from "@/components/trips/LoadsTable";
 import { QuickFilters } from "@/components/trips/QuickFilters";
@@ -90,6 +91,7 @@ import {
   exportLoadsToExcelSimplified,
 } from "@/lib/exportTripsToExcel";
 import { cn } from "@/lib/utils";
+import type { Waypoint } from "@/types/Trips";
 
 // ============================================================================
 // Types
@@ -527,6 +529,7 @@ export default function ThirdPartyLoadsPage() {
   const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [weekFilter, setWeekFilter] = useState<WeekFilter>({ start: null, end: null });
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
 
   // Data
   const { data: loads = [], isLoading } = useLoads();
@@ -597,6 +600,7 @@ export default function ThirdPartyLoadsPage() {
         linkedLoadId: linkedLoad?.id || null,
         linkedLoadNumber: linkedLoad?.load_id || null,
       },
+      waypoints: waypoints.filter((wp) => wp.placeName),
     };
 
     createLoad.mutate(
@@ -619,10 +623,11 @@ export default function ThirdPartyLoadsPage() {
         onSuccess: () => {
           updateDialog("create", false);
           form.reset();
+          setWaypoints([]);
         },
       }
     );
-  }, [clients, linkableLoads, createLoad, updateDialog, form]);
+  }, [clients, linkableLoads, createLoad, updateDialog, form, waypoints]);
 
   const exportMenuItems = [
     { label: "Full Export (All Columns)", onClick: () => handleExportExcel(false) },
@@ -845,6 +850,15 @@ export default function ThirdPartyLoadsPage() {
                 departureField="offloadingPlannedDeparture"
                 form={form}
                 customLocations={customLocations}
+              />
+
+              {/* Additional Stops / Waypoints */}
+              <WaypointsSection
+                waypoints={waypoints}
+                onChange={setWaypoints}
+                customLocations={customLocations}
+                origin={form.watch("loadingPlaceName")}
+                destination={form.watch("offloadingPlaceName")}
               />
 
               {/* Cargo & Assignment */}

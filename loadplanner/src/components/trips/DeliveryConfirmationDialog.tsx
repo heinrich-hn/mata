@@ -434,6 +434,22 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
               <MapPin className="h-4 w-4 text-blue-600" />
               <span className="font-medium">{getLocationDisplayName(load.destination)}</span>
             </div>
+            {/* Waypoints / Additional Stops */}
+            {times.waypoints && times.waypoints.length > 0 && (
+              <div className="mt-2 ml-1 pl-3 border-l-2 border-orange-300 dark:border-orange-700 space-y-1">
+                {times.waypoints.map((wp, i) => (
+                  <div key={wp.id || i} className="flex items-center gap-1.5 text-xs">
+                    <div className="w-4 h-4 rounded-full bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[8px] font-bold text-orange-600 dark:text-orange-400">{i + 1}</span>
+                    </div>
+                    <span className="font-medium text-orange-700 dark:text-orange-400">{getLocationDisplayName(wp.placeName)}</span>
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 capitalize">{wp.type}</Badge>
+                    {wp.plannedArrival && <span className="text-muted-foreground text-[10px]">Arr {wp.plannedArrival}</span>}
+                    {wp.plannedDeparture && <span className="text-muted-foreground text-[10px]">Dep {wp.plannedDeparture}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
               <span>Loading: {safeFormatDate(load.loading_date, 'dd MMM yyyy')}</span>
               <span>Offloading: {safeFormatDate(load.offloading_date, 'dd MMM yyyy')}</span>

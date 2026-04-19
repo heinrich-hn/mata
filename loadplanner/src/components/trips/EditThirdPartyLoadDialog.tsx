@@ -56,6 +56,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { CreateClientDialog } from "./CreateClientDialog";
+import { WaypointsSection } from "./WaypointsSection";
 
 // === NEW IMPORTS FOR DEPOT COMBOBOX ===
 import {
@@ -68,6 +69,7 @@ import {
 } from "@/components/ui/command";
 import { useCustomLocations, type CustomLocation } from "@/hooks/useCustomLocations";
 import { DEPOTS } from "@/lib/depots";
+import type { Waypoint } from "@/types/Trips";
 
 interface LocationItem {
   id: string;
@@ -203,6 +205,7 @@ export function EditThirdPartyLoadDialog({
   load,
 }: EditThirdPartyLoadDialogProps) {
   const [createClientDialogOpen, setCreateClientDialogOpen] = useState(false);
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const updateLoad = useUpdateLoad();
   const { data: clients = [] } = useClients();
   const { data: fleetVehicles = [] } = useFleetVehicles();
@@ -254,6 +257,8 @@ export function EditThirdPartyLoadDialog({
         notes: load.notes || "",
         status: load.status as FormData["status"],
       });
+
+      setWaypoints(times.waypoints ?? []);
     }
   }, [load, open, form]);
 
@@ -289,6 +294,7 @@ export function EditThirdPartyLoadDialog({
         referenceNumber: existingTimeData.thirdParty?.referenceNumber || null,
       },
       backload: existingTimeData.backload,
+      waypoints: waypoints.filter((wp) => wp.placeName),
     };
 
     // Determine status: if both fleet and driver are provided and current status is pending, auto-upgrade to scheduled
@@ -659,6 +665,15 @@ export function EditThirdPartyLoadDialog({
                   />
                 </div>
               </div>
+
+              {/* Additional Stops / Waypoints */}
+              <WaypointsSection
+                waypoints={waypoints}
+                onChange={setWaypoints}
+                customLocations={customLocations}
+                origin={form.watch("loadingPlaceName")}
+                destination={form.watch("offloadingPlaceName")}
+              />
 
               {/* Cargo & Assignment */}
               <div className="space-y-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">

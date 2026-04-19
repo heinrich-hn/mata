@@ -295,27 +295,23 @@ export default function ClientLiveMapPage() {
   // Visibility rules for the client portal map:
   // - Scheduled loads: only show if the vehicle is physically at the load's ORIGIN geofence
   //   (truck has arrived at the loading point). Never show a merely scheduled trip.
-  // - In-transit loads: show if the vehicle is within any depot or origin geofence.
+  // - In-transit loads: always show — the trip has been explicitly marked as moving,
+  //   so the vehicle should be visible on the map regardless of its position.
   const inTransitTrackedVehicles = useMemo(() => {
     return inTransitMatchedLoads.filter((m) => {
       if (!m.asset || !m.asset.lastLatitude || !m.asset.lastLongitude) return false;
 
-      const lat = m.asset.lastLatitude;
-      const lng = m.asset.lastLongitude;
-
       if (m.load.status === 'scheduled') {
         // Scheduled: vehicle must be physically at the load's origin to appear
+        const lat = m.asset.lastLatitude;
+        const lng = m.asset.lastLongitude;
         const originName = getLocationDisplayName(m.load.origin);
         const originDepot = allDepots.find((d) => d.name === originName);
         return originDepot ? isWithinDepot(lat, lng, originDepot) : false;
       }
 
-      // In-transit: show if within any depot or origin geofence
-      for (const depot of allDepots) {
-        if (isWithinDepot(lat, lng, depot)) return true;
-      }
-
-      return false;
+      // In-transit: always show — user or system has confirmed the vehicle is moving
+      return true;
     });
   }, [inTransitMatchedLoads, allDepots]);
 

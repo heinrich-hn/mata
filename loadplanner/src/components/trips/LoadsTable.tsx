@@ -546,6 +546,26 @@ export function LoadsTable({
                                 </div>
                               </div>
 
+                              {/* Waypoints / Additional Stops */}
+                              {times.waypoints && times.waypoints.length > 0 && (
+                                <div className="ml-2 pl-3 border-l-2 border-orange-300 dark:border-orange-700 space-y-1">
+                                  {times.waypoints.map((wp, i) => (
+                                    <div key={wp.id || i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                      <div className="w-4 h-4 rounded-full bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-[8px] font-bold text-orange-600 dark:text-orange-400">{i + 1}</span>
+                                      </div>
+                                      <span className="font-medium text-foreground">{getLocationDisplayName(wp.placeName)}</span>
+                                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 capitalize">
+                                        {wp.type}
+                                      </Badge>
+                                      {wp.plannedArrival && (
+                                        <span className="text-[10px]">{wp.plannedArrival}</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
                               {backload?.enabled && (
                                 <div className="relative ml-2 pl-3 border-l-2 border-orange-400">
                                   <div className="flex items-start gap-2 p-2 rounded-md bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/30 border border-orange-200 dark:border-orange-800/50">

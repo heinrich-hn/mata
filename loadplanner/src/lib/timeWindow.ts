@@ -8,10 +8,11 @@ import type {
   BackloadInfo,
   TimeWindowData,
   TimeWindowSection,
+  Waypoint,
 } from "@/types/Trips";
 
 // Re-export the types so consumers don't need a second import
-export type { BackloadInfo, TimeWindowData, TimeWindowSection };
+export type { BackloadInfo, TimeWindowData, TimeWindowSection, Waypoint };
 
 // ---------------------------------------------------------------------------
 // Extended data that can live inside a time_window JSON blob
@@ -29,6 +30,7 @@ export interface TimeWindowDataFull extends TimeWindowData {
   backload: BackloadInfo | null;  // Make it explicitly non-optional
   thirdParty?: ThirdPartyInfo | null;
   varianceReason?: string;
+  waypoints: Waypoint[];
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +83,7 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
         : null,
       thirdParty: data.thirdParty || null,
       varianceReason: typeof data.varianceReason === 'string' ? data.varianceReason : undefined,
+      waypoints: Array.isArray(data.waypoints) ? (data.waypoints as Waypoint[]) : [],
     };
   } catch {
     return {
@@ -89,6 +92,7 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
       backload: null,
       thirdParty: null,
       varianceReason: undefined,
+      waypoints: [],
     };
   }
 }
