@@ -1,4 +1,5 @@
 import Layout from "@/components/Layout";
+import VehicleDocAlerts from "@/components/Vehicle/VehicleDocAlerts";
 import { VehicleDetailsModal } from "@/components/Vehicle/VehicleDetailsModal";
 import VehicleKPITiles from "@/components/Vehicle/VehicleKPITiles";
 import AddVehicleDialog from "@/components/dialogs/AddVehicleDialog";
@@ -190,6 +191,9 @@ const Vehicles = () => {
 
         {/* KPI Tiles */}
         <VehicleKPITiles />
+
+        {/* Document Alerts */}
+        <VehicleDocAlerts />
 
         {/* Vehicle List */}
         <Card>

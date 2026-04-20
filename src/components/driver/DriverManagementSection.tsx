@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AssignVehicleDialog from '@/components/driver/AssignVehicleDialog';
 import { CreateDriverAuthDialog } from '@/components/driver/CreateDriverAuthDialog';
+import DriverDocAlerts from '@/components/driver/DriverDocAlerts';
 import DriverDocumentsSection from '@/components/driver/DriverDocumentsSection';
 import { useDriverAuth } from '@/hooks/useDriverAuth';
 import { useDrivers, type Driver, type DriverInsert } from '@/hooks/useDrivers';
@@ -223,6 +224,11 @@ const DriverManagementSection = () => {
   return (
     <Card>
       <CardContent className="pt-6">
+        {/* Document Alerts */}
+        <div className="mb-4">
+          <DriverDocAlerts />
+        </div>
+
         {/* Filters + Add Driver */}
         <div className="flex items-center gap-4 mb-6">
           <div className="relative flex-1 max-w-sm">
