@@ -107,6 +107,24 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
     enabled: !!jobCard?.id,
   });
 
+  // Check if job card is linked to a tyre inspection
+  const { data: inspectionType } = useQuery({
+    queryKey: ["inspection_type", jobCard?.inspection_id],
+    queryFn: async () => {
+      if (!jobCard?.inspection_id) return null;
+      const { data } = await supabase
+        .from("vehicle_inspections")
+        .select("inspection_type")
+        .eq("id", jobCard.inspection_id)
+        .single();
+      return data?.inspection_type ?? null;
+    },
+    enabled: !!jobCard?.inspection_id,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const isTyreJobCard = inspectionType === "tyre";
+
   const { data: notes = [], refetch: refetchNotes } = useQuery({
     queryKey: ["notes", jobCard?.id],
     queryFn: async () => {
@@ -330,6 +348,7 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
                   jobCardId={jobCard.id}
                   parts={parts}
                   onRefresh={refetchParts}
+                  isTyreJobCard={isTyreJobCard}
                 />
               </TabsContent>
 

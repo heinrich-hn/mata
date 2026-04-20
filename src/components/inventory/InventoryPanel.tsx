@@ -506,7 +506,7 @@ const InventoryPanel = () => {
               )}
 
               {/* COMPACT INVENTORY LIST */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {filteredInventory.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     No inventory items found. Add items to get started.
@@ -515,75 +515,62 @@ const InventoryPanel = () => {
                   filteredInventory.map((item) => (
                     <div 
                       key={item.id} 
-                      className={`border rounded-lg p-3 hover:bg-muted/30 transition-colors ${
+                      className={`border rounded p-2 hover:bg-muted/30 transition-colors ${
                         selectedInventoryIds.has(item.id) ? "ring-2 ring-primary bg-primary/5" : ""
                       }`}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-center gap-2">
                         <Checkbox
                           checked={selectedInventoryIds.has(item.id)}
                           onCheckedChange={() => toggleInventorySelection(item.id)}
-                          className="mt-0.5"
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-semibold text-sm truncate">{item.name}</h3>
-                            <span className="text-xs text-muted-foreground font-mono">{item.partNumber}</span>
+                            <span className="text-[11px] text-muted-foreground font-mono">{item.partNumber}</span>
                             {isLowStock(item) && (
-                              <Badge variant="destructive" className="text-xs py-0 h-5">
+                              <Badge variant="destructive" className="text-[10px] py-0 h-4">
                                 Low Stock
                               </Badge>
                             )}
                             {item.hasWarranty && (
-                              <Badge variant="outline" className="text-blue-600 border-blue-300 text-xs py-0 h-5">
-                                <ShieldCheck className="h-3 w-3 mr-0.5" />
+                              <Badge variant="outline" className="text-blue-600 border-blue-300 text-[10px] py-0 h-4">
+                                <ShieldCheck className="h-2.5 w-2.5 mr-0.5" />
                                 Warranty
                               </Badge>
                             )}
                           </div>
                           
-                          <div className="flex items-center gap-4 text-xs mb-2">
+                          <div className="flex items-center gap-3 text-[11px] mt-0.5">
                             <span className="text-muted-foreground">
-                              Category: <span className="font-medium text-foreground">{item.category}</span>
+                              <span className={`font-medium ${isLowStock(item) ? "text-warning" : "text-foreground"}`}>
+                                {item.quantity}
+                              </span>/{item.minQuantity} units
                             </span>
-                            <span className="text-muted-foreground">
-                              Qty: <span className={`font-medium ${isLowStock(item) ? "text-warning" : "text-foreground"}`}>
-                                {item.quantity} units
-                              </span>
-                            </span>
-                            <span className="text-muted-foreground">
-                              Min: <span className="font-medium text-foreground">{item.minQuantity}</span>
-                            </span>
-                            <span className="text-muted-foreground">
-                              Location: <span className="font-medium text-foreground">{item.location}</span>
-                            </span>
-                            <span className="text-muted-foreground">
-                              Price: <span className="font-semibold text-foreground">${item.unitPrice.toFixed(2)}</span>
-                            </span>
+                            <span className="text-muted-foreground">{item.category}</span>
+                            <span className="text-muted-foreground">{item.location}</span>
+                            <span className="font-medium text-foreground">${item.unitPrice.toFixed(2)}</span>
                           </div>
-                          
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="sm"
-                              variant={isLowStock(item) ? "default" : "ghost"}
-                              onClick={() => handleReorderItem(item)}
-                              className={`h-7 text-xs px-2 ${isLowStock(item) ? "bg-orange-600 hover:bg-orange-700" : ""}`}
-                            >
-                              <ShoppingCart className="h-3.5 w-3.5 mr-1" />
-                              Reorder
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleManageWarranty(item)} className="h-7 text-xs px-2">
-                              <Shield className="h-3.5 w-3.5 mr-1" />
-                              Warranty
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} className="h-7 text-xs px-2">
-                              <Edit className="h-3.5 w-3.5 mr-1" />
-                              Edit
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleUpdateStock(item)} className="h-7 text-xs px-2">
-                              Update Stock
-                            </Button>
-                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <Button
+                            size="sm"
+                            variant={isLowStock(item) ? "default" : "ghost"}
+                            onClick={() => handleReorderItem(item)}
+                            className={`h-6 text-[11px] px-2 ${isLowStock(item) ? "bg-orange-600 hover:bg-orange-700" : ""}`}
+                          >
+                            <ShoppingCart className="h-3 w-3 mr-0.5" />
+                            Reorder
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleManageWarranty(item)} className="h-6 text-[11px] px-1.5">
+                            <Shield className="h-3 w-3" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} className="h-6 text-[11px] px-1.5">
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleUpdateStock(item)} className="h-6 text-[11px] px-1.5">
+                            <TrendingUp className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
                     </div>

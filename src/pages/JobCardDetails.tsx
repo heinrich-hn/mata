@@ -533,6 +533,7 @@ const JobCardDetails = () => {
                   onRefresh={handleRefresh}
                   fleetNumber={vehicle?.fleet_number}
                   jobNumber={jobCard.job_number}
+                  isTyreJobCard={inspection?.inspection_type === "tyre"}
                 />
               </CardContent>
             </CollapsibleContent>

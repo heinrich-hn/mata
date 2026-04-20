@@ -22,6 +22,7 @@ import ExternalPartForm from "./parts/ExternalPartForm";
 import InventoryPartForm from "./parts/InventoryPartForm";
 import ServicePartForm from "./parts/ServicePartForm";
 import SourceTypeSelector from "./parts/SourceTypeSelector";
+import TyreInventoryPartForm from "./parts/TyreInventoryPartForm";
 import RepeatedActionAlertDialog from "./RepeatedActionAlertDialog";
 
 type InventoryItem = Database["public"]["Tables"]["inventory"]["Row"];
@@ -31,6 +32,7 @@ interface AddPartWithCostDialogProps {
   onOpenChange: (open: boolean) => void;
   jobCardId: string;
   onSuccess: () => void;
+  isTyreJobCard?: boolean;
 }
 
 export default function AddPartWithCostDialog({
@@ -38,6 +40,7 @@ export default function AddPartWithCostDialog({
   onOpenChange,
   jobCardId,
   onSuccess,
+  isTyreJobCard = false,
 }: AddPartWithCostDialogProps) {
   const {
     state,
@@ -45,9 +48,10 @@ export default function AddPartWithCostDialog({
     hasInsufficientStock,
     isLowStock,
     handleInventorySelect,
+    handleTyreSelect,
     handleSubmit,
     handleRepeatedActionConfirm,
-  } = useAddPartForm(jobCardId, open, onSuccess, onOpenChange);
+  } = useAddPartForm(jobCardId, open, onSuccess, onOpenChange, isTyreJobCard);
 
   // Fetch inventory items for direct selection
   const {
@@ -90,10 +94,13 @@ export default function AddPartWithCostDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Request Part or Service</DialogTitle>
+            <DialogTitle>
+              {isTyreJobCard ? "Request Tyre or Service" : "Request Part or Service"}
+            </DialogTitle>
             <DialogDescription>
-              Submit a request for a part or service. Vendor, pricing and IR
-              number will be assigned by the procurement team.
+              {isTyreJobCard
+                ? "Select a tyre from the holding bay inventory, or request an external part/service. Vendor, pricing and IR numbers will be assigned by procurement."
+                : "Submit a request for a part or service. Vendor, pricing and IR number will be assigned by the procurement team."}
             </DialogDescription>
           </DialogHeader>
 
@@ -112,7 +119,15 @@ export default function AddPartWithCostDialog({
               onSelect={(type) =>
                 dispatch({ type: "SET_SOURCE_TYPE", payload: type })
               }
+              isTyreJobCard={isTyreJobCard}
             />
+
+            {state.sourceType === "tyre-inventory" && (
+              <TyreInventoryPartForm
+                selectedTyreId={state.selectedTyreId}
+                onTyreSelect={handleTyreSelect}
+              />
+            )}
 
             {state.sourceType === "inventory" && (
               <InventoryPartForm

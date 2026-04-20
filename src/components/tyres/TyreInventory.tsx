@@ -436,6 +436,12 @@ const TyreInventory = () => {
                     <div className="flex flex-col">
                       <span className="font-semibold group-hover:text-primary transition-colors">{tyre.brand}</span>
                       <span className="text-xs text-muted-foreground">{tyre.model}</span>
+                      {tyre.notes && /Procured for vehicle\s+(\S+)/i.test(tyre.notes) && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 border-purple-300 text-purple-600 mt-0.5 w-fit">
+                          <Truck className="h-2.5 w-2.5 mr-0.5" />
+                          For {tyre.notes.match(/Procured for vehicle\s+(\S+)/i)?.[1]}
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="py-3.5">

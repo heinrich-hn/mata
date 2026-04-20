@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useToast } from "@/hooks/use-toast";
 import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { supabase } from "@/integrations/supabase/client";
-import { DollarSign, FileText, Loader2, Package, Pencil, Plus, ShoppingBag, Trash2, Wrench } from "lucide-react";
+import { Circle, DollarSign, FileText, Loader2, Package, Pencil, Plus, ShoppingBag, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
 import AddPartWithCostDialog from "../dialogs/AddPartWithCostDialog";
 import InventoryDetailDialog from "../dialogs/InventoryDetailDialog";
@@ -58,6 +58,8 @@ interface PartsRequest {
   ordered_at?: string | null;
   received_date?: string | null;
   allocated_to_job_card?: boolean | null;
+  // Tyre inventory link
+  tyre_id?: string | null;
   vendors?: {
     id: string;
     name: string;
@@ -81,9 +83,10 @@ interface JobCardPartsTableProps {
   onRefresh: () => void;
   fleetNumber?: string | null;
   jobNumber?: string | null;
+  isTyreJobCard?: boolean;
 }
 
-const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber }: JobCardPartsTableProps) => {
+const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber, isTyreJobCard = false }: JobCardPartsTableProps) => {
   const [showRequestParts, setShowRequestParts] = useState(false);
   const [selectedInventoryId, setSelectedInventoryId] = useState<string | null>(null);
   const [showInventoryDetail, setShowInventoryDetail] = useState(false);
@@ -141,6 +144,8 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
   const getSourceIcon = (part: PartsRequest) => {
     if (part.is_service) {
       return <Wrench className="h-3 w-3" />;
+    } else if (part.tyre_id) {
+      return <Circle className="h-3 w-3" />;
     } else if (part.is_from_inventory) {
       return <Package className="h-3 w-3" />;
     } else {
@@ -150,12 +155,14 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
 
   const getSourceLabel = (part: PartsRequest) => {
     if (part.is_service) return "Service";
+    if (part.tyre_id) return "Tyre Inv.";
     if (part.is_from_inventory) return "Inventory";
     return "External";
   };
 
   const getSourceColor = (part: PartsRequest) => {
     if (part.is_service) return "bg-purple-100 text-purple-700 hover:bg-purple-200";
+    if (part.tyre_id) return "bg-cyan-100 text-cyan-700 hover:bg-cyan-200";
     if (part.is_from_inventory) return "bg-green-100 text-green-700 hover:bg-green-200";
     return "bg-orange-100 text-orange-700 hover:bg-orange-200";
   };
@@ -432,6 +439,7 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
           onOpenChange={setShowRequestParts}
           jobCardId={jobCardId}
           onSuccess={onRefresh}
+          isTyreJobCard={isTyreJobCard}
         />
 
         <InventoryDetailDialog

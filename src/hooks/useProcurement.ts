@@ -61,6 +61,7 @@ export interface PartsRequest {
     job_number: string;
     title: string;
     status: string;
+    vehicle_id: string | null;
   };
   vendor?: {
     id: string;
@@ -136,7 +137,7 @@ export const useProcurementRequests = (status?: string) => {
         .from("parts_requests")
         .select(`
           *,
-          job_card:job_cards(id, job_number, title, status),
+          job_card:job_cards(id, job_number, title, status, vehicle_id),
           vendor:vendors(id, vendor_name, contact_person, phone),
           inventory:inventory(id, name, part_number, quantity)
         `)
@@ -169,7 +170,7 @@ export const usePendingRequests = () => {
         .from("parts_requests")
         .select(`
           *,
-          job_card:job_cards(id, job_number, title, status),
+          job_card:job_cards(id, job_number, title, status, vehicle_id),
           vendor:vendors(id, vendor_name, contact_person, phone),
           inventory:inventory(id, name, part_number, quantity)
         `)
@@ -620,7 +621,7 @@ export const useUpdateProcurementRequest = () => {
         .eq("id", id)
         .select(`
           *,
-          job_card:job_cards(id, job_number, title, status),
+          job_card:job_cards(id, job_number, title, status, vehicle_id),
           vendor:vendors(id, vendor_name, contact_person, phone),
           inventory:inventory(id, name, part_number, quantity)
         `)
@@ -941,7 +942,7 @@ export const useOpenRequests = () => {
         .from("parts_requests")
         .select(`
           *,
-          job_card:job_cards(id, job_number, title, status),
+          job_card:job_cards(id, job_number, title, status, vehicle_id),
           vendor:vendors(id, vendor_name, contact_person, phone),
           inventory:inventory(id, name, part_number, quantity)
         `)
@@ -967,7 +968,7 @@ export const useCashManagerRequests = () => {
       // Use intermediate variable to avoid excessively deep type instantiation with complex joins
       const { data, error } = await supabase
         .from("parts_requests")
-        .select("*, job_card:job_cards(id, job_number, title, status), vendor:vendors(id, vendor_name, contact_person, phone), inventory:inventory(id, name, part_number, quantity)")
+        .select("*, job_card:job_cards(id, job_number, title, status, vehicle_id), vendor:vendors(id, vendor_name, contact_person, phone), inventory:inventory(id, name, part_number, quantity)")
         .eq("procurement_started", true)
         .not("status", "eq", "fulfilled")
         // Also exclude items already allocated to job cards from inventory

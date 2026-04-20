@@ -476,6 +476,46 @@ export function useAddPartForm(
         } else if (state.sourceType === "inventory") {
           insertData.inventory_id = state.selectedInventoryId || null;
           insertData.vendor_id = null;
+
+          // Check current stock from DB and fulfill directly if available
+          if (state.selectedInventoryId) {
+            const { data: currentItem, error: stockCheckError } = await supabase
+              .from("inventory")
+              .select("quantity")
+              .eq("id", state.selectedInventoryId)
+              .single();
+
+            if (stockCheckError) {
+              console.error("Error checking current stock:", stockCheckError);
+              throw stockCheckError;
+            }
+
+            const currentStock = currentItem?.quantity ?? 0;
+
+            if (currentStock >= state.quantity) {
+              // Sufficient stock — fulfill directly from inventory
+              const newQuantity = currentStock - state.quantity;
+              const { error: inventoryError } = await supabase
+                .from("inventory")
+                .update({ quantity: newQuantity })
+                .eq("id", state.selectedInventoryId);
+
+              if (inventoryError) {
+                console.error("Error updating inventory:", inventoryError);
+                throw inventoryError;
+              }
+
+              insertData.status = "fulfilled";
+              insertData.allocated_to_job_card = true;
+              insertData.allocated_at = new Date().toISOString();
+            } else {
+              // Insufficient stock — send to procurement with note
+              finalNotes = finalNotes
+                ? `${finalNotes}\n\n[OUT OF STOCK - needs procurement] Available: ${currentStock}, Requested: ${state.quantity}`
+                : `[OUT OF STOCK - needs procurement] Available: ${currentStock}, Requested: ${state.quantity}`;
+              insertData.notes = finalNotes;
+            }
+          }
         } else {
           insertData.inventory_id = null;
           insertData.vendor_id = state.selectedVendorId || null;
@@ -487,9 +527,14 @@ export function useAddPartForm(
 
         if (error) throw error;
 
+        const isFulfilled = insertData.status === "fulfilled";
         toast({
-          title: "Success",
-          description: `${state.sourceType === "service" ? "Service" : "Part"} added successfully`,
+          title: isFulfilled ? "Success" : "Request Created",
+          description: state.sourceType === "service"
+            ? "Service added successfully"
+            : isFulfilled
+              ? `Part allocated from inventory (${state.quantity} units)`
+              : "Part is out of stock - request sent to procurement",
         });
 
         onSuccess();

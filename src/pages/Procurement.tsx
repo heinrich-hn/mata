@@ -75,7 +75,10 @@ import {
   useUpdateSageRequisition,
   useVendors
 } from "@/hooks/useProcurement";
+import { useVehicles } from "@/hooks/useVehicles";
 import StartProcurementDialog from "@/components/dialogs/StartProcurementDialog";
+import CashManagerDetailsDialog from "@/components/dialogs/CashManagerDetailsDialog";
+import AllocateTyreToHoldingBayDialog from "@/components/dialogs/AllocateTyreToHoldingBayDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -98,6 +101,7 @@ import {
   Package,
   PackagePlus,
   Plus,
+  Search,
   ShoppingBag,
   ShoppingCart,
   Store,
@@ -129,6 +133,16 @@ const Procurement = () => {
   const { data: lowStockItems = [], isLoading: loadingLowStock } = useLowStockItems();
   const { data: vendors = [] } = useVendors();
   const { data: stats } = useProcurementStats();
+  const { data: vehicles = [] } = useVehicles();
+
+  // Build vehicle_id → fleet_number lookup
+  const vehicleFleetMap = useMemo(() => {
+    const map = new Map<string, string>();
+    vehicles.forEach((v: { id: string; fleet_number?: string | null }) => {
+      if (v.fleet_number) map.set(v.id, v.fleet_number);
+    });
+    return map;
+  }, [vehicles]);
 
   const createRequest = useCreateProcurementRequest();
   const updateStatus = useUpdateRequestStatus();
@@ -158,6 +172,8 @@ const Procurement = () => {
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [cashManagerDetailsDialogOpen, setCashManagerDetailsDialogOpen] = useState(false);
+  const [tyreHoldingBayDialogOpen, setTyreHoldingBayDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<PartsRequest | null>(null);
   const [selectedLowStockItem, setSelectedLowStockItem] = useState<LowStockItem | null>(null);
 
@@ -169,6 +185,8 @@ const Procurement = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   // Urgency filter for Cash Manager tab
   const [urgencyFilter, setUrgencyFilter] = useState<string>("all");
+  // Search / text filter for All Requests tab
+  const [requestSearch, setRequestSearch] = useState<string>("");
 
   // Priority options
   type PriorityLevel = "urgent" | "2-weeks" | "4-weeks";
@@ -652,14 +670,21 @@ const Procurement = () => {
     );
   };
 
-  // Filter open requests by source
-  const jobCardRequests = openRequests.filter(r => r.job_card_id);
-  const lowStockRequests = openRequests.filter(r => !r.job_card_id && r.is_from_inventory && r.inventory_id);
-  const manualRequests = openRequests.filter(r => !r.job_card_id && !(r.is_from_inventory && r.inventory_id));
+  // Helper to detect if a request is for a tyre
+  const isTyreRequest = (request: PartsRequest): boolean => {
+    const name = (request.part_name || "").toLowerCase();
+    const title = (request.job_card?.title || "").toLowerCase();
+    return name.includes("tyre") || name.includes("tire") || title.includes("tyre") || title.includes("tire");
+  };
 
-  // Handle allocate to job card
+  // Handle allocate to job card - for tyres, open holding bay dialog
   const handleAllocateToJobCard = async (request: PartsRequest) => {
-    await allocateToJobCard.mutateAsync(request.id);
+    if (isTyreRequest(request)) {
+      setSelectedRequest(request);
+      setTyreHoldingBayDialogOpen(true);
+    } else {
+      await allocateToJobCard.mutateAsync(request.id);
+    }
   };
 
   // Open start procurement dialog
@@ -740,9 +765,25 @@ const Procurement = () => {
   };
 
   // Filtered requests for All Requests tab
-  const filteredRequests = statusFilter === "all"
-    ? allRequests
-    : allRequests.filter(r => r.status.toLowerCase() === statusFilter);
+  const filteredRequests = useMemo(() => {
+    let filtered = openRequests;
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(r => r.status.toLowerCase() === statusFilter);
+    }
+    if (requestSearch.trim()) {
+      const q = requestSearch.toLowerCase();
+      filtered = filtered.filter(r =>
+        r.part_name?.toLowerCase().includes(q) ||
+        r.part_number?.toLowerCase().includes(q) ||
+        r.job_card?.job_number?.toLowerCase().includes(q) ||
+        (r.job_card?.vehicle_id && vehicleFleetMap.get(r.job_card.vehicle_id)?.toLowerCase().includes(q)) ||
+        r.vendor?.vendor_name?.toLowerCase().includes(q) ||
+        r.notes?.toLowerCase().includes(q) ||
+        r.requested_by?.toLowerCase().includes(q)
+      );
+    }
+    return filtered;
+  }, [openRequests, statusFilter, requestSearch, vehicleFleetMap]);
 
   // Restock item selection handlers
   const toggleRestockItem = (itemId: string) => {
@@ -1404,42 +1445,55 @@ const Procurement = () => {
                     <Badge variant="destructive" className="ml-1">{lowStockItems.length}</Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="requests" className="px-5 py-2.5 text-base gap-2">
-                  Restock
-                  {lowStockItems.length > 0 && (
-                    <Badge variant="secondary" className="ml-1">{lowStockItems.length}</Badge>
-                  )}
-                </TabsTrigger>
               </TabsList>
 
               {/* All Requests Tab - Open requests grouped by source with Start Procurement */}
               <TabsContent value="all">
-                <div className="space-y-6">
-                  {/* Export Actions */}
-                  {openRequests.length > 0 && (
-                    <div className="flex justify-end">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <Download className="h-4 w-4 mr-2" />
-                            Export
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={exportAllRequestsToExcel} disabled={openRequests.length === 0}>
-                            <FileText className="h-4 w-4 mr-2" />
-                            Export to Excel
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={exportAllRequestsToPDF} disabled={openRequests.length === 0}>
-                            <FileDown className="h-4 w-4 mr-2" />
-                            Export to PDF
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                <div className="space-y-4">
+                  {/* Search & Filter Bar */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 min-w-[200px] max-w-sm">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search parts, job cards, vehicles..."
+                        value={requestSearch}
+                        onChange={(e) => setRequestSearch(e.target.value)}
+                        className="pl-9 h-9"
+                      />
                     </div>
-                  )}
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-[140px] h-9">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="requested">Requested</SelectItem>
+                        <SelectItem value="ordered">Ordered</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex-1" />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" disabled={openRequests.length === 0}>
+                          <Download className="h-4 w-4 mr-2" />
+                          Export
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={exportAllRequestsToExcel} disabled={openRequests.length === 0}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Export to Excel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={exportAllRequestsToPDF} disabled={openRequests.length === 0}>
+                          <FileDown className="h-4 w-4 mr-2" />
+                          Export to PDF
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
 
-                  {/* ========== NEW SECTION: Unallocated Fulfilled Items ========== */}
+                  {/* ========== Unallocated Fulfilled Items ========== */}
                   {allRequests.filter(r =>
                     r.status === "fulfilled" &&
                     r.is_from_inventory &&
@@ -1471,13 +1525,13 @@ const Procurement = () => {
                           <div className="overflow-x-auto">
                             <Table>
                               <TableHeader>
-                                <TableRow>
-                                  <TableHead>Part</TableHead>
-                                  <TableHead>Qty</TableHead>
-                                  <TableHead>Job Card</TableHead>
-                                  <TableHead>Date</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead>Actions</TableHead>
+                                <TableRow className="h-8">
+                                  <TableHead className="py-1.5 text-xs">Part</TableHead>
+                                  <TableHead className="py-1.5 text-xs">Qty</TableHead>
+                                  <TableHead className="py-1.5 text-xs">Job Card / Vehicle</TableHead>
+                                  <TableHead className="py-1.5 text-xs">Date</TableHead>
+                                  <TableHead className="py-1.5 text-xs">Status</TableHead>
+                                  <TableHead className="py-1.5 text-xs">Actions</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -1489,63 +1543,54 @@ const Procurement = () => {
                                     !r.allocated_to_job_card
                                   )
                                   .map((request) => (
-                                    <TableRow key={request.id} className="bg-blue-50/50">
-                                      <TableCell>
+                                    <TableRow key={request.id} className="h-9 bg-blue-50/50">
+                                      <TableCell className="py-1.5">
                                         <div>
-                                          <div className="font-medium">{request.part_name}</div>
+                                          <span className="font-medium text-sm">{request.part_name}</span>
                                           {request.part_number && (
-                                            <div className="text-xs text-muted-foreground font-mono">
+                                            <span className="ml-1.5 text-xs text-muted-foreground font-mono">
                                               {request.part_number}
-                                            </div>
+                                            </span>
                                           )}
-                                          {request.inventory && (
-                                            <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0 border-blue-500 text-blue-600">
-                                              <Package className="h-3 w-3 mr-0.5" />
-                                              {request.inventory.name}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="py-1.5 font-mono text-sm">{request.quantity}</TableCell>
+                                      <TableCell className="py-1.5">
+                                        <div className="flex items-center gap-1.5 text-sm">
+                                          <span className="font-mono">{request.job_card?.job_number || "—"}</span>
+                                          {request.job_card?.vehicle_id && vehicleFleetMap.get(request.job_card.vehicle_id) && (
+                                            <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                              <Truck className="h-2.5 w-2.5 mr-0.5" />
+                                              {vehicleFleetMap.get(request.job_card.vehicle_id)}
                                             </Badge>
                                           )}
                                         </div>
                                       </TableCell>
-                                      <TableCell className="font-mono">{request.quantity}</TableCell>
-                                      <TableCell>
-                                        <div className="flex items-center gap-1">
-                                          <FileText className="h-3 w-3 text-muted-foreground" />
-                                          <span className="font-mono text-sm">
-                                            {request.job_card?.job_number || "—"}
-                                          </span>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className="text-sm text-muted-foreground">
+                                      <TableCell className="py-1.5 text-xs text-muted-foreground">
                                         {request.created_at ? formatDate(request.created_at) : "—"}
                                       </TableCell>
-                                      <TableCell>
-                                        <Badge className="bg-yellow-500">
-                                          <Clock className="h-3 w-3 mr-1" />
+                                      <TableCell className="py-1.5">
+                                        <Badge className="bg-yellow-500 text-[10px] px-1.5 py-0">
+                                          <Clock className="h-2.5 w-2.5 mr-0.5" />
                                           Needs Allocation
                                         </Badge>
                                       </TableCell>
-                                      <TableCell>
-                                        <div className="flex gap-2">
+                                      <TableCell className="py-1.5">
+                                        <div className="flex gap-1">
                                           <Button
                                             size="sm"
-                                            className="bg-green-600 hover:bg-green-700"
+                                            className={`h-7 text-xs ${isTyreRequest(request) ? "bg-purple-600 hover:bg-purple-700" : "bg-green-600 hover:bg-green-700"}`}
                                             onClick={() => handleAllocateToJobCard(request)}
                                             disabled={allocateToJobCard.isPending}
                                           >
                                             {allocateToJobCard.isPending ? (
-                                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                            ) : isTyreRequest(request) ? (
+                                              <Package className="h-3 w-3 mr-1" />
                                             ) : (
-                                              <CheckCircle className="h-4 w-4 mr-1" />
+                                              <CheckCircle className="h-3 w-3 mr-1" />
                                             )}
-                                            Allocate
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => openDetailDialog(request)}
-                                          >
-                                            <FileText className="h-4 w-4 mr-1" />
-                                            Details
+                                            {isTyreRequest(request) ? "To Holding Bay" : "Allocate"}
                                           </Button>
                                         </div>
                                       </TableCell>
@@ -1562,10 +1607,11 @@ const Procurement = () => {
                             r.inventory_id &&
                             !r.allocated_to_job_card
                           ).length > 1 && (
-                              <div className="mt-4 flex justify-end">
+                              <div className="mt-3 flex justify-end">
                                 <Button
+                                  size="sm"
                                   variant="outline"
-                                  className="border-green-600 text-green-600 hover:bg-green-50"
+                                  className="h-7 text-xs border-green-600 text-green-600 hover:bg-green-50"
                                   onClick={async () => {
                                     const unallocated = allRequests.filter(r =>
                                       r.status === "fulfilled" &&
@@ -1573,8 +1619,6 @@ const Procurement = () => {
                                       r.inventory_id &&
                                       !r.allocated_to_job_card
                                     );
-
-                                    // Show confirmation
                                     if (confirm(`Allocate all ${unallocated.length} items to their respective job cards?`)) {
                                       for (const request of unallocated) {
                                         await allocateToJobCard.mutateAsync(request.id);
@@ -1588,357 +1632,167 @@ const Procurement = () => {
                                   disabled={allocateToJobCard.isPending}
                                 >
                                   {allocateToJobCard.isPending ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                                   ) : (
-                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                    <CheckCircle className="h-3 w-3 mr-1" />
                                   )}
                                   Allocate All ({allRequests.filter(r =>
                                     r.status === "fulfilled" &&
                                     r.is_from_inventory &&
                                     r.inventory_id &&
                                     !r.allocated_to_job_card
-                                  ).length} items)
+                                  ).length})
                                 </Button>
                               </div>
                             )}
                         </CardContent>
                       </Card>
                     )}
-                  {/* ========== END NEW SECTION ========== */}
 
                   {/* Selection Bar */}
                   {selectedRequestIds.size > 0 && (
-                    <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <Badge variant="secondary" className="text-sm">
+                    <div className="flex items-center gap-3 p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <Badge variant="secondary" className="text-xs">
                         {selectedRequestIds.size} selected
                       </Badge>
-                      <Button size="sm" onClick={openBulkProcurementDialog}>
-                        <ShoppingBag className="h-4 w-4 mr-1" />
+                      <Button size="sm" className="h-7 text-xs" onClick={openBulkProcurementDialog}>
+                        <ShoppingBag className="h-3 w-3 mr-1" />
                         Start Procurement for Selected
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setSelectedRequestIds(new Set())}>
-                        Clear Selection
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedRequestIds(new Set())}>
+                        Clear
                       </Button>
                     </div>
                   )}
 
-                  {/* Job Card Requests Section */}
-                  {jobCardRequests.length > 0 && (
+                  {/* All Requests - Flat Table */}
+                  {filteredRequests.length > 0 && (
                     <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <FileText className="h-5 w-5" />
-                          Job Card Requests
-                        </CardTitle>
-                        <CardDescription>
-                          Parts, external items, and services requested through job cards
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
+                      <CardContent className="p-0">
                         <div className="overflow-x-auto">
-                          <Table className="min-w-[700px]">
+                          <Table className="min-w-[800px]">
                             <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-10">
+                              <TableRow className="h-8">
+                                <TableHead className="w-10 py-1.5">
                                   <Checkbox
-                                    checked={jobCardRequests.length > 0 && jobCardRequests.every(r => selectedRequestIds.has(r.id))}
-                                    onCheckedChange={() => toggleAllInSection(jobCardRequests)}
+                                    checked={filteredRequests.length > 0 && filteredRequests.every(r => selectedRequestIds.has(r.id))}
+                                    onCheckedChange={() => toggleAllInSection(filteredRequests)}
                                   />
                                 </TableHead>
-                                <TableHead>Part</TableHead>
-                                <TableHead>Qty</TableHead>
-                                <TableHead>Job Card</TableHead>
-                                <TableHead>Requested</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
+                                <TableHead className="py-1.5 text-xs">Part / Item</TableHead>
+                                <TableHead className="py-1.5 text-xs">Type</TableHead>
+                                <TableHead className="py-1.5 text-xs w-[60px]">Qty</TableHead>
+                                <TableHead className="py-1.5 text-xs">Job Card / Vehicle</TableHead>
+                                <TableHead className="py-1.5 text-xs">Requested</TableHead>
+                                <TableHead className="py-1.5 text-xs">Status</TableHead>
+                                <TableHead className="py-1.5 text-xs">Actions</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {jobCardRequests.map((request) => (
-                                <TableRow key={request.id} className={selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : ""}>
-                                  <TableCell>
+                              {filteredRequests.map((request) => (
+                                <TableRow
+                                  key={request.id}
+                                  className={cn("h-9", selectedRequestIds.has(request.id) && "bg-blue-50/50 dark:bg-blue-950/10")}
+                                >
+                                  <TableCell className="py-1.5">
                                     <Checkbox
                                       checked={selectedRequestIds.has(request.id)}
                                       onCheckedChange={() => toggleRequestSelection(request.id)}
                                     />
                                   </TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{request.part_name}</div>
+                                  <TableCell className="py-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-medium text-sm">{request.part_name}</span>
                                       {request.part_number && (
-                                        <div className="text-xs text-muted-foreground font-mono">
+                                        <span className="text-[11px] text-muted-foreground font-mono">
                                           {request.part_number}
-                                        </div>
+                                        </span>
                                       )}
-                                      {request.is_service ? (
-                                        <>
-                                          <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0 border-purple-500 text-purple-600">
-                                            <Wrench className="h-3 w-3 mr-0.5" />
-                                            Service
-                                          </Badge>
-                                          {request.service_description && (
-                                            <div className="text-xs text-muted-foreground mt-1">
-                                              {request.service_description}
-                                            </div>
-                                          )}
-                                        </>
-                                      ) : !request.is_from_inventory && !request.inventory_id ? (
-                                        <>
-                                          <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0 border-orange-500 text-orange-600">
-                                            <DollarSign className="h-3 w-3 mr-0.5" />
-                                            External
-                                          </Badge>
-                                          {request.vendor && (
-                                            <div className="text-xs text-muted-foreground mt-1">
-                                              Vendor: {request.vendor?.vendor_name || 'Unknown'}
-                                            </div>
-                                          )}
-                                        </>
-                                      ) : request.inventory_id && request.is_from_inventory ? (
-                                        request.notes?.includes('[OUT OF STOCK') ? (
-                                          <Badge variant="destructive" className="mt-1 text-[10px] px-1.5 py-0">
-                                            <AlertTriangle className="h-3 w-3 mr-0.5" />
-                                            Short — Needs Restock
-                                          </Badge>
-                                        ) : (
-                                          <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0 border-green-500 text-green-600">
-                                            <Package className="h-3 w-3 mr-0.5" />
-                                            From Inventory
-                                          </Badge>
-                                        )
-                                      ) : null}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="font-mono">{request.quantity}</TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-1">
-                                      <FileText className="h-3 w-3 text-muted-foreground" />
-                                      <span className="font-mono text-sm">
-                                        {request.job_card?.job_number || "—"}
-                                      </span>
-                                    </div>
+                                  <TableCell className="py-1.5">
+                                    {request.is_service ? (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-500 text-purple-600">
+                                        <Wrench className="h-2.5 w-2.5 mr-0.5" />
+                                        Service
+                                      </Badge>
+                                    ) : !request.is_from_inventory && !request.inventory_id ? (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-500 text-orange-600">
+                                        <DollarSign className="h-2.5 w-2.5 mr-0.5" />
+                                        External
+                                      </Badge>
+                                    ) : request.inventory_id && request.is_from_inventory ? (
+                                      request.notes?.includes('[OUT OF STOCK') ? (
+                                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-semibold">
+                                          <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+                                          Out of Stock
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-green-500 text-green-600">
+                                          <Package className="h-2.5 w-2.5 mr-0.5" />
+                                          Inventory
+                                        </Badge>
+                                      )
+                                    ) : request.inventory_id && !request.is_from_inventory ? (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600">
+                                        <Package className="h-2.5 w-2.5 mr-0.5" />
+                                        Low Stock
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                        <Package className="h-2.5 w-2.5 mr-0.5" />
+                                        Manual
+                                      </Badge>
+                                    )}
+                                    {request.job_card_id && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-500 text-blue-600 mt-0.5">
+                                        <FileText className="h-2.5 w-2.5 mr-0.5" />
+                                        Job Card
+                                      </Badge>
+                                    )}
+                                    {!request.job_card_id && request.inventory_id && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 mt-0.5">
+                                        <Package className="h-2.5 w-2.5 mr-0.5" />
+                                        Low Stock
+                                      </Badge>
+                                    )}
                                   </TableCell>
-                                  <TableCell className="text-sm text-muted-foreground">
+                                  <TableCell className="py-1.5 font-mono text-sm">{request.quantity}</TableCell>
+                                  <TableCell className="py-1.5">
+                                    {request.job_card ? (
+                                      <div className="flex items-center gap-1.5 text-sm">
+                                        <span className="font-mono">{request.job_card.job_number}</span>
+                                        {request.job_card.vehicle_id && vehicleFleetMap.get(request.job_card.vehicle_id) && (
+                                          <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                            <Truck className="h-2.5 w-2.5 mr-0.5" />
+                                            {vehicleFleetMap.get(request.job_card.vehicle_id)}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    ) : request.inventory?.name ? (
+                                      <span className="text-xs text-muted-foreground">{request.inventory.name}</span>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="py-1.5 text-xs text-muted-foreground">
                                     {request.created_at ? formatDate(request.created_at) : "—"}
                                   </TableCell>
-                                  <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-1.5">{getStatusBadge(request.status)}</TableCell>
+                                  <TableCell className="py-1.5">
                                     <div className="flex gap-1">
                                       <Button
                                         size="sm"
+                                        className="h-7 text-xs"
                                         onClick={() => openStartProcurementDialog(request)}
                                       >
-                                        <ShoppingBag className="h-4 w-4 mr-1" />
-                                        Start Procurement
+                                        <ShoppingBag className="h-3 w-3 mr-1" />
+                                        Procure
                                       </Button>
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                          <DropdownMenuItem onClick={() => openDetailDialog(request)}>
-                                            <FileText className="h-4 w-4 mr-2" />
-                                            View Details
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem onClick={() => openEditDialog(request)}>
-                                            <Edit className="h-4 w-4 mr-2" />
-                                            Edit
-                                          </DropdownMenuItem>
-                                          <DropdownMenuSeparator />
-                                          <DropdownMenuItem onClick={() => openDeleteDialog(request)} className="text-red-600">
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Low Stock / Restock Requests Section */}
-                  {lowStockRequests.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <AlertTriangle className="h-5 w-5 text-orange-500" />
-                          Low Stock / Restock Requests
-                        </CardTitle>
-                        <CardDescription>
-                          Replenishment requests for inventory items below minimum levels
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table className="min-w-[700px]">
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-10">
-                                  <Checkbox
-                                    checked={lowStockRequests.length > 0 && lowStockRequests.every(r => selectedRequestIds.has(r.id))}
-                                    onCheckedChange={() => toggleAllInSection(lowStockRequests)}
-                                  />
-                                </TableHead>
-                                <TableHead>Part</TableHead>
-                                <TableHead>Qty</TableHead>
-                                <TableHead>Inventory Item</TableHead>
-                                <TableHead>Requested</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {lowStockRequests.map((request) => (
-                                <TableRow key={request.id} className={selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : ""}>
-                                  <TableCell>
-                                    <Checkbox
-                                      checked={selectedRequestIds.has(request.id)}
-                                      onCheckedChange={() => toggleRequestSelection(request.id)}
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{request.part_name}</div>
-                                      {request.part_number && (
-                                        <div className="text-xs text-muted-foreground font-mono">
-                                          {request.part_number}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="font-mono">{request.quantity}</TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline" className="text-xs">
-                                      <Package className="h-3 w-3 mr-1" />
-                                      {request.inventory?.name || "Inventory"}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-sm text-muted-foreground">
-                                    {request.created_at ? formatDate(request.created_at) : "—"}
-                                  </TableCell>
-                                  <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                  <TableCell>
-                                    <div className="flex gap-1">
-                                      <Button
-                                        size="sm"
-                                        onClick={() => openStartProcurementDialog(request)}
-                                      >
-                                        <ShoppingBag className="h-4 w-4 mr-1" />
-                                        Start Procurement
-                                      </Button>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                          <DropdownMenuItem onClick={() => openDetailDialog(request)}>
-                                            <FileText className="h-4 w-4 mr-2" />
-                                            View Details
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem onClick={() => openEditDialog(request)}>
-                                            <Edit className="h-4 w-4 mr-2" />
-                                            Edit
-                                          </DropdownMenuItem>
-                                          <DropdownMenuSeparator />
-                                          <DropdownMenuItem onClick={() => openDeleteDialog(request)} className="text-red-600">
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Manual Requests Section */}
-                  {manualRequests.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Package className="h-5 w-5" />
-                          Manual Requests
-                        </CardTitle>
-                        <CardDescription>
-                          Procurement requests created directly
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table className="min-w-[700px]">
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-10">
-                                  <Checkbox
-                                    checked={manualRequests.length > 0 && manualRequests.every(r => selectedRequestIds.has(r.id))}
-                                    onCheckedChange={() => toggleAllInSection(manualRequests)}
-                                  />
-                                </TableHead>
-                                <TableHead>Part</TableHead>
-                                <TableHead>Qty</TableHead>
-                                <TableHead>Price</TableHead>
-                                <TableHead>Requested By</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {manualRequests.map((request) => (
-                                <TableRow key={request.id} className={selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : ""}>
-                                  <TableCell>
-                                    <Checkbox
-                                      checked={selectedRequestIds.has(request.id)}
-                                      onCheckedChange={() => toggleRequestSelection(request.id)}
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{request.part_name}</div>
-                                      {request.part_number && (
-                                        <div className="text-xs text-muted-foreground font-mono">
-                                          {request.part_number}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="font-mono">{request.quantity}</TableCell>
-                                  <TableCell className="font-mono">
-                                    {request.total_price
-                                      ? `$${request.total_price.toLocaleString()}`
-                                      : "—"
-                                    }
-                                  </TableCell>
-                                  <TableCell>{request.requested_by || "—"}</TableCell>
-                                  <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                  <TableCell>
-                                    <div className="flex gap-1">
-                                      <Button
-                                        size="sm"
-                                        onClick={() => openStartProcurementDialog(request)}
-                                      >
-                                        <ShoppingBag className="h-4 w-4 mr-1" />
-                                        Start Procurement
-                                      </Button>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                            <MoreHorizontal className="h-4 w-4" />
+                                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                            <MoreHorizontal className="h-3.5 w-3.5" />
                                           </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
@@ -1983,7 +1837,7 @@ const Procurement = () => {
               {/* Cash Manager Tab - Procurement workflow tracking */}
               <TabsContent value="cash-manager">
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div>
                         <CardTitle className="flex items-center gap-2">
@@ -1999,7 +1853,7 @@ const Procurement = () => {
                           value={statusFilter}
                           onValueChange={setStatusFilter}
                         >
-                          <SelectTrigger className="w-[150px]">
+                          <SelectTrigger className="w-[140px] h-9">
                             <SelectValue placeholder="Filter status" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2014,7 +1868,7 @@ const Procurement = () => {
                           value={urgencyFilter}
                           onValueChange={setUrgencyFilter}
                         >
-                          <SelectTrigger className="w-[150px]">
+                          <SelectTrigger className="w-[140px] h-9">
                             <SelectValue placeholder="Filter urgency" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2078,7 +1932,7 @@ const Procurement = () => {
                       <Table className="min-w-[900px]">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-10">
+                            <TableHead className="w-10 py-1.5 text-xs">
                               <Checkbox
                                 checked={filteredCashManager.length > 0 && filteredCashManager.every(r => selectedRequestIds.has(r.id))}
                                 onCheckedChange={() => {
@@ -2091,14 +1945,14 @@ const Procurement = () => {
                                 }}
                               />
                             </TableHead>
-                            <TableHead>Part</TableHead>
-                            <TableHead>IR #</TableHead>
-                            <TableHead>Qty</TableHead>
-                            <TableHead>Source</TableHead>
-                            <TableHead>Workflow Progress</TableHead>
-                            <TableHead>Lead Time</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="w-[180px]">Actions</TableHead>
+                            <TableHead className="py-1.5 text-xs">Part</TableHead>
+                            <TableHead className="py-1.5 text-xs">IR #</TableHead>
+                            <TableHead className="py-1.5 text-xs">Qty</TableHead>
+                            <TableHead className="py-1.5 text-xs">Source</TableHead>
+                            <TableHead className="py-1.5 text-xs">Workflow Progress</TableHead>
+                            <TableHead className="py-1.5 text-xs">Lead Time</TableHead>
+                            <TableHead className="py-1.5 text-xs">Status</TableHead>
+                            <TableHead className="py-1.5 text-xs w-[180px]">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2112,25 +1966,29 @@ const Procurement = () => {
                               // Single-item IR – render as a normal row
                               const request = items[0];
                               return (
-                                <TableRow key={request.id} className={selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : "cursor-pointer hover:bg-muted/50"}>
-                                  <TableCell onClick={(e) => { e.stopPropagation(); setSelectedRequestIds(prev => { const newSet = new Set(prev); if (newSet.has(request.id)) newSet.delete(request.id); else newSet.add(request.id); return newSet; }); }}>
+                                <TableRow key={request.id} className={`h-9 ${selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : "cursor-pointer hover:bg-muted/50"}`}>
+                                  <TableCell className="py-1.5" onClick={(e) => { e.stopPropagation(); setSelectedRequestIds(prev => { const newSet = new Set(prev); if (newSet.has(request.id)) newSet.delete(request.id); else newSet.add(request.id); return newSet; }); }}>
                                     <Checkbox checked={selectedRequestIds.has(request.id)} />
                                   </TableCell>
-                                  <TableCell onClick={() => openDetailDialog(request)}>
+                                  <TableCell className="py-1.5" onClick={() => openDetailDialog(request)}>
                                     <div>
-                                      <div className="font-medium">{request.part_name}</div>
+                                      <div className="font-medium text-sm">{request.part_name}</div>
                                       {request.part_number && (
-                                        <div className="text-xs text-muted-foreground font-mono">{request.part_number}</div>
+                                        <div className="text-[11px] text-muted-foreground font-mono">{request.part_number}</div>
                                       )}
                                       {request.vendor?.vendor_name && (
-                                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                        <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                                           <Store className="h-3 w-3" />
                                           {request.vendor.vendor_name}
                                         </div>
                                       )}
                                       {(!request.vendor_id || !request.unit_price) && !request.cash_manager_approval_date && (
-                                        <div className="mt-1">
-                                          <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400">
+                                        <div className="mt-0.5">
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[10px] border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                            onClick={(e) => { e.stopPropagation(); setSelectedRequest(request); setCashManagerDetailsDialogOpen(true); }}
+                                          >
                                             <AlertTriangle className="h-3 w-3 mr-1" />
                                             {!request.vendor_id && !request.unit_price ? "Needs vendor & price" : !request.vendor_id ? "Needs vendor" : "Needs price"}
                                           </Badge>
@@ -2143,16 +2001,24 @@ const Procurement = () => {
                                       )}
                                     </div>
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-1.5">
                                     <span className="font-mono text-sm">{request.ir_number || request.sage_requisition_number || "—"}</span>
                                   </TableCell>
-                                  <TableCell className="font-mono">{request.quantity}</TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-1.5 font-mono text-sm">{request.quantity}</TableCell>
+                                  <TableCell className="py-1.5">
                                     {request.job_card_id ? (
-                                      <Badge variant="outline" className="text-xs">
-                                        <FileText className="h-3 w-3 mr-1" />
-                                        {request.job_card?.job_number || "Job Card"}
-                                      </Badge>
+                                      <div className="flex items-center gap-1">
+                                        <Badge variant="outline" className="text-xs">
+                                          <FileText className="h-3 w-3 mr-1" />
+                                          {request.job_card?.job_number || "Job Card"}
+                                        </Badge>
+                                        {request.job_card?.vehicle_id && vehicleFleetMap.get(request.job_card.vehicle_id) && (
+                                          <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                            <Truck className="h-2.5 w-2.5 mr-0.5" />
+                                            {vehicleFleetMap.get(request.job_card.vehicle_id)}
+                                          </Badge>
+                                        )}
+                                      </div>
                                     ) : request.inventory_id ? (
                                       <Badge variant="outline" className="text-xs">
                                         <Package className="h-3 w-3 mr-1" />
@@ -2162,46 +2028,46 @@ const Procurement = () => {
                                       <Badge variant="secondary" className="text-xs">Manual</Badge>
                                     )}
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-1.5">
                                     <div className="flex items-center gap-1">
                                       <Tooltip>
                                         <TooltipTrigger>
-                                          <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium", (request.ir_number || request.sage_requisition_date) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
-                                            {(request.ir_number || request.sage_requisition_date) ? <Check className="h-3 w-3" /> : "1"}
+                                          <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium", (request.ir_number || request.sage_requisition_date) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                                            {(request.ir_number || request.sage_requisition_date) ? <Check className="h-2.5 w-2.5" /> : "1"}
                                           </div>
                                         </TooltipTrigger>
                                         <TooltipContent><p className="font-semibold">IR Created</p>{request.ir_number ? <p>✓ IR: {request.ir_number}</p> : <p className="text-muted-foreground">Not yet submitted</p>}</TooltipContent>
                                       </Tooltip>
-                                      <div className="w-4 h-0.5 bg-gray-200" />
+                                      <div className="w-3 h-0.5 bg-gray-200" />
                                       <Tooltip>
                                         <TooltipTrigger>
-                                          <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium", request.cash_manager_approval_date ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
-                                            {request.cash_manager_approval_date ? <Check className="h-3 w-3" /> : "2"}
+                                          <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium", request.cash_manager_approval_date ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                                            {request.cash_manager_approval_date ? <Check className="h-2.5 w-2.5" /> : "2"}
                                           </div>
                                         </TooltipTrigger>
                                         <TooltipContent><p className="font-semibold">Cash Manager</p>{request.cash_manager_approval_date ? <><p>✓ {formatDate(request.cash_manager_approval_date)}</p><p>Ref: {request.cash_manager_reference}</p></> : <p className="text-muted-foreground">Awaiting approval</p>}</TooltipContent>
                                       </Tooltip>
-                                      <div className="w-4 h-0.5 bg-gray-200" />
+                                      <div className="w-3 h-0.5 bg-gray-200" />
                                       <Tooltip>
                                         <TooltipTrigger>
-                                          <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium", request.ordered_at ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
-                                            {request.ordered_at ? <Check className="h-3 w-3" /> : "3"}
+                                          <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium", request.ordered_at ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                                            {request.ordered_at ? <Check className="h-2.5 w-2.5" /> : "3"}
                                           </div>
                                         </TooltipTrigger>
                                         <TooltipContent><p className="font-semibold">Ordered</p>{request.ordered_at ? <><p>✓ {formatDate(request.ordered_at)}</p><p>Vendor: {request.vendor?.vendor_name || "Unknown"}</p></> : <p className="text-muted-foreground">Not yet ordered</p>}</TooltipContent>
                                       </Tooltip>
-                                      <div className="w-4 h-0.5 bg-gray-200" />
+                                      <div className="w-3 h-0.5 bg-gray-200" />
                                       <Tooltip>
                                         <TooltipTrigger>
-                                          <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium", request.received_date ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
-                                            {request.received_date ? <Check className="h-3 w-3" /> : "4"}
+                                          <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium", request.received_date ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                                            {request.received_date ? <Check className="h-2.5 w-2.5" /> : "4"}
                                           </div>
                                         </TooltipTrigger>
                                         <TooltipContent><p className="font-semibold">Received</p>{request.received_date ? <><p>✓ {formatDate(request.received_date)}</p><p>Qty: {request.received_quantity ?? request.quantity}</p></> : <p className="text-muted-foreground">Awaiting delivery</p>}</TooltipContent>
                                       </Tooltip>
                                     </div>
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-1.5">
                                     {request.received_date ? (
                                       <Tooltip>
                                         <TooltipTrigger>
@@ -2221,21 +2087,23 @@ const Procurement = () => {
                                       <span className="text-xs text-muted-foreground">—</span>
                                     )}
                                   </TableCell>
-                                  <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-1.5">{getStatusBadge(request.status)}</TableCell>
+                                  <TableCell className="py-1.5">
                                     <div className="flex gap-1 flex-wrap">
                                       {(request.ir_number || request.sage_requisition_date) && !request.cash_manager_approval_date && (
-                                        <Button size="sm" variant="outline" onClick={() => openCashManagerDialog(request)}><CreditCard className="h-3 w-3 mr-1" />Approve</Button>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openCashManagerDialog(request)}><CreditCard className="h-3 w-3 mr-1" />Approve</Button>
                                       )}
                                       {request.cash_manager_approval_date && !request.ordered_at && (
-                                        <Button size="sm" variant="outline" onClick={() => openOrderDialog(request)}><ShoppingCart className="h-3 w-3 mr-1" />Order</Button>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openOrderDialog(request)}><ShoppingCart className="h-3 w-3 mr-1" />Order</Button>
                                       )}
                                       {request.ordered_at && !request.received_date && (
-                                        <Button size="sm" variant="outline" onClick={() => openReceiveDialog(request)}><Truck className="h-3 w-3 mr-1" />Receive</Button>
+                                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openReceiveDialog(request)}><Truck className="h-3 w-3 mr-1" />Receive</Button>
                                       )}
                                       {/* Show Allocate button when: received OR (approved and has inventory with sufficient stock) */}
                                       {(request.received_date || (request.cash_manager_approval_date && request.inventory_id)) && request.job_card_id && !request.allocated_to_job_card && (
-                                        <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAllocateToJobCard(request)} disabled={allocateToJobCard.isPending}><CheckCircle className="h-3 w-3 mr-1" />Allocate</Button>
+                                        <Button size="sm" className={isTyreRequest(request) ? "bg-purple-600 hover:bg-purple-700" : "bg-green-600 hover:bg-green-700"} onClick={() => handleAllocateToJobCard(request)} disabled={allocateToJobCard.isPending}>
+                                          {isTyreRequest(request) ? <><Package className="h-3 w-3 mr-1" />To Holding Bay</> : <><CheckCircle className="h-3 w-3 mr-1" />Allocate</>}
+                                        </Button>
                                       )}
                                       {request.allocated_to_job_card && (
                                         <Badge className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />Fulfilled</Badge>
@@ -2347,15 +2215,15 @@ const Procurement = () => {
 
                                 {/* Expanded child rows */}
                                 {isExpanded && items.map((request) => (
-                                  <TableRow key={request.id} className={`bg-muted/10 hover:bg-muted/20 ${selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : ""}`}>
-                                    <TableCell onClick={(e) => { e.stopPropagation(); setSelectedRequestIds(prev => { const newSet = new Set(prev); if (newSet.has(request.id)) newSet.delete(request.id); else newSet.add(request.id); return newSet; }); }}>
+                                  <TableRow key={request.id} className={`h-9 bg-muted/10 hover:bg-muted/20 ${selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : ""}`}>
+                                    <TableCell className="py-1.5" onClick={(e) => { e.stopPropagation(); setSelectedRequestIds(prev => { const newSet = new Set(prev); if (newSet.has(request.id)) newSet.delete(request.id); else newSet.add(request.id); return newSet; }); }}>
                                       <Checkbox checked={selectedRequestIds.has(request.id)} />
                                     </TableCell>
-                                    <TableCell onClick={() => openDetailDialog(request)} className="cursor-pointer">
+                                    <TableCell className="cursor-pointer py-1.5" onClick={() => openDetailDialog(request)}>
                                       <div className="pl-6">
-                                        <div className="font-medium">{request.part_name}</div>
+                                        <div className="font-medium text-sm">{request.part_name}</div>
                                         {request.part_number && (
-                                          <div className="text-xs text-muted-foreground font-mono">{request.part_number}</div>
+                                          <div className="text-[11px] text-muted-foreground font-mono">{request.part_number}</div>
                                         )}
                                         {request.vendor?.vendor_name && (
                                           <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
@@ -2365,7 +2233,11 @@ const Procurement = () => {
                                         )}
                                         {(!request.vendor_id || !request.unit_price) && !request.cash_manager_approval_date && (
                                           <div className="mt-1">
-                                            <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400">
+                                            <Badge
+                                              variant="outline"
+                                              className="text-[10px] border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                              onClick={(e) => { e.stopPropagation(); setSelectedRequest(request); setCashManagerDetailsDialogOpen(true); }}
+                                            >
                                               <AlertTriangle className="h-3 w-3 mr-1" />
                                               {!request.vendor_id && !request.unit_price ? "Needs vendor & price" : !request.vendor_id ? "Needs vendor" : "Needs price"}
                                             </Badge>
@@ -2384,10 +2256,18 @@ const Procurement = () => {
                                     <TableCell className="font-mono">{request.quantity}</TableCell>
                                     <TableCell>
                                       {request.job_card_id ? (
-                                        <Badge variant="outline" className="text-xs">
-                                          <FileText className="h-3 w-3 mr-1" />
-                                          {request.job_card?.job_number || "Job Card"}
-                                        </Badge>
+                                        <div className="flex items-center gap-1">
+                                          <Badge variant="outline" className="text-xs">
+                                            <FileText className="h-3 w-3 mr-1" />
+                                            {request.job_card?.job_number || "Job Card"}
+                                          </Badge>
+                                          {request.job_card?.vehicle_id && vehicleFleetMap.get(request.job_card.vehicle_id) && (
+                                            <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                              <Truck className="h-2.5 w-2.5 mr-0.5" />
+                                              {vehicleFleetMap.get(request.job_card.vehicle_id)}
+                                            </Badge>
+                                          )}
+                                        </div>
                                       ) : request.inventory_id ? (
                                         <Badge variant="outline" className="text-xs">
                                           <Package className="h-3 w-3 mr-1" />
@@ -2465,7 +2345,9 @@ const Procurement = () => {
                                         )}
                                         {/* Show Allocate button when: received OR (approved and has inventory with sufficient stock) */}
                                         {(request.received_date || (request.cash_manager_approval_date && request.inventory_id)) && request.job_card_id && !request.allocated_to_job_card && (
-                                          <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAllocateToJobCard(request)} disabled={allocateToJobCard.isPending}><CheckCircle className="h-3 w-3 mr-1" />Allocate</Button>
+                                          <Button size="sm" className={isTyreRequest(request) ? "bg-purple-600 hover:bg-purple-700" : "bg-green-600 hover:bg-green-700"} onClick={() => handleAllocateToJobCard(request)} disabled={allocateToJobCard.isPending}>
+                                            {isTyreRequest(request) ? <><Package className="h-3 w-3 mr-1" />To Holding Bay</> : <><CheckCircle className="h-3 w-3 mr-1" />Allocate</>}
+                                          </Button>
                                         )}
                                         {request.allocated_to_job_card && (
                                           <Badge className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />Fulfilled</Badge>
@@ -2502,7 +2384,7 @@ const Procurement = () => {
                 </Card>
               </TabsContent>
 
-              {/* Low Stock Tab */}
+              {/* Low Stock Tab - consolidated with restock functionality */}
               <TabsContent value="low-stock">
                 <Card>
                   <CardHeader>
@@ -2516,130 +2398,39 @@ const Procurement = () => {
                           These inventory items need to be replenished
                         </CardDescription>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="sm" disabled={lowStockItems.length === 0}>
-                            <Download className="h-4 w-4 mr-2" />
-                            Export
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={exportLowStockToExcel}>
-                            <FileText className="h-4 w-4 mr-2" />
-                            Export to Excel
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={exportLowStockToPDF}>
-                            <FileDown className="h-4 w-4 mr-2" />
-                            Export to PDF
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {loadingLowStock ? (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                      </div>
-                    ) : lowStockItems.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <Table className="min-w-[700px]">
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Item</TableHead>
-                              <TableHead>Category</TableHead>
-                              <TableHead className="text-right">Current Stock</TableHead>
-                              <TableHead className="text-right">Minimum</TableHead>
-                              <TableHead className="text-right">Shortage</TableHead>
-                              <TableHead>Supplier</TableHead>
-                              <TableHead>Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {lowStockItems.map((item) => (
-                              <TableRow key={item.id}>
-                                <TableCell>
-                                  <div>
-                                    <div className="font-medium">{item.name}</div>
-                                    <div className="text-xs text-muted-foreground font-mono">
-                                      {item.part_number}
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline">{item.category}</Badge>
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-red-600">
-                                  {item.quantity}
-                                </TableCell>
-                                <TableCell className="text-right font-mono">
-                                  {item.min_quantity}
-                                </TableCell>
-                                <TableCell className="text-right font-mono font-bold text-red-600">
-                                  -{item.shortage}
-                                </TableCell>
-                                <TableCell>{item.supplier || "—"}</TableCell>
-                                <TableCell>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => openReplenishDialog(item)}
-                                  >
-                                    <PackagePlus className="h-4 w-4 mr-1" />
-                                    Replenish
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-12">
-                        <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
-                        <p className="text-lg font-medium">Stock Levels OK</p>
-                        <p className="text-muted-foreground">All items are above minimum levels</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Requests Tab - For restock items with checkboxes and priorities */}
-              <TabsContent value="requests">
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <ShoppingBag className="h-5 w-5 text-primary" />
-                          Restock Requests
-                        </CardTitle>
-                        <CardDescription>
-                          Select items to request restock, assign priority levels, and export for processing
-                        </CardDescription>
-                      </div>
                       <div className="flex items-center gap-2">
                         {selectedRestockItems.size > 0 && (
                           <span className="text-sm text-muted-foreground">
                             {selectedRestockItems.size} item{selectedRestockItems.size !== 1 ? "s" : ""} selected
                           </span>
                         )}
-                        <Button
-                          variant="outline"
-                          onClick={exportRestockToExcel}
-                          disabled={selectedRestockItems.size === 0}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Export Excel
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={exportRestockToPDF}
-                          disabled={selectedRestockItems.size === 0}
-                        >
-                          <FileDown className="h-4 w-4 mr-2" />
-                          Export PDF
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" disabled={lowStockItems.length === 0 && selectedRestockItems.size === 0}>
+                              <Download className="h-4 w-4 mr-2" />
+                              Export
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={exportLowStockToExcel} disabled={lowStockItems.length === 0}>
+                              <FileText className="h-4 w-4 mr-2" />
+                              Export All (Excel)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={exportLowStockToPDF} disabled={lowStockItems.length === 0}>
+                              <FileDown className="h-4 w-4 mr-2" />
+                              Export All (PDF)
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={exportRestockToExcel} disabled={selectedRestockItems.size === 0}>
+                              <FileText className="h-4 w-4 mr-2" />
+                              Export Selected (Excel)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={exportRestockToPDF} disabled={selectedRestockItems.size === 0}>
+                              <FileDown className="h-4 w-4 mr-2" />
+                              Export Selected (PDF)
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </CardHeader>
@@ -2652,8 +2443,8 @@ const Procurement = () => {
                       <div className="overflow-x-auto">
                         <Table className="min-w-[800px]">
                           <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-[50px]">
+                            <TableRow className="h-8">
+                              <TableHead className="w-[40px] py-1.5">
                                 <Checkbox
                                   checked={
                                     lowStockItems.length > 0 &&
@@ -2663,13 +2454,14 @@ const Procurement = () => {
                                   aria-label="Select all items"
                                 />
                               </TableHead>
-                              <TableHead>Item</TableHead>
-                              <TableHead>Category</TableHead>
-                              <TableHead className="text-right">Current Stock</TableHead>
-                              <TableHead className="text-right">Shortage</TableHead>
-                              <TableHead>Priority</TableHead>
-                              <TableHead>Supplier</TableHead>
-                              <TableHead>Actions</TableHead>
+                              <TableHead className="py-1.5 text-xs">Item</TableHead>
+                              <TableHead className="py-1.5 text-xs">Category</TableHead>
+                              <TableHead className="py-1.5 text-xs text-right">Stock</TableHead>
+                              <TableHead className="py-1.5 text-xs text-right">Min</TableHead>
+                              <TableHead className="py-1.5 text-xs text-right">Short</TableHead>
+                              <TableHead className="py-1.5 text-xs">Priority</TableHead>
+                              <TableHead className="py-1.5 text-xs">Supplier</TableHead>
+                              <TableHead className="py-1.5 text-xs">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -2677,42 +2469,43 @@ const Procurement = () => {
                               <TableRow
                                 key={item.id}
                                 className={cn(
+                                  "h-9",
                                   selectedRestockItems.has(item.id) && "bg-muted/50"
                                 )}
                               >
-                                <TableCell>
+                                <TableCell className="py-1">
                                   <Checkbox
                                     checked={selectedRestockItems.has(item.id)}
                                     onCheckedChange={() => toggleRestockItem(item.id)}
                                     aria-label={`Select ${item.name}`}
                                   />
                                 </TableCell>
-                                <TableCell>
-                                  <div>
-                                    <div className="font-medium">{item.name}</div>
-                                    <div className="text-xs text-muted-foreground font-mono">
-                                      {item.part_number}
-                                    </div>
+                                <TableCell className="py-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-medium text-sm">{item.name}</span>
+                                    <span className="text-[11px] text-muted-foreground font-mono">{item.part_number}</span>
                                   </div>
                                 </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline">{item.category}</Badge>
+                                <TableCell className="py-1">
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">{item.category}</Badge>
                                 </TableCell>
-                                <TableCell className="text-right">
-                                  <span className="font-mono text-red-600">{item.quantity}</span>
-                                  <span className="text-muted-foreground"> / {item.min_quantity}</span>
+                                <TableCell className="py-1 text-right font-mono text-sm text-red-600">
+                                  {item.quantity}
                                 </TableCell>
-                                <TableCell className="text-right font-mono font-bold text-red-600">
+                                <TableCell className="py-1 text-right font-mono text-sm">
+                                  {item.min_quantity}
+                                </TableCell>
+                                <TableCell className="py-1 text-right font-mono text-sm font-bold text-red-600">
                                   -{item.shortage}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="py-1">
                                   <Select
                                     value={restockPriorities[item.id] || ""}
                                     onValueChange={(value) =>
                                       setRestockPriority(item.id, value as PriorityLevel)
                                     }
                                   >
-                                    <SelectTrigger className="w-[160px]">
+                                    <SelectTrigger className="w-[130px] h-7 text-xs">
                                       <SelectValue placeholder="Set priority">
                                         {restockPriorities[item.id] ? (
                                           getPriorityBadge(restockPriorities[item.id])
@@ -2735,13 +2528,14 @@ const Procurement = () => {
                                     </SelectContent>
                                   </Select>
                                 </TableCell>
-                                <TableCell>{item.supplier || "—"}</TableCell>
-                                <TableCell>
+                                <TableCell className="py-1 text-sm">{item.supplier || "—"}</TableCell>
+                                <TableCell className="py-1">
                                   <Button
                                     size="sm"
+                                    className="h-7 text-xs"
                                     onClick={() => openReplenishDialog(item)}
                                   >
-                                    <PackagePlus className="h-4 w-4 mr-1" />
+                                    <PackagePlus className="h-3 w-3 mr-1" />
                                     Replenish
                                   </Button>
                                 </TableCell>
@@ -2753,8 +2547,8 @@ const Procurement = () => {
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12">
                         <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
-                        <p className="text-lg font-medium">No Items to Restock</p>
-                        <p className="text-muted-foreground">All inventory items are at or above minimum levels</p>
+                        <p className="text-lg font-medium">Stock Levels OK</p>
+                        <p className="text-muted-foreground">All items are above minimum levels</p>
                       </div>
                     )}
                   </CardContent>
@@ -3803,6 +3597,20 @@ const Procurement = () => {
           if (!open) setSelectedRequestIds(new Set());
         }}
         requests={selectedRequestIds.size > 0 ? selectedRequests : selectedRequest ? [selectedRequest] : []}
+      />
+
+      <CashManagerDetailsDialog
+        open={cashManagerDetailsDialogOpen}
+        onOpenChange={setCashManagerDetailsDialogOpen}
+        request={selectedRequest}
+        vendors={vendors}
+      />
+
+      <AllocateTyreToHoldingBayDialog
+        open={tyreHoldingBayDialogOpen}
+        onOpenChange={setTyreHoldingBayDialogOpen}
+        request={selectedRequest}
+        vehicleFleetNumber={selectedRequest?.job_card?.vehicle_id ? vehicleFleetMap.get(selectedRequest.job_card.vehicle_id) : null}
       />
     </Layout>
   );

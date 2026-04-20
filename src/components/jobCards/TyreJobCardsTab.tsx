@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import AddTyreJobCardDialog from "@/components/dialogs/AddTyreJobCardDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { saveAs } from "file-saver";
@@ -17,6 +18,7 @@ import {
     ClipboardList,
     Download,
     FileText,
+    Plus,
     Search,
     Truck,
     User,
@@ -522,6 +524,8 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         </div>
     );
 
+    const [showAddDialog, setShowAddDialog] = useState(false);
+
     if (isLoading) {
         return (
             <div className="text-center text-muted-foreground py-8">
@@ -535,6 +539,14 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
             {/* Compact toolbar: stats + filters + exports in one row */}
             <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    {/* New Tyre Job Card button */}
+                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setShowAddDialog(true)}>
+                        <Plus className="w-3.5 h-3.5" />
+                        New Tyre Job Card
+                    </Button>
+
+                    <div className="hidden sm:block h-4 w-px bg-border" />
+
                     {/* Inline stats */}
                     <div className="flex items-center gap-1.5 text-sm">
                         <ClipboardList className="h-3.5 w-3.5 text-amber-500" />
@@ -671,6 +683,8 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
                     )}
                 </CardContent>
             </Card>
+
+            <AddTyreJobCardDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
         </div>
     );
 }

@@ -289,6 +289,8 @@ export default function DeliveriesDashboardPage() {
       .filter((l) => {
         // Always include in-transit loads regardless of date
         if (l.status === "in-transit") return true;
+        // Always include loads where the truck is at the loading origin
+        if (l.isAtLoadOrigin && l.status === "scheduled") return true;
         const loadDate = parseISO(l.loading_date);
         return loadDate >= weekStart && loadDate <= weekEnd;
       })

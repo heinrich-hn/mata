@@ -23,42 +23,23 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   type PartsRequest,
-  type QuoteAttachment,
   useCreateInventoryAndLink,
   useStartProcurement,
 } from "@/hooks/useProcurement";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  Building2,
   Clock,
   FileText,
   Loader2,
   Package,
   Plus,
   Search,
-  Truck,
-  Upload,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import InventorySearchDialog from "./InventorySearchDialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────
-
-interface Vendor {
-  id: string;
-  vendor_name: string;
-  contact_person: string | null;
-  phone: string | null;
-}
-
-interface ItemProcurementData {
-  vendorId: string;
-  unitPrice: string;
-  quoteFile: File | null;
-}
 
 interface StartProcurementDialogProps {
   open: boolean;
@@ -87,9 +68,6 @@ export default function StartProcurementDialog({
   const [selectedInventoryName, setSelectedInventoryName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Per-item procurement data keyed by request.id
-  const [itemData, setItemData] = useState<Record<string, ItemProcurementData>>({});
-
   // New inventory item fields (single request only)
   const [newItemName, setNewItemName] = useState("");
   const [newItemPartNumber, setNewItemPartNumber] = useState("");
@@ -100,21 +78,6 @@ export default function StartProcurementDialog({
   const isSingle = requests.length === 1;
   const firstRequest = requests[0] ?? null;
 
-  // Fetch active vendors
-  const { data: vendors = [] } = useQuery<Vendor[]>({
-    queryKey: ["vendors-active-list"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vendors")
-        .select("id, vendor_name, contact_person, phone")
-        .eq("is_active", true)
-        .order("vendor_name");
-      if (error) throw error;
-      return (data ?? []) as Vendor[];
-    },
-    enabled: open,
-  });
-
   // Reset / initialise state when the dialog opens or requests change
   useEffect(() => {
     if (!open) {
@@ -123,7 +86,6 @@ export default function StartProcurementDialog({
       setInventoryChoice("existing");
       setSelectedInventoryId(null);
       setSelectedInventoryName("");
-      setItemData({});
       setNewItemName("");
       setNewItemPartNumber("");
       setNewItemCategory("");
@@ -131,16 +93,6 @@ export default function StartProcurementDialog({
       setNewItemLocation("");
       return;
     }
-
-    const init: Record<string, ItemProcurementData> = {};
-    for (const req of requests) {
-      init[req.id] = {
-        vendorId: (req as unknown as { vendor_id?: string }).vendor_id ?? "",
-        unitPrice: req.unit_price ? String(req.unit_price) : "",
-        quoteFile: null,
-      };
-    }
-    setItemData(init);
 
     if (isSingle && firstRequest) {
       if (firstRequest.inventory_id) {
@@ -154,48 +106,6 @@ export default function StartProcurementDialog({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  const updateItemField = <K extends keyof ItemProcurementData>(
-    requestId: string,
-    field: K,
-    value: ItemProcurementData[K],
-  ) => {
-    setItemData((prev) => ({
-      ...prev,
-      [requestId]: { ...prev[requestId], [field]: value },
-    }));
-  };
-
-  const validateQuoteFile = (file: File): boolean => {
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ variant: "destructive", title: "File Too Large", description: "Max 5 MB per file" });
-      return false;
-    }
-    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
-      toast({ variant: "destructive", title: "Invalid File Type", description: "PDF, JPG or PNG only" });
-      return false;
-    }
-    return true;
-  };
-
-  const uploadQuoteFile = async (
-    file: File,
-    reqId: string,
-  ): Promise<QuoteAttachment | null> => {
-    const ext = file.name.split(".").pop();
-    const path = `procurement-quotes/ir-${irNumber}-${reqId}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("documents").upload(path, file);
-    if (error) { console.error("Quote upload:", error); return null; }
-    const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path);
-    const item = itemData[reqId];
-    return {
-      file_url: publicUrl,
-      file_name: file.name,
-      vendor_name: vendors.find((v) => v.id === item?.vendorId)?.vendor_name ?? "",
-      price: item?.unitPrice ? parseFloat(item.unitPrice) : null,
-      uploaded_at: new Date().toISOString(),
-    };
-  };
 
   const handleSubmit = async () => {
     if (!requests.length) return;
@@ -222,26 +132,16 @@ export default function StartProcurementDialog({
       }
 
       for (const req of requests) {
-        const item = itemData[req.id];
-
-        let quotes: QuoteAttachment[] | undefined;
-        if (item?.quoteFile) {
-          const attachment = await uploadQuoteFile(item.quoteFile, req.id);
-          if (attachment) quotes = [attachment];
-        }
-
-        const unitPriceNum = item?.unitPrice ? parseFloat(item.unitPrice) : null;
         const reqInventoryId = isSingle ? inventoryId : req.inventory_id;
 
         await startProcurement.mutateAsync({
           id: req.id,
           ir_number: irNumber,
           urgency_level: urgencyLevel,
-          quotes,
           inventory_id: reqInventoryId ?? undefined,
           is_from_inventory: !!reqInventoryId,
-          vendor_id: item?.vendorId || null,
-          unit_price: unitPriceNum,
+          vendor_id: req.vendor_id || null,
+          unit_price: req.unit_price || null,
         });
       }
 
@@ -276,8 +176,8 @@ export default function StartProcurementDialog({
             </DialogTitle>
             <DialogDescription>
               {requests.length === 1
-                ? "Assign an IR number, set urgency, select a vendor and optionally upload a quote."
-                : `One shared IR number and urgency — assign vendor, price and quote per item independently.`}
+                ? "Assign an IR number and set urgency to move this item to the Cash Manager tab. Vendor and pricing details will be added during approval."
+                : `One shared IR number and urgency for ${requests.length} items. Vendor and pricing details will be added during Cash Manager approval.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -364,22 +264,8 @@ export default function StartProcurementDialog({
                           {firstRequest.job_card.job_number}
                         </span>
                       )}
-                      {(firstRequest.job_card as { vehicle?: { fleet_number?: string } } | undefined)?.vehicle?.fleet_number && (
-                        <span className="flex items-center gap-1">
-                          <Truck className="h-3 w-3" />
-                          {(firstRequest.job_card as { vehicle?: { fleet_number?: string } })?.vehicle?.fleet_number}
-                        </span>
-                      )}
                     </div>
                   </div>
-
-                  {/* Vendor + Price + Quote */}
-                  <ItemProcurementFields
-                    data={itemData[firstRequest.id] ?? { vendorId: "", unitPrice: "", quoteFile: null }}
-                    vendors={vendors}
-                    onChange={(f, v) => updateItemField(firstRequest.id, f, v)}
-                    onFileValidate={validateQuoteFile}
-                  />
 
                   {/* Inventory link */}
                   {!firstRequest.inventory_id ? (
@@ -492,7 +378,7 @@ export default function StartProcurementDialog({
                   {requests.map((req, idx) => (
                     <div
                       key={req.id}
-                      className="border rounded-lg p-4 space-y-4 bg-muted/10"
+                      className="border rounded-lg p-3 bg-muted/10"
                     >
                       {/* Item header */}
                       <div className="flex items-start gap-2">
@@ -515,22 +401,9 @@ export default function StartProcurementDialog({
                                 {req.job_card.job_number}
                               </span>
                             )}
-                            {(req.job_card as { vehicle?: { fleet_number?: string } } | undefined)?.vehicle?.fleet_number && (
-                              <span className="flex items-center gap-0.5">
-                                <Truck className="h-3 w-3" />
-                                {(req.job_card as { vehicle?: { fleet_number?: string } })?.vehicle?.fleet_number}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
-
-                      <ItemProcurementFields
-                        data={itemData[req.id] ?? { vendorId: "", unitPrice: "", quoteFile: null }}
-                        vendors={vendors}
-                        onChange={(f, v) => updateItemField(req.id, f, v)}
-                        onFileValidate={validateQuoteFile}
-                      />
                     </div>
                   ))}
                 </div>
@@ -569,112 +442,5 @@ export default function StartProcurementDialog({
         }}
       />
     </>
-  );
-}
-
-// ── Per-item vendor / price / quote section ───────────────────────────────
-
-interface ItemProcurementFieldsProps {
-  data: ItemProcurementData;
-  vendors: Vendor[];
-  onChange: <K extends keyof ItemProcurementData>(
-    field: K,
-    value: ItemProcurementData[K],
-  ) => void;
-  onFileValidate: (file: File) => boolean;
-}
-
-function ItemProcurementFields({
-  data,
-  vendors,
-  onChange,
-  onFileValidate,
-}: ItemProcurementFieldsProps) {
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {/* Vendor select */}
-      <div className="space-y-1 sm:col-span-2">
-        <Label className="text-xs flex items-center gap-1">
-          <Building2 className="h-3 w-3" />
-          Vendor
-        </Label>
-        <Select
-          value={data.vendorId || "__none__"}
-          onValueChange={(v) => onChange("vendorId", v === "__none__" ? "" : v)}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Select vendor…" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">
-              <span className="text-muted-foreground">No vendor assigned yet</span>
-            </SelectItem>
-            {vendors.map((v) => (
-              <SelectItem key={v.id} value={v.id}>
-                {v.vendor_name}
-                {v.contact_person && (
-                  <span className="text-xs text-muted-foreground ml-2">
-                    · {v.contact_person}
-                  </span>
-                )}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {vendors.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            No active vendors found — add vendors on the Vendors page first.
-          </p>
-        )}
-      </div>
-
-      {/* Unit price */}
-      <div className="space-y-1">
-        <Label className="text-xs">Unit Price (quoted)</Label>
-        <Input
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="0.00"
-          value={data.unitPrice}
-          onChange={(e) => onChange("unitPrice", e.target.value)}
-          className="h-9"
-        />
-      </div>
-
-      {/* Quote file */}
-      <div className="space-y-1">
-        <Label className="text-xs">Quote / Invoice (PDF, JPG, PNG — max 5 MB)</Label>
-        {data.quoteFile ? (
-          <div className="flex items-center gap-2 text-xs p-2 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded">
-            <FileText className="h-3.5 w-3.5 text-green-600 shrink-0" />
-            <span className="truncate flex-1">{data.quoteFile.name}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-5 w-5 p-0"
-              onClick={() => onChange("quoteFile", null)}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-        ) : (
-          <label className="flex items-center gap-2 cursor-pointer border border-dashed rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted/30 transition-colors">
-            <Upload className="h-3.5 w-3.5 shrink-0" />
-            <span>Click to upload quote</span>
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file && onFileValidate(file)) onChange("quoteFile", file);
-              }}
-            />
-          </label>
-        )}
-      </div>
-    </div>
   );
 }
