@@ -40,6 +40,16 @@ import {
     addSummarySheet,
     generatedSubtitle,
     statusColours,
+    styleHeaderRow,
+    styleBodyRow,
+    bodyFont,
+    headerFill,
+    headerFont,
+    headerAlign,
+    thinBorder,
+    addTitle,
+    addSubtitle,
+    colLetter,
 } from '@/utils/excelStyles';
 import AddDriverLeaveDialog from './AddDriverLeaveDialog';
 import DriverActivityModal from './DriverActivityModal';
@@ -140,100 +150,419 @@ export default function DriverPlanningSection() {
     const handleExportAllExcel = async () => {
         const wb = createWorkbook();
 
-        // Summary sheet with totals per driver
-        addSummarySheet(wb, 'Summary', {
-            title: `All Drivers – Work Pattern`,
-            subtitle: generatedSubtitle(monthLabel),
-            rows: [
-                ['Month', monthLabel],
-                ['Total Active Drivers', planningData.length],
-                ['', ''],
-                ...planningData.map((d): [string, string | number] => [
-                    d.driverName,
-                    `Work: ${d.daysAtWork} | Trip: ${d.daysOnTrip} | Leave: ${d.daysOnLeave} | Off Day: ${d.daysOffDay} | Off: ${d.daysOff} | Streak: ${d.maxConsecutiveWorkingDays}d`,
-                ]),
-            ],
+        // ━━━ Sheet 1: Driver Summary (statistics per driver) ━━━
+        const totalWorkDays = planningData.reduce((s, d) => s + d.daysAtWork, 0);
+        const totalTripDays = planningData.reduce((s, d) => s + d.daysOnTrip, 0);
+        const totalLeaveDays = planningData.reduce((s, d) => s + d.daysOnLeave, 0);
+        const totalOffDays = planningData.reduce((s, d) => s + d.daysOffDay, 0);
+        const overworkedDrivers = planningData.filter((d) => d.isOverworked);
+
+        addStyledSheet(wb, 'Driver Summary', {
+            title: `Driver Planning Summary – ${monthLabel}`,
+            subtitle: generatedSubtitle(`${planningData.length} active drivers • ${daysInMonth.length} days in month`),
+            headers: ['Driver', 'Work Days', 'Trip Days', 'Leave Days', 'Off Days (Applied)', 'Off (Unassigned)', 'Max Streak', 'Status', 'Trips This Month'],
+            rows: planningData.map((d) => [
+                d.driverName,
+                String(d.daysAtWork),
+                String(d.daysOnTrip),
+                String(d.daysOnLeave),
+                String(d.daysOffDay),
+                String(d.daysOff),
+                `${d.maxConsecutiveWorkingDays} days`,
+                d.isOverworked ? 'OVERWORKED' : 'Normal',
+                d.trips.length > 0 ? d.trips.map((t) => t.trip_number || 'N/A').join(', ') : 'None',
+            ]),
+            cellStyler: (rowData, colIndex) => {
+                if (colIndex === 8) {
+                    const status = String(rowData[7] || '').toLowerCase();
+                    if (status === 'overworked') return { ...bodyFont, color: { argb: 'DC2626' }, bold: true };
+                    return { ...bodyFont, color: { argb: '16A34A' } };
+                }
+                return undefined;
+            },
         });
 
-        // Daily status sheet — all drivers, all days
-        const headers = ['Driver', ...daysInMonth.map((d) => format(d, 'dd')), 'Work', 'Trip', 'Leave', 'Off Day', 'Off', 'Streak'];
-        const rows = planningData.map((driver) => {
-            const dayCells = daysInMonth.map((day) => {
-                const key = format(day, 'yyyy-MM-dd');
-                const status = driver.dayStatuses[key] || 'off';
-                const tripName = driver.tripDays[key];
-                const note = driver.dayNotes[key];
-                if (tripName) return `W (${tripName})`;
-                if (status === 'at_work' && note) return `W (${note})`;
-                if (status === 'at_work') return 'W';
-                if (status === 'leave') return 'L';
-                if (status === 'off_day') return 'OD';
-                return '';
-            });
-            return [
-                driver.driverName,
-                ...dayCells,
-                String(driver.daysAtWork),
-                String(driver.daysOnTrip),
-                String(driver.daysOnLeave),
-                String(driver.daysOffDay),
-                String(driver.daysOff),
-                `${driver.maxConsecutiveWorkingDays}d`,
+        // ━━━ Sheet 2: Monthly Calendar Grid (colorful calendar-style) ━━━
+        {
+            const calWs = wb.addWorksheet('Monthly Calendar');
+            const numDays = daysInMonth.length;
+            const lastColStr = colLetter(numDays + 7); // driver + days + 6 summary cols
+
+            addTitle(calWs, `All Drivers – Monthly Calendar – ${monthLabel}`, lastColStr);
+            addSubtitle(calWs, generatedSubtitle(monthLabel), lastColStr);
+
+            // Status fill colours (ARGB)
+            const FILL_WORK = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'D1FAE5' } };   // emerald-100
+            const FILL_TRIP = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'A7F3D0' } };   // emerald-200
+            const FILL_LEAVE = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'BAE6FD' } };  // sky-200
+            const FILL_OFF_DAY = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'E9D5FF' } }; // purple-200
+            const FILL_OFF = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'F1F5F9' } };    // slate-100
+            const FILL_WEEKEND = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FEF3C7' } }; // amber-100 (weekend header tint)
+
+            const FONT_WORK = { size: 8, name: 'Calibri', color: { argb: '065F46' }, bold: true } as const;   // emerald-800
+            const FONT_TRIP = { size: 8, name: 'Calibri', color: { argb: '064E3B' }, bold: true } as const;   // emerald-900
+            const FONT_LEAVE = { size: 8, name: 'Calibri', color: { argb: '0369A1' }, bold: true } as const;  // sky-700
+            const FONT_OFF_DAY = { size: 8, name: 'Calibri', color: { argb: '6B21A8' }, bold: true } as const; // purple-800
+            const FONT_OFF = { size: 8, name: 'Calibri', color: { argb: '94A3B8' } } as const;               // slate-400
+
+            // ── Legend row (row 3) ──
+            const legendRow = calWs.getRow(3);
+            const legends = [
+                { label: '■ Work', fill: FILL_WORK, font: FONT_WORK },
+                { label: '■ Trip', fill: FILL_TRIP, font: FONT_TRIP },
+                { label: '■ Leave', fill: FILL_LEAVE, font: FONT_LEAVE },
+                { label: '■ Off Day', fill: FILL_OFF_DAY, font: FONT_OFF_DAY },
+                { label: '■ Off', fill: FILL_OFF, font: FONT_OFF },
+                { label: '■ Weekend', fill: FILL_WEEKEND, font: { size: 8, name: 'Calibri', color: { argb: '92400E' } } as const },
             ];
-        });
+            legends.forEach((l, i) => {
+                const c = legendRow.getCell(2 + i);
+                c.value = l.label;
+                c.fill = l.fill;
+                c.font = l.font;
+                c.border = thinBorder;
+                c.alignment = { horizontal: 'center', vertical: 'middle' };
+            });
+            legendRow.height = 18;
 
-        addStyledSheet(wb, 'Daily Status', {
-            title: `All Drivers – Daily Status`,
-            subtitle: generatedSubtitle(monthLabel),
-            headers,
-            rows,
-        });
+            // ── Header row (row 4) ──
+            const hdrRow = 4;
+            const calHeaders = ['Driver', ...daysInMonth.map((d) => format(d, 'dd')), 'Work', 'Trip', 'Leave', 'OD', 'Off', 'Str'];
+            calWs.getRow(hdrRow).values = calHeaders;
+            styleHeaderRow(calWs, hdrRow);
 
-        // Per-driver detail sheets (one sheet per driver with daily breakdown)
-        for (const driver of planningData) {
-            const safeName = driver.driverName.replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 28);
-            addStyledSheet(wb, safeName, {
-                title: `${driver.driverName} – Daily Status`,
-                subtitle: generatedSubtitle(monthLabel),
-                headers: ['Date', 'Day', 'Status', 'Trip', 'Location'],
-                rows: daysInMonth.map((day) => {
+            // Sub-header with day names (row 5)
+            const dayNameRow = calWs.getRow(5);
+            dayNameRow.getCell(1).value = '';
+            daysInMonth.forEach((d, i) => {
+                const c = dayNameRow.getCell(i + 2);
+                c.value = format(d, 'EEE');
+                const isWeekend = getDay(d) === 0 || getDay(d) === 6;
+                c.fill = isWeekend ? FILL_WEEKEND : headerFill;
+                c.font = { size: 7, name: 'Calibri', bold: true, color: { argb: isWeekend ? '92400E' : 'FFFFFF' } };
+                c.alignment = headerAlign;
+                c.border = thinBorder;
+            });
+            // Style summary header cells on day-name row
+            for (let s = 0; s < 6; s++) {
+                const c = dayNameRow.getCell(numDays + 2 + s);
+                c.fill = headerFill;
+                c.font = headerFont;
+                c.alignment = headerAlign;
+                c.border = thinBorder;
+            }
+            dayNameRow.height = 16;
+
+            // ── Body rows (row 6+) ──
+            planningData.forEach((driver, driverIdx) => {
+                const rowNum = 6 + driverIdx;
+                const row = calWs.getRow(rowNum);
+
+                // Driver name
+                const nameCell = row.getCell(1);
+                nameCell.value = driver.driverName;
+                nameCell.font = { size: 9, name: 'Calibri', bold: true };
+                nameCell.border = thinBorder;
+                nameCell.alignment = { vertical: 'middle' };
+
+                // Day cells with colour fills
+                daysInMonth.forEach((day, dayIdx) => {
                     const key = format(day, 'yyyy-MM-dd');
                     const status = driver.dayStatuses[key] || 'off';
-                    return [
-                        format(day, 'yyyy-MM-dd'),
-                        format(day, 'EEEE'),
-                        DAY_STATUS_LABELS[status],
-                        driver.tripDays[key] || '',
-                        driver.dayNotes[key] || '',
-                    ];
-                }),
+                    const tripName = driver.tripDays[key];
+                    const note = driver.dayNotes[key];
+                    const isWeekend = getDay(day) === 0 || getDay(day) === 6;
+
+                    const cell = row.getCell(dayIdx + 2);
+                    cell.border = thinBorder;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+                    // Determine label, fill, and font based on status
+                    if (tripName) {
+                        cell.value = tripName;
+                        cell.fill = FILL_TRIP;
+                        cell.font = FONT_TRIP;
+                    } else if (status === 'at_work' && note) {
+                        cell.value = note;
+                        cell.fill = FILL_WORK;
+                        cell.font = FONT_WORK;
+                    } else if (status === 'at_work') {
+                        cell.value = '✓';
+                        cell.fill = FILL_WORK;
+                        cell.font = FONT_WORK;
+                    } else if (status === 'leave') {
+                        cell.value = 'L';
+                        cell.fill = FILL_LEAVE;
+                        cell.font = FONT_LEAVE;
+                    } else if (status === 'off_day') {
+                        cell.value = 'OD';
+                        cell.fill = FILL_OFF_DAY;
+                        cell.font = FONT_OFF_DAY;
+                    } else {
+                        cell.value = isWeekend ? '' : '—';
+                        cell.fill = isWeekend ? FILL_WEEKEND : FILL_OFF;
+                        cell.font = FONT_OFF;
+                    }
+                });
+
+                // Summary cells
+                const summaryData = [
+                    { val: driver.daysAtWork, font: FONT_WORK },
+                    { val: driver.daysOnTrip, font: FONT_TRIP },
+                    { val: driver.daysOnLeave, font: FONT_LEAVE },
+                    { val: driver.daysOffDay, font: FONT_OFF_DAY },
+                    { val: driver.daysOff, font: FONT_OFF },
+                    { val: `${driver.maxConsecutiveWorkingDays}d`, font: driver.isOverworked ? { size: 9, name: 'Calibri', color: { argb: 'DC2626' }, bold: true } as const : { size: 9, name: 'Calibri' } as const },
+                ];
+                summaryData.forEach((s, i) => {
+                    const c = row.getCell(numDays + 2 + i);
+                    c.value = s.val;
+                    c.font = s.font;
+                    c.border = thinBorder;
+                    c.alignment = { horizontal: 'center', vertical: 'middle' };
+                });
+
+                // Overworked row highlight
+                if (driver.isOverworked) {
+                    nameCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEE2E2' } };
+                    nameCell.font = { size: 9, name: 'Calibri', bold: true, color: { argb: 'DC2626' } };
+                }
+
+                row.height = 22;
+            });
+
+            // Column widths
+            calWs.getColumn(1).width = 22;
+            for (let d = 0; d < numDays; d++) calWs.getColumn(d + 2).width = 12;
+            for (let s = 0; s < 6; s++) calWs.getColumn(numDays + 2 + s).width = 7;
+
+            // Freeze panes
+            calWs.views = [{ state: 'frozen', xSplit: 1, ySplit: 5 }];
+
+            // Auto-filter on header row
+            const lastDataRow = 5 + planningData.length;
+            calWs.autoFilter = { from: `A${hdrRow}`, to: `${lastColStr}${lastDataRow}` };
+        }
+
+        // ━━━ Sheet 3: Trip Assignments (all trips with details) ━━━
+        const allTrips: (string | number)[][] = [];
+        for (const driver of planningData) {
+            for (const trip of driver.trips) {
+                allTrips.push([
+                    driver.driverName,
+                    trip.trip_number || '—',
+                    trip.origin || '—',
+                    trip.destination || '—',
+                    trip.departure_date ? format(new Date(trip.departure_date), 'dd MMM yyyy') : '—',
+                    trip.arrival_date ? format(new Date(trip.arrival_date), 'dd MMM yyyy') : '—',
+                    trip.status || '—',
+                    trip.vehicle_id || '—',
+                ]);
+            }
+        }
+        if (allTrips.length > 0) {
+            addStyledSheet(wb, 'Trip Assignments', {
+                title: `Trip Assignments – ${monthLabel}`,
+                subtitle: generatedSubtitle(`${allTrips.length} trips across ${planningData.filter((d) => d.trips.length > 0).length} drivers`),
+                headers: ['Driver', 'Load Ref / Trip #', 'Origin', 'Destination', 'Departure', 'Arrival', 'Status', 'Vehicle'],
+                rows: allTrips,
                 cellStyler: (rowData, colIndex) => {
-                    if (colIndex === 3) {
-                        const status = String(rowData[2] || '').toLowerCase().replace(/\s+/g, '_');
-                        return statusColours[status];
+                    if (colIndex === 7) {
+                        const status = String(rowData[6] || '').toLowerCase();
+                        if (status === 'completed') return { ...bodyFont, color: { argb: '16A34A' }, bold: true };
+                        if (status === 'in_progress' || status === 'in progress') return { ...bodyFont, color: { argb: '2563EB' }, bold: true };
+                        if (status === 'scheduled') return { ...bodyFont, color: { argb: 'D97706' }, bold: true };
                     }
                     return undefined;
                 },
             });
         }
 
-        await saveWorkbook(wb, `All_Drivers_Work_Pattern_${format(selectedMonth, 'yyyy_MM')}.xlsx`);
+        // ━━━ Sheet 4: Leave Schedule ━━━
+        const allLeave: (string | number)[][] = [];
+        for (const driver of planningData) {
+            for (const leave of driver.leaveEntries) {
+                const startDate = new Date(leave.start_date);
+                const endDate = new Date(leave.end_date);
+                const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                allLeave.push([
+                    driver.driverName,
+                    leave.leave_type.charAt(0).toUpperCase() + leave.leave_type.slice(1),
+                    format(startDate, 'dd MMM yyyy'),
+                    format(endDate, 'dd MMM yyyy'),
+                    `${days} days`,
+                    leave.status.charAt(0).toUpperCase() + leave.status.slice(1),
+                    leave.notes || '—',
+                ]);
+            }
+        }
+        if (allLeave.length > 0) {
+            addStyledSheet(wb, 'Leave Schedule', {
+                title: `Leave Schedule – ${monthLabel}`,
+                subtitle: generatedSubtitle(`${allLeave.length} leave entries`),
+                headers: ['Driver', 'Leave Type', 'Start Date', 'End Date', 'Duration', 'Status', 'Notes'],
+                rows: allLeave,
+                cellStyler: (rowData, colIndex) => {
+                    if (colIndex === 6) {
+                        const status = String(rowData[5] || '').toLowerCase();
+                        if (status === 'approved') return { ...bodyFont, color: { argb: '16A34A' }, bold: true };
+                        if (status === 'planned') return { ...bodyFont, color: { argb: 'D97706' }, bold: true };
+                        if (status === 'rejected') return { ...bodyFont, color: { argb: 'DC2626' }, bold: true };
+                    }
+                    return undefined;
+                },
+            });
+        }
+
+        // ━━━ Sheet 5: Fleet Overview KPIs ━━━
+        addSummarySheet(wb, 'Fleet Overview', {
+            title: `Fleet Overview – ${monthLabel}`,
+            subtitle: generatedSubtitle(monthLabel),
+            rows: [
+                ['Report Period', monthLabel],
+                ['Total Active Drivers', planningData.length],
+                ['Days in Month', daysInMonth.length],
+                ['', ''],
+                ['── Attendance ──', ''],
+                ['Total Work Days (all drivers)', totalWorkDays],
+                ['Total Trip Days (all drivers)', totalTripDays],
+                ['Total Leave Days (all drivers)', totalLeaveDays],
+                ['Total Off Days Applied', totalOffDays],
+                ['Avg Work Days per Driver', planningData.length > 0 ? Math.round(totalWorkDays / planningData.length) : 0],
+                ['Avg Trip Days per Driver', planningData.length > 0 ? Math.round(totalTripDays / planningData.length) : 0],
+                ['', ''],
+                ['── Overwork Alerts ──', ''],
+                ['Drivers Flagged Overworked', overworkedDrivers.length],
+                ...(overworkedDrivers.map((d): [string, string | number] => [`  ⚠ ${d.driverName}`, `${d.maxConsecutiveWorkingDays} consecutive days`])),
+                ['', ''],
+                ['── Trips ──', ''],
+                ['Total Trips This Month', allTrips.length],
+                ['Drivers With Trips', planningData.filter((d) => d.trips.length > 0).length],
+                ['Drivers Without Trips', planningData.filter((d) => d.trips.length === 0).length],
+            ],
+        });
+
+        // ━━━ Per-driver detail sheets ━━━
+        for (const driver of planningData) {
+            const safeName = driver.driverName.replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 28);
+            const ws = addStyledSheet(wb, safeName, {
+                title: `${driver.driverName} – Complete Schedule`,
+                subtitle: generatedSubtitle(`${monthLabel} • Work: ${driver.daysAtWork}d • Trip: ${driver.daysOnTrip}d • Leave: ${driver.daysOnLeave}d • Off Day: ${driver.daysOffDay}d • Off: ${driver.daysOff}d • Streak: ${driver.maxConsecutiveWorkingDays}d`),
+                headers: ['Date', 'Day', 'Status', 'Load Ref / Trip #', 'Location', 'Trip Route', 'Notes'],
+                rows: daysInMonth.map((day) => {
+                    const key = format(day, 'yyyy-MM-dd');
+                    const status = driver.dayStatuses[key] || 'off';
+                    const tripRef = driver.tripDays[key] || '';
+                    const location = driver.dayNotes[key] || '';
+                    // Find matching trip for route info
+                    const matchingTrip = driver.trips.find((t) => {
+                        if (!t.departure_date) return false;
+                        const dep = t.departure_date;
+                        const arr = t.arrival_date || t.departure_date;
+                        return key >= dep && key <= arr;
+                    });
+                    const route = matchingTrip ? `${matchingTrip.origin || '?'} → ${matchingTrip.destination || '?'}` : '';
+                    const notes = matchingTrip?.status ? `Status: ${matchingTrip.status}` : '';
+                    return [
+                        format(day, 'dd MMM yyyy'),
+                        format(day, 'EEEE'),
+                        DAY_STATUS_LABELS[status],
+                        tripRef,
+                        location,
+                        route,
+                        notes,
+                    ];
+                }),
+                cellStyler: (rowData, colIndex) => {
+                    if (colIndex === 3) {
+                        const status = String(rowData[2] || '').toLowerCase().replace(/\s+/g, '_');
+                        if (status === 'at_work') return { ...bodyFont, color: { argb: '16A34A' }, bold: true };
+                        if (status === 'on_trip') return { ...bodyFont, color: { argb: '059669' }, bold: true };
+                        if (status === 'on_leave') return { ...bodyFont, color: { argb: '0284C7' }, bold: true };
+                        if (status === 'off_day') return { ...bodyFont, color: { argb: '7C3AED' }, bold: true };
+                        return statusColours[status];
+                    }
+                    return undefined;
+                },
+            });
+
+            // Add trip summary below the daily grid if the driver has trips
+            if (driver.trips.length > 0) {
+                const lastRow = ws.lastRow?.number || 0;
+                const gapRow = lastRow + 2;
+                ws.getCell(`A${gapRow}`).value = 'Trip Details';
+                ws.getCell(`A${gapRow}`).font = { bold: true, size: 11, name: 'Calibri' };
+                const tripHeaderRow = gapRow + 1;
+                const tripHeaders = ['Load Ref / Trip #', 'Origin', 'Destination', 'Departure', 'Arrival', 'Status', 'Vehicle'];
+                ws.getRow(tripHeaderRow).values = tripHeaders;
+                styleHeaderRow(ws, tripHeaderRow);
+                driver.trips.forEach((trip, i) => {
+                    const r = ws.getRow(tripHeaderRow + 1 + i);
+                    r.values = [
+                        trip.trip_number || '—',
+                        trip.origin || '—',
+                        trip.destination || '—',
+                        trip.departure_date ? format(new Date(trip.departure_date), 'dd MMM yyyy') : '—',
+                        trip.arrival_date ? format(new Date(trip.arrival_date), 'dd MMM yyyy') : '—',
+                        trip.status || '—',
+                        trip.vehicle_id || '—',
+                    ];
+                    styleBodyRow(ws, tripHeaderRow + 1 + i, i % 2 === 1);
+                });
+            }
+        }
+
+        await saveWorkbook(wb, `Driver_Planning_Schedule_${format(selectedMonth, 'yyyy_MM')}.xlsx`);
     };
 
     // ─── Bulk Export: All Drivers PDF ────────────────────────────────────────
 
     const handleExportAllPDF = () => {
         const doc = new jsPDF({ orientation: 'landscape' });
+        const brandColor: [number, number, number] = [31, 56, 100];
+        const greenColor: [number, number, number] = [22, 163, 74];
+        const blueColor: [number, number, number] = [37, 99, 235];
+        const amberColor: [number, number, number] = [217, 119, 6];
+        const redColor: [number, number, number] = [220, 38, 38];
 
-        doc.setFontSize(16);
-        doc.text(`All Drivers – Work Pattern`, 14, 20);
-        doc.setFontSize(10);
-        doc.text(monthLabel, 14, 28);
+        // ━━━ Page 1: Cover / Fleet Overview ━━━
+        doc.setFillColor(...brandColor);
+        doc.rect(0, 0, 297, 40, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.text('Driver Planning Schedule', 14, 22);
+        doc.setFontSize(12);
+        doc.text(monthLabel, 14, 33);
+        doc.setTextColor(0, 0, 0);
 
-        // Summary table
+        // Fleet statistics
+        const totalWorkDaysPdf = planningData.reduce((s, d) => s + d.daysAtWork, 0);
+        const totalTripDaysPdf = planningData.reduce((s, d) => s + d.daysOnTrip, 0);
+        const totalLeaveDaysPdf = planningData.reduce((s, d) => s + d.daysOnLeave, 0);
+        const overworkedPdf = planningData.filter((d) => d.isOverworked);
+        const driversWithTrips = planningData.filter((d) => d.trips.length > 0).length;
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Fleet Overview', 14, 52);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const stats = [
+            `Active Drivers: ${planningData.length}`,
+            `Total Work Days: ${totalWorkDaysPdf}  |  Total Trip Days: ${totalTripDaysPdf}  |  Total Leave Days: ${totalLeaveDaysPdf}`,
+            `Drivers With Trips: ${driversWithTrips}  |  Drivers Without Trips: ${planningData.length - driversWithTrips}`,
+            `Overworked Alerts: ${overworkedPdf.length}${overworkedPdf.length > 0 ? ` (${overworkedPdf.map((d) => d.driverName).join(', ')})` : ''}`,
+        ];
+        stats.forEach((s, i) => doc.text(s, 14, 60 + i * 6));
+
+        // Summary table with all driver stats
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Driver Summary', 14, 88);
+
         autoTable(doc, {
-            startY: 34,
-            head: [['Driver', 'Work', 'Trip', 'Leave', 'Off Day', 'Off', 'Streak']],
+            startY: 92,
+            head: [['Driver', 'Work', 'Trip', 'Leave', 'Off Day', 'Off', 'Streak', 'Status', 'Trips']],
             body: planningData.map((d) => [
                 d.driverName,
                 String(d.daysAtWork),
@@ -242,41 +571,216 @@ export default function DriverPlanningSection() {
                 String(d.daysOffDay),
                 String(d.daysOff),
                 `${d.maxConsecutiveWorkingDays}d`,
+                d.isOverworked ? 'OVERWORKED' : 'Normal',
+                d.trips.length > 0 ? d.trips.map((t) => t.trip_number || '—').join(', ') : 'None',
             ]),
             theme: 'grid',
-            headStyles: { fillColor: [31, 56, 100] },
-            styles: { fontSize: 8 },
+            headStyles: { fillColor: brandColor, fontSize: 7, halign: 'center' },
+            styles: { fontSize: 7, cellPadding: 2 },
+            columnStyles: {
+                0: { fontStyle: 'bold', cellWidth: 35 },
+                7: { halign: 'center' },
+                8: { cellWidth: 50 },
+            },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === 7) {
+                    if (data.cell.raw === 'OVERWORKED') {
+                        data.cell.styles.textColor = redColor;
+                        data.cell.styles.fontStyle = 'bold';
+                    } else {
+                        data.cell.styles.textColor = greenColor;
+                    }
+                }
+            },
         });
 
-        // Daily grid per driver on subsequent pages
+        // ━━━ Page 2: Trip Assignments ━━━
+        const allTripsPdf: string[][] = [];
         for (const driver of planningData) {
+            for (const trip of driver.trips) {
+                allTripsPdf.push([
+                    driver.driverName,
+                    trip.trip_number || '—',
+                    trip.origin || '—',
+                    trip.destination || '—',
+                    trip.departure_date ? format(new Date(trip.departure_date), 'dd MMM yyyy') : '—',
+                    trip.arrival_date ? format(new Date(trip.arrival_date), 'dd MMM yyyy') : '—',
+                    trip.status || '—',
+                ]);
+            }
+        }
+
+        if (allTripsPdf.length > 0) {
             doc.addPage();
-            doc.setFontSize(14);
-            doc.text(driver.driverName, 14, 16);
-            doc.setFontSize(9);
-            doc.text(`Work: ${driver.daysAtWork}  |  Trip: ${driver.daysOnTrip}  |  Leave: ${driver.daysOnLeave}  |  Off Day: ${driver.daysOffDay}  |  Off: ${driver.daysOff}`, 14, 23);
+            doc.setFillColor(...brandColor);
+            doc.rect(0, 0, 297, 14, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(11);
+            doc.text(`Trip Assignments – ${monthLabel}`, 14, 10);
+            doc.setTextColor(0, 0, 0);
 
             autoTable(doc, {
-                startY: 28,
-                head: [['Date', 'Day', 'Status', 'Trip', 'Location']],
+                startY: 20,
+                head: [['Driver', 'Load Ref / Trip #', 'Origin', 'Destination', 'Departure', 'Arrival', 'Status']],
+                body: allTripsPdf,
+                theme: 'grid',
+                headStyles: { fillColor: brandColor, fontSize: 8 },
+                styles: { fontSize: 8, cellPadding: 2.5 },
+                columnStyles: { 0: { fontStyle: 'bold' } },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 6) {
+                        const val = String(data.cell.raw || '').toLowerCase();
+                        if (val === 'completed') data.cell.styles.textColor = greenColor;
+                        else if (val.includes('progress')) data.cell.styles.textColor = blueColor;
+                        else if (val === 'scheduled') data.cell.styles.textColor = amberColor;
+                    }
+                },
+            });
+        }
+
+        // ━━━ Per-driver detail pages ━━━
+        for (const driver of planningData) {
+            doc.addPage();
+
+            // Driver header bar
+            doc.setFillColor(...brandColor);
+            doc.rect(0, 0, 297, 14, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(12);
+            doc.text(driver.driverName, 14, 10);
+            doc.setFontSize(8);
+            doc.text(`Work: ${driver.daysAtWork}  |  Trip: ${driver.daysOnTrip}  |  Leave: ${driver.daysOnLeave}  |  Off Day: ${driver.daysOffDay}  |  Off: ${driver.daysOff}  |  Streak: ${driver.maxConsecutiveWorkingDays}d`, 120, 10);
+            doc.setTextColor(0, 0, 0);
+
+            // Overwork warning
+            let currentY = 18;
+            if (driver.isOverworked) {
+                doc.setTextColor(...redColor);
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`⚠ OVERWORK ALERT: ${driver.maxConsecutiveWorkingDays} consecutive working days`, 14, currentY);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(0, 0, 0);
+                currentY += 6;
+            }
+
+            // Daily schedule table
+            autoTable(doc, {
+                startY: currentY + 2,
+                head: [['Date', 'Day', 'Status', 'Load Ref / Trip #', 'Location', 'Route']],
                 body: daysInMonth.map((day) => {
                     const key = format(day, 'yyyy-MM-dd');
                     const status = driver.dayStatuses[key] || 'off';
+                    const tripRef = driver.tripDays[key] || '';
+                    const location = driver.dayNotes[key] || '';
+                    const matchingTrip = driver.trips.find((t) => {
+                        if (!t.departure_date) return false;
+                        const dep = t.departure_date;
+                        const arr = t.arrival_date || t.departure_date;
+                        return key >= dep && key <= arr;
+                    });
+                    const route = matchingTrip ? `${matchingTrip.origin || '?'} → ${matchingTrip.destination || '?'}` : '';
                     return [
                         format(day, 'dd MMM'),
                         format(day, 'EEE'),
                         DAY_STATUS_LABELS[status],
-                        driver.tripDays[key] || '',
-                        driver.dayNotes[key] || '',
+                        tripRef,
+                        location,
+                        route,
                     ];
                 }),
                 theme: 'grid',
-                headStyles: { fillColor: [31, 56, 100] },
-                styles: { fontSize: 7 },
+                headStyles: { fillColor: brandColor, fontSize: 7.5, halign: 'center' },
+                styles: { fontSize: 7, cellPadding: 1.5 },
+                columnStyles: {
+                    0: { cellWidth: 20 },
+                    1: { cellWidth: 14 },
+                    2: { cellWidth: 22 },
+                    3: { cellWidth: 40 },
+                    4: { cellWidth: 30 },
+                    5: { cellWidth: 50 },
+                },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 2) {
+                        const val = String(data.cell.raw || '').toLowerCase().replace(/\s+/g, '_');
+                        if (val === 'at_work') data.cell.styles.textColor = greenColor;
+                        else if (val === 'on_trip') data.cell.styles.textColor = [5, 150, 105];
+                        else if (val === 'on_leave') data.cell.styles.textColor = blueColor;
+                        else if (val === 'off_day') data.cell.styles.textColor = [124, 58, 237];
+                    }
+                },
             });
+
+            // Trip details section if driver has trips
+            if (driver.trips.length > 0) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const lastTableY = (doc as any).lastAutoTable?.finalY || 160;
+                const tripStartY = lastTableY + 8;
+
+                if (tripStartY < 175) {
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Trip Details', 14, tripStartY);
+                    doc.setFont('helvetica', 'normal');
+
+                    autoTable(doc, {
+                        startY: tripStartY + 3,
+                        head: [['Load Ref / Trip #', 'Origin', 'Destination', 'Departure', 'Arrival', 'Status']],
+                        body: driver.trips.map((trip) => [
+                            trip.trip_number || '—',
+                            trip.origin || '—',
+                            trip.destination || '—',
+                            trip.departure_date ? format(new Date(trip.departure_date), 'dd MMM yyyy') : '—',
+                            trip.arrival_date ? format(new Date(trip.arrival_date), 'dd MMM yyyy') : '—',
+                            trip.status || '—',
+                        ]),
+                        theme: 'grid',
+                        headStyles: { fillColor: [5, 150, 105], fontSize: 7.5 },
+                        styles: { fontSize: 7.5, cellPadding: 2 },
+                    });
+                }
+            }
+
+            // Leave entries if driver has leave
+            if (driver.leaveEntries.length > 0) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const lastY = (doc as any).lastAutoTable?.finalY || 160;
+                const leaveStartY = lastY + 8;
+
+                if (leaveStartY < 185) {
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Leave Entries', 14, leaveStartY);
+                    doc.setFont('helvetica', 'normal');
+
+                    autoTable(doc, {
+                        startY: leaveStartY + 3,
+                        head: [['Type', 'Start', 'End', 'Status', 'Notes']],
+                        body: driver.leaveEntries.map((leave) => [
+                            leave.leave_type.charAt(0).toUpperCase() + leave.leave_type.slice(1),
+                            format(new Date(leave.start_date), 'dd MMM yyyy'),
+                            format(new Date(leave.end_date), 'dd MMM yyyy'),
+                            leave.status.charAt(0).toUpperCase() + leave.status.slice(1),
+                            leave.notes || '—',
+                        ]),
+                        theme: 'grid',
+                        headStyles: { fillColor: [2, 132, 199], fontSize: 7.5 },
+                        styles: { fontSize: 7.5, cellPadding: 2 },
+                    });
+                }
+            }
         }
 
-        doc.save(`All_Drivers_Work_Pattern_${format(selectedMonth, 'yyyy_MM')}.pdf`);
+        // Footer with generation info on last page
+        const pageCount = doc.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(7);
+            doc.setTextColor(150, 150, 150);
+            doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' })} • Page ${i} of ${pageCount}`, 14, 200);
+        }
+
+        doc.save(`Driver_Planning_Schedule_${format(selectedMonth, 'yyyy_MM')}.pdf`);
     };
 
     const modalDriverData = planningData.find((d) => d.driverName === modalDriver) || null;

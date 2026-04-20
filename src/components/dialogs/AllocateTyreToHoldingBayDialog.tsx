@@ -54,7 +54,7 @@ export default function AllocateTyreToHoldingBayDialog({
     dot_code: "",
     current_tread_depth: "",
     initial_tread_depth: "",
-    condition: "new" as Database["public"]["Enums"]["tyre_condition"],
+    condition: "excellent" as Database["public"]["Enums"]["tyre_condition"],
     purchase_cost_zar: "",
     purchase_cost_usd: "",
     notes: "",
@@ -80,7 +80,7 @@ export default function AllocateTyreToHoldingBayDialog({
         dot_code: "",
         current_tread_depth: "",
         initial_tread_depth: "",
-        condition: "new",
+        condition: "excellent",
         purchase_cost_zar: request.unit_price ? String(request.unit_price) : "",
         purchase_cost_usd: "",
         notes: vehicleFleetNumber
@@ -308,10 +308,11 @@ export default function AllocateTyreToHoldingBayDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="excellent">Excellent (New)</SelectItem>
                   <SelectItem value="good">Good</SelectItem>
                   <SelectItem value="fair">Fair</SelectItem>
-                  <SelectItem value="worn">Worn</SelectItem>
+                  <SelectItem value="poor">Poor</SelectItem>
+                  <SelectItem value="needs_replacement">Needs Replacement</SelectItem>
                 </SelectContent>
               </Select>
             </div>
