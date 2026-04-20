@@ -349,6 +349,9 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
                   parts={parts}
                   onRefresh={refetchParts}
                   isTyreJobCard={isTyreJobCard}
+                  vehicleId={jobCard.vehicle_id}
+                  fleetNumber={vehicle?.fleet_number}
+                  jobNumber={jobCard.job_number}
                 />
               </TabsContent>
 

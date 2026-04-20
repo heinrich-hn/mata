@@ -534,6 +534,7 @@ const JobCardDetails = () => {
                   fleetNumber={vehicle?.fleet_number}
                   jobNumber={jobCard.job_number}
                   isTyreJobCard={inspection?.inspection_type === "tyre"}
+                  vehicleId={jobCard.vehicle_id}
                 />
               </CardContent>
             </CollapsibleContent>

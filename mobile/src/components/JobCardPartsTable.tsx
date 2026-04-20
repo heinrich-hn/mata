@@ -19,9 +19,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { DollarSign, FileText, Loader2, Package, Pencil, Plus, Trash2, Wrench } from "lucide-react";
+import { CircleDot, DollarSign, FileText, Loader2, Package, Pencil, Plus, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
 import AddPartWithCostDialog from "./dialogs/AddPartWithCostDialog";
+import AddTyresByPositionDialog from "./dialogs/AddTyresByPositionDialog";
 import InventoryDetailDialog from "./dialogs/InventoryDetailDialog";
 
 interface PartsRequest {
@@ -48,6 +49,8 @@ interface PartsRequest {
   document_name?: string | null;
   is_service?: boolean | null;
   service_description?: string | null;
+  tyre_id?: string | null;
+  target_position?: string | null;
   vendors?: {
     id: string;
     name: string;
@@ -69,10 +72,15 @@ interface JobCardPartsTableProps {
   jobCardId: string;
   parts: PartsRequest[];
   onRefresh: () => void;
+  isTyreJobCard?: boolean;
+  vehicleId?: string | null;
+  fleetNumber?: string | null;
+  jobNumber?: string | null;
 }
 
-const JobCardPartsTable = ({ jobCardId, parts, onRefresh }: JobCardPartsTableProps) => {
+const JobCardPartsTable = ({ jobCardId, parts, onRefresh, isTyreJobCard = false, vehicleId = null, fleetNumber = null, jobNumber = null }: JobCardPartsTableProps) => {
   const [showRequestParts, setShowRequestParts] = useState(false);
+  const [tyrePositionDialogOpen, setTyrePositionDialogOpen] = useState(false);
   const [selectedInventoryId, setSelectedInventoryId] = useState<string | null>(null);
   const [showInventoryDetail, setShowInventoryDetail] = useState(false);
   const [deletePartId, setDeletePartId] = useState<string | null>(null);
@@ -160,10 +168,18 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh }: JobCardPartsTablePro
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Parts & Services</CardTitle>
-        <Button onClick={() => setShowRequestParts(true)} size="sm">
-          <Plus className="h-4 w-4 mr-1" />
-          Add Part/Service
-        </Button>
+        <div className="flex items-center gap-2">
+          {isTyreJobCard && (
+            <Button onClick={() => setTyrePositionDialogOpen(true)} size="sm" variant="outline" className="border-purple-300 text-purple-700">
+              <CircleDot className="h-3.5 w-3.5 mr-1" />
+              By Position
+            </Button>
+          )}
+          <Button onClick={() => setShowRequestParts(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Add Part
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {parts.length === 0 ? (
@@ -570,6 +586,19 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh }: JobCardPartsTablePro
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Tyre Position Dialog */}
+        {isTyreJobCard && (
+          <AddTyresByPositionDialog
+            open={tyrePositionDialogOpen}
+            onOpenChange={setTyrePositionDialogOpen}
+            jobCardId={jobCardId}
+            vehicleId={vehicleId}
+            fleetNumber={fleetNumber}
+            jobNumber={jobNumber}
+            onComplete={onRefresh}
+          />
+        )}
       </CardContent>
     </Card>
   );

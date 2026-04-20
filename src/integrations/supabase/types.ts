@@ -7159,6 +7159,7 @@ export type Database = {
           service_description: string | null
           status: string
           total_price: number | null
+          target_position: string | null
           tyre_id: string | null
           unit_price: number | null
           updated_at: string | null
@@ -7205,6 +7206,7 @@ export type Database = {
           service_description?: string | null
           status?: string
           total_price?: number | null
+          target_position?: string | null
           tyre_id?: string | null
           unit_price?: number | null
           updated_at?: string | null
@@ -7251,6 +7253,7 @@ export type Database = {
           service_description?: string | null
           status?: string
           total_price?: number | null
+          target_position?: string | null
           tyre_id?: string | null
           unit_price?: number | null
           updated_at?: string | null

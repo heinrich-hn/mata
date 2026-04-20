@@ -7009,6 +7009,7 @@ export type Database = {
           sage_requisition_number: string | null
           service_description: string | null
           status: string
+          target_position: string | null
           total_price: number | null
           unit_price: number | null
           updated_at: string | null
@@ -7054,6 +7055,7 @@ export type Database = {
           sage_requisition_number?: string | null
           service_description?: string | null
           status?: string
+          target_position?: string | null
           total_price?: number | null
           unit_price?: number | null
           updated_at?: string | null
@@ -7099,6 +7101,7 @@ export type Database = {
           sage_requisition_number?: string | null
           service_description?: string | null
           status?: string
+          target_position?: string | null
           total_price?: number | null
           unit_price?: number | null
           updated_at?: string | null

@@ -20,9 +20,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useToast } from "@/hooks/use-toast";
 import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { supabase } from "@/integrations/supabase/client";
-import { Circle, DollarSign, FileText, Loader2, Package, Pencil, Plus, ShoppingBag, Trash2, Wrench } from "lucide-react";
+import { Circle, CircleDot, DollarSign, FileText, Loader2, Package, Pencil, Plus, ShoppingBag, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
 import AddPartWithCostDialog from "../dialogs/AddPartWithCostDialog";
+import AddTyresByPositionDialog from "../dialogs/AddTyresByPositionDialog";
 import InventoryDetailDialog from "../dialogs/InventoryDetailDialog";
 
 interface PartsRequest {
@@ -60,6 +61,7 @@ interface PartsRequest {
   allocated_to_job_card?: boolean | null;
   // Tyre inventory link
   tyre_id?: string | null;
+  target_position?: string | null;
   vendors?: {
     id: string;
     name: string;
@@ -84,10 +86,12 @@ interface JobCardPartsTableProps {
   fleetNumber?: string | null;
   jobNumber?: string | null;
   isTyreJobCard?: boolean;
+  vehicleId?: string | null;
 }
 
-const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber, isTyreJobCard = false }: JobCardPartsTableProps) => {
+const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber, isTyreJobCard = false, vehicleId = null }: JobCardPartsTableProps) => {
   const [showRequestParts, setShowRequestParts] = useState(false);
+  const [tyrePositionDialogOpen, setTyrePositionDialogOpen] = useState(false);
   const [selectedInventoryId, setSelectedInventoryId] = useState<string | null>(null);
   const [showInventoryDetail, setShowInventoryDetail] = useState(false);
   const [deletePartId, setDeletePartId] = useState<string | null>(null);
@@ -223,10 +227,18 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
             </div>
           )}
         </div>
-        <Button onClick={() => setShowRequestParts(true)} size="sm">
-          <Plus className="h-4 w-4 mr-1" />
-          Add Part/Service
-        </Button>
+        <div className="flex items-center gap-2">
+          {isTyreJobCard && (
+            <Button onClick={() => setTyrePositionDialogOpen(true)} size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50">
+              <CircleDot className="h-4 w-4 mr-1" />
+              Add Tyres by Position
+            </Button>
+          )}
+          <Button onClick={() => setShowRequestParts(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Add Part/Service
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {parts.length === 0 ? (
@@ -240,6 +252,7 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
                 <TableRow>
                   <TableHead>Source</TableHead>
                   <TableHead>Name/Description</TableHead>
+                  {isTyreJobCard && <TableHead>Position</TableHead>}
                   <TableHead>Part #</TableHead>
                   <TableHead>Vendor</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
@@ -292,6 +305,19 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
                         )}
                       </div>
                     </TableCell>
+
+                    {/* Position (tyre job cards only) */}
+                    {isTyreJobCard && (
+                      <TableCell>
+                        {part.target_position ? (
+                          <Badge variant="outline" className="font-mono text-xs border-purple-300 text-purple-700">
+                            {part.target_position}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                    )}
 
                     {/* Part Number */}
                     <TableCell className="text-sm">{part.part_number || "-"}</TableCell>
@@ -590,6 +616,19 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Tyre Position Dialog */}
+        {isTyreJobCard && (
+          <AddTyresByPositionDialog
+            open={tyrePositionDialogOpen}
+            onOpenChange={setTyrePositionDialogOpen}
+            jobCardId={jobCardId}
+            vehicleId={vehicleId}
+            fleetNumber={fleetNumber || null}
+            jobNumber={jobNumber || null}
+            onComplete={onRefresh}
+          />
+        )}
       </CardContent>
     </Card>
   );
