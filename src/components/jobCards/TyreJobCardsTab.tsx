@@ -1,29 +1,53 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import AddTyreJobCardDialog from "@/components/dialogs/AddTyreJobCardDialog";
+import WorkerDashboardDialog from "@/components/jobCards/WorkerDashboardDialog";
 import { supabase } from "@/integrations/supabase/client";
+import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { useQuery } from "@tanstack/react-query";
 import { saveAs } from "file-saver";
 import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
+    Archive as ArchiveIcon,
     Calendar,
-    CheckCircle2,
     ChevronDown,
-    ClipboardList,
     Download,
+    Eye,
     FileText,
+    MoreHorizontal,
+    Pencil,
     Plus,
     Search,
+    Share2,
+    Trash2,
     Truck,
     User,
+    Users,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface TyreJobCard {
@@ -36,6 +60,7 @@ interface TyreJobCard {
     assignee: string | null;
     due_date: string | null;
     created_at: string;
+    archived_at?: string | null;
     vehicle?: {
         id: string;
         fleet_number: string | null;
@@ -50,18 +75,26 @@ interface TyreJobCard {
 }
 
 interface TyreJobCardsTabProps {
-    onJobCardClick?: (jobCard: TyreJobCard) => void;
+    onJobCardClick?: (jobCard: TyreJobCard, editMode?: boolean) => void;
 }
 
 export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps) {
+    const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedPriority, setSelectedPriority] = useState<string>("all");
     const [selectedAssignee, setSelectedAssignee] = useState<string>("all");
     const [closedActiveFleets, setClosedActiveFleets] = useState<Set<string>>(new Set());
     const [closedCompletedFleets, setClosedCompletedFleets] = useState<Set<string>>(new Set());
+    const [closedArchivedFleets, setClosedArchivedFleets] = useState<Set<string>>(new Set());
+    const [workerDashboardJob, setWorkerDashboardJob] = useState<TyreJobCard | null>(null);
+    const [workerDashboardOpen, setWorkerDashboardOpen] = useState(false);
+    const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+    const [jobToArchive, setJobToArchive] = useState<TyreJobCard | null>(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [jobToDelete, setJobToDelete] = useState<TyreJobCard | null>(null);
 
     // Fetch tyre job cards (linked to tyre inspections)
-    const { data: tyreJobCards = [], isLoading } = useQuery({
+    const { data: tyreJobCards = [], isLoading, refetch } = useQuery({
         queryKey: ["tyre_job_cards"],
         queryFn: async () => {
             // First get all tyre inspection IDs
@@ -109,6 +142,29 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         },
     });
 
+    // Always start with all fleet sections collapsed when the tab mounts or
+    // when the underlying data refreshes. Manual expansions persist only
+    // until the next data refresh / tab visit.
+    useEffect(() => {
+        const collectFleetKeys = (cards: TyreJobCard[]) => {
+            const keys = new Set<string>();
+            cards.forEach((c) => keys.add(c.vehicle?.fleet_number || "__no_fleet__"));
+            return keys;
+        };
+
+        const nonArchived = tyreJobCards.filter((c) => !c.archived_at);
+        const archived = tyreJobCards.filter((c) => !!c.archived_at);
+        const active = nonArchived.filter((c) => {
+            const s = c.status?.toLowerCase();
+            return s === "pending" || s === "in_progress" || s === "in progress";
+        });
+        const completed = nonArchived.filter((c) => c.status?.toLowerCase() === "completed");
+
+        setClosedActiveFleets(collectFleetKeys(active));
+        setClosedCompletedFleets(collectFleetKeys(completed));
+        setClosedArchivedFleets(collectFleetKeys(archived));
+    }, [tyreJobCards]);
+
     // Get unique assignees
     const assignees = [...new Set(
         tyreJobCards
@@ -127,12 +183,75 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         return true;
     });
 
-    const activeCards = filteredCards.filter(card => {
+    // Exclude archived cards from active/completed
+    const nonArchived = filteredCards.filter(c => !c.archived_at);
+    const archivedCards = filteredCards.filter(c => !!c.archived_at);
+
+    const activeCards = nonArchived.filter(card => {
         const status = card.status?.toLowerCase();
         return status === "pending" || status === "in_progress" || status === "in progress";
     });
 
-    const completedCards = filteredCards.filter(card => card.status?.toLowerCase() === "completed");
+    const completedCards = nonArchived.filter(card => card.status?.toLowerCase() === "completed");
+
+    // Action handlers
+    const handleView = (card: TyreJobCard) => onJobCardClick?.(card, false);
+    const handleUpdate = (card: TyreJobCard) => onJobCardClick?.(card, true);
+    const handleWorkerDashboard = (card: TyreJobCard) => {
+        setWorkerDashboardJob(card);
+        setWorkerDashboardOpen(true);
+    };
+    const handleShare = (card: TyreJobCard) => {
+        navigate(`/job-card/${card.id}?share=1`);
+    };
+    const handleArchiveClick = (card: TyreJobCard) => {
+        setJobToArchive(card);
+        setArchiveDialogOpen(true);
+    };
+    const handleDeleteClick = (card: TyreJobCard) => {
+        setJobToDelete(card);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleArchiveConfirm = async () => {
+        if (!jobToArchive) return;
+        const isCurrentlyArchived = !!jobToArchive.archived_at;
+        try {
+            const { error } = await supabase
+                .from("job_cards")
+                .update({ archived_at: isCurrentlyArchived ? null : new Date().toISOString() } as never)
+                .eq("id", jobToArchive.id);
+            if (error) throw error;
+            toast.success(isCurrentlyArchived
+                ? `Job card #${jobToArchive.job_number} restored`
+                : `Job card #${jobToArchive.job_number} archived`);
+            requestGoogleSheetsSync('workshop');
+            refetch();
+        } catch (e) {
+            console.error(e);
+            toast.error("Failed to update archive status");
+        } finally {
+            setArchiveDialogOpen(false);
+            setJobToArchive(null);
+        }
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!jobToDelete) return;
+        try {
+            const { error } = await supabase.from("job_cards").delete().eq("id", jobToDelete.id);
+            if (error) throw error;
+            toast.success(`Job card #${jobToDelete.job_number} deleted`);
+            requestGoogleSheetsSync('workshop');
+            refetch();
+        } catch (e) {
+            console.error(e);
+            toast.error("Failed to delete job card");
+        } finally {
+            setDeleteDialogOpen(false);
+            setJobToDelete(null);
+        }
+    };
 
     // Export to Excel
     const exportToExcel = useCallback(async () => {
@@ -360,6 +479,14 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         });
     };
 
+    const toggleArchivedFleet = (fleet: string) => {
+        setClosedArchivedFleets(prev => {
+            const next = new Set(prev);
+            if (next.has(fleet)) next.delete(fleet); else next.add(fleet);
+            return next;
+        });
+    };
+
     const getPriorityBadge = (priority: string) => {
         switch (priority) {
             case "urgent": return <Badge variant="destructive">Urgent</Badge>;
@@ -380,19 +507,20 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         }
     };
 
-    const JobCardTable = ({ cards }: { cards: TyreJobCard[] }) => (
+    const JobCardTable = ({ cards, isArchived = false }: { cards: TyreJobCard[]; isArchived?: boolean }) => (
         <div className="overflow-x-auto">
             <Table>
                 <TableHeader>
-                    <TableRow>
-                        <TableHead className="w-[100px]">Job #</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Fleet / Vehicle</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Priority</TableHead>
-                        <TableHead>Assignee</TableHead>
-                        <TableHead>Due Date</TableHead>
-                        <TableHead>Inspection</TableHead>
+                    <TableRow className="hover:bg-transparent">
+                        <TableHead className="h-9 px-3 py-2 text-xs w-[90px]">Job #</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-xs">Title</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-xs">Fleet / Vehicle</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-xs">Status</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-xs">Priority</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-xs">Assignee</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-xs">Due</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-xs">Inspection</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-xs w-[60px] text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -400,67 +528,101 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
                         <TableRow
                             key={card.id}
                             className="cursor-pointer border-b transition-colors hover:bg-muted/30"
-                            onClick={() => onJobCardClick?.(card)}
+                            onClick={() => onJobCardClick?.(card, false)}
                         >
-                            <TableCell className="font-mono text-sm">#{card.job_number}</TableCell>
-                            <TableCell className="max-w-[280px]">
-                                <div className="space-y-1">
-                                    <p className="font-medium leading-tight truncate">{card.title}</p>
-                                    <p className="text-xs text-muted-foreground">Created {new Date(card.created_at).toLocaleDateString()}</p>
-                                </div>
+                            <TableCell className="px-3 py-2 font-mono text-xs">#{card.job_number}</TableCell>
+                            <TableCell className="px-3 py-2 max-w-[260px]">
+                                <p className="font-medium text-sm leading-tight truncate">{card.title}</p>
+                                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                                    Created {new Date(card.created_at).toLocaleDateString()}
+                                </p>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">
                                 {card.vehicle ? (
-                                    <div className="flex items-center gap-2">
-                                        <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                                        <div className="flex flex-col">
-                                            {card.vehicle.fleet_number && (
-                                                <Badge variant="outline" className="text-xs w-fit">{card.vehicle.fleet_number}</Badge>
-                                            )}
-                                            <span className="text-xs text-muted-foreground">{card.vehicle.registration_number}</span>
-                                        </div>
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                        <Truck className="h-3 w-3 text-muted-foreground shrink-0" />
+                                        {card.vehicle.fleet_number && (
+                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 leading-none">{card.vehicle.fleet_number}</Badge>
+                                        )}
+                                        <span className="text-[10px] text-muted-foreground truncate">{card.vehicle.registration_number}</span>
                                     </div>
                                 ) : (
-                                    <span className="text-muted-foreground">—</span>
+                                    <span className="text-muted-foreground text-xs">—</span>
                                 )}
                             </TableCell>
-                            <TableCell>{getStatusBadge(card.status)}</TableCell>
-                            <TableCell>{getPriorityBadge(card.priority)}</TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">{getStatusBadge(card.status)}</TableCell>
+                            <TableCell className="px-3 py-2">{getPriorityBadge(card.priority)}</TableCell>
+                            <TableCell className="px-3 py-2">
                                 {card.assignee ? (
-                                    <div className="flex items-center gap-2">
-                                        <User className="h-3.5 w-3.5 text-muted-foreground" />
-                                        <span className="text-sm">{card.assignee}</span>
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                        <User className="h-3 w-3 text-muted-foreground shrink-0" />
+                                        <span className="truncate max-w-[120px]">{card.assignee}</span>
                                     </div>
                                 ) : (
-                                    <span className="text-muted-foreground">—</span>
+                                    <span className="text-muted-foreground text-xs">—</span>
                                 )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">
                                 {card.due_date ? (
-                                    <div className="flex items-center gap-2">
-                                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                        <span className="text-sm">{new Date(card.due_date).toLocaleDateString()}</span>
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                        <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
+                                        <span>{new Date(card.due_date).toLocaleDateString()}</span>
                                     </div>
                                 ) : (
-                                    <span className="text-muted-foreground">—</span>
+                                    <span className="text-muted-foreground text-xs">—</span>
                                 )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="px-3 py-2">
                                 {card.inspection ? (
-                                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                        <FileText className="h-3 w-3 mr-1" />
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 leading-none bg-amber-50 text-amber-700 border-amber-200">
+                                        <FileText className="h-2.5 w-2.5 mr-1" />
                                         {card.inspection.inspection_number}
                                     </Badge>
                                 ) : (
-                                    <span className="text-muted-foreground text-sm">No inspection</span>
+                                    <span className="text-muted-foreground text-[10px]">—</span>
                                 )}
+                            </TableCell>
+                            <TableCell className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                            <span className="sr-only">Actions</span>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                        <DropdownMenuItem onClick={() => handleWorkerDashboard(card)}>
+                                            <Users className="h-4 w-4 mr-2" />Worker Dashboard
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleView(card)}>
+                                            <Eye className="h-4 w-4 mr-2" />View
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleUpdate(card)}>
+                                            <Pencil className="h-4 w-4 mr-2" />Update
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleShare(card)}>
+                                            <Share2 className="h-4 w-4 mr-2" />Share
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => handleArchiveClick(card)}>
+                                            <ArchiveIcon className="h-4 w-4 mr-2" />
+                                            {isArchived ? "Restore" : "Archive"}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                                            onClick={() => handleDeleteClick(card)}
+                                        >
+                                            <Trash2 className="h-4 w-4 mr-2" />Delete Job Card
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </TableCell>
                         </TableRow>
                     ))}
                     {cards.length === 0 && (
                         <TableRow>
-                            <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                                 No tyre job cards found
                             </TableCell>
                         </TableRow>
@@ -476,49 +638,41 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         isOpen,
         onToggle,
         statusVariant,
+        isArchived = false,
     }: {
         fleetLabel: string;
         cards: TyreJobCard[];
         isOpen: boolean;
         onToggle: () => void;
         statusVariant: "active" | "completed";
+        isArchived?: boolean;
     }) => (
-        <div className="border border-border rounded-xl overflow-hidden transition-shadow duration-200 shadow-sm hover:shadow-md">
+        <div className="border border-border/70 rounded-md overflow-hidden bg-background">
             <button
                 type="button"
-                className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors duration-150 ${statusVariant === "active"
-                    ? "bg-gradient-to-r from-amber-50/80 to-yellow-50/60 hover:from-amber-100/80 hover:to-yellow-100/60 dark:from-amber-950/20 dark:to-yellow-950/20"
-                    : "bg-gradient-to-r from-emerald-50/80 to-green-50/60 hover:from-emerald-100/80 hover:to-green-100/60 dark:from-emerald-950/20 dark:to-green-950/20"
-                    }`}
+                className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors duration-150 bg-muted/30 hover:bg-muted/60 border-l-2 ${statusVariant === "active" ? "border-l-foreground/70" : "border-l-border"}`}
                 onClick={onToggle}
             >
-                <div className="flex items-center gap-3">
-                    <div className={`flex items-center justify-center w-9 h-9 rounded-lg ${statusVariant === "active" ? "bg-amber-100 dark:bg-amber-900/50" : "bg-emerald-100 dark:bg-emerald-900/50"
-                        }`}>
-                        <Truck className={`h-4 w-4 ${statusVariant === "active" ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
-                            }`} />
-                    </div>
-                    <div>
-                        <p className="font-semibold text-sm text-foreground leading-none">{fleetLabel}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
+                <div className="flex items-center gap-3 min-w-0">
+                    <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                        <p className="font-semibold text-sm text-foreground leading-none truncate">{fleetLabel}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">
                             {cards.length} {cards.length === 1 ? "tyre job card" : "tyre job cards"}
                         </p>
                     </div>
-                    <Badge className={`ml-1 text-xs font-semibold border ${statusVariant === "active"
-                        ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400"
-                        : "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400"
-                        }`}>
+                    <Badge variant="outline" className="ml-1 text-[10px] font-semibold px-1.5 py-0 h-5 leading-none tabular-nums">
                         {cards.length}
                     </Badge>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
-                    <span className="text-xs hidden sm:inline select-none">{isOpen ? "Collapse" : "Expand"}</span>
-                    <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
+                    <span className="text-[11px] hidden sm:inline select-none uppercase tracking-wide">{isOpen ? "Hide" : "Show"}</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
                 </div>
             </button>
             {isOpen && (
                 <div className="border-t border-border/60 bg-background">
-                    <JobCardTable cards={cards} />
+                    <JobCardTable cards={cards} isArchived={isArchived} />
                 </div>
             )}
         </div>
@@ -535,45 +689,39 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
     }
 
     return (
-        <div className="space-y-4">
-            {/* Compact toolbar: stats + filters + exports in one row */}
-            <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    {/* New Tyre Job Card button */}
-                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setShowAddDialog(true)}>
-                        <Plus className="w-3.5 h-3.5" />
-                        New Tyre Job Card
-                    </Button>
-
-                    <div className="hidden sm:block h-4 w-px bg-border" />
-
-                    {/* Inline stats */}
-                    <div className="flex items-center gap-1.5 text-sm">
-                        <ClipboardList className="h-3.5 w-3.5 text-amber-500" />
-                        <span className="font-semibold">{activeCards.length}</span>
-                        <span className="text-muted-foreground text-xs">active</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-sm">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                        <span className="font-semibold">{completedCards.length}</span>
-                        <span className="text-muted-foreground text-xs">completed</span>
+        <div className="space-y-6">
+            {/* Refined toolbar: KPI chips + filters + actions */}
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 sm:p-4">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+                    {/* KPI chips */}
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                            <span className="text-base font-semibold tabular-nums leading-none">{activeCards.length}</span>
+                            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Active</span>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                            <span className="text-base font-semibold tabular-nums leading-none">{completedCards.length}</span>
+                            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Completed</span>
+                        </div>
                     </div>
 
-                    <div className="hidden sm:block h-4 w-px bg-border" />
+                    <div className="hidden sm:block h-5 w-px bg-border/70" />
 
                     {/* Filters inline */}
-                    <div className="relative flex-1 min-w-0 sm:min-w-[180px] sm:max-w-[260px]">
-                        <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                    <div className="relative flex-1 min-w-0 sm:min-w-[200px] sm:max-w-[280px]">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
-                            placeholder="Search..."
+                            placeholder="Search tyre job cards..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="h-8 pl-7 text-xs"
+                            className="h-9 pl-8 text-xs bg-background"
                         />
                     </div>
 
                     <Select value={selectedPriority} onValueChange={setSelectedPriority}>
-                        <SelectTrigger className="h-8 w-[120px] text-xs">
+                        <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
                             <SelectValue placeholder="Priority" />
                         </SelectTrigger>
                         <SelectContent>
@@ -587,7 +735,7 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
 
                     {assignees.length > 0 && (
                         <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
-                            <SelectTrigger className="h-8 w-[130px] text-xs">
+                            <SelectTrigger className="h-9 w-[140px] text-xs bg-background">
                                 <SelectValue placeholder="Assignee" />
                             </SelectTrigger>
                             <SelectContent>
@@ -599,92 +747,165 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
                         </Select>
                     )}
 
-                    {/* Spacer to push exports right */}
+                    {/* Spacer to push actions right */}
                     <div className="flex-1" />
 
-                    {/* Export buttons */}
+                    {/* Export + Add buttons */}
                     <div className="flex items-center gap-1.5">
-                        <Button variant="outline" size="sm" onClick={exportToExcel} className="h-8 gap-1 text-xs px-2.5">
-                            <Download className="w-3 h-3" />
+                        <Button variant="outline" size="sm" onClick={exportToExcel} className="h-9 gap-1.5 text-xs px-3 bg-background">
+                            <Download className="w-3.5 h-3.5" />
                             Excel
                         </Button>
-                        <Button variant="outline" size="sm" onClick={exportToPDF} className="h-8 gap-1 text-xs px-2.5">
-                            <FileText className="w-3 h-3" />
+                        <Button variant="outline" size="sm" onClick={exportToPDF} className="h-9 gap-1.5 text-xs px-3 bg-background">
+                            <FileText className="w-3.5 h-3.5" />
                             PDF
+                        </Button>
+                        <Button size="sm" className="h-9 gap-1.5 text-xs px-3.5 shadow-sm" onClick={() => setShowAddDialog(true)}>
+                            <Plus className="h-3.5 w-3.5" />
+                            New Tyre Job Card
                         </Button>
                     </div>
                 </div>
             </div>
 
             {/* Active Tyre Job Cards */}
-            <Card>
-                <CardHeader className="pb-3 pt-4 px-4">
-                    <div className="flex items-center gap-2">
-                        <ClipboardList className="h-4 w-4 text-amber-500" />
-                        <CardTitle className="text-sm font-semibold">Active Tyre Job Cards</CardTitle>
-                        <Badge className="bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 font-semibold text-[11px] px-1.5 py-0">
-                            {activeCards.length}
-                        </Badge>
+            <section className="space-y-4">
+                <div className="flex items-center gap-2.5">
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                    <h2 className="text-base font-semibold tracking-tight text-foreground">Active Tyre Job Cards</h2>
+                    <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                        {activeCards.length}
+                    </span>
+                </div>
+                {activeCards.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                        <p className="text-sm font-medium">No active tyre job cards</p>
                     </div>
-                </CardHeader>
-                <CardContent className="pt-0 px-4 pb-4">
-                    {activeCards.length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                            <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                            <p className="text-sm font-medium">No active tyre job cards</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {Array.from(groupByFleet(activeCards).entries()).map(([fleetKey, cards]) => (
-                                <FleetAccordionSection
-                                    key={`active-${fleetKey}`}
-                                    fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
-                                    cards={cards}
-                                    isOpen={!closedActiveFleets.has(fleetKey)}
-                                    onToggle={() => toggleActiveFleet(fleetKey)}
-                                    statusVariant="active"
-                                />
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                ) : (
+                    <div className="space-y-3">
+                        {Array.from(groupByFleet(activeCards).entries()).map(([fleetKey, cards]) => (
+                            <FleetAccordionSection
+                                key={`active-${fleetKey}`}
+                                fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
+                                cards={cards}
+                                isOpen={!closedActiveFleets.has(fleetKey)}
+                                onToggle={() => toggleActiveFleet(fleetKey)}
+                                statusVariant="active"
+                            />
+                        ))}
+                    </div>
+                )}
+            </section>
 
             {/* Completed Tyre Job Cards */}
-            <Card>
-                <CardHeader className="pb-3 pt-4 px-4">
-                    <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <CardTitle className="text-sm font-semibold">Completed Tyre Job Cards</CardTitle>
-                        <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 font-semibold text-[11px] px-1.5 py-0">
-                            {completedCards.length}
-                        </Badge>
+            <section className="space-y-4">
+                <div className="flex items-center gap-2.5">
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                    <h2 className="text-base font-semibold tracking-tight text-foreground">Completed Tyre Job Cards</h2>
+                    <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                        {completedCards.length}
+                    </span>
+                </div>
+                {completedCards.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                        <p className="text-sm font-medium">No completed tyre job cards</p>
                     </div>
-                </CardHeader>
-                <CardContent className="pt-0 px-4 pb-4">
-                    {completedCards.length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                            <CheckCircle2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                            <p className="text-sm font-medium">No completed tyre job cards</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {Array.from(groupByFleet(completedCards).entries()).map(([fleetKey, cards]) => (
-                                <FleetAccordionSection
-                                    key={`completed-${fleetKey}`}
-                                    fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
-                                    cards={cards}
-                                    isOpen={!closedCompletedFleets.has(fleetKey)}
-                                    onToggle={() => toggleCompletedFleet(fleetKey)}
-                                    statusVariant="completed"
-                                />
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                ) : (
+                    <div className="space-y-3">
+                        {Array.from(groupByFleet(completedCards).entries()).map(([fleetKey, cards]) => (
+                            <FleetAccordionSection
+                                key={`completed-${fleetKey}`}
+                                fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
+                                cards={cards}
+                                isOpen={!closedCompletedFleets.has(fleetKey)}
+                                onToggle={() => toggleCompletedFleet(fleetKey)}
+                                statusVariant="completed"
+                            />
+                        ))}
+                    </div>
+                )}
+            </section>
+
+            {/* Archived Tyre Job Cards */}
+            {archivedCards.length > 0 && (
+                <section className="space-y-4">
+                    <div className="flex items-center gap-2.5">
+                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-muted-foreground/60" aria-hidden />
+                        <h2 className="text-base font-semibold tracking-tight text-foreground">Archived Tyre Job Cards</h2>
+                        <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                            {archivedCards.length}
+                        </span>
+                    </div>
+                    <div className="space-y-3">
+                        {Array.from(groupByFleet(archivedCards).entries()).map(([fleetKey, cards]) => (
+                            <FleetAccordionSection
+                                key={`archived-${fleetKey}`}
+                                fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
+                                cards={cards}
+                                isOpen={!closedArchivedFleets.has(fleetKey)}
+                                onToggle={() => toggleArchivedFleet(fleetKey)}
+                                statusVariant="completed"
+                                isArchived
+                            />
+                        ))}
+                    </div>
+                </section>
+            )}
 
             <AddTyreJobCardDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
+
+            <WorkerDashboardDialog
+                open={workerDashboardOpen}
+                onOpenChange={setWorkerDashboardOpen}
+                jobCard={workerDashboardJob ? {
+                    id: workerDashboardJob.id,
+                    job_number: workerDashboardJob.job_number,
+                    title: workerDashboardJob.title,
+                    assignee: workerDashboardJob.assignee,
+                    status: workerDashboardJob.status,
+                } : null}
+            />
+
+            <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {jobToArchive?.archived_at ? "Restore tyre job card?" : "Archive tyre job card?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {jobToArchive?.archived_at
+                                ? `Job card #${jobToArchive?.job_number} will be moved back into the active lists.`
+                                : `Job card #${jobToArchive?.job_number} will be hidden from the active and completed lists. You can restore it from the Archived section.`}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleArchiveConfirm}>
+                            {jobToArchive?.archived_at ? "Restore" : "Archive"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete tyre job card?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete job card #{jobToDelete?.job_number}. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={handleDeleteConfirm}
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

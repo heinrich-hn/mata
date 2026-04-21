@@ -510,48 +510,54 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
   }
 
   return (
-    <div className="space-y-4">
-      {/* Compact toolbar: stats + filters + export in one block */}
-      <div className="flex flex-col gap-3">
-        {/* Inline summary stats */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-muted-foreground text-xs">Total</span>
-            <span className="font-semibold">{formatCurrency(summary.totalCost)}</span>
-            <span className="text-muted-foreground text-[11px]">({summary.totalJobCards} cards, {weekData.length} wks)</span>
+    <div className="space-y-6">
+      {/* Refined toolbar: KPI chips + filters + export */}
+      <div className="rounded-xl border border-border/60 bg-muted/30 p-3 sm:p-4 space-y-3">
+        {/* KPI chips */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-foreground" aria-hidden />
+            <span className="text-base font-semibold tabular-nums leading-none">{formatCurrency(summary.totalCost)}</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Total · {summary.totalJobCards} cards · {weekData.length} wks
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-muted-foreground text-xs">Labor</span>
-            <span className="font-semibold text-blue-600">{formatCurrency(summary.totalLaborCost)}</span>
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" aria-hidden />
+            <span className="text-base font-semibold tabular-nums leading-none">{formatCurrency(summary.totalLaborCost)}</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Labor</span>
           </div>
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-muted-foreground text-xs">Parts</span>
-            <span className="font-semibold text-green-600">{formatCurrency(summary.totalPartsCost)}</span>
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+            <span className="text-base font-semibold tabular-nums leading-none">{formatCurrency(summary.totalPartsCost)}</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Parts</span>
           </div>
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-muted-foreground text-xs">Trend</span>
-            <span className={`font-semibold ${summary.trend >= 0 ? "text-red-600" : "text-green-600"}`}>
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+            <span className={`inline-flex h-1.5 w-1.5 rounded-full ${summary.trend >= 0 ? "bg-red-500" : "bg-emerald-500"}`} aria-hidden />
+            <span className={`text-base font-semibold tabular-nums leading-none ${summary.trend >= 0 ? "text-red-600" : "text-emerald-600"}`}>
               {summary.trend >= 0 ? "+" : ""}{summary.trend.toFixed(1)}%
             </span>
-            <span className="text-muted-foreground text-[11px]">({formatCurrency(summary.avgWeeklyCost)}/wk)</span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Trend · {formatCurrency(summary.avgWeeklyCost)}/wk
+            </span>
           </div>
         </div>
 
         {/* Filters row */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="relative flex-1 min-w-0 sm:min-w-[180px] sm:max-w-[260px]">
-            <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+          <div className="relative flex-1 min-w-0 sm:min-w-[200px] sm:max-w-[280px]">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search..."
+              placeholder="Search job cards..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-8 pl-7 text-xs"
+              className="h-9 pl-8 text-xs bg-background"
             />
           </div>
 
           <Select value={weeksToShow} onValueChange={setWeeksToShow}>
-            <SelectTrigger className="h-8 w-[130px] text-xs">
-              <Calendar className="w-3 h-3 mr-1.5" />
+            <SelectTrigger className="h-9 w-[140px] text-xs bg-background">
+              <Calendar className="w-3.5 h-3.5 mr-1.5" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -564,7 +570,7 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
           </Select>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 w-[120px] text-xs">
+            <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -576,7 +582,7 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
           </Select>
 
           <Select value={costTypeFilter} onValueChange={setCostTypeFilter}>
-            <SelectTrigger className="h-8 w-[120px] text-xs">
+            <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
               <SelectValue placeholder="Cost Type" />
             </SelectTrigger>
             <SelectContent>
@@ -589,7 +595,7 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
 
           {uniqueFleets.length > 0 && (
             <Select value={fleetFilter} onValueChange={setFleetFilter}>
-              <SelectTrigger className="h-8 w-[120px] text-xs">
+              <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
                 <SelectValue placeholder="Fleet" />
               </SelectTrigger>
               <SelectContent>
@@ -605,8 +611,8 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 gap-1 text-xs px-2.5">
-                <Download className="w-3 h-3" />
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs px-3 bg-background">
+                <Download className="w-3.5 h-3.5" />
                 Export
               </Button>
             </DropdownMenuTrigger>
@@ -627,23 +633,26 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
       {/* Week-by-Week Accordion */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Weekly Breakdown</h3>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-foreground" aria-hidden />
+            <h3 className="text-base font-semibold tracking-tight text-foreground">Weekly Breakdown</h3>
+          </div>
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
               onClick={() => setExpandedWeeks(new Set(weekData.map((_, i) => i)))}
             >
-              Expand All
+              Expand all
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
               onClick={() => setExpandedWeeks(new Set())}
             >
-              Collapse All
+              Collapse all
             </Button>
           </div>
         </div>

@@ -13,6 +13,7 @@ import {
   Eye,
   FileText,
   Link2,
+  Send,
   Share2,
   Trash2,
   Wrench,
@@ -23,6 +24,7 @@ interface InspectionActionsMenuProps {
   inspectionNumber: string;
   onView: () => void;
   onShare: () => void;
+  onSendShare?: () => void;
   onCreateWorkOrder: () => void;
   onLinkJobCard?: () => void;
   onCorrectiveAction: () => void;
@@ -38,6 +40,7 @@ export function InspectionActionsMenu({
   inspectionNumber: _inspectionNumber,
   onView,
   onShare,
+  onSendShare,
   onCreateWorkOrder,
   onLinkJobCard,
   onCorrectiveAction,
@@ -62,8 +65,15 @@ export function InspectionActionsMenu({
 
         <DropdownMenuItem onClick={onShare}>
           <Share2 className="h-4 w-4 mr-2" />
-          Share
+          Copy Link
         </DropdownMenuItem>
+
+        {onSendShare && (
+          <DropdownMenuItem onClick={onSendShare}>
+            <Send className="h-4 w-4 mr-2" />
+            Send / Share PDF
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 

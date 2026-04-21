@@ -1,14 +1,18 @@
 import type { IncidentDocument, IncidentTimelineEvent } from "@/hooks/useIncidentDocuments";
 import type { Incident } from "@/hooks/useIncidents";
+import type { Database } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { listIncidentStorageFiles } from "./recoverIncidentImages";
 
+type CarReportRow = Database["public"]["Tables"]["car_reports"]["Row"];
+
 interface IncidentPDFData {
   incident: Incident;
   documents?: IncidentDocument[];
   timeline?: IncidentTimelineEvent[];
+  carReport?: CarReportRow | null;
 }
 
 const formatIncidentType = (type: string): string => {
@@ -222,6 +226,7 @@ export const generateIncidentPDF = async ({
   incident,
   documents = [],
   timeline = [],
+  carReport = null,
 }: IncidentPDFData): Promise<void> => {
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
@@ -589,6 +594,70 @@ export const generateIncidentPDF = async ({
     });
 
     yPos = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  }
+
+  // Section: CAR Report (if linked)
+  if (carReport) {
+    checkNewPage(40);
+    pdf.setFontSize(14);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(33, 33, 33);
+    pdf.text("Corrective Action Request (CAR) Report", margin, yPos);
+    yPos += 8;
+
+    const carHeader: Array<[string, string]> = [
+      ["Report #", carReport.report_number || "-"],
+      ["Status", (carReport.status || "open").replace(/^./, c => c.toUpperCase())],
+      ["Severity", (carReport.severity || "-").replace(/^./, c => c.toUpperCase())],
+      ["Driver", carReport.driver_name || "-"],
+      ["Fleet #", carReport.fleet_number || "-"],
+      ["Incident Date", carReport.incident_date ? formatDate(carReport.incident_date) : "-"],
+      ["Incident Time", carReport.incident_time || "-"],
+      ["Location", carReport.incident_location || "-"],
+      ["Type", carReport.incident_type || "-"],
+      ["Responsible Person", carReport.responsible_person || "-"],
+      ["Target Completion", carReport.target_completion_date ? formatDate(carReport.target_completion_date) : "-"],
+      ["Actual Completion", carReport.actual_completion_date ? formatDate(carReport.actual_completion_date) : "-"],
+    ];
+
+    autoTable(pdf, {
+      startY: yPos,
+      body: carHeader,
+      theme: "plain",
+      styles: { fontSize: 9, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 50, fontStyle: "bold", textColor: [80, 80, 80] },
+        1: { cellWidth: pageWidth - margin * 2 - 50 },
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    yPos = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+
+    const narrativeBlocks: Array<[string, string | null]> = [
+      ["Description", carReport.description],
+      ["Immediate Action Taken", carReport.immediate_action_taken],
+      ["Root Cause Analysis", carReport.root_cause_analysis],
+      ["Corrective Actions", carReport.corrective_actions],
+      ["Preventive Measures", carReport.preventive_measures],
+    ];
+
+    for (const [label, value] of narrativeBlocks) {
+      if (!value) continue;
+      checkNewPage(20);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(60, 60, 60);
+      pdf.text(label, margin, yPos);
+      yPos += 5;
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(33, 33, 33);
+      const lines = pdf.splitTextToSize(value, pageWidth - margin * 2);
+      pdf.text(lines, margin, yPos);
+      yPos += lines.length * 5 + 4;
+    }
+
+    yPos += 4;
   }
 
   // Footer on each page

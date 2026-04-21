@@ -129,6 +129,17 @@ const TYRE_TEMPLATES: Record<string, { label: string; positions: FleetTyrePositi
       { position: 'SP2', label: 'SP2 - Spare 2', axle: 'Spare' },
     ],
   },
+  light_motor_4: {
+    label: "Light Motor Vehicle (4 wheels + spare)",
+    fleetType: 'van',
+    positions: [
+      { position: 'V1', label: 'V1 - Front Left', axle: 'Front' },
+      { position: 'V2', label: 'V2 - Front Right', axle: 'Front' },
+      { position: 'V3', label: 'V3 - Rear Left', axle: 'Rear' },
+      { position: 'V4', label: 'V4 - Rear Right', axle: 'Rear' },
+      { position: 'SP', label: 'SP - Spare', axle: 'Spare' },
+    ],
+  },
 };
 
 // Map vehicle types to default templates
@@ -138,6 +149,7 @@ const VEHICLE_TYPE_DEFAULT_TEMPLATES: Record<string, string> = {
   refrigerated_truck: 'horse_10',
   reefer: 'reefer_8',
   interlink: 'interlink_18',
+  van: 'light_motor_4', // Map 'van' to the 4-wheel template
 };
 
 interface AddVehicleDialogProps {
@@ -152,7 +164,7 @@ interface VehicleFormData {
   model: string;
   vehicle_type: string;
   tonnage: string;
-  engine_specs: string;
+  vin_number: string;
   active: boolean;
 }
 
@@ -162,6 +174,7 @@ const VEHICLE_TYPES = [
   { value: "refrigerated_truck", label: "Refrigerated Truck" },
   { value: "reefer", label: "Reefer Trailer" },
   { value: "interlink", label: "Interlink Trailer" },
+  { value: "van", label: "Light Motor Vehicle" }, // Using 'van' for Light Motor Vehicle
 ];
 
 const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
@@ -175,7 +188,7 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
     model: "",
     vehicle_type: "",
     tonnage: "",
-    engine_specs: "",
+    vin_number: "",
     active: true,
   });
 
@@ -224,7 +237,7 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
             model: data.model,
             vehicle_type: data.vehicle_type as Database["public"]["Enums"]["vehicle_type"],
             tonnage: data.tonnage ? parseFloat(data.tonnage) : null,
-            engine_specs: data.engine_specs || null,
+            engine_specs: data.vin_number || null,
             active: data.active,
           },
         ])
@@ -361,7 +374,7 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
       model: "",
       vehicle_type: "",
       tonnage: "",
-      engine_specs: "",
+      vin_number: "",
       active: true,
     });
     setSelectedTemplate("");
@@ -518,18 +531,18 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
               />
             </div>
 
-            {/* Engine Specs */}
+            {/* VIN Number */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="engine_specs" className="text-right">
-                Engine Specs
+              <Label htmlFor="vin_number" className="text-right">
+                VIN Number
               </Label>
               <Input
-                id="engine_specs"
-                value={formData.engine_specs}
+                id="vin_number"
+                value={formData.vin_number}
                 onChange={(e) =>
-                  setFormData({ ...formData, engine_specs: e.target.value })
+                  setFormData({ ...formData, vin_number: e.target.value })
                 }
-                placeholder="e.g., D13K500"
+                placeholder="e.g., YV1AS565781234567"
                 className="col-span-3"
               />
             </div>

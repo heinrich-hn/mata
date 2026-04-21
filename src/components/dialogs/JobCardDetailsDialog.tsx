@@ -34,9 +34,10 @@ interface JobCardDetailsDialogProps {
     created_at: string;
   } | null;
   onUpdate?: () => void;
+  initialEditMode?: boolean;
 }
 
-const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCardDetailsDialogProps) => {
+const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate, initialEditMode = false }: JobCardDetailsDialogProps) => {
   const { toast } = useToast();
 
   const { data: vehicle } = useQuery({
@@ -331,6 +332,7 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
                   jobCard={jobCard}
                   vehicle={vehicle}
                   onUpdate={handleJobCardUpdate}
+                  initialEditMode={initialEditMode}
                 />
               </TabsContent>
 

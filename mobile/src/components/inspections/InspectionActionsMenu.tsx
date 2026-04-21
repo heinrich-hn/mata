@@ -14,7 +14,8 @@ import
     ClipboardList,
     Eye,
     FileText,
-    Share2,
+    Link2,
+    Send,
     Trash2,
     Wrench,
   } from "lucide-react";
@@ -24,6 +25,7 @@ interface InspectionActionsMenuProps {
   inspectionNumber: string;
   onView: () => void;
   onShare: () => void;
+  onSendShare?: () => void;
   onCreateWorkOrder: () => void;
   onCorrectiveAction: () => void;
   onRootCauseAnalysis: () => void;
@@ -37,6 +39,7 @@ export function InspectionActionsMenu({
   inspectionNumber: _inspectionNumber,
   onView,
   onShare,
+  onSendShare,
   onCreateWorkOrder,
   onCorrectiveAction,
   onRootCauseAnalysis,
@@ -58,9 +61,16 @@ export function InspectionActionsMenu({
         </DropdownMenuItem>
 
         <DropdownMenuItem onClick={onShare}>
-          <Share2 className="h-4 w-4 mr-2" />
-          Share
+          <Link2 className="h-4 w-4 mr-2" />
+          Copy Link
         </DropdownMenuItem>
+
+        {onSendShare && (
+          <DropdownMenuItem onClick={onSendShare}>
+            <Send className="h-4 w-4 mr-2" />
+            Send / Share PDF
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 

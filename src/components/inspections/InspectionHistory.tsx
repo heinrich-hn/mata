@@ -37,6 +37,7 @@ import { LinkJobCardToInspectionDialog } from "../dialogs/LinkInspectionJobCardD
 import { RootCauseAnalysisDialog } from "../dialogs/RootCauseAnalysisDialog";
 import StartInspectionDialog from "../dialogs/StartInspectionDialog";
 import { InspectionActionsMenu } from "./InspectionActionsMenu";
+import { ShareInspectionDialog } from "./ShareInspectionDialog";
 
 interface InspectionHistoryRecord {
   id: string;
@@ -87,6 +88,7 @@ export function InspectionHistory() {
   const [showFaultDetails, setShowFaultDetails] = useState(false);
   const [showCreateJobCard, setShowCreateJobCard] = useState(false);
   const [showLinkJobCard, setShowLinkJobCard] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [selectedFaults, setSelectedFaults] = useState<FaultDetail[]>([]);
   const [selectedFailedItems, setSelectedFailedItems] = useState<FailedInspectionItem[]>([]);
   const [faultsForCorrectiveAction, setFaultsForCorrectiveAction] = useState<Array<{
@@ -727,6 +729,10 @@ export function InspectionHistory() {
                           inspectionNumber={inspection.inspection_number}
                           onView={() => handleView(inspection)}
                           onShare={() => handleShare(inspection)}
+                          onSendShare={() => {
+                            setSelectedInspection(inspection);
+                            setShowShareDialog(true);
+                          }}
                           onCreateWorkOrder={() => handleCreateWorkOrder(inspection)}
                           onLinkJobCard={() => handleLinkJobCard(inspection)}
                           onCorrectiveAction={() => handleCorrectiveAction(inspection)}
@@ -911,6 +917,16 @@ export function InspectionHistory() {
             refetch();
             setShowRootCauseAnalysis(false);
           }}
+        />
+      )}
+
+      {/* Share Inspection Dialog */}
+      {selectedInspection && (
+        <ShareInspectionDialog
+          open={showShareDialog}
+          onOpenChange={setShowShareDialog}
+          inspectionId={selectedInspection.id}
+          inspectionNumber={selectedInspection.inspection_number}
         />
       )}
 

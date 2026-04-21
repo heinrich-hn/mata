@@ -189,7 +189,8 @@ const JobCardFollowUpsTab = () => {
     });
 
     const filteredFollowUps = useMemo(() => {
-        let result = followUps;
+        // Hide completed follow-ups from the list (record is still preserved on the job card)
+        let result = followUps.filter((f) => f.status !== "completed");
         if (statusFilter !== "all") {
             result = result.filter((f) => f.status === statusFilter);
         }
@@ -282,49 +283,52 @@ const JobCardFollowUpsTab = () => {
     };
 
     return (
-        <div className="space-y-4">
-            {/* Compact toolbar: stats + filters in one row */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                {/* Inline stats */}
-                <div className="flex items-center gap-1.5 text-sm">
-                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-semibold">{followUps.length}</span>
-                    <span className="text-muted-foreground text-xs">total</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                    <ListPlus className="h-3.5 w-3.5 text-yellow-500" />
-                    <span className="font-semibold text-yellow-600">{pendingCount}</span>
-                    <span className="text-muted-foreground text-xs">pending</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                    <span className="font-semibold text-green-600">{completedCount}</span>
-                    <span className="text-muted-foreground text-xs">completed</span>
-                </div>
+        <div className="space-y-6">
+            {/* Refined toolbar: KPI chips + filters */}
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 sm:p-4">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+                    {/* KPI chips */}
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-muted-foreground/60" aria-hidden />
+                            <span className="text-base font-semibold tabular-nums leading-none">{followUps.length}</span>
+                            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Total</span>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                            <span className="text-base font-semibold tabular-nums leading-none">{pendingCount}</span>
+                            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pending</span>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                            <span className="text-base font-semibold tabular-nums leading-none">{completedCount}</span>
+                            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Completed</span>
+                        </div>
+                    </div>
 
-                <div className="hidden sm:block h-4 w-px bg-border" />
+                    <div className="hidden sm:block h-5 w-px bg-border/70" />
 
-                {/* Filters inline */}
-                <div className="relative flex-1 min-w-0 sm:min-w-[180px] sm:max-w-[260px]">
-                    <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input
-                        placeholder="Search..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-8 pl-7 text-xs"
-                    />
+                    {/* Filters inline */}
+                    <div className="relative flex-1 min-w-0 sm:min-w-[200px] sm:max-w-[280px]">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                            placeholder="Search follow-ups..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="h-9 pl-8 text-xs bg-background"
+                        />
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Open</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-8 w-[120px] text-xs">
-                        <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                    </SelectContent>
-                </Select>
             </div>
 
             {/* Follow-ups list */}

@@ -7,7 +7,9 @@ import JobCardNotesPopover from "@/components/jobCards/JobCardNotesPopover";
 import JobCardFollowUpsPopover from "@/components/jobCards/JobCardFollowUpsPopover";
 import JobCardFollowUpsTab from "@/components/jobCards/JobCardFollowUpsTab";
 import TyreJobCardsTab from "@/components/jobCards/TyreJobCardsTab";
+import WorkerDashboardDialog from "@/components/jobCards/WorkerDashboardDialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import {
   Dialog,
   DialogContent,
@@ -48,19 +50,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import {
   Calendar,
-  CheckCircle2,
   ChevronDown,
-  ClipboardList,
   Download,
+  Eye,
   FileText,
   ListPlus,
   MessageSquarePlus,
   MoreHorizontal,
+  Pencil,
   Plus,
   Search,
+  Share2,
+  Archive as ArchiveIcon,
+  ArchiveRestore,
   Trash2,
   Truck,
-  User
+  User,
+  Users,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ExcelJS from 'exceljs';
@@ -86,6 +92,7 @@ type Database = {
           due_date: string | null;
           vehicle_id: string | null;
           inspection_id: string | null;
+          archived_at: string | null;
         };
       };
       vehicle_inspections: {
@@ -174,8 +181,15 @@ type FleetCategory = {
 
 const JobCards = () => {
   const { userName } = useAuth();
+  const navigate = useNavigate();
   const [selectedJob, setSelectedJob] = useState<JobCard | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewInitialEditMode, setViewInitialEditMode] = useState(false);
+  const [workerDashboardJob, setWorkerDashboardJob] = useState<JobCard | null>(null);
+  const [workerDashboardOpen, setWorkerDashboardOpen] = useState(false);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [jobToArchive, setJobToArchive] = useState<JobCard | null>(null);
+  const [closedArchivedFleets, setClosedArchivedFleets] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<JobCard | null>(null);
@@ -485,11 +499,14 @@ const JobCards = () => {
   });
 
   // Group by status (case-insensitive to handle any database variations)
-  const allActiveCards = baseFilteredCards.filter(card => {
+  // Archived cards are excluded from active/completed and shown in their own tab.
+  const nonArchivedCards = baseFilteredCards.filter(card => !(card as JobCard & { archived_at?: string | null }).archived_at);
+  const allActiveCards = nonArchivedCards.filter(card => {
     const status = card.status?.toLowerCase();
     return status === "pending" || status === "in_progress" || status === "in progress";
   });
-  const allCompletedCards = baseFilteredCards.filter(card => card.status?.toLowerCase() === "completed");
+  const allCompletedCards = nonArchivedCards.filter(card => card.status?.toLowerCase() === "completed");
+  const allArchivedCards = baseFilteredCards.filter(card => !!(card as JobCard & { archived_at?: string | null }).archived_at);
 
   // Collapse all fleet sections by default on initial load
   const hasInitialCollapse = useRef(false);
@@ -524,6 +541,15 @@ const JobCards = () => {
 
   const toggleCompletedFleet = (fleet: string) => {
     setClosedCompletedFleets(prev => {
+      const next = new Set(prev);
+      if (next.has(fleet)) next.delete(fleet);
+      else next.add(fleet);
+      return next;
+    });
+  };
+
+  const toggleArchivedFleet = (fleet: string) => {
+    setClosedArchivedFleets(prev => {
       const next = new Set(prev);
       if (next.has(fleet)) next.delete(fleet);
       else next.add(fleet);
@@ -721,7 +747,36 @@ const JobCards = () => {
 
   const handleJobClick = (job: JobCard) => {
     setSelectedJob(job);
+    setViewInitialEditMode(false);
     setDialogOpen(true);
+  };
+
+  const openViewDialog = (job: JobCard) => {
+    setSelectedJob(job);
+    setViewInitialEditMode(false);
+    setDialogOpen(true);
+  };
+
+  const openUpdateDialog = (job: JobCard) => {
+    setSelectedJob(job);
+    setViewInitialEditMode(true);
+    setDialogOpen(true);
+  };
+
+  const openWorkerDashboard = (job: JobCard) => {
+    setWorkerDashboardJob(job);
+    setWorkerDashboardOpen(true);
+  };
+
+  const openShareDialog = (job: JobCard) => {
+    // Share dialog needs the full export data which is built on the details page.
+    // Navigate there with ?share=1 to auto-open it.
+    navigate(`/job-card/${job.id}?share=1`);
+  };
+
+  const handleArchiveClick = (job: JobCard) => {
+    setJobToArchive(job);
+    setArchiveDialogOpen(true);
   };
 
   const handleDeleteClick = (job: JobCard) => {
@@ -772,6 +827,38 @@ const JobCards = () => {
     } finally {
       setDeleteDialogOpen(false);
       setJobToDelete(null);
+    }
+  };
+
+  const handleArchiveConfirm = async () => {
+    if (!jobToArchive) return;
+    const isCurrentlyArchived = !!(jobToArchive as JobCard & { archived_at?: string | null }).archived_at;
+    try {
+      const { error } = await supabase
+        .from("job_cards")
+        .update({ archived_at: isCurrentlyArchived ? null : new Date().toISOString() } as never)
+        .eq("id", jobToArchive.id);
+
+      if (error) throw error;
+
+      toast({
+        title: isCurrentlyArchived ? "Restored" : "Archived",
+        description: isCurrentlyArchived
+          ? `Job card #${jobToArchive.job_number} has been restored.`
+          : `Job card #${jobToArchive.job_number} has been archived.`,
+      });
+      requestGoogleSheetsSync('workshop');
+      refetch();
+    } catch (error) {
+      console.error("Error archiving job card:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update archive status",
+        variant: "destructive",
+      });
+    } finally {
+      setArchiveDialogOpen(false);
+      setJobToArchive(null);
     }
   };
 
@@ -892,16 +979,16 @@ const JobCards = () => {
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="w-[100px]">Job #</TableHead>
-            <TableHead>Title</TableHead>
-            <TableHead>Fleet / Vehicle</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Priority</TableHead>
-            <TableHead>Assignee</TableHead>
-            <TableHead>Due Date</TableHead>
-            <TableHead>Linked References</TableHead>
-            <TableHead className="w-[80px]">Actions</TableHead>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="h-9 px-3 py-2 text-xs w-[90px]">Job #</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-xs">Title</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-xs">Fleet / Vehicle</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-xs">Status</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-xs">Priority</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-xs">Assignee</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-xs">Due</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-xs">Links</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-xs w-[60px] text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -911,70 +998,65 @@ const JobCards = () => {
               className="cursor-pointer border-b transition-colors hover:bg-muted/30"
               onClick={() => handleJobClick(card)}
             >
-              <TableCell className="font-mono text-sm">#{card.job_number}</TableCell>
-              <TableCell className="max-w-[280px]">
-                <div className="space-y-1">
-                  <p className="font-medium leading-tight truncate">{card.title}</p>
-                  <p className="text-xs text-muted-foreground">Created {new Date(card.created_at).toLocaleDateString()}</p>
-                </div>
+              <TableCell className="px-3 py-2 font-mono text-xs">#{card.job_number}</TableCell>
+              <TableCell className="px-3 py-2 max-w-[260px]">
+                <p className="font-medium text-sm leading-tight truncate">{card.title}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                  Created {new Date(card.created_at).toLocaleDateString()}
+                </p>
               </TableCell>
-              <TableCell>
+              <TableCell className="px-3 py-2">
                 {card.vehicle ? (
-                  <div className="flex items-center gap-2">
-                    <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                    <div className="flex flex-col">
-                      {card.vehicle.fleet_number && (
-                        <Badge variant="outline" className="text-xs w-fit">
-                          {card.vehicle.fleet_number}
-                        </Badge>
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {card.vehicle.registration_number}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Truck className="h-3 w-3 text-muted-foreground shrink-0" />
+                    {card.vehicle.fleet_number && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 leading-none">
+                        {card.vehicle.fleet_number}
+                      </Badge>
+                    )}
+                    <span className="text-[10px] text-muted-foreground truncate">
+                      {card.vehicle.registration_number}
+                    </span>
                   </div>
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground text-xs">—</span>
                 )}
               </TableCell>
-              <TableCell>{getStatusBadge(card.status)}</TableCell>
-              <TableCell>{getPriorityBadge(card.priority)}</TableCell>
-              <TableCell>
+              <TableCell className="px-3 py-2">{getStatusBadge(card.status)}</TableCell>
+              <TableCell className="px-3 py-2">{getPriorityBadge(card.priority)}</TableCell>
+              <TableCell className="px-3 py-2">
                 {card.assignee ? (
-                  <div className="flex items-center gap-2">
-                    <User className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm">{card.assignee}</span>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <User className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate max-w-[120px]">{card.assignee}</span>
                   </div>
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground text-xs">—</span>
                 )}
               </TableCell>
-              <TableCell>
+              <TableCell className="px-3 py-2">
                 {card.due_date ? (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm">{new Date(card.due_date).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span>{new Date(card.due_date).toLocaleDateString()}</span>
                   </div>
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground text-xs">—</span>
                 )}
               </TableCell>
-              <TableCell>
-                <div className="space-y-1 max-w-[220px]">
+              <TableCell className="px-3 py-2">
+                <div className="flex flex-wrap items-center gap-1 max-w-[220px]">
                   {card.inspection ? (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                      <FileText className="h-3 w-3 mr-1" />
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 leading-none bg-blue-50 text-blue-700 border-blue-200">
+                      <FileText className="h-2.5 w-2.5 mr-1" />
                       {card.inspection.inspection_number}
                     </Badge>
                   ) : card.inspection_id ? (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                      <FileText className="h-3 w-3 mr-1" />
-                      Inspection Linked
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 leading-none bg-blue-50 text-blue-700 border-blue-200">
+                      <FileText className="h-2.5 w-2.5 mr-1" />
+                      Linked
                     </Badge>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">No inspection</span>
-                  )}
-
+                  ) : null}
                   {card.notesCount && card.notesCount > 0 ? (
                     <JobCardNotesPopover
                       jobCardId={card.id}
@@ -982,7 +1064,6 @@ const JobCards = () => {
                       notesCount={card.notesCount}
                     />
                   ) : null}
-
                   {card.followUpCount && card.followUpCount > 0 ? (
                     <JobCardFollowUpsPopover
                       jobCardId={card.id}
@@ -990,31 +1071,24 @@ const JobCards = () => {
                       followUpCount={card.followUpCount}
                     />
                   ) : null}
-
                   {card.partsSummary && card.partsSummary.count > 0 ? (
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap gap-1">
-                        <Badge variant="outline" className="text-xs">
-                          {card.partsSummary.count} Part{card.partsSummary.count > 1 ? "s" : ""}
+                    <>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 leading-none">
+                        {card.partsSummary.count}P
+                      </Badge>
+                      {card.partsSummary.latestIrNumber && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 leading-none bg-emerald-50 text-emerald-700 border-emerald-200">
+                          IR {card.partsSummary.latestIrNumber}
                         </Badge>
-                        {card.partsSummary.latestIrNumber && (
-                          <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
-                            IR {card.partsSummary.latestIrNumber}
-                          </Badge>
-                        )}
-                      </div>
-                      {card.partsSummary.latestPartName && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          Latest part: {card.partsSummary.latestPartName}
-                        </p>
                       )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">No parts linked</p>
+                    </>
+                  ) : null}
+                  {!card.inspection && !card.inspection_id && !card.notesCount && !card.followUpCount && !card.partsSummary?.count && (
+                    <span className="text-muted-foreground text-[10px]">—</span>
                   )}
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -1027,6 +1101,23 @@ const JobCards = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem onClick={() => openWorkerDashboard(card)}>
+                      <Users className="h-4 w-4 mr-2" />
+                      Worker Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openViewDialog(card)}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      View
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openUpdateDialog(card)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Update
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openShareDialog(card)}>
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Share
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => openCommentDialog(card)}>
                       <MessageSquarePlus className="h-4 w-4 mr-2" />
                       Add Comment
@@ -1036,6 +1127,19 @@ const JobCards = () => {
                       Add External Follow-up
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleArchiveClick(card)}>
+                      {(card as JobCard & { archived_at?: string | null }).archived_at ? (
+                        <>
+                          <ArchiveRestore className="h-4 w-4 mr-2" />
+                          Restore
+                        </>
+                      ) : (
+                        <>
+                          <ArchiveIcon className="h-4 w-4 mr-2" />
+                          Archive
+                        </>
+                      )}
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
                       onClick={() => handleDeleteClick(card)}
@@ -1073,42 +1177,28 @@ const JobCards = () => {
     onToggle: () => void;
     statusVariant: "active" | "completed";
   }) => (
-    <div className="border border-border rounded-xl overflow-hidden transition-shadow duration-200 shadow-sm hover:shadow-md">
+    <div className="border border-border/70 rounded-md overflow-hidden bg-background">
       <button
         type="button"
-        className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors duration-150 ${statusVariant === "active"
-          ? "bg-gradient-to-r from-orange-50/80 to-amber-50/60 hover:from-orange-100/80 hover:to-amber-100/60 dark:from-orange-950/20 dark:to-amber-950/20 dark:hover:from-orange-950/30 dark:hover:to-amber-950/30"
-          : "bg-gradient-to-r from-emerald-50/80 to-green-50/60 hover:from-emerald-100/80 hover:to-green-100/60 dark:from-emerald-950/20 dark:to-green-950/20 dark:hover:from-emerald-950/30 dark:hover:to-green-950/30"
-          }`}
+        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors duration-150 bg-muted/30 hover:bg-muted/60 border-l-2 ${statusVariant === "active" ? "border-l-foreground/70" : "border-l-border"}`}
         onClick={onToggle}
       >
-        <div className="flex items-center gap-3">
-          <div className={`flex items-center justify-center w-9 h-9 rounded-lg ${statusVariant === "active"
-            ? "bg-orange-100 dark:bg-orange-900/50"
-            : "bg-emerald-100 dark:bg-emerald-900/50"
-            }`}>
-            <Truck className={`h-4 w-4 ${statusVariant === "active" ? "text-orange-600 dark:text-orange-400" : "text-emerald-600 dark:text-emerald-400"
-              }`} />
-          </div>
-          <div>
-            <p className="font-semibold text-sm text-foreground leading-none">{fleetLabel}</p>
-            <p className="text-xs text-muted-foreground mt-1">
+        <div className="flex items-center gap-3 min-w-0">
+          <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-foreground leading-none truncate">{fleetLabel}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">
               {cards.length} {cards.length === 1 ? "job card" : "job cards"}
             </p>
           </div>
-          <Badge
-            className={`ml-1 text-xs font-semibold border ${statusVariant === "active"
-              ? "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800"
-              : "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800"
-              }`}
-          >
+          <Badge variant="outline" className="ml-1 text-[10px] font-semibold px-1.5 py-0 h-5 leading-none tabular-nums">
             {cards.length}
           </Badge>
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
-          <span className="text-xs hidden sm:inline select-none">{isOpen ? "Collapse" : "Expand"}</span>
+          <span className="text-[11px] hidden sm:inline select-none uppercase tracking-wide">{isOpen ? "Hide" : "Show"}</span>
           <ChevronDown
-            className={`h-4 w-4 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
+            className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
           />
         </div>
       </button>
@@ -1135,9 +1225,9 @@ const JobCards = () => {
     return (
       <div key={category} className="mb-6">
         <div className="flex items-center gap-2 mb-3">
-          <h3 className="text-lg font-semibold">{categoryInfo.name}</h3>
-          <Badge className={categoryInfo.color}>
-            {totalCards} {totalCards === 1 ? 'card' : 'cards'}
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{categoryInfo.name}</h3>
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 leading-none tabular-nums font-semibold">
+            {totalCards}
           </Badge>
         </div>
         <div className="space-y-3">
@@ -1163,19 +1253,18 @@ const JobCards = () => {
 
   return (
     <Layout>
-      <div className="p-2 sm:p-6 space-y-4 sm:space-y-6">
-        {/* Status indicators */}
+      <div className="p-3 sm:p-8 space-y-5 sm:space-y-7">
         {(isLoading || queryError) && (
           <div>
-            {isLoading && <p className="text-sm text-blue-500">Loading job cards...</p>}
-            {queryError && <p className="text-sm text-red-500">Error: {String(queryError)}</p>}
+            {isLoading && <p className="text-xs text-muted-foreground">Loading job cards…</p>}
+            {queryError && <p className="text-xs text-destructive">Error: {String(queryError)}</p>}
           </div>
         )}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="overflow-x-auto -mx-1 px-1">
-            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-4xl sm:grid-cols-5">
+            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-5xl sm:grid-cols-6">
               <TabsTrigger value="job-cards" className="px-5 py-2.5 text-base whitespace-nowrap">
                 Job Cards
               </TabsTrigger>
@@ -1191,219 +1280,219 @@ const JobCards = () => {
               <TabsTrigger value="tyre-costs" className="px-5 py-2.5 text-base whitespace-nowrap">
                 Tyre Costs
               </TabsTrigger>
+              <TabsTrigger value="archived" className="px-5 py-2.5 text-base whitespace-nowrap">
+                Archived
+                {allArchivedCards.length > 0 && (
+                  <Badge variant="secondary" className="ml-2 text-xs">{allArchivedCards.length}</Badge>
+                )}
+              </TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value="job-cards" className="space-y-4 mt-4">
-            {/* Compact toolbar: stats + filters + actions in one row */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              {/* Inline stats */}
-              <div className="flex items-center gap-1.5 text-sm">
-                <ClipboardList className="h-3.5 w-3.5 text-orange-500" />
-                <span className="font-semibold">{allActiveCards.length}</span>
-                <span className="text-muted-foreground text-xs">active</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-sm">
-                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                <span className="font-semibold">{allCompletedCards.length}</span>
-                <span className="text-muted-foreground text-xs">completed</span>
-              </div>
+          <TabsContent value="job-cards" className="space-y-6 mt-6">
+            {/* Refined toolbar: KPI chips + filters + actions */}
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3 sm:p-4">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+                {/* KPI chips */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                    <span className="text-base font-semibold tabular-nums leading-none">{allActiveCards.length}</span>
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Active</span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-3 py-1.5 shadow-sm">
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                    <span className="text-base font-semibold tabular-nums leading-none">{allCompletedCards.length}</span>
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Completed</span>
+                  </div>
+                </div>
 
-              <div className="hidden sm:block h-4 w-px bg-border" />
+                <div className="hidden sm:block h-5 w-px bg-border/70" />
 
-              {/* Filters inline */}
-              <div className="relative flex-1 min-w-0 sm:min-w-[180px] sm:max-w-[260px]">
-                <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Search..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="h-8 pl-7 text-xs"
-                />
-              </div>
+                {/* Filters inline */}
+                <div className="relative flex-1 min-w-0 sm:min-w-[200px] sm:max-w-[280px]">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search job cards..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-9 pl-8 text-xs bg-background"
+                  />
+                </div>
 
-              <Select value={selectedPriority} onValueChange={setSelectedPriority}>
-                <SelectTrigger className="h-8 w-[120px] text-xs">
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priorities</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {assignees.length > 0 && (
-                <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
-                  <SelectTrigger className="h-8 w-[130px] text-xs">
-                    <SelectValue placeholder="Assignee" />
+                <Select value={selectedPriority} onValueChange={setSelectedPriority}>
+                  <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
+                    <SelectValue placeholder="Priority" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Assignees</SelectItem>
-                    {assignees.map((assignee) => (
-                      <SelectItem key={assignee} value={assignee}>
-                        {assignee}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="all">All Priorities</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
                   </SelectContent>
                 </Select>
-              )}
 
-              {/* Spacer to push actions right */}
-              <div className="flex-1" />
+                {assignees.length > 0 && (
+                  <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+                    <SelectTrigger className="h-9 w-[140px] text-xs bg-background">
+                      <SelectValue placeholder="Assignee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Assignees</SelectItem>
+                      {assignees.map((assignee) => (
+                        <SelectItem key={assignee} value={assignee}>
+                          {assignee}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
 
-              {/* Export + Add buttons */}
-              <div className="flex items-center gap-1.5">
-                <Button variant="outline" size="sm" onClick={exportJobCardsToExcel} className="h-8 gap-1 text-xs px-2.5">
-                  <Download className="w-3 h-3" />
-                  Excel
-                </Button>
-                <Button variant="outline" size="sm" onClick={exportJobCardsToPDF} className="h-8 gap-1 text-xs px-2.5">
-                  <FileText className="w-3 h-3" />
-                  PDF
-                </Button>
-                <Button size="sm" className="h-8 gap-1 text-xs px-2.5" onClick={() => setShowAddDialog(true)}>
-                  <Plus className="h-3 w-3" />
-                  New Job Card
-                </Button>
+                {/* Spacer to push actions right */}
+                <div className="flex-1" />
+
+                {/* Export + Add buttons */}
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="sm" onClick={exportJobCardsToExcel} className="h-9 gap-1.5 text-xs px-3 bg-background">
+                    <Download className="w-3.5 h-3.5" />
+                    Excel
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={exportJobCardsToPDF} className="h-9 gap-1.5 text-xs px-3 bg-background">
+                    <FileText className="w-3.5 h-3.5" />
+                    PDF
+                  </Button>
+                  <Button size="sm" className="h-9 gap-1.5 text-xs px-3.5 shadow-sm" onClick={() => setShowAddDialog(true)}>
+                    <Plus className="h-3.5 w-3.5" />
+                    New Job Card
+                  </Button>
+                </div>
               </div>
             </div>
 
             {/* Active Job Cards (Pending + In Progress) */}
-            <Card>
-              <CardHeader className="pb-3 pt-4 px-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4 text-orange-500" />
-                    <CardTitle className="text-sm font-semibold">Active Job Cards</CardTitle>
-                    <Badge className="bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800 font-semibold text-[11px] px-1.5 py-0">
-                      {allActiveCards.length}
-                    </Badge>
-                  </div>
-                  {allActiveCards.length > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50"
-                        onClick={() => setClosedActiveFleets(new Set())}
-                      >
-                        Expand All
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50"
-                        onClick={() => {
-                          const allFleets = new Set<string>();
-                          const grouped = groupCardsByCategory(allActiveCards);
-                          grouped.forEach((fleetMap) => {
-                            fleetMap.forEach((_, fleetKey) => {
-                              allFleets.add(fleetKey);
-                            });
-                          });
-                          setClosedActiveFleets(allFleets);
-                        }}
-                      >
-                        Collapse All
-                      </Button>
-                    </div>
-                  )}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                  <h2 className="text-base font-semibold tracking-tight text-foreground">Active</h2>
+                  <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                    {allActiveCards.length}
+                  </span>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0 px-4 pb-4">
-                {allActiveCards.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">No active job cards</p>
-                    <p className="text-xs mt-1">No results match the current filter criteria</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {Object.keys(categories)
-                      .sort((a, b) => categories[a].order - categories[b].order)
-                      .map(category =>
-                        renderCategorySection(
-                          category,
-                          groupCardsByCategory(allActiveCards).get(category) || new Map(),
-                          true,
-                          closedActiveFleets,
-                          toggleActiveFleet
-                        )
-                      )}
+                {allActiveCards.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      onClick={() => setClosedActiveFleets(new Set())}
+                    >
+                      Expand all
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      onClick={() => {
+                        const allFleets = new Set<string>();
+                        const grouped = groupCardsByCategory(allActiveCards);
+                        grouped.forEach((fleetMap) => {
+                          fleetMap.forEach((_, fleetKey) => {
+                            allFleets.add(fleetKey);
+                          });
+                        });
+                        setClosedActiveFleets(allFleets);
+                      }}
+                    >
+                      Collapse all
+                    </Button>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+              {allActiveCards.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <p className="text-sm font-medium">No active job cards</p>
+                  <p className="text-xs mt-1">No results match the current filter criteria.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {Object.keys(categories)
+                    .sort((a, b) => categories[a].order - categories[b].order)
+                    .map(category =>
+                      renderCategorySection(
+                        category,
+                        groupCardsByCategory(allActiveCards).get(category) || new Map(),
+                        true,
+                        closedActiveFleets,
+                        toggleActiveFleet
+                      )
+                    )}
+                </div>
+              )}
+            </section>
 
             {/* Completed Job Cards */}
-            <Card>
-              <CardHeader className="pb-3 pt-4 px-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    <CardTitle className="text-sm font-semibold">Completed Job Cards</CardTitle>
-                    <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800 font-semibold text-[11px] px-1.5 py-0">
-                      {allCompletedCards.length}
-                    </Badge>
-                  </div>
-                  {allCompletedCards.length > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50"
-                        onClick={() => setClosedCompletedFleets(new Set())}
-                      >
-                        Expand All
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground border border-transparent hover:border-border/50"
-                        onClick={() => {
-                          const allFleets = new Set<string>();
-                          const grouped = groupCardsByCategory(allCompletedCards);
-                          grouped.forEach((fleetMap) => {
-                            fleetMap.forEach((_, fleetKey) => {
-                              allFleets.add(fleetKey);
-                            });
-                          });
-                          setClosedCompletedFleets(allFleets);
-                        }}
-                      >
-                        Collapse All
-                      </Button>
-                    </div>
-                  )}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                  <h2 className="text-base font-semibold tracking-tight text-foreground">Completed</h2>
+                  <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                    {allCompletedCards.length}
+                  </span>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0 px-4 pb-4">
-                {allCompletedCards.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <CheckCircle2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">No completed job cards</p>
-                    <p className="text-xs mt-1">No results match the current filter criteria</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {Object.keys(categories)
-                      .sort((a, b) => categories[a].order - categories[b].order)
-                      .map(category =>
-                        renderCategorySection(
-                          category,
-                          groupCardsByCategory(allCompletedCards).get(category) || new Map(),
-                          false,
-                          closedCompletedFleets,
-                          toggleCompletedFleet
-                        )
-                      )}
+                {allCompletedCards.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      onClick={() => setClosedCompletedFleets(new Set())}
+                    >
+                      Expand all
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      onClick={() => {
+                        const allFleets = new Set<string>();
+                        const grouped = groupCardsByCategory(allCompletedCards);
+                        grouped.forEach((fleetMap) => {
+                          fleetMap.forEach((_, fleetKey) => {
+                            allFleets.add(fleetKey);
+                          });
+                        });
+                        setClosedCompletedFleets(allFleets);
+                      }}
+                    >
+                      Collapse all
+                    </Button>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+              {allCompletedCards.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <p className="text-sm font-medium">No completed job cards</p>
+                  <p className="text-xs mt-1">No results match the current filter criteria.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {Object.keys(categories)
+                    .sort((a, b) => categories[a].order - categories[b].order)
+                    .map(category =>
+                      renderCategorySection(
+                        category,
+                        groupCardsByCategory(allCompletedCards).get(category) || new Map(),
+                        false,
+                        closedCompletedFleets,
+                        toggleCompletedFleet
+                      )
+                      )}
+                </div>
+              )}
+            </section>
           </TabsContent>
 
           <TabsContent value="cost-reports" className="mt-4">
@@ -1416,8 +1505,9 @@ const JobCards = () => {
 
           <TabsContent value="tyre-job-cards" className="mt-4">
             <TyreJobCardsTab
-              onJobCardClick={(card) => {
+              onJobCardClick={(card, editMode) => {
                 setSelectedJob(card as unknown as JobCard);
+                setViewInitialEditMode(!!editMode);
                 setDialogOpen(true);
               }}
             />
@@ -1425,6 +1515,43 @@ const JobCards = () => {
 
           <TabsContent value="tyre-costs" className="mt-4">
             <JobCardWeeklyCostReport filter="tyre-only" />
+          </TabsContent>
+
+          <TabsContent value="archived" className="space-y-4 mt-4">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex h-1.5 w-1.5 rounded-full bg-muted-foreground/60" aria-hidden />
+              <h2 className="text-base font-semibold tracking-tight text-foreground">Archived Job Cards</h2>
+              <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                {allArchivedCards.length}
+              </span>
+            </div>
+            {allArchivedCards.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <p className="text-sm font-medium">No archived job cards</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {Array.from(
+                  allArchivedCards.reduce((map, card) => {
+                    const fleet = card.fleet_number || "Unassigned";
+                    if (!map.has(fleet)) map.set(fleet, []);
+                    map.get(fleet)!.push(card);
+                    return map;
+                  }, new Map<string, JobCard[]>())
+                )
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([fleet, cards]) => (
+                    <FleetAccordionSection
+                      key={`archived-${fleet}`}
+                      fleet={fleet}
+                      cards={cards}
+                      isOpen={!closedArchivedFleets.has(fleet)}
+                      statusVariant="completed"
+                      onToggle={() => toggleArchivedFleet(fleet)}
+                    />
+                  ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 
@@ -1434,6 +1561,13 @@ const JobCards = () => {
           onOpenChange={setDialogOpen}
           jobCard={selectedJob}
           onUpdate={refetch}
+          initialEditMode={viewInitialEditMode}
+        />
+
+        <WorkerDashboardDialog
+          open={workerDashboardOpen}
+          onOpenChange={setWorkerDashboardOpen}
+          jobCard={workerDashboardJob}
         />
 
         <AddJobCardDialog
@@ -1587,6 +1721,29 @@ const JobCards = () => {
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {(jobToArchive as JobCard & { archived_at?: string | null })?.archived_at
+                  ? "Restore Job Card"
+                  : "Archive Job Card"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {(jobToArchive as JobCard & { archived_at?: string | null })?.archived_at
+                  ? `Restore job card #${jobToArchive?.job_number} - "${jobToArchive?.title}" back to the active list?`
+                  : `Archive job card #${jobToArchive?.job_number} - "${jobToArchive?.title}"? It will be hidden from the active and completed views and can be restored from the Archived tab.`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleArchiveConfirm}>
+                {(jobToArchive as JobCard & { archived_at?: string | null })?.archived_at ? "Restore" : "Archive"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

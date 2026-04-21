@@ -17,18 +17,32 @@ import { generateJobCardPDF, type JobCardExportData } from "@/lib/jobCardExport"
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ArrowLeft, ChevronDown, ClipboardList, FileText, Link2, Loader2 } from "lucide-react";
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { LinkInspectionToJobCardDialog } from "@/components/dialogs/LinkInspectionJobCardDialogs";
+import { ShareJobCardDialog } from "@/components/jobCards/ShareJobCardDialog";
+import { Send } from "lucide-react";
 
 type JobCard = Database["public"]["Tables"]["job_cards"]["Row"];
 
 const JobCardDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showLinkInspection, setShowLinkInspection] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+
+  // Auto-open share dialog when navigated with ?share=1 (from Job Cards list)
+  useEffect(() => {
+    if (searchParams.get("share") === "1") {
+      setShowShareDialog(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("share");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const { data: jobCard, isLoading } = useQuery<JobCard>({
     queryKey: ["job_card", id],
@@ -271,10 +285,9 @@ const JobCardDetails = () => {
     }
   };
 
-  const handleExportPDF = () => {
-    if (!jobCard) return;
-
-    const exportData: JobCardExportData = {
+  const exportData = useMemo<JobCardExportData | null>(() => {
+    if (!jobCard) return null;
+    return {
       jobCard: {
         id: jobCard.id,
         job_number: jobCard.job_number,
@@ -360,7 +373,10 @@ const JobCardDetails = () => {
         } : null,
       } : null,
     };
+  }, [jobCard, vehicle, tasks, laborEntries, parts, notes, inspection, inspectionItems, inspectionFaults, oocReport]);
 
+  const handleExportPDF = () => {
+    if (!exportData) return;
     generateJobCardPDF(exportData);
     toast({
       title: "Success",
@@ -406,10 +422,21 @@ const JobCardDetails = () => {
               <p className="text-muted-foreground">#{jobCard.job_number}</p>
             </div>
           </div>
-          <Button onClick={handleExportPDF} className="gap-2">
-            <FileText className="h-4 w-4" />
-            Export PDF
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowShareDialog(true)}
+              disabled={!exportData}
+              className="gap-2"
+            >
+              <Send className="h-4 w-4" />
+              Send / Share
+            </Button>
+            <Button onClick={handleExportPDF} className="gap-2">
+              <FileText className="h-4 w-4" />
+              Export PDF
+            </Button>
+          </div>
         </div>
 
         {/* Job Card Header */}
@@ -560,6 +587,12 @@ const JobCardDetails = () => {
           setShowLinkInspection(false);
           handleRefresh();
         }}
+      />
+
+      <ShareJobCardDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        exportData={exportData}
       />
     </Layout>
   );

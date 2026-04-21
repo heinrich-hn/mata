@@ -48,7 +48,7 @@ interface VehicleFormData {
   model: string;
   vehicle_type: string;
   tonnage: string;
-  engine_specs: string;
+  vin_number: string;
   active: boolean;
 }
 
@@ -58,6 +58,7 @@ const VEHICLE_TYPES = [
   { value: "refrigerated_truck", label: "Refrigerated Truck" },
   { value: "reefer", label: "Reefer Trailer" },
   { value: "interlink", label: "Interlink Trailer" },
+  { value: "van", label: "Light Motor Vehicle" }, // Using 'van' for Light Motor Vehicle
 ];
 
 const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogProps) => {
@@ -71,7 +72,7 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
     model: "",
     vehicle_type: "",
     tonnage: "",
-    engine_specs: "",
+    vin_number: "",
     active: true,
   });
 
@@ -84,7 +85,7 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
         model: vehicle.model,
         vehicle_type: vehicle.vehicle_type,
         tonnage: vehicle.tonnage?.toString() || "",
-        engine_specs: vehicle.engine_specs || "",
+        vin_number: vehicle.engine_specs || "",
         active: vehicle.active ?? true,
       });
     }
@@ -103,7 +104,7 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
           model: data.model,
           vehicle_type: data.vehicle_type as Database["public"]["Enums"]["vehicle_type"],
           tonnage: data.tonnage ? parseFloat(data.tonnage) : null,
-          engine_specs: data.engine_specs || null,
+          engine_specs: data.vin_number || null,
           active: data.active,
         })
         .eq("id", vehicle.id)
@@ -269,18 +270,18 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
               />
             </div>
 
-            {/* Engine Specs */}
+            {/* VIN Number */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="engine_specs" className="text-right">
-                Engine Specs
+              <Label htmlFor="vin_number" className="text-right">
+                VIN Number
               </Label>
               <Input
-                id="engine_specs"
-                value={formData.engine_specs}
+                id="vin_number"
+                value={formData.vin_number}
                 onChange={(e) =>
-                  setFormData({ ...formData, engine_specs: e.target.value })
+                  setFormData({ ...formData, vin_number: e.target.value })
                 }
-                placeholder="e.g., D13K500"
+                placeholder="e.g., YV1AS565781234567"
                 className="col-span-3"
               />
             </div>

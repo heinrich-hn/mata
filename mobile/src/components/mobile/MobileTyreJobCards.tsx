@@ -1,4 +1,5 @@
 import JobCardDetailsDialog from "@/components/dialogs/JobCardDetailsDialog";
+import WorkerDashboardSheet from "@/components/WorkerDashboardSheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,10 +7,37 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, CircleDot } from "lucide-react";
+import {
+    Archive as ArchiveIcon,
+    ChevronDown,
+    CircleDot,
+    Eye,
+    MoreVertical,
+    Pencil,
+    Share2,
+    Trash2,
+    Users,
+} from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 
 // ============================================================================
@@ -28,6 +56,7 @@ interface TyreJobCard {
     inspection_id: string | null;
     created_at: string;
     updated_at: string;
+    archived_at?: string | null;
     [key: string]: unknown;
     vehicle?: {
         id: string;
@@ -156,9 +185,11 @@ const PRIORITY_BORDER_COLORS = {
 const TyreJobCardItem = ({
     card,
     onClick,
+    onMenu,
 }: {
     card: TyreJobCard;
     onClick: (card: TyreJobCard) => void;
+    onMenu: (card: TyreJobCard) => void;
 }) => {
     const borderClass = PRIORITY_BORDER_COLORS[card.priority?.toLowerCase() as keyof typeof PRIORITY_BORDER_COLORS] || "border-l-gray-400";
 
@@ -192,7 +223,21 @@ const TyreJobCardItem = ({
                         </div>
                         <p className="text-sm font-bold truncate">{card.title}</p>
                     </div>
-                    <StatusBadge status={card.status} />
+                    <div className="flex items-center gap-1 shrink-0">
+                        <StatusBadge status={card.status} />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 -mr-1.5 touch-target"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onMenu(card);
+                            }}
+                            aria-label="Tyre job card actions"
+                        >
+                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
@@ -226,11 +271,22 @@ const TyreJobCardItem = ({
 // Main Component
 // ============================================================================
 const MobileTyreJobCards = () => {
+    const { toast } = useToast();
     const [selectedJob, setSelectedJob] = useState<TyreJobCard | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [viewInitialEditMode, setViewInitialEditMode] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedPriority, setSelectedPriority] = useState<string>("all");
     const [showFilters, setShowFilters] = useState(false);
+    // Action menu state
+    const [actionsCard, setActionsCard] = useState<TyreJobCard | null>(null);
+    const [actionsOpen, setActionsOpen] = useState(false);
+    const [workerJob, setWorkerJob] = useState<TyreJobCard | null>(null);
+    const [workerOpen, setWorkerOpen] = useState(false);
+    const [archiveOpen, setArchiveOpen] = useState(false);
+    const [jobToArchive, setJobToArchive] = useState<TyreJobCard | null>(null);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [jobToDelete, setJobToDelete] = useState<TyreJobCard | null>(null);
 
     // Fetch tyre job cards (linked to tyre inspections)
     const {
@@ -310,18 +366,21 @@ const MobileTyreJobCards = () => {
         });
     }, [tyreJobCards, searchTerm, selectedPriority]);
 
+    const nonArchivedCards = useMemo(() => filteredCards.filter((c) => !c.archived_at), [filteredCards]);
+    const archivedCards = useMemo(() => filteredCards.filter((c) => !!c.archived_at), [filteredCards]);
+
     const activeCards = useMemo(
         () =>
-            filteredCards.filter((c) => {
+            nonArchivedCards.filter((c) => {
                 const status = c.status?.toLowerCase().replace(" ", "_");
                 return status === "pending" || status === "in_progress";
             }),
-        [filteredCards]
+        [nonArchivedCards]
     );
 
     const completedCards = useMemo(
-        () => filteredCards.filter((c) => c.status?.toLowerCase() === "completed"),
-        [filteredCards]
+        () => nonArchivedCards.filter((c) => c.status?.toLowerCase() === "completed"),
+        [nonArchivedCards]
     );
 
     // Category sort helpers
@@ -353,11 +412,132 @@ const MobileTyreJobCards = () => {
 
     const groupedActive = useMemo(() => groupJobCards(activeCards), [groupJobCards, activeCards]);
     const groupedCompleted = useMemo(() => groupJobCards(completedCards), [groupJobCards, completedCards]);
+    const groupedArchived = useMemo(() => groupJobCards(archivedCards), [groupJobCards, archivedCards]);
 
     const handleJobClick = useCallback((job: TyreJobCard) => {
         setSelectedJob(job);
+        setViewInitialEditMode(false);
         setDialogOpen(true);
     }, []);
+
+    const openActions = useCallback((card: TyreJobCard) => {
+        setActionsCard(card);
+        setActionsOpen(true);
+    }, []);
+
+    const closeActionsAnd = useCallback((fn: () => void) => {
+        setActionsOpen(false);
+        setTimeout(fn, 150);
+    }, []);
+
+    const handleView = () => {
+        if (!actionsCard) return;
+        const card = actionsCard;
+        closeActionsAnd(() => {
+            setSelectedJob(card);
+            setViewInitialEditMode(false);
+            setDialogOpen(true);
+        });
+    };
+
+    const handleUpdate = () => {
+        if (!actionsCard) return;
+        const card = actionsCard;
+        closeActionsAnd(() => {
+            setSelectedJob(card);
+            setViewInitialEditMode(true);
+            setDialogOpen(true);
+        });
+    };
+
+    const handleWorkerDashboard = () => {
+        if (!actionsCard) return;
+        const card = actionsCard;
+        closeActionsAnd(() => {
+            setWorkerJob(card);
+            setWorkerOpen(true);
+        });
+    };
+
+    const handleShare = async () => {
+        if (!actionsCard) return;
+        const card = actionsCard;
+        const shareText = `Tyre Job Card #${card.job_number}\n${card.title}\nStatus: ${card.status}\nPriority: ${card.priority}${card.assignee ? `\nAssignee: ${card.assignee}` : ""}${card.due_date ? `\nDue: ${new Date(card.due_date).toLocaleDateString("en-GB")}` : ""}`;
+        closeActionsAnd(async () => {
+            const nav = navigator as Navigator & { share?: (data: { title?: string; text?: string }) => Promise<void> };
+            if (nav.share) {
+                try {
+                    await nav.share({ title: `Tyre Job Card #${card.job_number}`, text: shareText });
+                } catch {
+                    // user cancelled
+                }
+            } else if (navigator.clipboard) {
+                try {
+                    await navigator.clipboard.writeText(shareText);
+                    toast({ title: "Copied to clipboard", description: "Tyre job card summary copied." });
+                } catch {
+                    toast({ title: "Sharing not available", variant: "destructive" });
+                }
+            }
+        });
+    };
+
+    const handleArchiveOpen = () => {
+        if (!actionsCard) return;
+        const card = actionsCard;
+        closeActionsAnd(() => {
+            setJobToArchive(card);
+            setArchiveOpen(true);
+        });
+    };
+
+    const handleDeleteOpen = () => {
+        if (!actionsCard) return;
+        const card = actionsCard;
+        closeActionsAnd(() => {
+            setJobToDelete(card);
+            setDeleteOpen(true);
+        });
+    };
+
+    const handleArchiveConfirm = async () => {
+        if (!jobToArchive) return;
+        const isArchived = !!jobToArchive.archived_at;
+        try {
+            const { error } = await supabase
+                .from("job_cards")
+                .update({ archived_at: isArchived ? null : new Date().toISOString() } as never)
+                .eq("id", jobToArchive.id);
+            if (error) throw error;
+            toast({
+                title: isArchived ? "Restored" : "Archived",
+                description: `Tyre job card #${jobToArchive.job_number} ${isArchived ? "restored" : "archived"}.`,
+            });
+            refetch();
+        } catch (e) {
+            console.error(e);
+            toast({ title: "Error", description: "Failed to update archive status", variant: "destructive" });
+        } finally {
+            setArchiveOpen(false);
+            setJobToArchive(null);
+        }
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!jobToDelete) return;
+        try {
+            const { error } = await supabase.from("job_cards").delete().eq("id", jobToDelete.id);
+            if (error) throw error;
+            toast({ title: "Deleted", description: `Tyre job card #${jobToDelete.job_number} deleted.` });
+            refetch();
+        } catch (e) {
+            console.error(e);
+            toast({ title: "Error", description: "Failed to delete tyre job card", variant: "destructive" });
+        } finally {
+            setDeleteOpen(false);
+            setJobToDelete(null);
+        }
+    };
 
     const handleClearSearch = useCallback(() => setSearchTerm(""), []);
 
@@ -454,13 +634,13 @@ const MobileTyreJobCards = () => {
 
             {/* Tabs */}
             <Tabs defaultValue="active" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 h-12 rounded-2xl bg-muted/50 p-1">
+                <TabsList className="grid w-full grid-cols-3 h-12 rounded-2xl bg-muted/50 p-1">
                     <TabsTrigger
                         value="active"
                         className="text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm touch-target text-foreground data-[state=active]:text-primary"
                     >
                         Active
-                        <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 font-bold bg-muted text-muted-foreground">
+                        <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 font-bold bg-muted text-muted-foreground">
                             {activeCards.length}
                         </Badge>
                     </TabsTrigger>
@@ -468,9 +648,18 @@ const MobileTyreJobCards = () => {
                         value="completed"
                         className="text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm touch-target text-foreground data-[state=active]:text-primary"
                     >
-                        Completed
-                        <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 font-bold bg-muted text-muted-foreground">
+                        Done
+                        <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 font-bold bg-muted text-muted-foreground">
                             {completedCards.length}
+                        </Badge>
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="archived"
+                        className="text-xs font-semibold rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm touch-target text-foreground data-[state=active]:text-primary"
+                    >
+                        Archive
+                        <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 font-bold bg-muted text-muted-foreground">
+                            {archivedCards.length}
                         </Badge>
                     </TabsTrigger>
                 </TabsList>
@@ -511,7 +700,7 @@ const MobileTyreJobCards = () => {
                                     </CollapsibleTrigger>
                                     <CollapsibleContent className="space-y-2 mt-2">
                                         {group.cards.map((card) => (
-                                            <TyreJobCardItem key={card.id} card={card} onClick={handleJobClick} />
+                                            <TyreJobCardItem key={card.id} card={card} onClick={handleJobClick} onMenu={openActions} />
                                         ))}
                                     </CollapsibleContent>
                                 </Collapsible>
@@ -543,7 +732,40 @@ const MobileTyreJobCards = () => {
                                     </CollapsibleTrigger>
                                     <CollapsibleContent className="space-y-2 mt-2">
                                         {group.cards.map((card) => (
-                                            <TyreJobCardItem key={card.id} card={card} onClick={handleJobClick} />
+                                            <TyreJobCardItem key={card.id} card={card} onClick={handleJobClick} onMenu={openActions} />
+                                        ))}
+                                    </CollapsibleContent>
+                                </Collapsible>
+                            );
+                        })
+                    )}
+                </TabsContent>
+
+                <TabsContent value="archived" className="mt-3 space-y-3">
+                    {archivedCards.length === 0 ? (
+                        <EmptyState title="No archived tyre jobs" message="Archived tyre job cards will appear here" />
+                    ) : (
+                        groupedArchived.map((group) => {
+                            const label = group.vehicle
+                                ? `${group.vehicle.fleet_number || ""} ${group.vehicle.registration_number ? `(${group.vehicle.registration_number})` : ""}`.trim()
+                                : "No Vehicle";
+                            return (
+                                <Collapsible key={group.vehicle?.id || "unknown"}>
+                                    <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-muted/60 hover:bg-muted transition-colors group">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <ArchiveIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                            <span className="text-sm font-bold truncate">{label}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <Badge variant="secondary" className="text-[10px] px-1.5 rounded-lg">
+                                                {group.cards.length}
+                                            </Badge>
+                                            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                                        </div>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="space-y-2 mt-2">
+                                        {group.cards.map((card) => (
+                                            <TyreJobCardItem key={card.id} card={card} onClick={handleJobClick} onMenu={openActions} />
                                         ))}
                                     </CollapsibleContent>
                                 </Collapsible>
@@ -559,9 +781,112 @@ const MobileTyreJobCards = () => {
                 onOpenChange={setDialogOpen}
                 jobCard={selectedJob}
                 onUpdate={refetch}
+                initialEditMode={viewInitialEditMode}
             />
+
+            {/* Actions Sheet */}
+            <Sheet open={actionsOpen} onOpenChange={setActionsOpen}>
+                <SheetContent side="bottom" className="rounded-t-2xl px-0 pb-safe-bottom">
+                    <SheetHeader className="px-4 pb-3 text-left">
+                        <SheetTitle className="text-sm font-bold truncate">
+                            {actionsCard ? `#${actionsCard.job_number} · ${actionsCard.title}` : "Actions"}
+                        </SheetTitle>
+                    </SheetHeader>
+                    <div className="divide-y divide-border">
+                        <ActionRow icon={<Users className="h-5 w-5 text-amber-500" />} label="Worker Dashboard" onClick={handleWorkerDashboard} />
+                        <ActionRow icon={<Eye className="h-5 w-5 text-blue-500" />} label="View" onClick={handleView} />
+                        <ActionRow icon={<Pencil className="h-5 w-5 text-emerald-500" />} label="Update" onClick={handleUpdate} />
+                        <ActionRow icon={<Share2 className="h-5 w-5 text-indigo-500" />} label="Share" onClick={handleShare} />
+                        <ActionRow
+                            icon={<ArchiveIcon className="h-5 w-5 text-muted-foreground" />}
+                            label={actionsCard?.archived_at ? "Restore" : "Archive"}
+                            onClick={handleArchiveOpen}
+                        />
+                        <ActionRow icon={<Trash2 className="h-5 w-5 text-destructive" />} label="Delete Job Card" onClick={handleDeleteOpen} destructive />
+                    </div>
+                </SheetContent>
+            </Sheet>
+
+            <WorkerDashboardSheet
+                open={workerOpen}
+                onOpenChange={setWorkerOpen}
+                jobCard={workerJob ? {
+                    id: workerJob.id,
+                    job_number: workerJob.job_number,
+                    title: workerJob.title,
+                    assignee: workerJob.assignee,
+                    status: workerJob.status,
+                } : null}
+            />
+
+            <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+                <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {jobToArchive?.archived_at ? "Restore tyre job card?" : "Archive tyre job card?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {jobToArchive?.archived_at
+                                ? `Tyre job card #${jobToArchive?.job_number} will return to active lists.`
+                                : `Tyre job card #${jobToArchive?.job_number} will be hidden. You can restore it from the Archive tab.`}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleArchiveConfirm}>
+                            {jobToArchive?.archived_at ? "Restore" : "Archive"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <AlertDialogContent className="max-w-[90vw] rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete tyre job card?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This permanently deletes job card #{jobToDelete?.job_number}. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={handleDeleteConfirm}
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };
+
+function ActionRow({
+    icon,
+    label,
+    onClick,
+    destructive,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+    destructive?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={cn(
+                "flex items-center gap-3 w-full px-4 py-4 text-left active:bg-muted/60 transition-colors touch-target",
+                destructive && "text-destructive"
+            )}
+        >
+            <span className="shrink-0">{icon}</span>
+            <span className="text-sm font-semibold">{label}</span>
+        </button>
+    );
+}
 
 export default MobileTyreJobCards;

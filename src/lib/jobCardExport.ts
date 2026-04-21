@@ -171,9 +171,11 @@ export function calculateJobCardCosts(data: JobCardExportData): CostSummary {
 }
 
 /**
- * Generate a comprehensive PDF for a job card
+ * Build a comprehensive PDF for a job card and return the doc + computed
+ * file name without saving it. Useful for share/email flows that need the
+ * raw blob or base64 payload.
  */
-export function generateJobCardPDF(data: JobCardExportData): void {
+export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName: string } {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 15;
@@ -367,7 +369,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
     margin: { left: margin, right: margin },
   });
 
-   
+
   yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
 
   // =====================
@@ -417,7 +419,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
       },
     });
 
-     
+
     yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
   }
 
@@ -488,7 +490,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
       margin: { left: margin, right: margin },
     });
 
-     
+
     yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
 
     // =====================
@@ -528,7 +530,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
         margin: { left: margin, right: margin },
       });
 
-       
+
       yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
   }
@@ -591,7 +593,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
       margin: { left: margin, right: margin },
     });
 
-     
+
     yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
   }
 
@@ -643,7 +645,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
       margin: { left: margin, right: margin },
     });
 
-     
+
     yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
   }
 
@@ -740,7 +742,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
         },
       });
 
-       
+
       yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
 
@@ -798,7 +800,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
         },
       });
 
-       
+
       yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
     }
 
@@ -896,7 +898,7 @@ export function generateJobCardPDF(data: JobCardExportData): void {
           margin: { left: margin, right: margin },
         });
 
-         
+
         yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8;
       }
 
@@ -939,5 +941,13 @@ export function generateJobCardPDF(data: JobCardExportData): void {
 
   // Save the PDF
   const fileName = `job-card-${data.jobCard.job_number}-${format(new Date(), "yyyy-MM-dd")}.pdf`;
+  return { doc, fileName };
+}
+
+/**
+ * Generate and download a comprehensive PDF for a job card.
+ */
+export function generateJobCardPDF(data: JobCardExportData): void {
+  const { doc, fileName } = buildJobCardPDF(data);
   doc.save(fileName);
 }

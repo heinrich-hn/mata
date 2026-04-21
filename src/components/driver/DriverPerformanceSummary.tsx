@@ -1,30 +1,31 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "@/components/ui/select";
+import {
+Select,
+SelectContent,
+SelectItem,
+SelectTrigger,
+SelectValue,
+} from "@/components/ui/select";
 import { useDriverPerformanceSummary } from "@/hooks/useDriverBehaviorEvents";
-import { AlertTriangle, CheckCircle, TrendingDown, TrendingUp, Users } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { AlertTriangle, CheckCircle, Download, TrendingDown, TrendingUp, Users } from "lucide-react";
 import { useMemo, useState } from "react";
-import
-  {
-    Bar,
-    BarChart,
-    CartesianGrid,
-    Cell,
-    Legend,
-    Pie,
-    PieChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-  } from "recharts";
+import {
+Bar,
+BarChart,
+CartesianGrid,
+Cell,
+Legend,
+Pie,
+PieChart,
+ResponsiveContainer,
+Tooltip,
+XAxis,
+YAxis,
+} from "recharts";
 
 const SEVERITY_COLORS = {
   critical: "#dc2626",
@@ -32,6 +33,8 @@ const SEVERITY_COLORS = {
   medium: "#eab308",
   low: "#3b82f6",
 };
+
+type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
 
 const DriverPerformanceSummary = () => {
   const { data: driverSummaries = [], isLoading } = useDriverPerformanceSummary();
@@ -97,6 +100,180 @@ const DriverPerformanceSummary = () => {
     return driverSummaries.find(d => d.driver_name === selectedDriver);
   }, [driverSummaries, selectedDriver]);
 
+  const handleExportPDF = () => {
+    if (!driverSummaries || driverSummaries.length === 0) return;
+
+    const doc = new jsPDF("landscape", "mm", "a4") as JsPDFWithAutoTable;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const generatedAt = new Date().toLocaleString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    // Filtered data based on current selector
+    const reportSummaries = selectedDriver === "all"
+      ? driverSummaries
+      : driverSummaries.filter(d => d.driver_name === selectedDriver);
+
+    const totals = reportSummaries.reduce(
+      (acc, d) => ({
+        total_events: acc.total_events + d.total_events,
+        total_points: acc.total_points + d.total_points,
+        open_events: acc.open_events + d.open_events,
+        resolved_events: acc.resolved_events + d.resolved_events,
+        critical_events: acc.critical_events + d.critical_events,
+        high_events: acc.high_events + d.high_events,
+        medium_events: acc.medium_events + d.medium_events,
+        low_events: acc.low_events + d.low_events,
+      }),
+      {
+        total_events: 0,
+        total_points: 0,
+        open_events: 0,
+        resolved_events: 0,
+        critical_events: 0,
+        high_events: 0,
+        medium_events: 0,
+        low_events: 0,
+      },
+    );
+
+    // ----- Header band -----
+    doc.setFillColor(30, 41, 59); // slate-800
+    doc.rect(0, 0, pageWidth, 22, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Driver Performance Summary", 14, 14);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("MATA Fleet Management", pageWidth - 14, 14, { align: "right" });
+
+    // ----- Sub-header -----
+    doc.setTextColor(80, 80, 80);
+    doc.setFontSize(10);
+    const scopeLabel = selectedDriver === "all"
+      ? `All Drivers (${reportSummaries.length})`
+      : selectedDriver;
+    doc.text(`Scope: ${scopeLabel}`, 14, 30);
+    doc.text(`Generated: ${generatedAt}`, pageWidth - 14, 30, { align: "right" });
+
+    // ----- Summary cards -----
+    const cardY = 36;
+    const cardH = 18;
+    const cardGap = 4;
+    const cardW = (pageWidth - 28 - cardGap * 4) / 5;
+    const cards: Array<{ label: string; value: number; fill: [number, number, number]; text: [number, number, number] }> = [
+      { label: "Total Events", value: totals.total_events, fill: [241, 245, 249], text: [15, 23, 42] },
+      { label: "Critical", value: totals.critical_events, fill: [254, 226, 226], text: [185, 28, 28] },
+      { label: "Total Points", value: totals.total_points, fill: [254, 243, 199], text: [180, 83, 9] },
+      { label: "Open", value: totals.open_events, fill: [255, 237, 213], text: [194, 65, 12] },
+      { label: "Resolved", value: totals.resolved_events, fill: [220, 252, 231], text: [21, 128, 61] },
+    ];
+    cards.forEach((c, i) => {
+      const x = 14 + i * (cardW + cardGap);
+      doc.setFillColor(c.fill[0], c.fill[1], c.fill[2]);
+      doc.roundedRect(x, cardY, cardW, cardH, 2, 2, "F");
+      doc.setTextColor(c.text[0], c.text[1], c.text[2]);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(String(c.value), x + cardW / 2, cardY + 9, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      doc.text(c.label, x + cardW / 2, cardY + 15, { align: "center" });
+    });
+
+    // ----- Severity breakdown row -----
+    const sevY = cardY + cardH + 6;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text("Severity Breakdown", 14, sevY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(80, 80, 80);
+    const sevText = `Critical: ${totals.critical_events}    High: ${totals.high_events}    Medium: ${totals.medium_events}    Low: ${totals.low_events}`;
+    doc.text(sevText, 14, sevY + 5);
+
+    // ----- Driver table -----
+    const tableHead = [[
+      "#",
+      "Driver",
+      "Total",
+      "Critical",
+      "High",
+      "Medium",
+      "Low",
+      "Open",
+      "Resolved",
+      "Points",
+    ]];
+    const tableBody = reportSummaries.map((d, i) => [
+      String(i + 1),
+      d.driver_name,
+      String(d.total_events),
+      String(d.critical_events),
+      String(d.high_events),
+      String(d.medium_events),
+      String(d.low_events),
+      String(d.open_events),
+      String(d.resolved_events),
+      String(d.total_points),
+    ]);
+
+    autoTable(doc, {
+      startY: sevY + 10,
+      head: tableHead,
+      body: tableBody,
+      theme: "grid",
+      styles: { fontSize: 8, cellPadding: 2.5, valign: "middle" },
+      headStyles: {
+        fillColor: [30, 41, 59],
+        textColor: 255,
+        fontStyle: "bold",
+        halign: "center",
+      },
+      bodyStyles: { textColor: [30, 41, 59] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 10, halign: "center" },
+        1: { cellWidth: 55 },
+        2: { halign: "center", fontStyle: "bold" },
+        3: { halign: "center", textColor: [185, 28, 28] },
+        4: { halign: "center", textColor: [194, 65, 12] },
+        5: { halign: "center", textColor: [161, 98, 7] },
+        6: { halign: "center", textColor: [29, 78, 216] },
+        7: { halign: "center" },
+        8: { halign: "center", textColor: [21, 128, 61] },
+        9: { halign: "center", fontStyle: "bold" },
+      },
+      didDrawPage: () => {
+        // Footer drawn after loop below; this hook only ensures pagination runs.
+      },
+    });
+
+    // ----- Footer on every page -----
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      doc.setFont("helvetica", "normal");
+      doc.text("MATA Fleet Management \u2022 Driver Performance Summary", 14, pageHeight - 6);
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 6, { align: "right" });
+    }
+
+    const fileScope = selectedDriver === "all" ? "all-drivers" : selectedDriver.replace(/\s+/g, "-").toLowerCase();
+    doc.save(`driver-performance-${fileScope}-${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -136,19 +313,30 @@ const DriverPerformanceSummary = () => {
                 View behavior events and points by driver
               </CardDescription>
             </div>
-            <Select value={selectedDriver} onValueChange={setSelectedDriver}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Select driver" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Drivers ({driverSummaries.length})</SelectItem>
-                {driverSummaries.map(driver => (
-                  <SelectItem key={driver.driver_name} value={driver.driver_name}>
-                    {driver.driver_name} ({driver.total_events})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select value={selectedDriver} onValueChange={setSelectedDriver}>
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Select driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Drivers ({driverSummaries.length})</SelectItem>
+                  {driverSummaries.map(driver => (
+                    <SelectItem key={driver.driver_name} value={driver.driver_name}>
+                      {driver.driver_name} ({driver.total_events})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPDF}
+                disabled={driverSummaries.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export PDF
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -271,20 +459,18 @@ const DriverPerformanceSummary = () => {
             {driverSummaries.slice(0, 8).map((driver, index) => (
               <div
                 key={driver.driver_name}
-                className={`flex items-center justify-between p-3 rounded-lg border ${
-                  index === 0 ? "bg-red-50 dark:bg-red-950/20 border-red-200" :
-                  index === 1 ? "bg-orange-50 dark:bg-orange-950/20 border-orange-200" :
-                  index === 2 ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200" :
-                  "bg-muted/30"
-                }`}
+                className={`flex items-center justify-between p-3 rounded-lg border ${index === 0 ? "bg-red-50 dark:bg-red-950/20 border-red-200" :
+                    index === 1 ? "bg-orange-50 dark:bg-orange-950/20 border-orange-200" :
+                      index === 2 ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200" :
+                        "bg-muted/30"
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                    index === 0 ? "bg-red-200 text-red-800" :
-                    index === 1 ? "bg-orange-200 text-orange-800" :
-                    index === 2 ? "bg-amber-200 text-amber-800" :
-                    "bg-gray-200 text-gray-800"
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${index === 0 ? "bg-red-200 text-red-800" :
+                      index === 1 ? "bg-orange-200 text-orange-800" :
+                        index === 2 ? "bg-amber-200 text-amber-800" :
+                          "bg-gray-200 text-gray-800"
+                    }`}>
                     {index + 1}
                   </div>
                   <div>

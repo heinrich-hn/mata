@@ -3,6 +3,7 @@ import { CreateWorkOrderFromInspectionDialog } from "@/components/dialogs/Create
 import { RootCauseAnalysisDialog } from "@/components/dialogs/RootCauseAnalysisDialog";
 import { InspectionActionsMenu } from "@/components/inspections/InspectionActionsMenu";
 import { InspectionForm } from "@/components/inspections/InspectionForm";
+import { ShareInspectionDialog } from "@/components/inspections/ShareInspectionDialog";
 import Layout from "@/components/Layout";
 import {
   AlertDialog,
@@ -88,6 +89,7 @@ const InspectionDetails = () => {
   const [showCreateWorkOrder, setShowCreateWorkOrder] = useState(false);
   const [showLinkJobCard, setShowLinkJobCard] = useState(false);
   const [showOocReport, setShowOocReport] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   // Fetch inspection details
   const { data: inspection, isLoading, refetch } = useQuery<InspectionData>({
@@ -442,6 +444,7 @@ const InspectionDetails = () => {
               inspectionNumber={inspection.inspection_number}
               onView={handleView}
               onShare={handleShare}
+              onSendShare={() => setShowShareDialog(true)}
               onCreateWorkOrder={handleCreateWorkOrder}
               onCorrectiveAction={handleCorrectiveAction}
               onRootCauseAnalysis={handleRootCauseAnalysis}
@@ -947,6 +950,14 @@ const InspectionDetails = () => {
             description: "Out-of-commission report has been recorded",
           });
         }}
+      />
+
+      {/* Share Inspection Dialog */}
+      <ShareInspectionDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        inspectionId={inspection.id}
+        inspectionNumber={inspection.inspection_number}
       />
     </Layout>
   );

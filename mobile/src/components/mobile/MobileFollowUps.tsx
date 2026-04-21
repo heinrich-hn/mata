@@ -72,9 +72,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_FILTERS = [
-    { value: "all", label: "All" },
+    { value: "all", label: "Open" },
     { value: "pending", label: "Pending" },
-    { value: "completed", label: "Done" },
+    { value: "in_progress", label: "In Progress" },
 ] as const;
 
 // ============================================================================
@@ -284,7 +284,8 @@ const MobileFollowUps = () => {
 
     // Filtered follow-ups
     const filteredFollowUps = useMemo(() => {
-        let result = followUps;
+        // Hide completed follow-ups from the list (record is preserved on the job card)
+        let result = followUps.filter((f) => f.status !== "completed");
 
         if (statusFilter !== "all") {
             result = result.filter((f) => f.status === statusFilter);

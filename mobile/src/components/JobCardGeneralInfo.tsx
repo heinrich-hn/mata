@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserSelect } from "@/components/ui/user-select";
 import { useVehicles } from "@/hooks/useVehicles";
 import { Pencil } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface JobCardGeneralInfoProps {
   jobCard: {
@@ -25,16 +25,26 @@ interface JobCardGeneralInfoProps {
     fleet_number?: string | null;
   } | null;
   onUpdate: (updates: Partial<JobCardGeneralInfoProps['jobCard']>) => void;
+  initialEditMode?: boolean;
 }
 
-const JobCardGeneralInfo = ({ jobCard, vehicle, onUpdate }: JobCardGeneralInfoProps) => {
+const JobCardGeneralInfo = ({ jobCard, vehicle, onUpdate, initialEditMode = false }: JobCardGeneralInfoProps) => {
   const { data: vehicles = [] } = useVehicles();
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(initialEditMode);
   const [description, setDescription] = useState(jobCard.description || "");
-  const [isEditingAssignee, setIsEditingAssignee] = useState(false);
+  const [isEditingAssignee, setIsEditingAssignee] = useState(initialEditMode);
   const [assignee, setAssignee] = useState(jobCard.assignee || "");
-  const [isEditingVehicle, setIsEditingVehicle] = useState(false);
+  const [isEditingVehicle, setIsEditingVehicle] = useState(initialEditMode);
   const [selectedVehicleId, setSelectedVehicleId] = useState(jobCard.vehicle_id || "");
+
+  useEffect(() => {
+    if (initialEditMode) {
+      setIsEditing(true);
+      setIsEditingAssignee(true);
+      setIsEditingVehicle(true);
+    }
+     
+  }, [initialEditMode, jobCard.id]);
 
   const handleSave = () => {
     onUpdate({ description });

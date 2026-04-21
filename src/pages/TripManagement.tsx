@@ -89,16 +89,25 @@ const TripManagement = () => {
       }>> = {};
 
       if (tripIds.length > 0) {
-        // Batch to avoid Supabase URL length limits with many trip IDs
+        // Batch to avoid Supabase URL length limits with many trip IDs.
+        // Run batches in parallel to cut latency from N*roundtrip down to ~1 roundtrip.
         const BATCH_SIZE = 50;
+        const batches: string[][] = [];
         for (let i = 0; i < tripIds.length; i += BATCH_SIZE) {
-          const batch = tripIds.slice(i, i + BATCH_SIZE);
-          const { data: costData } = await supabase
-            .from('cost_entries')
-            .select('id, trip_id, amount, currency, category, sub_category, is_flagged, investigation_status, flag_reason')
-            .in('trip_id', batch);
+          batches.push(tripIds.slice(i, i + BATCH_SIZE));
+        }
 
-          // Group costs by trip_id
+        const batchResults = await Promise.all(
+          batches.map(batch =>
+            supabase
+              .from('cost_entries')
+              .select('id, trip_id, amount, currency, category, sub_category, is_flagged, investigation_status, flag_reason')
+              .in('trip_id', batch)
+          )
+        );
+
+        // Group costs by trip_id
+        batchResults.forEach(({ data: costData }) => {
           (costData || []).forEach(cost => {
             if (cost.trip_id) {
               if (!costEntriesMap[cost.trip_id]) {
@@ -107,7 +116,7 @@ const TripManagement = () => {
               costEntriesMap[cost.trip_id].push(cost);
             }
           });
-        }
+        });
       }
 
       return (tripsData || []).map(trip => {
@@ -264,19 +273,12 @@ const TripManagement = () => {
   const handleAddTrip = useCallback(() => setIsAddDialogOpen(true), []);
   const handleImport = useCallback(() => setIsImportModalOpen(true), []);
 
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Loading trips...</p>
-        </div>
-      </Layout>
-    );
-  }
-
   return (
     <Layout>
       <div className="space-y-5">
+        {loading && (
+          <div className="text-xs text-muted-foreground px-1">Loading trips…</div>
+        )}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
           <div className="bg-card/80 backdrop-blur-sm border border-border/60 rounded-xl p-1.5 shadow-sm">
             <TabsList className="inline-flex w-full bg-transparent gap-2 h-auto p-1 flex-wrap">

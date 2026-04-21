@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserSelect } from "@/components/ui/user-select";
 import { useVehicles } from "@/hooks/useVehicles";
 import { ChevronDown, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface JobCardGeneralInfoProps {
   jobCard: {
@@ -27,16 +27,26 @@ interface JobCardGeneralInfoProps {
   } | null;
   onUpdate: (updates: Partial<JobCardGeneralInfoProps['jobCard']>) => void;
   defaultCollapsed?: boolean;
+  initialEditMode?: boolean;
 }
 
-const JobCardGeneralInfo = ({ jobCard, vehicle, onUpdate, defaultCollapsed = false }: JobCardGeneralInfoProps) => {
+const JobCardGeneralInfo = ({ jobCard, vehicle, onUpdate, defaultCollapsed = false, initialEditMode = false }: JobCardGeneralInfoProps) => {
   const { data: vehicles = [] } = useVehicles();
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(initialEditMode);
   const [description, setDescription] = useState(jobCard.description || "");
-  const [isEditingAssignee, setIsEditingAssignee] = useState(false);
+  const [isEditingAssignee, setIsEditingAssignee] = useState(initialEditMode);
   const [assignee, setAssignee] = useState(jobCard.assignee || "");
-  const [isEditingVehicle, setIsEditingVehicle] = useState(false);
+  const [isEditingVehicle, setIsEditingVehicle] = useState(initialEditMode);
   const [selectedVehicleId, setSelectedVehicleId] = useState(jobCard.vehicle_id || "");
+
+  // When the dialog is re-opened with initialEditMode=true, re-enable all editors
+  useEffect(() => {
+    if (initialEditMode) {
+      setIsEditing(true);
+      setIsEditingAssignee(true);
+      setIsEditingVehicle(true);
+    }
+  }, [initialEditMode, jobCard.id]);
 
   const handleSave = () => {
     onUpdate({ description });

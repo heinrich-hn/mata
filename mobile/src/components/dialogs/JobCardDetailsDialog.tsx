@@ -21,6 +21,7 @@ import JobCardTasksTable from "../JobCardTasksTable";
 interface JobCardDetailsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialEditMode?: boolean;
   jobCard: {
     id: string;
     job_number: string;
@@ -265,6 +266,7 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
                   jobCard={jobCard}
                   vehicle={vehicle}
                   onUpdate={handleJobCardUpdate}
+                  initialEditMode={initialEditMode}
                 />
 
                 {/* Linked Inspection */}
