@@ -365,55 +365,52 @@ const DieselDebriefTab = ({
                                 const someSent = sentCount > 0 && !allSent;
                                 return (
                                     <div key={fleet} className="border rounded-lg overflow-hidden">
-                                        <button
-                                            type="button"
-                                            className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors text-left"
-                                            onClick={() =>
-                                                setExpandedPendingFleets(prev => {
-                                                    const next = new Set(prev);
-                                                    if (next.has(fleet)) {
-                                                        next.delete(fleet);
-                                                    } else {
-                                                        next.add(fleet);
-                                                    }
-                                                    return next;
-                                                })
-                                            }
-                                        >
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                <span className="font-semibold text-sm">{fleet}</span>
-                                                <Badge variant="destructive" className="text-xs px-1.5 py-0">
-                                                    {records.length} pending
-                                                </Badge>
-                                                {allSent && (
-                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
-                                                        <CheckCircle className="h-3 w-3" />
-                                                        All WA Sent
-                                                    </span>
-                                                )}
-                                                {someSent && (
-                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded-full">
-                                                        {sentCount}/{records.length} WA Sent
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="h-7 px-2 text-xs border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onOpenBatchDebrief(fleet);
-                                                    }}
-                                                >
-                                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                                    Batch
-                                                </Button>
+                                        <div className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors">
+                                            <button
+                                                type="button"
+                                                className="flex-1 flex items-center justify-between gap-2 text-left min-w-0"
+                                                onClick={() =>
+                                                    setExpandedPendingFleets(prev => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(fleet)) {
+                                                            next.delete(fleet);
+                                                        } else {
+                                                            next.add(fleet);
+                                                        }
+                                                        return next;
+                                                    })
+                                                }
+                                            >
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                    <span className="font-semibold text-sm">{fleet}</span>
+                                                    <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                                                        {records.length} pending
+                                                    </Badge>
+                                                    {allSent && (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                                                            <CheckCircle className="h-3 w-3" />
+                                                            All WA Sent
+                                                        </span>
+                                                    )}
+                                                    {someSent && (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded-full">
+                                                            {sentCount}/{records.length} WA Sent
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
-                                            </div>
-                                        </button>
+                                            </button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="ml-2 h-7 px-2 text-xs border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                                onClick={() => onOpenBatchDebrief(fleet)}
+                                            >
+                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                Batch
+                                            </Button>
+                                        </div>
 
                                         {isOpen && (
                                             <div className="border-t divide-y">

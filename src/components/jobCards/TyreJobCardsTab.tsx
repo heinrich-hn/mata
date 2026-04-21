@@ -108,15 +108,28 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
             const tyreInspectionIds = (tyreInspections || []).map(i => i.id);
             if (tyreInspectionIds.length === 0) return [];
 
-            // Fetch job cards linked to tyre inspections
-            const { data: cards, error: cardsError } = await supabase
-                .from("job_cards")
-                .select("*")
-                .in("inspection_id", tyreInspectionIds)
-                .order("created_at", { ascending: false });
+            // Batch the IN query to avoid Supabase URL-length limits when there are many inspections.
+            const BATCH_SIZE = 100;
+            const batches: string[][] = [];
+            for (let i = 0; i < tyreInspectionIds.length; i += BATCH_SIZE) {
+                batches.push(tyreInspectionIds.slice(i, i + BATCH_SIZE));
+            }
 
-            if (cardsError) throw cardsError;
-            if (!cards || cards.length === 0) return [];
+            const batchResults = await Promise.all(
+                batches.map(batch =>
+                    supabase
+                        .from("job_cards")
+                        .select("*")
+                        .in("inspection_id", batch)
+                        .order("created_at", { ascending: false })
+                )
+            );
+
+            const firstError = batchResults.find(r => r.error)?.error;
+            if (firstError) throw firstError;
+
+            const cards = batchResults.flatMap(r => r.data || []);
+            if (cards.length === 0) return [];
 
             // Fetch related data
             const vehicleIds = [...new Set(cards.map(c => c.vehicle_id).filter(Boolean))] as string[];
@@ -145,6 +158,13 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
     // Always start with all fleet sections collapsed when the tab mounts or
     // when the underlying data refreshes. Manual expansions persist only
     // until the next data refresh / tab visit.
+    // Use a stable signature (count + id list) as the dep so we don't re-run
+    // on every render (the default `= []` would otherwise create a new array
+    // reference each render and cause an infinite loop).
+    const tyreJobCardsSignature = tyreJobCards.length === 0
+        ? ""
+        : `${tyreJobCards.length}:${tyreJobCards.map(c => `${c.id}|${c.status}|${c.archived_at ?? ""}`).join(",")}`;
+
     useEffect(() => {
         const collectFleetKeys = (cards: TyreJobCard[]) => {
             const keys = new Set<string>();
@@ -163,7 +183,8 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         setClosedActiveFleets(collectFleetKeys(active));
         setClosedCompletedFleets(collectFleetKeys(completed));
         setClosedArchivedFleets(collectFleetKeys(archived));
-    }, [tyreJobCards]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tyreJobCardsSignature]);
 
     // Get unique assignees
     const assignees = [...new Set(
