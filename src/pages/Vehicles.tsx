@@ -1,7 +1,6 @@
 import Layout from "@/components/Layout";
 import VehicleDocAlerts from "@/components/Vehicle/VehicleDocAlerts";
 import { VehicleDetailsModal } from "@/components/Vehicle/VehicleDetailsModal";
-import VehicleKPITiles from "@/components/Vehicle/VehicleKPITiles";
 import AddVehicleDialog from "@/components/dialogs/AddVehicleDialog";
 import DeleteVehicleDialog from "@/components/dialogs/DeleteVehicleDialog";
 import EditVehicleDialog from "@/components/dialogs/EditVehicleDialog";
@@ -188,9 +187,6 @@ const Vehicles = () => {
             Add Vehicle
           </Button>
         </div>
-
-        {/* KPI Tiles */}
-        <VehicleKPITiles />
 
         {/* Document Alerts */}
         <VehicleDocAlerts />

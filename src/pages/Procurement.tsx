@@ -1,4 +1,5 @@
 import InventoryPanel from "@/components/inventory/InventoryPanel";
+import ToolsPanel from "@/components/tools/ToolsPanel";
 import Layout from "@/components/Layout";
 import {
   AlertDialog,
@@ -1371,11 +1372,18 @@ const Procurement = () => {
             <TabsTrigger value="inventory" className="px-5 py-2.5 text-base">
               Inventory
             </TabsTrigger>
+            <TabsTrigger value="tools" className="px-5 py-2.5 text-base">
+              Tools
+            </TabsTrigger>
           </TabsList>
         </div>
 
         <TabsContent value="inventory" className="mt-0">
           <InventoryPanel />
+        </TabsContent>
+
+        <TabsContent value="tools" className="mt-0">
+          <ToolsPanel />
         </TabsContent>
 
         <TabsContent value="procurement" className="mt-0">

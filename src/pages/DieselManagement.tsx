@@ -15,7 +15,9 @@ import Layout from '@/components/Layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -24,7 +26,7 @@ import { useVehicles } from '@/hooks/useVehicles';
 import { useReeferConsumptionSummary, useReeferDieselRecords, type ReeferDieselRecordRow } from '@/hooks/useReeferDiesel';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/formatters';
 import type { DieselConsumptionRecord, DieselNorms } from '@/types/operations';
-import { AlertCircle, CheckCircle, ChevronDown, ChevronRight, DollarSign, Edit, Eye, FileSpreadsheet, FileText, Fuel, Link, List, Plus, Settings, Snowflake, Trash2, Truck, User } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, ChevronsUpDown, DollarSign, Edit, Eye, FileSpreadsheet, FileText, Filter, Fuel, Link, List, Plus, Settings, Snowflake, Trash2, Truck, User, X } from 'lucide-react';
 import { type ComponentProps, useCallback, useEffect, useMemo, useState } from 'react';
 import BatchDebriefModal, { type BatchDebriefData } from '@/components/diesel/BatchDebriefModal';
 
@@ -35,6 +37,85 @@ const getWeekNumberForDateString = (dateStr: string): number => {
   const startOfYear = new Date(date.getFullYear(), 0, 1);
   const days = Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
   return Math.ceil((days + startOfYear.getDay() + 1) / 7);
+};
+
+interface FleetFilterComboboxProps {
+  value: string;
+  onChange: (value: string) => void;
+  fleets: string[];
+}
+
+const FleetFilterCombobox = ({ value, onChange, fleets }: FleetFilterComboboxProps) => {
+  const [open, setOpen] = useState(false);
+  const isAll = value === 'all' || value === '';
+  const label = isAll ? 'All Fleets' : value;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className="text-xs font-medium text-muted-foreground hidden sm:inline">Fleet:</span>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn(
+              "h-9 w-[200px] justify-between gap-2 font-medium",
+              !isAll && "border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800"
+            )}
+          >
+            <span className="truncate">{label}</span>
+            <div className="flex items-center gap-1 shrink-0">
+              {!isAll && (
+                <X
+                  className="h-3.5 w-3.5 hover:text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange('all');
+                  }}
+                />
+              )}
+              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+            </div>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[240px] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search fleet number…" />
+            <CommandList>
+              <CommandEmpty>No fleet found.</CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value="all"
+                  onSelect={() => {
+                    onChange('all');
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", isAll ? "opacity-100" : "opacity-0")} />
+                  All Fleets
+                </CommandItem>
+                {fleets.map((fleet) => (
+                  <CommandItem
+                    key={fleet}
+                    value={fleet}
+                    onSelect={() => {
+                      onChange(fleet);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", value === fleet ? "opacity-100" : "opacity-0")} />
+                    {fleet}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 };
 
 
@@ -801,17 +882,11 @@ const DieselManagement = () => {
                 Export All to Excel
               </Button>
               {viewMode === 'list' && (
-                <Select value={listFleetFilter} onValueChange={setListFleetFilter}>
-                  <SelectTrigger className="w-[180px] h-9">
-                    <SelectValue placeholder="Filter by fleet" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Fleets</SelectItem>
-                    {[...uniqueFleetNumbers, ...reeferFleetNumbers].sort().map(fleet => (
-                      <SelectItem key={fleet} value={fleet}>{fleet}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FleetFilterCombobox
+                  value={listFleetFilter}
+                  onChange={setListFleetFilter}
+                  fleets={[...new Set([...uniqueFleetNumbers, ...reeferFleetNumbers])].sort()}
+                />
               )}
               <div className="ml-auto">
                 <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grouped' | 'list')}>
@@ -1077,7 +1152,7 @@ const DieselManagement = () => {
               )
             ) : (
               sortedFleets.length > 0 ? (
-                <div className="space-y-6">
+                <div className="space-y-3">
                   {sortedFleets.map((fleet) => {
                     const fleetTotals = getFleetTotals(truckRecordsGroupedByFleetAndWeek, fleet);
                     const isFleetExpanded = expandedFleets.has(fleet);
@@ -1090,38 +1165,38 @@ const DieselManagement = () => {
                         {/* Fleet Header */}
                         <Collapsible open={isFleetExpanded} onOpenChange={() => toggleFleetExpanded(fleet)}>
                           <CollapsibleTrigger asChild>
-                            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
+                            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-2.5 px-4">
+                              <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <div className="flex items-center gap-2 min-w-0">
                                   {isFleetExpanded ? (
-                                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                                   ) : (
-                                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                                   )}
-                                  <div>
-                                    <CardTitle className="text-xl">{fleet}</CardTitle>
-                                    <CardDescription>
-                                      {fleetTotals.count} transactions across {fleetWeeks.length} week(s)
+                                  <div className="min-w-0">
+                                    <CardTitle className="text-base leading-tight">{fleet}</CardTitle>
+                                    <CardDescription className="text-xs">
+                                      {fleetTotals.count} transactions • {fleetWeeks.length} week(s)
                                     </CardDescription>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-6 text-sm">
+                                <div className="flex items-center gap-4 text-xs">
                                   <div className="text-right">
-                                    <p className="text-muted-foreground">Total Litres</p>
-                                    <p className="font-semibold">{formatNumber(fleetTotals.totalLitres)} L</p>
+                                    <p className="text-muted-foreground leading-none">Litres</p>
+                                    <p className="font-semibold tabular-nums mt-0.5">{formatNumber(fleetTotals.totalLitres)} L</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-muted-foreground">Total Cost</p>
-                                    <p className="font-semibold">
-                                      {fleetTotals.totalCost > 0 && formatCurrency(fleetTotals.totalCost)}
+                                    <p className="text-muted-foreground leading-none">Cost</p>
+                                    <p className="font-semibold tabular-nums mt-0.5">
+                                      {fleetTotals.totalCost > 0 ? formatCurrency(fleetTotals.totalCost) : '—'}
                                     </p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-muted-foreground">Avg km/L</p>
-                                    <p className="font-semibold">{formatNumber(fleetTotals.avgKmL, 2)}</p>
+                                    <p className="text-muted-foreground leading-none">Avg km/L</p>
+                                    <p className="font-semibold tabular-nums mt-0.5">{formatNumber(fleetTotals.avgKmL, 2)}</p>
                                   </div>
                                   {fleetTotals.pendingDebrief > 0 && (
-                                    <Badge variant="destructive" className="ml-2">
+                                    <Badge variant="destructive" className="text-[10px] py-0 h-5">
                                       {fleetTotals.pendingDebrief} Debrief
                                     </Badge>
                                   )}
@@ -1536,7 +1611,7 @@ const DieselManagement = () => {
               )
             ) : (
               sortedReeferFleets.length > 0 && (
-                <div className="space-y-6">
+                <div className="space-y-3">
                   {sortedReeferFleets.map((fleet) => {
                     const fleetTotals = getFleetTotals(reeferRecordsGroupedByFleetAndWeek, fleet);
                     const isFleetExpanded = expandedFleets.has(`reefer-${fleet}`);
@@ -1548,30 +1623,30 @@ const DieselManagement = () => {
                       <Card key={`reefer-${fleet}`} className="overflow-hidden">
                         <Collapsible open={isFleetExpanded} onOpenChange={() => toggleFleetExpanded(`reefer-${fleet}`)}>
                           <CollapsibleTrigger asChild>
-                            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
+                            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-2.5 px-4">
+                              <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <div className="flex items-center gap-2 min-w-0">
                                   {isFleetExpanded ? (
-                                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                                   ) : (
-                                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                                   )}
-                                  <div>
-                                    <CardTitle className="text-xl">{fleet}</CardTitle>
-                                    <CardDescription>
-                                      {fleetTotals.count} transactions across {fleetWeeks.length} week(s)
+                                  <div className="min-w-0">
+                                    <CardTitle className="text-base leading-tight">{fleet}</CardTitle>
+                                    <CardDescription className="text-xs">
+                                      {fleetTotals.count} transactions • {fleetWeeks.length} week(s)
                                     </CardDescription>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-6 text-sm">
+                                <div className="flex items-center gap-4 text-xs">
                                   <div className="text-right">
-                                    <p className="text-muted-foreground">Total Litres</p>
-                                    <p className="font-semibold">{formatNumber(fleetTotals.totalLitres)} L</p>
+                                    <p className="text-muted-foreground leading-none">Litres</p>
+                                    <p className="font-semibold tabular-nums mt-0.5">{formatNumber(fleetTotals.totalLitres)} L</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-muted-foreground">Total Cost</p>
-                                    <p className="font-semibold">
-                                      {fleetTotals.totalCost > 0 && formatCurrency(fleetTotals.totalCost)}
+                                    <p className="text-muted-foreground leading-none">Cost</p>
+                                    <p className="font-semibold tabular-nums mt-0.5">
+                                      {fleetTotals.totalCost > 0 ? formatCurrency(fleetTotals.totalCost) : '—'}
                                     </p>
                                   </div>
                                 </div>

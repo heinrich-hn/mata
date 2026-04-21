@@ -20,6 +20,7 @@ import { AlertTriangle, CalendarDays, CheckCircle, Circle, Clock, ClipboardList,
 import React, { useEffect, useState } from 'react';
 import { extractRegistrationNumber } from "@/constants/fleetTyreConfig";
 import FleetTyreLayoutDiagram from "../tyres/FleetTyreLayoutDiagram";
+import VehicleEquipmentList from "../tools/VehicleEquipmentList";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 interface Vehicle {
@@ -430,6 +431,7 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
             <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
             <TabsTrigger value="compliance">Compliance</TabsTrigger>
             <TabsTrigger value="tyres" disabled={!vehicle.fleetNumber}>Tyres</TabsTrigger>
+            <TabsTrigger value="equipment">Equipment</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
           </TabsList>
           <TabsContent value="general">
@@ -942,6 +944,19 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="equipment">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5" />
+                  Tools &amp; Equipment Assigned
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VehicleEquipmentList vehicleId={vehicle.id} />
               </CardContent>
             </Card>
           </TabsContent>
