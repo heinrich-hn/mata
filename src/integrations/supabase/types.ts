@@ -5615,8 +5615,11 @@ export type Database = {
           created_at: string | null
           email: string | null
           id: string
+          job_title: string | null
           name: string
           phone: string | null
+          responsibilities: string[]
+          skills: string[]
           updated_at: string | null
           user_id: string
         }
@@ -5624,8 +5627,11 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          job_title?: string | null
           name: string
           phone?: string | null
+          responsibilities?: string[]
+          skills?: string[]
           updated_at?: string | null
           user_id: string
         }
@@ -5633,8 +5639,11 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          job_title?: string | null
           name?: string
           phone?: string | null
+          responsibilities?: string[]
+          skills?: string[]
           updated_at?: string | null
           user_id?: string
         }
@@ -7100,6 +7109,104 @@ export type Database = {
             columns: ["report_id"]
             isOneToOne: true
             referencedRelation: "inspection_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      overtime_entries: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          breakdown_id: string | null
+          created_at: string
+          created_by: string | null
+          date: string
+          end_time: string
+          hours: number | null
+          id: string
+          incident_id: string | null
+          inspector_id: string
+          inspector_name: string
+          job_card_id: string | null
+          link_type: string
+          notes: string | null
+          reason: string | null
+          rejection_reason: string | null
+          start_time: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          breakdown_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date: string
+          end_time: string
+          hours?: number | null
+          id?: string
+          incident_id?: string | null
+          inspector_id: string
+          inspector_name: string
+          job_card_id?: string | null
+          link_type: string
+          notes?: string | null
+          reason?: string | null
+          rejection_reason?: string | null
+          start_time: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          breakdown_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          end_time?: string
+          hours?: number | null
+          id?: string
+          incident_id?: string | null
+          inspector_id?: string
+          inspector_name?: string
+          job_card_id?: string | null
+          link_type?: string
+          notes?: string | null
+          reason?: string | null
+          rejection_reason?: string | null
+          start_time?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overtime_entries_breakdown_id_fkey"
+            columns: ["breakdown_id"]
+            isOneToOne: false
+            referencedRelation: "fleet_breakdowns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "overtime_entries_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "overtime_entries_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspector_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "overtime_entries_job_card_id_fkey"
+            columns: ["job_card_id"]
+            isOneToOne: false
+            referencedRelation: "job_cards"
             referencedColumns: ["id"]
           },
         ]
@@ -8614,6 +8721,54 @@ export type Database = {
             columns: ["job_card_id"]
             isOneToOne: false
             referencedRelation: "job_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tool_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          id: string
+          notes: string | null
+          quantity: number
+          tool_id: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          id?: string
+          notes?: string | null
+          quantity: number
+          tool_id: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          id?: string
+          notes?: string | null
+          quantity?: number
+          tool_id?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tool_assignments_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tool_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]

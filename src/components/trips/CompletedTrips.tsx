@@ -754,49 +754,48 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                   onOpenChange={() => toggleWeekCollapse(weekKey)}
                 >
                   <CollapsibleTrigger asChild>
-                    <div className="group flex items-center justify-between p-5 bg-card border rounded-xl hover:bg-accent/50 hover:border-emerald-500/30 transition-all duration-200 cursor-pointer shadow-sm">
-                      <div className="flex items-center gap-5">
-                        <div className={`flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 ${isCollapsed
+                    <div className="group flex items-center justify-between gap-3 px-3 py-2 bg-card border rounded-lg hover:bg-accent/50 hover:border-emerald-500/30 transition-all cursor-pointer shadow-xs flex-wrap">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`flex items-center justify-center w-7 h-7 rounded-md transition-all ${isCollapsed
                           ? 'bg-muted group-hover:bg-emerald-500/10'
                           : 'bg-emerald-500/20'
                           }`}>
                           {isCollapsed ? (
-                            <ChevronRight className={`h-5 w-5 transition-colors ${isCollapsed ? 'text-muted-foreground' : 'text-emerald-600'
-                              }`} />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           ) : (
-                            <ChevronDown className="h-5 w-5 text-emerald-600" />
+                            <ChevronDown className="h-4 w-4 text-emerald-600" />
                           )}
                         </div>
 
                         {weekNumber && (
-                          <div className="flex flex-col items-center justify-center w-16 h-16 bg-emerald-500/10 rounded-xl">
-                            <span className="text-xs text-muted-foreground">Week</span>
-                            <span className="text-2xl font-bold text-emerald-600 tabular-nums leading-none">{weekNumber}</span>
+                          <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 rounded-md">
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Wk</span>
+                            <span className="text-sm font-bold text-emerald-600 tabular-nums leading-none">{weekNumber}</span>
                           </div>
                         )}
 
-                        <div>
-                          <div className="flex items-center gap-3 mb-1">
-                            <h3 className="text-lg font-semibold">{formattedWeek}</h3>
-                            <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-sm font-semibold leading-tight">{formattedWeek}</h3>
+                            <Badge variant="secondary" className="text-[10px] font-medium px-1.5 py-0 h-4">
                               {weekTrips.length} {weekTrips.length === 1 ? 'trip' : 'trips'}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-4 text-sm">
-                            <span className="flex items-center gap-1.5">
-                              <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
-                              <span className="font-medium text-emerald-600">{formatCurrency(weekRevenue)}</span>
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <DollarSign className="h-3.5 w-3.5 text-rose-500" />
-                              <span className="font-medium text-rose-600">{formatCurrency(weekExpenses)}</span>
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <Gauge className="h-3.5 w-3.5 text-blue-500" />
-                              <span className="font-medium">{weekTrips.reduce((sum, t) => sum + (t.distance_km || 0), 0).toLocaleString()} km</span>
-                            </span>
-                          </div>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="flex items-center gap-1">
+                          <DollarSign className="h-3 w-3 text-emerald-500" />
+                          <span className="font-medium tabular-nums text-emerald-600">{formatCurrency(weekRevenue)}</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <DollarSign className="h-3 w-3 text-rose-500" />
+                          <span className="font-medium tabular-nums text-rose-600">{formatCurrency(weekExpenses)}</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Gauge className="h-3 w-3 text-blue-500" />
+                          <span className="font-medium tabular-nums">{weekTrips.reduce((sum, t) => sum + (t.distance_km || 0), 0).toLocaleString()} km</span>
+                        </span>
                       </div>
                     </div>
                   </CollapsibleTrigger>

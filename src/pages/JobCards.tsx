@@ -8,6 +8,7 @@ import JobCardFollowUpsPopover from "@/components/jobCards/JobCardFollowUpsPopov
 import JobCardFollowUpsTab from "@/components/jobCards/JobCardFollowUpsTab";
 import TyreJobCardsTab from "@/components/jobCards/TyreJobCardsTab";
 import WorkerDashboardDialog from "@/components/jobCards/WorkerDashboardDialog";
+import OvertimeApprovalTab from "@/components/overtime/OvertimeApprovalTab";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import {
@@ -1264,7 +1265,7 @@ const JobCards = () => {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="overflow-x-auto -mx-1 px-1">
-            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-5xl sm:grid-cols-6">
+            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-6xl sm:grid-cols-7">
               <TabsTrigger value="job-cards" className="px-5 py-2.5 text-base whitespace-nowrap">
                 Job Cards
               </TabsTrigger>
@@ -1279,6 +1280,9 @@ const JobCards = () => {
               </TabsTrigger>
               <TabsTrigger value="tyre-costs" className="px-5 py-2.5 text-base whitespace-nowrap">
                 Tyre Costs
+              </TabsTrigger>
+              <TabsTrigger value="overtime-approval" className="px-5 py-2.5 text-base whitespace-nowrap">
+                Overtime Approval
               </TabsTrigger>
               <TabsTrigger value="archived" className="px-5 py-2.5 text-base whitespace-nowrap">
                 Archived
@@ -1489,7 +1493,7 @@ const JobCards = () => {
                         closedCompletedFleets,
                         toggleCompletedFleet
                       )
-                      )}
+                    )}
                 </div>
               )}
             </section>
@@ -1552,6 +1556,10 @@ const JobCards = () => {
                   ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="overtime-approval" className="space-y-4 mt-6">
+            <OvertimeApprovalTab />
           </TabsContent>
         </Tabs>
 
