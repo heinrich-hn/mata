@@ -37,11 +37,13 @@ export type OvertimeEntry = {
     id?: string;
     inspector_id: string;
     inspector_name: string;
+    entry_mode?: "shift" | "monthly";
     date: string;
-    start_time: string;
-    end_time: string;
+    month?: string | null; // YYYY-MM
+    start_time?: string | null;
+    end_time?: string | null;
     hours?: number | null;
-    link_type: "job_card" | "breakdown" | "incident" | "other";
+    link_type?: "job_card" | "breakdown" | "incident" | "other" | null;
     job_card_id?: string | null;
     breakdown_id?: string | null;
     incident_id?: string | null;
@@ -75,11 +77,15 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
     const [inspectorPickerOpen, setInspectorPickerOpen] = useState(false);
 
     const today = new Date().toISOString().slice(0, 10);
+    const currentMonth = today.slice(0, 7);
+    const [entryMode, setEntryMode] = useState<"shift" | "monthly">("shift");
     const [date, setDate] = useState(today);
+    const [month, setMonth] = useState(currentMonth);
+    const [monthlyHours, setMonthlyHours] = useState<string>("");
     const [startTime, setStartTime] = useState("17:00");
     const [endTime, setEndTime] = useState("19:00");
 
-    const [linkType, setLinkType] = useState<OvertimeEntry["link_type"]>("job_card");
+    const [linkType, setLinkType] = useState<NonNullable<OvertimeEntry["link_type"]>>("job_card");
     const [jobCardId, setJobCardId] = useState<string | null>(null);
     const [breakdownId, setBreakdownId] = useState<string | null>(null);
     const [incidentId, setIncidentId] = useState<string | null>(null);
@@ -93,7 +99,14 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
         if (entry) {
             setInspectorId(entry.inspector_id || "");
             setInspectorName(entry.inspector_name || "");
+            setEntryMode(entry.entry_mode === "monthly" ? "monthly" : "shift");
             setDate(entry.date || today);
+            setMonth(entry.month || currentMonth);
+            setMonthlyHours(
+                entry.entry_mode === "monthly" && entry.hours != null
+                    ? String(entry.hours)
+                    : ""
+            );
             setStartTime(entry.start_time?.slice(0, 5) || "17:00");
             setEndTime(entry.end_time?.slice(0, 5) || "19:00");
             setLinkType(entry.link_type || "job_card");
@@ -105,7 +118,10 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
         } else {
             setInspectorId("");
             setInspectorName("");
+            setEntryMode("shift");
             setDate(today);
+            setMonth(currentMonth);
+            setMonthlyHours("");
             setStartTime("17:00");
             setEndTime("19:00");
             setLinkType("job_card");
@@ -118,16 +134,19 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, entry]);
 
-    const hours = useMemo(() => diffHours(startTime, endTime), [startTime, endTime]);
+    const shiftHours = useMemo(() => diffHours(startTime, endTime), [startTime, endTime]);
+    const monthlyHoursNum = Number(monthlyHours);
+    const hours = entryMode === "monthly"
+        ? (Number.isFinite(monthlyHoursNum) ? monthlyHoursNum : 0)
+        : shiftHours;
 
     // Inspectors (NOT drivers - per user requirement)
     const { data: inspectors = [] } = useQuery({
-        queryKey: ["inspector_profiles", "active"],
+        queryKey: ["inspector_profiles", "all"],
         queryFn: async () => {
             const { data, error } = await sb
                 .from("inspector_profiles")
-                .select("id, name, is_active")
-                .eq("is_active", true)
+                .select("id, name")
                 .order("name");
             if (error) throw error;
             return data || [];
@@ -147,7 +166,7 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
             if (error) throw error;
             return data || [];
         },
-        enabled: open && linkType === "job_card",
+        enabled: open && entryMode === "shift" && linkType === "job_card",
     });
 
     const { data: breakdowns = [] } = useQuery({
@@ -161,7 +180,7 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
             if (error) throw error;
             return data || [];
         },
-        enabled: open && linkType === "breakdown",
+        enabled: open && entryMode === "shift" && linkType === "breakdown",
     });
 
     const { data: incidents = [] } = useQuery({
@@ -175,36 +194,66 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
             if (error) throw error;
             return data || [];
         },
-        enabled: open && linkType === "incident",
+        enabled: open && entryMode === "shift" && linkType === "incident",
     });
 
     const upsertMutation = useMutation({
         mutationFn: async () => {
             if (!inspectorId) throw new Error("Select an inspector");
-            if (!date) throw new Error("Select a date");
-            if (!startTime || !endTime) throw new Error("Provide start and end time");
-            if (hours <= 0) throw new Error("End time must be after start time");
-            if (linkType === "job_card" && !jobCardId) throw new Error("Select a job card");
-            if (linkType === "breakdown" && !breakdownId) throw new Error("Select a breakdown");
-            if (linkType === "incident" && !incidentId) throw new Error("Select an incident");
 
             const userResp = await supabase.auth.getUser();
             const userId = userResp.data.user?.id ?? null;
 
-            const payload = {
-                inspector_id: inspectorId,
-                inspector_name: inspectorName,
-                date,
-                start_time: startTime,
-                end_time: endTime,
-                hours,
-                link_type: linkType,
-                job_card_id: linkType === "job_card" ? jobCardId : null,
-                breakdown_id: linkType === "breakdown" ? breakdownId : null,
-                incident_id: linkType === "incident" ? incidentId : null,
-                reason: reason.trim() || null,
-                notes: notes.trim() || null,
-            };
+            let payload: Record<string, unknown>;
+
+            if (entryMode === "monthly") {
+                if (!month) throw new Error("Select a month");
+                if (!Number.isFinite(monthlyHoursNum) || monthlyHoursNum <= 0) {
+                    throw new Error("Enter total hours greater than zero");
+                }
+                // Use the first day of the selected month as the date.
+                const monthDate = `${month}-01`;
+                payload = {
+                    inspector_id: inspectorId,
+                    inspector_name: inspectorName,
+                    entry_mode: "monthly",
+                    date: monthDate,
+                    month,
+                    start_time: null,
+                    end_time: null,
+                    hours: monthlyHoursNum,
+                    link_type: null,
+                    job_card_id: null,
+                    breakdown_id: null,
+                    incident_id: null,
+                    reason: reason.trim() || null,
+                    notes: notes.trim() || null,
+                };
+            } else {
+                if (!date) throw new Error("Select a date");
+                if (!startTime || !endTime) throw new Error("Provide start and end time");
+                if (shiftHours <= 0) throw new Error("End time must be after start time");
+                if (linkType === "job_card" && !jobCardId) throw new Error("Select a job card");
+                if (linkType === "breakdown" && !breakdownId) throw new Error("Select a breakdown");
+                if (linkType === "incident" && !incidentId) throw new Error("Select an incident");
+
+                payload = {
+                    inspector_id: inspectorId,
+                    inspector_name: inspectorName,
+                    entry_mode: "shift",
+                    date,
+                    month: date.slice(0, 7),
+                    start_time: startTime,
+                    end_time: endTime,
+                    hours: shiftHours,
+                    link_type: linkType,
+                    job_card_id: linkType === "job_card" ? jobCardId : null,
+                    breakdown_id: linkType === "breakdown" ? breakdownId : null,
+                    incident_id: linkType === "incident" ? incidentId : null,
+                    reason: reason.trim() || null,
+                    notes: notes.trim() || null,
+                };
+            }
 
             if (isEdit && entry?.id) {
                 const { error } = await sb
@@ -279,7 +328,7 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
                                     <CommandInput placeholder="Search inspectors…" />
                                     <CommandList>
                                         <CommandEmpty>
-                                            No active inspector profiles. Create one in Settings → Inspectors.
+                                            No inspector profiles found. Create one in Settings → Inspectors.
                                         </CommandEmpty>
                                         <CommandGroup>
                                             {inspectors.map((i) => (
@@ -310,77 +359,135 @@ export default function AddOvertimeEntryDialog({ open, onOpenChange, entry }: Pr
                         </Popover>
                     </div>
 
-                    {/* Date / times */}
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                        <div className="grid gap-1.5 sm:col-span-2">
-                            <Label htmlFor="ot-date">Date *</Label>
-                            <Input
-                                id="ot-date"
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                            />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="ot-start">Start *</Label>
-                            <Input
-                                id="ot-start"
-                                type="time"
-                                value={startTime}
-                                onChange={(e) => setStartTime(e.target.value)}
-                            />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="ot-end">End *</Label>
-                            <Input
-                                id="ot-end"
-                                type="time"
-                                value={endTime}
-                                onChange={(e) => setEndTime(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="text-sm text-muted-foreground">
-                        Total: <span className="font-semibold text-foreground tabular-nums">{hours.toFixed(2)} h</span>
-                    </div>
-
-                    {/* Link type */}
+                    {/* Entry mode toggle */}
                     <div className="grid gap-1.5">
-                        <Label>Link to *</Label>
+                        <Label>Entry type *</Label>
                         <RadioGroup
-                            value={linkType}
-                            onValueChange={(v) => {
-                                setLinkType(v as OvertimeEntry["link_type"]);
-                                setJobCardId(null);
-                                setBreakdownId(null);
-                                setIncidentId(null);
-                            }}
-                            className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+                            value={entryMode}
+                            onValueChange={(v) => setEntryMode(v as "shift" | "monthly")}
+                            className="grid grid-cols-2 gap-2"
                         >
-                            {(["job_card", "breakdown", "incident", "other"] as const).map((opt) => (
+                            {(["shift", "monthly"] as const).map((opt) => (
                                 <Label
                                     key={opt}
                                     className={cn(
                                         "flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm",
-                                        linkType === opt && "border-primary bg-primary/5"
+                                        entryMode === opt && "border-primary bg-primary/5"
                                     )}
                                 >
                                     <RadioGroupItem value={opt} />
-                                    {opt === "job_card"
-                                        ? "Job Card"
-                                        : opt === "breakdown"
-                                            ? "Breakdown"
-                                            : opt === "incident"
-                                                ? "Incident"
-                                                : "Other"}
+                                    {opt === "shift" ? "Single shift" : "Monthly total"}
                                 </Label>
                             ))}
                         </RadioGroup>
                     </div>
 
+                    {entryMode === "monthly" ? (
+                        <>
+                            {/* Month + total hours */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="ot-month">Month *</Label>
+                                    <Input
+                                        id="ot-month"
+                                        type="month"
+                                        value={month}
+                                        onChange={(e) => setMonth(e.target.value)}
+                                    />
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="ot-monthly-hours">Total hours *</Label>
+                                    <Input
+                                        id="ot-monthly-hours"
+                                        type="number"
+                                        min="0"
+                                        step="0.25"
+                                        value={monthlyHours}
+                                        onChange={(e) => setMonthlyHours(e.target.value)}
+                                        placeholder="e.g. 24"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="text-sm text-muted-foreground">
+                                Total: <span className="font-semibold text-foreground tabular-nums">{hours.toFixed(2)} h</span>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* Date / times */}
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div className="grid gap-1.5 sm:col-span-2">
+                                    <Label htmlFor="ot-date">Date *</Label>
+                                    <Input
+                                        id="ot-date"
+                                        type="date"
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
+                                    />
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="ot-start">Start *</Label>
+                                    <Input
+                                        id="ot-start"
+                                        type="time"
+                                        value={startTime}
+                                        onChange={(e) => setStartTime(e.target.value)}
+                                    />
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="ot-end">End *</Label>
+                                    <Input
+                                        id="ot-end"
+                                        type="time"
+                                        value={endTime}
+                                        onChange={(e) => setEndTime(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="text-sm text-muted-foreground">
+                                Total: <span className="font-semibold text-foreground tabular-nums">{hours.toFixed(2)} h</span>
+                            </div>
+
+                            {/* Link type */}
+                            <div className="grid gap-1.5">
+                                <Label>Link to *</Label>
+                                <RadioGroup
+                                    value={linkType}
+                                    onValueChange={(v) => {
+                                        setLinkType(v as NonNullable<OvertimeEntry["link_type"]>);
+                                        setJobCardId(null);
+                                        setBreakdownId(null);
+                                        setIncidentId(null);
+                                    }}
+                                    className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+                                >
+                                    {(["job_card", "breakdown", "incident", "other"] as const).map((opt) => (
+                                        <Label
+                                            key={opt}
+                                            className={cn(
+                                                "flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm",
+                                                linkType === opt && "border-primary bg-primary/5"
+                                            )}
+                                        >
+                                            <RadioGroupItem value={opt} />
+                                            {opt === "job_card"
+                                                ? "Job Card"
+                                                : opt === "breakdown"
+                                                    ? "Breakdown"
+                                                    : opt === "incident"
+                                                        ? "Incident"
+                                                        : "Other"}
+                                        </Label>
+                                    ))}
+                                </RadioGroup>
+                            </div>
+                        </>
+                    )}
+
                     {/* Conditional link picker */}
-                    {linkType !== "other" && (
+                    {entryMode === "shift" && linkType !== "other" && (
                         <div className="grid gap-1.5">
                             <Label>
                                 {linkType === "job_card"
