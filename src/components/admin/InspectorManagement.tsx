@@ -9,7 +9,9 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Edit2, Plus, X } from "lucide-react";
+import { Edit2, FileDown, Plus, X } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { useState, type KeyboardEvent } from "react";
 
 type InspectorProfile = Database["public"]["Tables"]["inspector_profiles"]["Row"] & {
@@ -34,6 +36,127 @@ const EMPTY_FORM: FormState = {
   job_title: "",
   responsibilities: [],
   skills: [],
+};
+
+const slugify = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "inspector";
+
+const renderInspectorOnPdf = (
+  doc: jsPDF,
+  inspector: InspectorProfile,
+  startY: number,
+): number => {
+  let y = startY;
+
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text(inspector.name, 14, y);
+  y += 6;
+
+  if (inspector.job_title) {
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80);
+    doc.text(inspector.job_title, 14, y);
+    y += 6;
+  }
+
+  doc.setFontSize(10);
+  doc.setTextColor(40);
+  const contactLines: string[] = [];
+  if (inspector.email) contactLines.push(`Email: ${inspector.email}`);
+  if (inspector.phone) contactLines.push(`Phone: ${inspector.phone}`);
+  if (contactLines.length) {
+    doc.text(contactLines.join("    "), 14, y);
+    y += 6;
+  }
+
+  y += 2;
+  autoTable(doc, {
+    startY: y,
+    head: [["Responsibilities"]],
+    body:
+      (inspector.responsibilities || []).length > 0
+        ? (inspector.responsibilities || []).map((r) => [r])
+        : [["—"]],
+    styles: { fontSize: 9, cellPadding: 2 },
+    headStyles: { fillColor: [71, 85, 105] },
+    margin: { left: 14, right: 14 },
+  });
+
+  // @ts-expect-error - lastAutoTable is added by jspdf-autotable
+  y = (doc.lastAutoTable?.finalY ?? y) + 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Skills"]],
+    body:
+      (inspector.skills || []).length > 0
+        ? (inspector.skills || []).map((s) => [s])
+        : [["—"]],
+    styles: { fontSize: 9, cellPadding: 2 },
+    headStyles: { fillColor: [37, 99, 235] },
+    margin: { left: 14, right: 14 },
+  });
+
+  // @ts-expect-error - lastAutoTable is added by jspdf-autotable
+  return (doc.lastAutoTable?.finalY ?? y) + 8;
+};
+
+const exportInspectorPdf = (inspector: InspectorProfile) => {
+  const doc = new jsPDF();
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("Inspector Profile", 14, 18);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(120);
+  doc.text(`Generated ${new Date().toLocaleString()}`, 14, 24);
+  doc.setTextColor(0);
+
+  renderInspectorOnPdf(doc, inspector, 34);
+  doc.save(`inspector-${slugify(inspector.name)}.pdf`);
+};
+
+const exportAllInspectorsPdf = (inspectors: InspectorProfile[]) => {
+  if (inspectors.length === 0) return;
+  const doc = new jsPDF();
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("Inspector Profiles", 14, 18);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(120);
+  doc.text(
+    `${inspectors.length} inspector${inspectors.length === 1 ? "" : "s"} · Generated ${new Date().toLocaleString()}`,
+    14,
+    24,
+  );
+  doc.setTextColor(0);
+
+  // Summary table on first page
+  autoTable(doc, {
+    startY: 30,
+    head: [["Name", "Job Title", "Email", "Phone", "# Resp.", "# Skills"]],
+    body: inspectors.map((i) => [
+      i.name,
+      i.job_title || "—",
+      i.email || "—",
+      i.phone || "—",
+      String((i.responsibilities || []).length),
+      String((i.skills || []).length),
+    ]),
+    styles: { fontSize: 9, cellPadding: 2 },
+    headStyles: { fillColor: [30, 41, 59] },
+    margin: { left: 14, right: 14 },
+  });
+
+  inspectors.forEach((inspector) => {
+    doc.addPage();
+    renderInspectorOnPdf(doc, inspector, 18);
+  });
+
+  doc.save(`inspector-profiles-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
 const InspectorManagement = () => {
@@ -188,10 +311,20 @@ const InspectorManagement = () => {
               Manage inspectors, their job titles, responsibilities, and skills.
             </CardDescription>
           </div>
-          <Button onClick={() => setShowAddModal(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Inspector
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => exportAllInspectorsPdf(inspectors || [])}
+              disabled={!inspectors || inspectors.length === 0}
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Export All PDF
+            </Button>
+            <Button onClick={() => setShowAddModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Inspector
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -253,14 +386,24 @@ const InspectorManagement = () => {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEdit(inspector)}
-                      title="Edit inspector"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
+                    <div className="inline-flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => exportInspectorPdf(inspector)}
+                        title="Export PDF"
+                      >
+                        <FileDown className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(inspector)}
+                        title="Edit inspector"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
