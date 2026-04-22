@@ -397,6 +397,23 @@ export default function DriverDisciplinarySection() {
                         </SelectContent>
                     </Select>
                 </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" disabled={filtered.length === 0}>
+                            <Download className="h-4 w-4 mr-1" /> Export
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Export {filtered.length} record{filtered.length === 1 ? "" : "s"}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => exportDisciplinaryListPDF(filtered)}>
+                            <FileText className="h-4 w-4 mr-2 text-red-600" /> PDF Report
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => exportDisciplinaryListExcel(filtered)}>
+                            <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Excel Workbook
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
                 <Button onClick={openNewInquiry}>
                     <Plus className="h-4 w-4 mr-1" /> Log Inquiry
                 </Button>
@@ -422,7 +439,7 @@ export default function DriverDisciplinarySection() {
                                 <TableHead>Hearing</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Outcome</TableHead>
-                                <TableHead className="w-[130px]">Actions</TableHead>
+                                <TableHead className="w-[180px]">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -452,6 +469,21 @@ export default function DriverDisciplinarySection() {
                                                 <Button variant="ghost" size="icon" onClick={() => openRecordOutcome(rec)} title="Record outcome"><Gavel className="h-4 w-4 text-amber-600" /></Button>
                                             )}
                                             <Button variant="ghost" size="icon" onClick={() => openEditInquiry(rec)} title="Edit"><Edit className="h-4 w-4" /></Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" title="Export"><Download className="h-4 w-4" /></Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Export with timeline</DropdownMenuLabel>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem onClick={() => exportDisciplinaryRecordPDF(rec)}>
+                                                        <FileText className="h-4 w-4 mr-2 text-red-600" /> PDF
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => exportDisciplinaryRecordExcel(rec)}>
+                                                        <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Excel
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                             <Button variant="ghost" size="icon" onClick={() => setDeleteId(rec.id)} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                         </div>
                                     </TableCell>
