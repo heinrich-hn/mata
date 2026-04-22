@@ -2,28 +2,29 @@ import { useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ensureAlert } from '@/lib/alertUtils';
 
-interface DriverDoc {
-  id: string;
-  driver_id: string;
-  document_type: string;
-  document_number: string | null;
-  expiry_date: string | null;
-}
-
 interface AlertMetadata {
   driver_id: string;
   driver_name: string;
   driver_number: string;
-  document_id: string;
+  document_id?: string;
   document_type: string;
-  document_number: string | null;
-  expiry_date: string;
-  days_until_expiry: number;
-  status: 'overdue' | 'soon';
-  issue_type: 'document_expiry';
+  document_number?: string | null;
+  expiry_date?: string;
+  days_until_expiry?: number;
+  status: 'overdue' | 'soon' | 'missing';
+  issue_type: 'document_expiry' | 'document_missing';
   entity_type: 'driver';
-  [key: string]: unknown; // Add index signature to satisfy Record<string, unknown>
+  [key: string]: unknown;
 }
+
+const DOC_LABELS: Record<string, string> = {
+  license: 'Driver License',
+  pdp: 'PDP',
+  passport: 'Passport',
+  medical: 'Medical Certificate',
+  retest: 'Retest Certificate',
+  defensive_driving: 'Defensive Driving',
+};
 
 export function useDriverDocumentAlerts(enabled: boolean = true) {
   const isMounted = useRef(true);
@@ -55,28 +56,70 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
 
       if (!drivers?.length) return;
 
-      // Fetch driver documents with expiry dates
+      // Fetch ALL driver documents (including those without expiry, to detect missing types)
       const { data: docs, error: docErr } = await supabase
         .from('driver_documents')
         .select('id, driver_id, document_type, document_number, expiry_date')
-        .in('driver_id', drivers.map(d => d.id))
-        .not('expiry_date', 'is', null);
+        .in('driver_id', drivers.map(d => d.id));
 
       if (docErr) {
         console.error('Error fetching documents:', docErr);
         return;
       }
 
-      if (!docs?.length) return;
+      // Build per-driver map of uploaded doc types
+      const driverDocsMap: Record<string, Set<string>> = {};
+      for (const doc of docs || []) {
+        if (!driverDocsMap[doc.driver_id]) driverDocsMap[doc.driver_id] = new Set();
+        driverDocsMap[doc.driver_id].add(doc.document_type);
+      }
 
-      // Create driver map for quick lookup
-      const driverMap = new Map(drivers.map(d => [d.id, d]));
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Reset time to beginning of day for accurate comparison
+      today.setHours(0, 0, 0, 0);
 
-      // Process each document
-      const alertPromises = docs.map(async (doc: DriverDoc) => {
-        if (!doc.expiry_date) return;
+      const alertPromises: Promise<void>[] = [];
+
+      for (const driver of drivers) {
+        const activeTypes = (driver as { active_document_types?: string[] | null }).active_document_types || [];
+        const uploadedTypes = driverDocsMap[driver.id] || new Set();
+        const driverName = `${driver.first_name} ${driver.last_name}`.trim();
+        const sourceLabel = `${driverName} (${driver.driver_number})`;
+
+        // 1. Check for MISSING documents — active types with no uploaded doc
+        for (const docType of activeTypes) {
+          if (uploadedTypes.has(docType)) continue;
+          const label = DOC_LABELS[docType] || docType.replace(/_/g, ' ');
+
+          const metadata: AlertMetadata = {
+            driver_id: driver.id,
+            driver_name: driverName,
+            driver_number: driver.driver_number,
+            document_type: docType,
+            status: 'missing',
+            issue_type: 'document_missing',
+            entity_type: 'driver',
+          };
+
+          alertPromises.push(
+            ensureAlert({
+              sourceType: 'driver',
+              sourceId: driver.id,
+              sourceLabel,
+              category: 'document_missing',
+              severity: 'high',
+              title: `Missing ${label}`,
+              message: `${driverName} has no ${label} document uploaded`,
+              metadata,
+            }).then(() => { }).catch(err => console.error('Failed to create missing doc alert:', err))
+          );
+        }
+      }
+
+      // 2. Check for EXPIRED / EXPIRING documents
+      const driverMap = new Map(drivers.map(d => [d.id, d]));
+
+      for (const doc of docs || []) {
+        if (!doc.expiry_date) continue;
 
         const expiryDate = new Date(doc.expiry_date);
         expiryDate.setHours(0, 0, 0, 0);
@@ -85,21 +128,18 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
           (expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         );
 
-        // Skip if more than 30 days away
-        if (daysUntilExpiry > 30) return;
+        if (daysUntilExpiry > 30) continue;
 
         const driver = driverMap.get(doc.driver_id);
-        if (!driver) return;
+        if (!driver) continue;
 
-        // Only alert for document types the driver has toggled on
         const activeTypes = (driver as { active_document_types?: string[] | null }).active_document_types || [];
-        if (activeTypes.length > 0 && !activeTypes.includes(doc.document_type)) return;
+        if (activeTypes.length > 0 && !activeTypes.includes(doc.document_type)) continue;
 
         const driverName = `${driver.first_name} ${driver.last_name}`.trim();
         const isExpired = expiryDate < today;
         const docType = doc.document_type.replace(/_/g, ' ');
 
-        // Determine severity
         let severity: 'critical' | 'high' | 'medium' = 'medium';
         if (isExpired) {
           severity = 'critical';
@@ -121,17 +161,19 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
           entity_type: 'driver',
         };
 
-        await ensureAlert({
-          sourceType: 'driver',
-          sourceId: doc.id,
-          sourceLabel: `${driverName} (${driver.driver_number})`,
-          category: 'document_expiry',
-          severity,
-          title: `Driver ${docType.toUpperCase()} ${isExpired ? 'Expired' : 'Expiring Soon'}`,
-          message: `${driverName}'s ${docType} ${isExpired ? 'expired on' : 'expires on'} ${formatDate(doc.expiry_date)}`,
-          metadata,
-        }).catch(err => console.error('Failed to create driver doc alert:', err));
-      });
+        alertPromises.push(
+          ensureAlert({
+            sourceType: 'driver',
+            sourceId: doc.id,
+            sourceLabel: `${driverName} (${driver.driver_number})`,
+            category: 'document_expiry',
+            severity,
+            title: `Driver ${docType.toUpperCase()} ${isExpired ? 'Expired' : 'Expiring Soon'}`,
+            message: `${driverName}'s ${docType} ${isExpired ? 'expired on' : 'expires on'} ${formatDate(doc.expiry_date)}`,
+            metadata,
+          }).then(() => { }).catch(err => console.error('Failed to create driver doc alert:', err))
+        );
+      }
 
       await Promise.allSettled(alertPromises);
     } catch (error) {

@@ -84,12 +84,46 @@ export function useVehicleDocumentAlerts(enabled: boolean = true) {
 
       // Check each vehicle's documents
       for (const vehicle of vehicles as VehicleDocumentResponse[]) {
-        if (!vehicle.work_documents || vehicle.work_documents.length === 0) continue;
-
         const sourceLabel = vehicle.fleet_number || vehicle.registration_number;
         const activeTypes = vehicle.active_document_types || [];
+        const docs = vehicle.work_documents || [];
 
-        for (const doc of vehicle.work_documents) {
+        // Build set of uploaded categories for missing-doc detection
+        const uploadedCategories = new Set<string>();
+        for (const doc of docs) {
+          const cat = doc.document_category || doc.document_type;
+          if (cat) uploadedCategories.add(cat);
+        }
+
+        // 1. Check for MISSING documents — active categories with no uploaded doc
+        for (const cat of activeTypes) {
+          if (uploadedCategories.has(cat)) continue;
+          const docLabel = formatDocCategory(cat);
+
+          await ensureAlert({
+            sourceType: "vehicle",
+            sourceId: vehicle.id,
+            sourceLabel,
+            category: "document_missing",
+            severity: "high",
+            title: `Missing ${docLabel}`,
+            message: `${sourceLabel} has no ${docLabel} document uploaded`,
+            fleetNumber: vehicle.fleet_number,
+            metadata: {
+              vehicle_id: vehicle.id,
+              registration_number: vehicle.registration_number,
+              fleet_number: vehicle.fleet_number,
+              make: vehicle.make,
+              model: vehicle.model,
+              document_category: cat,
+              status: "missing",
+              issue_type: "document_missing",
+            },
+          }).catch((err) => console.error('Failed to create missing document alert:', err));
+        }
+
+        // 2. Check for EXPIRED / EXPIRING documents
+        for (const doc of docs) {
           const expiry = doc.metadata?.expiry_date;
           if (!expiry) continue;
 

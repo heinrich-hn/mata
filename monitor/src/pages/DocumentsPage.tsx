@@ -41,6 +41,7 @@ interface DocRow {
   expiryDate: string;
   daysUntilExpiry: number;
   isOverdue: boolean;
+  isMissing?: boolean;
 }
 
 function calcDays(expiryDate: string) {
@@ -64,25 +65,64 @@ export default function DocumentsPage() {
   const { data: driverRows = [], isLoading: isLoadingDrivers } = useQuery({
     queryKey: ["driver-documents-expiry"],
     queryFn: async () => {
+      // Fetch active drivers with their active_document_types
+      const { data: drivers, error: drvErr } = await supabase
+        .from("drivers")
+        .select("id, first_name, last_name, driver_number, status, active_document_types")
+        .eq("status", "active");
+      if (drvErr) throw drvErr;
+      if (!drivers?.length) return [];
+
+      const driverIds = drivers.map(d => d.id);
+
+      // Fetch ALL driver documents (not just those with expiry)
       const { data, error } = await supabase
         .from("driver_documents")
-        .select("id, document_type, document_number, expiry_date, drivers!inner(id, first_name, last_name, driver_number, status)")
-        .not("expiry_date", "is", null);
-
+        .select("id, driver_id, document_type, document_number, expiry_date")
+        .in("driver_id", driverIds);
       if (error) throw error;
+
+      // Build per-driver map of uploaded types
+      const driverDocsMap: Record<string, Set<string>> = {};
+      for (const doc of data || []) {
+        if (!driverDocsMap[doc.driver_id]) driverDocsMap[doc.driver_id] = new Set();
+        driverDocsMap[doc.driver_id].add(doc.document_type);
+      }
 
       const today = new Date();
       const rows: DocRow[] = [];
 
+      // 1. Missing documents — active types with no uploaded doc
+      for (const driver of drivers) {
+        const activeTypes = (driver as { active_document_types?: string[] | null }).active_document_types || [];
+        const uploaded = driverDocsMap[driver.id] || new Set();
+        const driverName = `${driver.first_name} ${driver.last_name}`.trim();
+
+        for (const docType of activeTypes) {
+          if (uploaded.has(docType)) continue;
+          rows.push({
+            id: `driver-missing-${driver.id}-${docType}`,
+            entityType: "driver",
+            entityName: driverName,
+            entityDetail: driver.driver_number || "",
+            documentType: docType,
+            documentNumber: "",
+            expiryDate: "",
+            daysUntilExpiry: -9999,
+            isOverdue: true,
+            isMissing: true,
+          });
+        }
+      }
+
+      // 2. Expired / expiring documents
       for (const doc of data || []) {
-        const driver = doc.drivers as unknown as {
-          id: string;
-          first_name: string;
-          last_name: string;
-          driver_number: string;
-          status: string;
-        };
-        if (driver.status !== "active") continue;
+        if (!doc.expiry_date) continue;
+        const driver = drivers.find(d => d.id === doc.driver_id);
+        if (!driver) continue;
+
+        const activeTypes = (driver as { active_document_types?: string[] | null }).active_document_types || [];
+        if (activeTypes.length > 0 && !activeTypes.includes(doc.document_type)) continue;
 
         const daysUntil = calcDays(doc.expiry_date);
         const expiry = new Date(doc.expiry_date);
@@ -128,11 +168,38 @@ export default function DocumentsPage() {
       for (const vehicle of data || []) {
         const activeTypes = (vehicle as { active_document_types: string[] | null }).active_document_types || [];
         const docs = (vehicle as { work_documents: { id: string; document_type: string | null; document_category: string | null; document_number: string; title: string; metadata: { expiry_date?: string } | null }[] }).work_documents || [];
+        const vehicleName = (vehicle as { registration_number: string }).registration_number || (vehicle as { fleet_number: string | null }).fleet_number || "Unknown";
+        const vehicleDetail = `${(vehicle as { make: string }).make || ""} ${(vehicle as { model: string }).model || ""}`.trim();
+
+        // Build set of uploaded categories for missing detection
+        const uploadedCategories = new Set<string>();
+        for (const doc of docs) {
+          const cat = doc.document_category || doc.document_type;
+          if (cat) uploadedCategories.add(cat);
+        }
+
+        // 1. Missing documents — active categories with no uploaded doc
+        for (const cat of activeTypes) {
+          if (uploadedCategories.has(cat)) continue;
+          rows.push({
+            id: `vehicle-missing-${(vehicle as { id: string }).id}-${cat}`,
+            entityType: "vehicle",
+            entityName: vehicleName,
+            entityDetail: vehicleDetail,
+            documentType: formatDocumentType(cat),
+            documentNumber: "",
+            expiryDate: "",
+            daysUntilExpiry: -9999,
+            isOverdue: true,
+            isMissing: true,
+          });
+        }
+
+        // 2. Expired / expiring documents
         for (const doc of docs) {
           const expDateStr = doc.metadata?.expiry_date;
           if (!expDateStr) continue;
 
-          // Only show alerts for categories the vehicle has toggled on
           const category = doc.document_category || doc.document_type;
           if (category && activeTypes.length > 0 && !activeTypes.includes(category)) continue;
 
@@ -145,8 +212,8 @@ export default function DocumentsPage() {
           rows.push({
             id: doc.id,
             entityType: "vehicle",
-            entityName: (vehicle as { registration_number: string }).registration_number || (vehicle as { fleet_number: string | null }).fleet_number || "Unknown",
-            entityDetail: `${(vehicle as { make: string }).make || ""} ${(vehicle as { model: string }).model || ""}`.trim(),
+            entityName: vehicleName,
+            entityDetail: vehicleDetail,
             documentType: formatDocumentType(category),
             documentNumber: doc.document_number || "",
             expiryDate: expDateStr,
@@ -177,8 +244,9 @@ export default function DocumentsPage() {
     const currentFiltered = filtered;
     return {
       total: currentFiltered.length,
-      overdue: currentFiltered.filter((r) => r.isOverdue).length,
-      expiringSoon: currentFiltered.filter((r) => !r.isOverdue).length,
+      overdue: currentFiltered.filter((r) => r.isOverdue && !r.isMissing).length,
+      expiringSoon: currentFiltered.filter((r) => !r.isOverdue && !r.isMissing).length,
+      missing: currentFiltered.filter((r) => r.isMissing).length,
       vehicle: vehicleAlerts.length,
       driver: driverAlerts.length,
     };
@@ -213,7 +281,7 @@ export default function DocumentsPage() {
   return (
     <div className="monitor-page">
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/55 to-white">
           <CardHeader className="pb-1 pt-2 px-3">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-blue-700/80">
@@ -245,6 +313,17 @@ export default function DocumentsPage() {
           <CardContent className="pb-2 px-3">
             <div className="text-xl font-bold text-amber-700">{stats.expiringSoon}</div>
             <p className="text-xs text-slate-500">Within 30 days</p>
+          </CardContent>
+        </Card>
+        <Card className="border-purple-200/80 bg-gradient-to-br from-purple-50/55 to-white">
+          <CardHeader className="pb-1 pt-2 px-3">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-purple-700/80">
+              Missing
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-2 px-3">
+            <div className="text-xl font-bold text-purple-700">{stats.missing}</div>
+            <p className="text-xs text-slate-500">Not uploaded</p>
           </CardContent>
         </Card>
         <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50/55 to-white">
@@ -365,7 +444,7 @@ export default function DocumentsPage() {
             return (
               <div
                 key={row.id}
-                className={`flex items-center gap-3 px-4 py-3 transition-colors ${row.isOverdue ? 'hover:bg-rose-50/40' : 'hover:bg-amber-50/40'}`}
+                className={`flex items-center gap-3 px-4 py-3 transition-colors ${row.isMissing ? 'hover:bg-purple-50/40' : row.isOverdue ? 'hover:bg-rose-50/40' : 'hover:bg-amber-50/40'}`}
               >
                 {/* Document info */}
                 <div className="min-w-0 flex-1">
@@ -385,21 +464,32 @@ export default function DocumentsPage() {
 
                 {/* Expiry info */}
                 <div className="shrink-0 text-right">
-                  <div className="text-xs font-medium text-slate-700 flex items-center gap-1 justify-end">
-                    <CalendarDays className="h-3 w-3 text-slate-400" />
-                    {format(new Date(row.expiryDate), "dd MMM yyyy")}
-                  </div>
-                  <span className="text-xs text-slate-500">
-                    {row.isOverdue
-                      ? `${Math.abs(row.daysUntilExpiry)}d overdue`
-                      : `${row.daysUntilExpiry}d remaining`}
-                  </span>
+                  {row.isMissing ? (
+                    <span className="text-xs font-medium text-purple-600">Not uploaded</span>
+                  ) : (
+                    <>
+                      <div className="text-xs font-medium text-slate-700 flex items-center gap-1 justify-end">
+                        <CalendarDays className="h-3 w-3 text-slate-400" />
+                        {format(new Date(row.expiryDate), "dd MMM yyyy")}
+                      </div>
+                      <span className="text-xs text-slate-500">
+                        {row.isOverdue
+                          ? `${Math.abs(row.daysUntilExpiry)}d overdue`
+                          : `${row.daysUntilExpiry}d remaining`}
+                      </span>
+                    </>
+                  )}
                 </div>
 
-                {/* Status badge - neutral */}
+                {/* Status badge */}
                 <div className="shrink-0">
-                  <Badge className={`text-xs px-1.5 py-0.5 ${row.isOverdue ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-                    {row.isOverdue ? "OVERDUE" : "EXPIRING"}
+                  <Badge className={`text-xs px-1.5 py-0.5 ${row.isMissing
+                      ? 'bg-purple-100 text-purple-700 border-purple-200'
+                      : row.isOverdue
+                        ? 'bg-rose-100 text-rose-700 border-rose-200'
+                        : 'bg-amber-100 text-amber-700 border-amber-200'
+                    }`}>
+                    {row.isMissing ? "MISSING" : row.isOverdue ? "OVERDUE" : "EXPIRING"}
                   </Badge>
                 </div>
 
