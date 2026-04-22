@@ -5,6 +5,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+    DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,10 +20,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import {
+    exportDisciplinaryListExcel, exportDisciplinaryListPDF,
+    exportDisciplinaryRecordExcel, exportDisciplinaryRecordPDF,
+} from "@/lib/disciplinaryExport";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    AlertTriangle, Calendar, ClipboardList, Edit,
-    Eye, Filter, Gavel, Loader2, Plus, Search, Trash2,
+    AlertTriangle, Calendar, ClipboardList, Download, Edit,
+    Eye, FileSpreadsheet, FileText, Filter, Gavel, Loader2, Plus, Search, Trash2,
 } from "lucide-react";
 import { useState } from "react";
 
