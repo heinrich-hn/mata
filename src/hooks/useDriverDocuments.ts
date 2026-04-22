@@ -5,7 +5,7 @@ import type { TablesInsert } from '@/integrations/supabase/types';
 
 export const DOCUMENT_TYPES = [
   { value: 'license', label: 'Driver License', shortLabel: 'License' },
-  { value: 'pdp', label: 'Professional Driving Permit (PDP)', shortLabel: 'PDP' },
+  { value: 'pdp', label: 'Professional Driving Permit (PDP/International)', shortLabel: 'PDP/International' },
   { value: 'passport', label: 'Passport', shortLabel: 'Passport' },
   { value: 'medical', label: 'Medical Certificate', shortLabel: 'Medical' },
   { value: 'retest', label: 'Retest Certificate', shortLabel: 'Retest' },

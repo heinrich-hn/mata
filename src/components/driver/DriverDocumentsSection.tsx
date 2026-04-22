@@ -3,8 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveDocumentTypes } from '@/hooks/useActiveDocumentTypes';
 import { useDriverDocuments, DOCUMENT_TYPES, type DriverDocumentType } from '@/hooks/useDriverDocuments';
 import {
   AlertTriangle,
@@ -38,6 +40,12 @@ const DriverDocumentsSection = ({ driverId, driverName: _driverName, compact = f
     deleteDocument,
     isDeleting,
   } = useDriverDocuments(driverId);
+
+  const {
+    isActive: isDocTypeActive,
+    toggleActive: toggleDocTypeActive,
+    isUpdating: isUpdatingActive,
+  } = useActiveDocumentTypes('drivers', driverId);
 
   const [editingType, setEditingType] = useState<DriverDocumentType | null>(null);
   const [editExpiryDate, setEditExpiryDate] = useState('');
@@ -168,9 +176,10 @@ const DriverDocumentsSection = ({ driverId, driverName: _driverName, compact = f
         {DOCUMENT_TYPES.map((docType) => {
           const doc = getDocument(docType.value);
           const isEditing = editingType === docType.value;
+          const tracked = isDocTypeActive(docType.value);
 
           return (
-            <Card key={docType.value} className={`relative transition-all ${isEditing ? 'ring-2 ring-primary' : 'hover:shadow-sm'}`}>
+            <Card key={docType.value} className={`relative transition-all ${isEditing ? 'ring-2 ring-primary' : 'hover:shadow-sm'} ${!tracked ? 'opacity-60' : ''}`}>
               <CardContent className="p-3">
                 {isEditing ? (
                   /* Edit Mode */
@@ -244,9 +253,30 @@ const DriverDocumentsSection = ({ driverId, driverName: _driverName, compact = f
                 ) : (
                   /* View Mode */
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <h4 className="font-medium text-sm">{docType.shortLabel}</h4>
-                      {getExpiryBadge(doc?.expiry_date || null)}
+                      <div className="flex items-center gap-2">
+                        {tracked && getExpiryBadge(doc?.expiry_date || null)}
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="flex items-center">
+                                <Switch
+                                  checked={tracked}
+                                  onCheckedChange={(v) => toggleDocTypeActive(docType.value, v)}
+                                  disabled={isUpdatingActive}
+                                  aria-label={`Track ${docType.shortLabel} for alerts`}
+                                />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              <p className="text-xs">
+                                {tracked ? 'Tracked — alerts enabled' : 'Not tracked — alerts disabled'}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     </div>
 
                     <div className="space-y-1">

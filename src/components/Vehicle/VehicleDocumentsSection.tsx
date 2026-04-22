@@ -10,10 +10,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useActiveDocumentTypes } from "@/hooks/useActiveDocumentTypes";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { FileText, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const COMMON_DOC_TYPES = [
     { value: "license_disk", label: "License Disk" },
@@ -73,6 +75,13 @@ const VehicleDocumentsSection = ({
 }: VehicleDocumentsSectionProps) => {
     const { toast } = useToast();
     const isLive = !!vehicleId;
+
+    const {
+        isActive: isCategoryActive,
+        toggleActive: toggleCategoryActive,
+        isLoading: loadingActive,
+        isUpdating: updatingActive,
+    } = useActiveDocumentTypes("vehicles", vehicleId);
 
     // Live mode state
     const [docs, setDocs] = useState<TrackedDoc[]>([]);
@@ -277,6 +286,17 @@ const VehicleDocumentsSection = ({
                 <FileText className="h-4 w-4" />
                 Vehicle Documents
             </Label>
+
+            {/* Tracked document categories — controls which docs trigger alerts */}
+            {isLive && (
+                <TrackedCategoriesPanel
+                    docs={docs}
+                    isCategoryActive={isCategoryActive}
+                    toggleCategoryActive={toggleCategoryActive}
+                    loading={loadingActive}
+                    disabled={updatingActive}
+                />
+            )}
 
             {/* Add document form */}
             <div className="space-y-3 rounded-md border p-3">
@@ -495,3 +515,62 @@ const VehicleDocumentsSection = ({
 };
 
 export default VehicleDocumentsSection;
+
+interface TrackedCategoriesPanelProps {
+    docs: TrackedDoc[];
+    isCategoryActive: (cat: string) => boolean;
+    toggleCategoryActive: (cat: string, active: boolean) => void;
+    loading: boolean;
+    disabled: boolean;
+}
+
+function TrackedCategoriesPanel({
+    docs,
+    isCategoryActive,
+    toggleCategoryActive,
+    loading,
+    disabled,
+}: TrackedCategoriesPanelProps) {
+    // Show all common types + any custom categories the vehicle already has uploaded.
+    const categories = useMemo(() => {
+        const map = new Map<string, string>();
+        COMMON_DOC_TYPES.forEach((t) => map.set(t.value, t.label));
+        docs.forEach((d) => {
+            const cat = d.document_category;
+            if (cat && !map.has(cat)) {
+                map.set(
+                    cat,
+                    cat.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+                );
+            }
+        });
+        return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    }, [docs]);
+
+    return (
+        <div className="rounded-md border p-3 bg-muted/20 space-y-2">
+            <div>
+                <p className="text-xs font-medium">Tracked document categories</p>
+                <p className="text-[11px] text-muted-foreground">
+                    Only categories switched on will appear in document alerts for this vehicle.
+                </p>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {categories.map((c) => (
+                    <label
+                        key={c.value}
+                        className="flex items-center gap-2 text-xs cursor-pointer"
+                    >
+                        <Switch
+                            checked={isCategoryActive(c.value)}
+                            onCheckedChange={(v) => toggleCategoryActive(c.value, v)}
+                            disabled={loading || disabled}
+                            aria-label={`Track ${c.label} for alerts`}
+                        />
+                        <span>{c.label}</span>
+                    </label>
+                ))}
+            </div>
+        </div>
+    );
+}

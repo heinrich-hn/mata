@@ -23,6 +23,7 @@ interface VehicleRow {
     license_disk_expiry: string | null;
     insurance_expiry: string | null;
     mot_expiry: string | null;
+    active_document_types: string[] | null;
 }
 
 type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
@@ -77,36 +78,46 @@ export default function VehicleDocAlerts() {
             vehicles.forEach(v => {
                 const vehicleIssues: string[] = [];
                 const uploadedDocs = vehicleDocsMap[v.id] || new Set();
+                const activeTypes = v.active_document_types || [];
+                const isActive = (cat: string) => activeTypes.includes(cat);
 
-                // Check missing required documents
+                // Check missing required documents (only those marked active for this vehicle)
                 REQUIRED_DOC_CATEGORIES.forEach(cat => {
+                    if (!isActive(cat)) return;
                     if (!uploadedDocs.has(cat)) {
                         vehicleIssues.push(`Missing ${formatDocCategory(cat)}`);
                     }
                 });
 
-                // Check built-in expiry fields
-                if (!v.license_disk_expiry) {
-                    vehicleIssues.push("No license disk expiry date set");
-                } else if (v.license_disk_expiry < today) {
-                    vehicleIssues.push("License disk expired");
+                // Check built-in expiry fields (only when relevant category is active)
+                if (isActive("license_disk")) {
+                    if (!v.license_disk_expiry) {
+                        vehicleIssues.push("No license disk expiry date set");
+                    } else if (v.license_disk_expiry < today) {
+                        vehicleIssues.push("License disk expired");
+                    }
                 }
 
-                if (!v.insurance_expiry) {
-                    vehicleIssues.push("No insurance expiry date set");
-                } else if (v.insurance_expiry < today) {
-                    vehicleIssues.push("Insurance expired");
+                if (isActive("insurance")) {
+                    if (!v.insurance_expiry) {
+                        vehicleIssues.push("No insurance expiry date set");
+                    } else if (v.insurance_expiry < today) {
+                        vehicleIssues.push("Insurance expired");
+                    }
                 }
 
-                if (!v.mot_expiry) {
-                    vehicleIssues.push("No COF/MOT expiry date set");
-                } else if (v.mot_expiry < today) {
-                    vehicleIssues.push("COF/MOT expired");
+                if (isActive("mot") || isActive("cof")) {
+                    if (!v.mot_expiry) {
+                        vehicleIssues.push("No COF/MOT expiry date set");
+                    } else if (v.mot_expiry < today) {
+                        vehicleIssues.push("COF/MOT expired");
+                    }
                 }
 
-                // Check expired uploaded docs
+                // Check expired uploaded docs (only active categories)
                 const expiredDocs = vehicleExpiredDocs[v.id] || [];
                 expiredDocs.forEach(cat => {
+                    if (!isActive(cat)) return;
                     vehicleIssues.push(`${formatDocCategory(cat)} document expired`);
                 });
 

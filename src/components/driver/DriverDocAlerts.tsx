@@ -22,7 +22,7 @@ const REQUIRED_DOC_TYPES = ["license", "pdp", "medical"] as const;
 
 const DOC_LABELS: Record<string, string> = {
     license: "Driver License",
-    pdp: "PDP",
+    pdp: "PDP/International",
     passport: "Passport",
     medical: "Medical Certificate",
     retest: "Retest Certificate",
@@ -40,7 +40,7 @@ export default function DriverDocAlerts() {
             // Fetch all active drivers
             const { data: drivers, error: drvErr } = await supabase
                 .from("drivers")
-                .select("id, first_name, last_name, driver_number, license_expiry, status")
+                .select("id, first_name, last_name, driver_number, license_expiry, status, active_document_types")
                 .in("status", ["active"])
                 .order("first_name");
             if (drvErr) throw drvErr;
@@ -67,9 +67,12 @@ export default function DriverDocAlerts() {
             drivers.forEach(d => {
                 const driverIssues: string[] = [];
                 const uploadedDocs = driverDocsMap[d.id] || {};
+                const activeTypes: string[] = (d as { active_document_types?: string[] | null }).active_document_types || [];
+                const isActive = (t: string) => activeTypes.includes(t);
 
-                // Check required documents
+                // Check required documents (only those marked active for this driver)
                 REQUIRED_DOC_TYPES.forEach(docType => {
+                    if (!isActive(docType)) return;
                     if (!(docType in uploadedDocs)) {
                         driverIssues.push(`Missing ${DOC_LABELS[docType] || docType}`);
                     } else {
@@ -82,20 +85,23 @@ export default function DriverDocAlerts() {
                     }
                 });
 
-                // Check non-required docs that are uploaded but expired
+                // Check non-required docs that are uploaded but expired (only if active)
                 Object.entries(uploadedDocs).forEach(([docType, expiry]) => {
                     if (REQUIRED_DOC_TYPES.includes(docType as typeof REQUIRED_DOC_TYPES[number])) return;
+                    if (!isActive(docType)) return;
                     if (expiry && expiry < today) {
                         driverIssues.push(`${DOC_LABELS[docType] || docType} expired`);
                     }
                 });
 
-                // Check license_expiry on the driver record itself
-                if (!d.license_expiry) {
-                    driverIssues.push("No license expiry date on profile");
-                } else if (d.license_expiry < today) {
-                    if (!driverIssues.some(i => i.includes("Driver License expired"))) {
-                        driverIssues.push("License expired (profile)");
+                // Check license_expiry on the driver record itself (only if license is tracked)
+                if (isActive("license")) {
+                    if (!d.license_expiry) {
+                        driverIssues.push("No license expiry date on profile");
+                    } else if (d.license_expiry < today) {
+                        if (!driverIssues.some(i => i.includes("Driver License expired"))) {
+                            driverIssues.push("License expired (profile)");
+                        }
                     }
                 }
 
