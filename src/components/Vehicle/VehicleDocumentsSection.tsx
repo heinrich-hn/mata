@@ -19,9 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const COMMON_DOC_TYPES = [
     { value: "license_disk", label: "License Disk" },
-    { value: "roadworthy", label: "Roadworthy" },
     { value: "insurance", label: "Insurance" },
-    { value: "mot", label: "MOT" },
     { value: "cof", label: "COF" },
     { value: "permit", label: "Permit" },
 ];
@@ -151,7 +149,7 @@ const VehicleDocumentsSection = ({
             }
 
             const category = newDoc.type === "custom" ? newDoc.customType : newDoc.type;
-            const docNumber = newDoc.number || category.toUpperCase();
+            const docNumber = newDoc.number || `${category.toUpperCase()}-${Date.now()}`;
 
             const { error } = await supabase.from("work_documents").insert({
                 vehicle_id: vehicleId,
@@ -174,7 +172,8 @@ const VehicleDocumentsSection = ({
             toast({ title: "Document added" });
         } catch (err) {
             console.error("Failed to add document:", err);
-            toast({ title: "Failed to add document", description: String(err), variant: "destructive" });
+            const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? "Please try again";
+            toast({ title: "Failed to add document", description: msg, variant: "destructive" });
         } finally {
             setAdding(false);
         }
@@ -353,7 +352,7 @@ const VehicleDocumentsSection = ({
 
                 <div className="flex flex-wrap items-end gap-2">
                     <div className="flex-1 min-w-[200px]">
-                        <Label className="text-xs">File</Label>
+                        <Label className="text-xs">File <span className="text-muted-foreground font-normal">(optional)</span></Label>
                         <Input
                             ref={fileInputRef}
                             type="file"

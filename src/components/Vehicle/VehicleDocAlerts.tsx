@@ -28,7 +28,6 @@ interface VehicleRow {
 
 type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
 
-const REQUIRED_DOC_CATEGORIES = ["license_disk", "roadworthy", "insurance"];
 
 export default function VehicleDocAlerts() {
     const [expanded, setExpanded] = useState(false);
@@ -56,69 +55,94 @@ export default function VehicleDocAlerts() {
                 .in("vehicle_id", vehicleIds);
             if (dErr) throw dErr;
 
-            // Build a map of vehicle -> uploaded doc categories
-            const vehicleDocsMap: Record<string, Set<string>> = {};
-            const vehicleExpiredDocs: Record<string, string[]> = {};
+            // Build per-vehicle, per-category document status.
+            // hasValidExpiry: at least one doc has expiry_date >= today.
+            // allExpired: every doc that has an expiry_date has it < today
+            //   (a doc with no expiry date is NOT treated as expired).
+            type CatStatus = { hasDoc: boolean; hasValidExpiry: boolean; allExpired: boolean };
+            const vehicleDocStatus: Record<string, Record<string, CatStatus>> = {};
 
             (docs || []).forEach(doc => {
-                if (!doc.vehicle_id) return;
-                if (!vehicleDocsMap[doc.vehicle_id]) vehicleDocsMap[doc.vehicle_id] = new Set();
-                if (doc.document_category) vehicleDocsMap[doc.vehicle_id].add(doc.document_category);
-
-                // Check expiry from metadata
-                const meta = doc.metadata as Record<string, unknown> | null;
-                if (meta?.expiry_date && typeof meta.expiry_date === "string" && meta.expiry_date < today) {
-                    if (!vehicleExpiredDocs[doc.vehicle_id]) vehicleExpiredDocs[doc.vehicle_id] = [];
-                    vehicleExpiredDocs[doc.vehicle_id].push(doc.document_category || "document");
+                if (!doc.vehicle_id || !doc.document_category) return;
+                const vid = doc.vehicle_id;
+                const cat = doc.document_category;
+                if (!vehicleDocStatus[vid]) vehicleDocStatus[vid] = {};
+                if (!vehicleDocStatus[vid][cat]) {
+                    vehicleDocStatus[vid][cat] = { hasDoc: false, hasValidExpiry: false, allExpired: true };
                 }
+
+                vehicleDocStatus[vid][cat].hasDoc = true;
+                const meta = doc.metadata as Record<string, unknown> | null;
+                const expiryDate = meta?.expiry_date as string | undefined;
+
+                if (!expiryDate) {
+                    // No expiry stored — don't count as expired
+                    vehicleDocStatus[vid][cat].allExpired = false;
+                } else if (expiryDate >= today) {
+                    vehicleDocStatus[vid][cat].hasValidExpiry = true;
+                    vehicleDocStatus[vid][cat].allExpired = false;
+                }
+                // else: expired doc — allExpired stays true unless a later iteration clears it
             });
+
+            // Determine status combining an inline vehicle field with uploaded work_documents.
+            // A category is 'ok' if either source has a valid (non-expired) date.
+            type DocStatus = "ok" | "expired" | "missing" | "no-date";
+            const getCategoryStatus = (
+                catDocs: CatStatus | undefined,
+                inlineExpiry: string | null
+            ): DocStatus => {
+                const inlineValid = !!inlineExpiry && inlineExpiry >= today;
+                const inlineExpired = !!inlineExpiry && inlineExpiry < today;
+
+                if (inlineValid || catDocs?.hasValidExpiry) return "ok";
+
+                const hasAnyDoc = catDocs?.hasDoc ?? false;
+                if (!hasAnyDoc && !inlineExpiry) return "missing";
+                if (inlineExpired || catDocs?.allExpired) return "expired";
+                return "no-date";
+            };
 
             const issues: VehicleDocIssue[] = [];
 
             vehicles.forEach(v => {
                 const vehicleIssues: string[] = [];
-                const uploadedDocs = vehicleDocsMap[v.id] || new Set();
                 const activeTypes = v.active_document_types || [];
                 const isActive = (cat: string) => activeTypes.includes(cat);
+                const docStatus = vehicleDocStatus[v.id] || {};
 
-                // Check missing required documents (only those marked active for this vehicle)
-                REQUIRED_DOC_CATEGORIES.forEach(cat => {
-                    if (!isActive(cat)) return;
-                    if (!uploadedDocs.has(cat)) {
-                        vehicleIssues.push(`Missing ${formatDocCategory(cat)}`);
-                    }
-                });
-
-                // Check built-in expiry fields (only when relevant category is active)
+                // License disk — cross-check work_documents + v.license_disk_expiry
                 if (isActive("license_disk")) {
-                    if (!v.license_disk_expiry) {
-                        vehicleIssues.push("No license disk expiry date set");
-                    } else if (v.license_disk_expiry < today) {
-                        vehicleIssues.push("License disk expired");
-                    }
+                    const status = getCategoryStatus(docStatus["license_disk"], v.license_disk_expiry);
+                    if (status === "missing") vehicleIssues.push("Missing License Disk");
+                    else if (status === "expired") vehicleIssues.push("License disk expired");
+                    else if (status === "no-date") vehicleIssues.push("No license disk expiry date set");
                 }
 
+                // Insurance — cross-check work_documents + v.insurance_expiry
                 if (isActive("insurance")) {
-                    if (!v.insurance_expiry) {
-                        vehicleIssues.push("No insurance expiry date set");
-                    } else if (v.insurance_expiry < today) {
-                        vehicleIssues.push("Insurance expired");
-                    }
+                    const status = getCategoryStatus(docStatus["insurance"], v.insurance_expiry);
+                    if (status === "missing") vehicleIssues.push("Missing Insurance");
+                    else if (status === "expired") vehicleIssues.push("Insurance expired");
+                    else if (status === "no-date") vehicleIssues.push("No insurance expiry date set");
                 }
 
-                if (isActive("mot") || isActive("cof")) {
-                    if (!v.mot_expiry) {
-                        vehicleIssues.push("No COF/MOT expiry date set");
-                    } else if (v.mot_expiry < today) {
-                        vehicleIssues.push("COF/MOT expired");
-                    }
+                // COF — check work_documents only (no inline vehicle field)
+                if (isActive("cof")) {
+                    const cofDoc = docStatus["cof"];
+                    if (!cofDoc?.hasDoc) vehicleIssues.push("Missing COF");
+                    else if (cofDoc.allExpired) vehicleIssues.push("COF expired");
                 }
 
-                // Check expired uploaded docs (only active categories)
-                const expiredDocs = vehicleExpiredDocs[v.id] || [];
-                expiredDocs.forEach(cat => {
-                    if (!isActive(cat)) return;
-                    vehicleIssues.push(`${formatDocCategory(cat)} document expired`);
+                // All other active categories — flag only if an uploaded doc is fully expired
+                // Note: "roadworthy" is excluded because COF serves as the roadworthy certificate.
+                const handledCats = new Set(["license_disk", "insurance", "mot", "cof", "roadworthy"]);
+                activeTypes.forEach(cat => {
+                    if (handledCats.has(cat)) return;
+                    const catDoc = docStatus[cat];
+                    if (catDoc?.hasDoc && catDoc.allExpired) {
+                        vehicleIssues.push(`${formatDocCategory(cat)} document expired`);
+                    }
                 });
 
                 if (vehicleIssues.length > 0) {
@@ -133,7 +157,7 @@ export default function VehicleDocAlerts() {
 
             return issues;
         },
-        staleTime: 5 * 60 * 1000,
+        staleTime: 0, // Always re-fetch on focus/remount so inactive vehicles and updates reflect immediately
     });
 
     const handleExportPDF = () => {
@@ -275,9 +299,7 @@ export default function VehicleDocAlerts() {
 function formatDocCategory(cat: string): string {
     const map: Record<string, string> = {
         license_disk: "License Disk",
-        roadworthy: "Roadworthy",
         insurance: "Insurance",
-        mot: "COF/MOT",
         cof: "COF",
         permit: "Permit",
     };

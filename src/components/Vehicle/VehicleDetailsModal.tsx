@@ -124,9 +124,7 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
 
   const COMMON_DOC_TYPES = [
     { value: "license_disk", label: "License Disk" },
-    { value: "roadworthy", label: "Roadworthy" },
     { value: "insurance", label: "Insurance" },
-    { value: "mot", label: "MOT" },
     { value: "cof", label: "COF" },
     { value: "permit", label: "Permit" },
   ];
@@ -353,11 +351,12 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
       }
 
       const category = newDoc.type === "custom" ? newDoc.customType : newDoc.type;
-      const docNumber = newDoc.number || category.toUpperCase();
+      const docNumber = newDoc.number || `${category.toUpperCase()}-${Date.now()}`;
 
-      const { data: inserted, error } = await supabase
+      const { error } = await supabase
         .from("work_documents")
         .insert({
+          vehicle_id: vehicle.id,
           document_type: "other",
           document_category: category,
           document_number: docNumber,
@@ -366,18 +365,9 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
           file_format: fileFormat,
           file_url: publicUrl,
           uploaded_by: "system",
-          metadata: { expiry_date: newDoc.expiry.toISOString().split('T')[0] },
-        })
-        .select("id")
-        .single();
+          metadata: newDoc.expiry ? { expiry_date: newDoc.expiry.toISOString().split('T')[0] } : null,
+        });
       if (error) throw error;
-      if (inserted?.id) {
-        const { error: bindErr } = await supabase
-          .from("work_documents")
-          .update({ vehicle_id: vehicle.id })
-          .eq("id", inserted.id);
-        if (bindErr) throw bindErr;
-      }
       setNewDoc({ type: "license_disk", number: "", expiry: undefined, file: null, customType: "" });
       await fetchDocs();
       toast({ title: "Document tracked", description: "Tracking has been added for this vehicle" });
@@ -692,26 +682,6 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="font-medium text-gray-500">MOT Expiry:</span>
-                      <div className="flex items-center gap-2">
-                        {vehicle.mot_expiry && isDateOverdue(vehicle.mot_expiry) && (
-                          <AlertTriangle className="h-4 w-4 text-red-500" />
-                        )}
-                        {vehicle.mot_expiry && isDateSoon(vehicle.mot_expiry) && !isDateOverdue(vehicle.mot_expiry) && (
-                          <Clock className="h-4 w-4 text-yellow-500" />
-                        )}
-                        <span className={`font-medium ${vehicle.mot_expiry && isDateOverdue(vehicle.mot_expiry)
-                          ? 'text-red-600'
-                          : vehicle.mot_expiry && isDateSoon(vehicle.mot_expiry)
-                            ? 'text-yellow-600'
-                            : ''
-                          }`}>
-                          {vehicle.mot_expiry ? formatDate(vehicle.mot_expiry) : 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center">
                       <span className="font-medium text-gray-500">Insurance Expiry:</span>
                       <div className="flex items-center gap-2">
                         {vehicle.insurance_expiry && isDateOverdue(vehicle.insurance_expiry) && (
@@ -775,7 +745,7 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                     </div>
                     <div className="flex flex-wrap items-end gap-2">
                       <div className="flex-1 min-w-[200px]">
-                        <Label htmlFor="doc-file" className="text-xs">File</Label>
+                        <Label htmlFor="doc-file" className="text-xs">File <span className="text-muted-foreground font-normal">(optional)</span></Label>
                         <Input id="doc-file" type="file" accept="*/*" onChange={(e) => setNewDoc((s) => ({ ...s, file: e.target.files?.[0] || null }))} />
                       </div>
                       <Button type="submit" disabled={adding} className="whitespace-nowrap"><Plus className="h-4 w-4 mr-1" /> Track</Button>
@@ -848,7 +818,6 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
             {/* Static alerts from vehicle fields */}
             {(
               (vehicle.next_service_due && (isDateOverdue(vehicle.next_service_due) || isDateSoon(vehicle.next_service_due))) ||
-              (vehicle.mot_expiry && (isDateOverdue(vehicle.mot_expiry) || isDateSoon(vehicle.mot_expiry))) ||
               (vehicle.insurance_expiry && (isDateOverdue(vehicle.insurance_expiry) || isDateSoon(vehicle.insurance_expiry)))
             ) && (
                 <Card>
@@ -870,18 +839,6 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                         <div className="flex items-center gap-2 text-yellow-600 text-sm">
                           <Clock className="h-4 w-4" />
                           Service due soon on {formatDate(vehicle.next_service_due)}
-                        </div>
-                      )}
-                      {vehicle.mot_expiry && isDateOverdue(vehicle.mot_expiry) && (
-                        <div className="flex items-center gap-2 text-red-600 text-sm">
-                          <AlertTriangle className="h-4 w-4" />
-                          MOT expired on {formatDate(vehicle.mot_expiry)}
-                        </div>
-                      )}
-                      {vehicle.mot_expiry && isDateSoon(vehicle.mot_expiry) && !isDateOverdue(vehicle.mot_expiry) && (
-                        <div className="flex items-center gap-2 text-yellow-600 text-sm">
-                          <Clock className="h-4 w-4" />
-                          MOT expires soon on {formatDate(vehicle.mot_expiry)}
                         </div>
                       )}
                       {vehicle.insurance_expiry && isDateOverdue(vehicle.insurance_expiry) && (

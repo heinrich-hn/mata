@@ -115,9 +115,10 @@ export default function DocumentsPage() {
       const { data, error } = await supabase
         .from("vehicles")
         .select(`
-          id, registration_number, fleet_number, make, model,
-          work_documents ( id, document_type, document_number, title, metadata )
-        `);
+          id, registration_number, fleet_number, make, model, active_document_types,
+          work_documents ( id, document_type, document_category, document_number, title, metadata )
+        `)
+        .eq("active", true);
 
       if (error) throw error;
 
@@ -125,10 +126,15 @@ export default function DocumentsPage() {
       const rows: DocRow[] = [];
 
       for (const vehicle of data || []) {
-        const docs = (vehicle as { work_documents: { id: string; document_type: string | null; document_number: string; title: string; metadata: { expiry_date?: string } | null }[] }).work_documents || [];
+        const activeTypes = (vehicle as { active_document_types: string[] | null }).active_document_types || [];
+        const docs = (vehicle as { work_documents: { id: string; document_type: string | null; document_category: string | null; document_number: string; title: string; metadata: { expiry_date?: string } | null }[] }).work_documents || [];
         for (const doc of docs) {
           const expDateStr = doc.metadata?.expiry_date;
           if (!expDateStr) continue;
+
+          // Only show alerts for categories the vehicle has toggled on
+          const category = doc.document_category || doc.document_type;
+          if (category && activeTypes.length > 0 && !activeTypes.includes(category)) continue;
 
           const daysUntil = calcDays(expDateStr);
           const expiry = new Date(expDateStr);
@@ -141,7 +147,7 @@ export default function DocumentsPage() {
             entityType: "vehicle",
             entityName: (vehicle as { registration_number: string }).registration_number || (vehicle as { fleet_number: string | null }).fleet_number || "Unknown",
             entityDetail: `${(vehicle as { make: string }).make || ""} ${(vehicle as { model: string }).model || ""}`.trim(),
-            documentType: doc.document_type || "Document",
+            documentType: formatDocumentType(category),
             documentNumber: doc.document_number || "",
             expiryDate: expDateStr,
             daysUntilExpiry: daysUntil,

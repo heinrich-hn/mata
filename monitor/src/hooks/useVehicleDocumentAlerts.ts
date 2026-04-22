@@ -5,6 +5,7 @@ import { ensureAlert } from '@/lib/alertUtils';
 interface WorkDocument {
   id: string;
   document_type: string | null;
+  document_category: string | null;
   document_number: string;
   title: string;
   metadata: {
@@ -20,15 +21,27 @@ type VehicleDocumentResponse = {
   fleet_number: string | null;
   make: string;
   model: string;
+  active_document_types: string[] | null;
   work_documents: WorkDocument[];
 };
+
+function formatDocCategory(cat: string | null): string {
+  if (!cat) return 'Document';
+  const map: Record<string, string> = {
+    license_disk: 'License Disk',
+    insurance: 'Insurance',
+    cof: 'COF',
+    permit: 'Permit',
+  };
+  return map[cat] || cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
 
 export function useVehicleDocumentAlerts(enabled: boolean = true) {
   useEffect(() => {
     if (!enabled) return;
 
     const checkDocumentExpiries = async () => {
-      // Get all vehicles with their documents
+      // Get all active vehicles with their documents
       const { data: vehicles, error } = await supabase
         .from('vehicles')
         .select(`
@@ -37,14 +50,17 @@ export function useVehicleDocumentAlerts(enabled: boolean = true) {
           fleet_number,
           make,
           model,
+          active_document_types,
           work_documents (
             id,
             document_type,
+            document_category,
             document_number,
             title,
             metadata
           )
-        `);
+        `)
+        .eq('active', true);
 
       if (error) {
         console.error('Error fetching vehicle documents:', error);
@@ -71,10 +87,15 @@ export function useVehicleDocumentAlerts(enabled: boolean = true) {
         if (!vehicle.work_documents || vehicle.work_documents.length === 0) continue;
 
         const sourceLabel = vehicle.fleet_number || vehicle.registration_number;
+        const activeTypes = vehicle.active_document_types || [];
 
         for (const doc of vehicle.work_documents) {
           const expiry = doc.metadata?.expiry_date;
           if (!expiry) continue;
+
+          // Only alert for categories the vehicle has toggled on
+          const category = doc.document_category || doc.document_type;
+          if (category && activeTypes.length > 0 && !activeTypes.includes(category)) continue;
 
           const exp = new Date(expiry);
           const daysUntilExpiry = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -82,6 +103,7 @@ export function useVehicleDocumentAlerts(enabled: boolean = true) {
           // Check if document is expired or expiring within 30 days
           if (exp < today || daysUntilExpiry <= 30) {
             const isOverdue = exp < today;
+            const docLabel = formatDocCategory(category);
 
             await ensureAlert({
               sourceType: "vehicle",
@@ -89,7 +111,7 @@ export function useVehicleDocumentAlerts(enabled: boolean = true) {
               sourceLabel,
               category: "document_expiry",
               severity: isOverdue ? "critical" : "high",
-              title: `${doc.document_type?.toUpperCase() || 'Document'} ${isOverdue ? 'Expired' : 'Expiring Soon'}`,
+              title: `${docLabel} ${isOverdue ? 'Expired' : 'Expiring Soon'}`,
               message: `${doc.title || doc.document_number} ${isOverdue ? 'expired on' : 'expires on'} ${formatDate(expiry)}`,
               fleetNumber: vehicle.fleet_number,
               metadata: {
@@ -100,6 +122,7 @@ export function useVehicleDocumentAlerts(enabled: boolean = true) {
                 model: vehicle.model,
                 document_id: doc.id,
                 document_type: doc.document_type,
+                document_category: category,
                 document_number: doc.document_number,
                 expiry_date: expiry,
                 status: isOverdue ? "overdue" : "soon",

@@ -31,10 +31,10 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel>>();
 
   const formatDate = useCallback((date: string): string => {
-    return new Date(date).toLocaleDateString('en-GB', { 
-      day: '2-digit', 
-      month: 'short', 
-      year: 'numeric' 
+    return new Date(date).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
     });
   }, []);
 
@@ -45,14 +45,14 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
       // Fetch active drivers
       const { data: drivers, error: dErr } = await supabase
         .from('drivers')
-        .select('id, first_name, last_name, driver_number')
+        .select('id, first_name, last_name, driver_number, active_document_types')
         .eq('status', 'active');
 
       if (dErr) {
         console.error('Error fetching drivers:', dErr);
         return;
       }
-      
+
       if (!drivers?.length) return;
 
       // Fetch driver documents with expiry dates
@@ -66,7 +66,7 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
         console.error('Error fetching documents:', docErr);
         return;
       }
-      
+
       if (!docs?.length) return;
 
       // Create driver map for quick lookup
@@ -80,7 +80,7 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
 
         const expiryDate = new Date(doc.expiry_date);
         expiryDate.setHours(0, 0, 0, 0);
-        
+
         const daysUntilExpiry = Math.ceil(
           (expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         );
@@ -90,6 +90,10 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
 
         const driver = driverMap.get(doc.driver_id);
         if (!driver) return;
+
+        // Only alert for document types the driver has toggled on
+        const activeTypes = (driver as { active_document_types?: string[] | null }).active_document_types || [];
+        if (activeTypes.length > 0 && !activeTypes.includes(doc.document_type)) return;
 
         const driverName = `${driver.first_name} ${driver.last_name}`.trim();
         const isExpired = expiryDate < today;
@@ -170,11 +174,11 @@ export function useDriverDocumentAlerts(enabled: boolean = true) {
     // Cleanup function
     return () => {
       isMounted.current = false;
-      
+
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe();
       }
-      
+
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
