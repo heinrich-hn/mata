@@ -29,6 +29,9 @@ export interface Trip {
   rate_per_km?: number;
   additional_revenue?: number;
   additional_revenue_reason?: string;
+  additional_revenue_verified?: boolean;
+  additional_revenue_verified_by?: string;
+  additional_revenue_verified_at?: string;
   status: 'active' | 'completed' | 'cancelled' | 'paid';
   payment_status: 'unpaid' | 'partial' | 'paid';
   payment_amount?: number;

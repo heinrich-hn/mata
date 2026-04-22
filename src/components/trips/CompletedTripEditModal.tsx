@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ClientSelect } from '@/components/ui/client-select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -39,6 +40,9 @@ interface Trip {
   zero_revenue_comment?: string;
   additional_revenue?: number;
   additional_revenue_reason?: string;
+  additional_revenue_verified?: boolean;
+  additional_revenue_verified_by?: string;
+  additional_revenue_verified_at?: string;
   edit_history?: EditHistoryRecord[];
   vehicles?: { id: string; fleet_number: string | null; registration: string | null } | null;
   wialon_vehicles?: { id: string; fleet_number: string | null; name: string | null } | null;
@@ -87,6 +91,7 @@ const CompletedTripEditModal = ({
     zero_revenue_comment: trip.zero_revenue_comment || '',
     additional_revenue: trip.additional_revenue?.toString() || '',
     additional_revenue_reason: trip.additional_revenue_reason || '',
+    additional_revenue_verified: !!trip.additional_revenue_verified,
   });
 
   const [editReason, setEditReason] = useState('');
@@ -114,6 +119,7 @@ const CompletedTripEditModal = ({
         zero_revenue_comment: trip.zero_revenue_comment || '',
         additional_revenue: trip.additional_revenue?.toString() || '',
         additional_revenue_reason: trip.additional_revenue_reason || '',
+        additional_revenue_verified: !!trip.additional_revenue_verified,
       });
       setEditReason('');
       setCustomReason('');
@@ -227,6 +233,13 @@ const CompletedTripEditModal = ({
       zero_revenue_comment: formData.zero_revenue_comment || undefined,
       additional_revenue: formData.additional_revenue ? Number(formData.additional_revenue) : undefined,
       additional_revenue_reason: formData.additional_revenue_reason || undefined,
+      additional_revenue_verified: !!formData.additional_revenue_verified,
+      additional_revenue_verified_by: formData.additional_revenue_verified
+        ? (trip.additional_revenue_verified ? (trip.additional_revenue_verified_by || userName || undefined) : (userName || undefined))
+        : undefined,
+      additional_revenue_verified_at: formData.additional_revenue_verified
+        ? (trip.additional_revenue_verified ? (trip.additional_revenue_verified_at || new Date().toISOString()) : new Date().toISOString())
+        : undefined,
     };
 
     // Resolve missing revenue alert if we're adding a zero revenue comment
@@ -558,6 +571,30 @@ const CompletedTripEditModal = ({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            {/* Verify (tick) third-party / additional revenue */}
+            <div className="flex items-start gap-3 rounded-md border border-emerald-200 bg-emerald-50/50 p-3">
+              <Checkbox
+                id="additional_revenue_verified"
+                checked={!!formData.additional_revenue_verified}
+                onCheckedChange={(checked) =>
+                  setFormData(prev => ({ ...prev, additional_revenue_verified: checked === true }))
+                }
+              />
+              <div className="space-y-1 leading-none">
+                <Label htmlFor="additional_revenue_verified" className="cursor-pointer">
+                  Mark this trip as Real Money
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Tick to confirm this trip's revenue is legitimate. Any unticked trip is reported as <strong>Funny Money</strong>.
+                  {trip.additional_revenue_verified && trip.additional_revenue_verified_by && (
+                    <span className="block mt-1 text-emerald-700">
+                      Currently marked Real Money by {trip.additional_revenue_verified_by}.
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
           </div>

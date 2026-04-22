@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ADDITIONAL_REVENUE_REASONS } from '@/constants/additionalRevenueReasons';
 import { CARGO_TYPES } from '@/constants/cargoTypes';
 import { useOperations } from '@/contexts/OperationsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useEffectiveRates } from '@/hooks/useSystemCostRates';
 import type { RouteExpenseItem } from '@/hooks/useRoutePredefinedExpenses';
@@ -51,6 +52,7 @@ const tripSchema = z.object({
   empty_km_reason: z.string().optional(),
   additional_revenue: z.string().optional(),
   additional_revenue_reason: z.string().optional(),
+  additional_revenue_verified: z.boolean().optional(),
   zero_revenue_comment: z.string().optional(),
   status: z.string().optional(),
 }).refine(
@@ -79,6 +81,7 @@ interface EditTripDialogProps {
 const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProps) => {
   const { toast } = useToast();
   const { addCostEntry } = useOperations();
+  const { userName } = useAuth();
   const { data: vehicles, isLoading: vehiclesLoading } = useWialonVehicles();
   const { effectiveRates } = useEffectiveRates();
 
@@ -128,6 +131,7 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
       empty_km_reason: '',
       additional_revenue: '',
       additional_revenue_reason: '',
+      additional_revenue_verified: false,
       zero_revenue_comment: '',
       status: 'active',
     },
@@ -209,6 +213,7 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
         empty_km_reason: trip.empty_km_reason || '',
         additional_revenue: trip.additional_revenue?.toString() || '',
         additional_revenue_reason: trip.additional_revenue_reason || '',
+        additional_revenue_verified: !!trip.additional_revenue_verified,
         zero_revenue_comment: trip.zero_revenue_comment || '',
         status: trip.status || 'active',
       });
@@ -306,6 +311,13 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
           empty_km_reason: data.empty_km_reason || null,
           additional_revenue: data.additional_revenue ? parseFloat(data.additional_revenue) : null,
           additional_revenue_reason: data.additional_revenue_reason || null,
+          additional_revenue_verified: !!data.additional_revenue_verified,
+          additional_revenue_verified_by: data.additional_revenue_verified
+            ? (trip.additional_revenue_verified ? (trip.additional_revenue_verified_by || userName || null) : (userName || null))
+            : null,
+          additional_revenue_verified_at: data.additional_revenue_verified
+            ? (trip.additional_revenue_verified ? (trip.additional_revenue_verified_at || new Date().toISOString()) : new Date().toISOString())
+            : null,
           zero_revenue_comment: data.zero_revenue_comment || null,
           status: data.status || 'active',
           updated_at: new Date().toISOString(),
@@ -864,6 +876,31 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
                     )}
                   />
                 </div>
+
+                {/* Verify (tick) third-party / additional revenue */}
+                <FormField
+                  control={form.control}
+                  name="additional_revenue_verified"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-emerald-200 bg-emerald-50/50 p-3">
+                      <FormControl>
+                        <Checkbox checked={!!field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Mark this trip as Real Money</FormLabel>
+                        <FormDesc className="text-xs">
+                          Tick to confirm this trip's revenue is legitimate. Any unticked trip is reported as <strong>Funny Money</strong>.
+                          {trip?.additional_revenue_verified && trip?.additional_revenue_verified_by && (
+                            <span className="block mt-1 text-emerald-700">
+                              Currently marked Real Money by {trip.additional_revenue_verified_by}
+                              {trip.additional_revenue_verified_at ? ` on ${format(new Date(trip.additional_revenue_verified_at), 'dd MMM yyyy')}` : ''}.
+                            </span>
+                          )}
+                        </FormDesc>
+                      </div>
+                    </FormItem>
+                  )}
+                />
               </div>
 
               {/* Previous Trip Highlights */}

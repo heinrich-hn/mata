@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import { CostEntry, Trip } from '@/types/operations';
+import { ADDITIONAL_REVENUE_REASONS } from '@/constants/additionalRevenueReasons';
 import {
   endOfWeek,
   format,
@@ -22,8 +23,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
   Building,
+  BadgeCheck,
   Calendar,
   CalendarRange,
+  CircleAlert,
   DollarSign,
   Download,
   FileText,
@@ -454,6 +457,153 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
     return Array.from(truckMap.values()).sort((a, b) => b.revenue.USD - a.revenue.USD);
   }, [filteredTrips, getTripCostsByCurrency]);
+
+  // Revenue Types Summary — classifies ALL trips with revenue by tick status.
+  // Ticked = "Real Money"; unticked = "Funny Money".
+  // The reason breakdown still groups trips that have additional (third-party) revenue by reason.
+  const revenueTypeSummaries = useMemo(() => {
+    type Bucket = {
+      reason: string;
+      label: string;
+      tripCount: number;
+      realCount: number;
+      funnyCount: number;
+      realAmount: number;
+      funnyAmount: number;
+      totalAmount: number;
+    };
+
+    const labelByValue = new Map<string, string>(
+      ADDITIONAL_REVENUE_REASONS.map(r => [r.value as string, r.label])
+    );
+    const buckets = new Map<string, Bucket>();
+    const funnyMoneyTrips: Array<{
+      id: string;
+      trip_number: string;
+      driver_name: string;
+      client_name: string;
+      route: string;
+      reason: string;
+      reasonLabel: string;
+      baseRevenue: number;
+      additionalRevenue: number;
+      totalRevenue: number;
+      currency: string;
+      date: string;
+      status: string;
+    }> = [];
+
+    // Headline totals across ALL trips that have any revenue
+    let totalRevenueAll = 0;
+    let realMoneyAmount = 0;
+    let funnyMoneyAmount = 0;
+    let realTripCount = 0;
+    let funnyTripCount = 0;
+    let realMoneyKm = 0;
+    let funnyMoneyKm = 0;
+
+    // For the by-reason breakdown (only trips with additional revenue > 0)
+    let additionalTotal = 0;
+    let additionalReal = 0;
+    let additionalFunny = 0;
+
+    filteredTrips.forEach(trip => {
+      const baseRev = Number(trip.base_revenue || 0);
+      const addRev = Number(trip.additional_revenue || 0);
+      const totalRev = baseRev + addRev;
+      const tripKm = Number(trip.distance_km || 0);
+      const isReal = !!trip.additional_revenue_verified;
+
+      if (totalRev > 0) {
+        totalRevenueAll += totalRev;
+        if (isReal) {
+          realMoneyAmount += totalRev;
+          realTripCount += 1;
+          realMoneyKm += tripKm;
+        } else {
+          funnyMoneyAmount += totalRev;
+          funnyTripCount += 1;
+          funnyMoneyKm += tripKm;
+          funnyMoneyTrips.push({
+            id: trip.id,
+            trip_number: trip.trip_number || '—',
+            driver_name: trip.driver_name || '—',
+            client_name: trip.client_name || '—',
+            route: trip.route || `${trip.origin || ''}${trip.origin && trip.destination ? ' → ' : ''}${trip.destination || ''}` || '—',
+            reason: trip.additional_revenue_reason || '',
+            reasonLabel: trip.additional_revenue_reason
+              ? (labelByValue.get(trip.additional_revenue_reason) || trip.additional_revenue_reason)
+              : '—',
+            baseRevenue: baseRev,
+            additionalRevenue: addRev,
+            totalRevenue: totalRev,
+            currency: trip.revenue_currency || 'USD',
+            date: trip.arrival_date || trip.departure_date || '',
+            status: trip.status || 'active',
+          });
+        }
+      }
+
+      // Reason buckets only for trips that actually have additional revenue
+      if (addRev > 0) {
+        const reason = trip.additional_revenue_reason || 'unspecified';
+        const label = labelByValue.get(reason) || (reason === 'unspecified' ? 'Unspecified' : reason);
+        let bucket = buckets.get(reason);
+        if (!bucket) {
+          bucket = {
+            reason,
+            label,
+            tripCount: 0,
+            realCount: 0,
+            funnyCount: 0,
+            realAmount: 0,
+            funnyAmount: 0,
+            totalAmount: 0,
+          };
+          buckets.set(reason, bucket);
+        }
+        bucket.tripCount += 1;
+        bucket.totalAmount += addRev;
+        additionalTotal += addRev;
+        if (isReal) {
+          bucket.realCount += 1;
+          bucket.realAmount += addRev;
+          additionalReal += addRev;
+        } else {
+          bucket.funnyCount += 1;
+          bucket.funnyAmount += addRev;
+          additionalFunny += addRev;
+        }
+      }
+    });
+
+    const byReason = Array.from(buckets.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+    funnyMoneyTrips.sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    const realPct = totalRevenueAll > 0 ? (realMoneyAmount / totalRevenueAll) * 100 : 0;
+    const funnyPct = totalRevenueAll > 0 ? (funnyMoneyAmount / totalRevenueAll) * 100 : 0;
+
+    return {
+      byReason,
+      funnyMoneyTrips,
+      totals: {
+        tripCount: realTripCount + funnyTripCount,
+        realTripCount,
+        funnyTripCount,
+        totalRevenue: totalRevenueAll,
+        realMoneyAmount,
+        funnyMoneyAmount,
+        realMoneyKm,
+        funnyMoneyKm,
+        totalKm: realMoneyKm + funnyMoneyKm,
+        realPct,
+        funnyPct,
+        additionalTotal,
+        additionalReal,
+        additionalFunny,
+      },
+    };
+  }, [filteredTrips]);
 
   // Expense summaries - group cost entries by category for filtered trips
   const expenseSummaries = useMemo(() => {
@@ -1125,6 +1275,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
           <TabsTrigger value="drivers" className="rounded-lg px-3.5 py-2 text-sm font-medium">Drivers</TabsTrigger>
           <TabsTrigger value="clients" className="rounded-lg px-3.5 py-2 text-sm font-medium">Clients</TabsTrigger>
           <TabsTrigger value="routes" className="rounded-lg px-3.5 py-2 text-sm font-medium">Routes</TabsTrigger>
+          <TabsTrigger value="revenue-types" className="rounded-lg px-3.5 py-2 text-sm font-medium">Revenue Types</TabsTrigger>
           <TabsTrigger value="expenses" className="rounded-lg px-3.5 py-2 text-sm font-medium">Expenses</TabsTrigger>
         </TabsList>
 
@@ -1499,6 +1650,55 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                   <p>No route data available</p>
                 </div>
               )}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Revenue Types Tab */}
+        <TabsContent value="revenue-types" className="space-y-4">
+          {/* Real Money banner */}
+          <div className="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100/40 backdrop-blur-sm p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+                  <BadgeCheck className="h-7 w-7 text-emerald-700" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-emerald-900">Real Money</p>
+                  <p className="text-xs text-emerald-700/80">{revenueTypeSummaries.totals.realTripCount} trip(s) marked as Real Money</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold tabular-nums text-emerald-700">
+                  {formatCurrency(revenueTypeSummaries.totals.realMoneyAmount)}
+                </p>
+                <p className="text-xs text-emerald-700/80 tabular-nums mt-1">
+                  {revenueTypeSummaries.totals.realMoneyKm.toLocaleString()} km
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Funny Money banner */}
+          <div className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-amber-100/40 backdrop-blur-sm p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl bg-amber-500/15 flex items-center justify-center">
+                  <CircleAlert className="h-7 w-7 text-amber-700" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-amber-900">Funny Money</p>
+                  <p className="text-xs text-amber-800/80">{revenueTypeSummaries.totals.funnyTripCount} trip(s) not marked as Real Money</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold tabular-nums text-amber-800">
+                  {formatCurrency(revenueTypeSummaries.totals.funnyMoneyAmount)}
+                </p>
+                <p className="text-xs text-amber-800/80 tabular-nums mt-1">
+                  {revenueTypeSummaries.totals.funnyMoneyKm.toLocaleString()} km
+                </p>
+              </div>
             </div>
           </div>
         </TabsContent>

@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ClientSelect } from '@/components/ui/client-select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ADDITIONAL_REVENUE_REASONS } from '@/constants/additionalRevenueReasons';
 import { CARGO_TYPES } from '@/constants/cargoTypes';
 import { TOLL_COST_CATEGORY, TOLL_COST_SUBCATEGORY } from '@/constants/routeTollCosts';
+import { useAuth } from '@/contexts/AuthContext';
 import { useOperations } from '@/contexts/OperationsContext';
 import { useToast } from '@/hooks/use-toast';
 import { useEffectiveRates } from '@/hooks/useSystemCostRates';
@@ -49,6 +51,7 @@ const tripSchema = z.object({
   empty_km_reason: z.string().optional(),
   additional_revenue: z.string().optional(),
   additional_revenue_reason: z.string().optional(),
+  additional_revenue_verified: z.boolean().optional(),
   zero_revenue_comment: z.string().optional(),
 }).refine(
   (data) => {
@@ -75,6 +78,7 @@ interface AddTripDialogProps {
 const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
   const { addTrip, addCostEntry } = useOperations();
   const { toast } = useToast();
+  const { userName } = useAuth();
   const { data: vehicles, isLoading: vehiclesLoading } = useWialonVehicles();
   const { effectiveRates } = useEffectiveRates();
 
@@ -120,6 +124,7 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
       empty_km_reason: '',
       additional_revenue: '',
       additional_revenue_reason: '',
+      additional_revenue_verified: false,
       zero_revenue_comment: '',
     },
   });
@@ -197,6 +202,9 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
         empty_km_reason: data.empty_km_reason || null,
         additional_revenue: data.additional_revenue ? parseFloat(data.additional_revenue) : null,
         additional_revenue_reason: data.additional_revenue_reason || null,
+        additional_revenue_verified: !!data.additional_revenue_verified,
+        additional_revenue_verified_by: data.additional_revenue_verified ? (userName || null) : null,
+        additional_revenue_verified_at: data.additional_revenue_verified ? new Date().toISOString() : null,
         zero_revenue_comment: data.zero_revenue_comment || null,
         status: 'active',
       } as Omit<Trip, 'id' | 'created_at' | 'updated_at'>;
@@ -776,6 +784,25 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
                     )}
                   />
                 </div>
+
+                {/* Verify (tick) third-party / additional revenue */}
+                <FormField
+                  control={form.control}
+                  name="additional_revenue_verified"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-emerald-200 bg-emerald-50/50 p-3">
+                      <FormControl>
+                        <Checkbox checked={!!field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Mark this trip as Real Money</FormLabel>
+                        <FormDescription className="text-xs">
+                          Tick to confirm this trip's revenue is legitimate. Any unticked trip is reported as <strong>Funny Money</strong>.
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
               </div>
 
               {/* Previous Trip Highlights */}

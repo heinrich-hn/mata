@@ -44,6 +44,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import TripExpenseInline from './TripExpenseInline';
+import AdditionalRevenueBadge from './AdditionalRevenueBadge';
 import TripExpenseExportDialog from './TripExpenseExportDialog';
 import TripExportDialog from './TripExportDialog';
 import { compareTripNumbers } from '@/hooks/useTripKmValidation';
@@ -95,6 +96,9 @@ interface Trip {
   base_revenue?: number;
   additional_revenue?: number;
   additional_revenue_reason?: string;
+  additional_revenue_verified?: boolean;
+  additional_revenue_verified_by?: string;
+  additional_revenue_verified_at?: string;
   revenue_currency?: string;
   distance_km?: number;
   empty_km?: number;
@@ -1021,7 +1025,19 @@ const ActiveTrips = ({
                                                       </TooltipContent>
                                                     </Tooltip>
                                                   ) : (
-                                                    <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
+                                                    <span className="inline-flex flex-col items-end gap-0.5">
+                                                      <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
+                                                      <AdditionalRevenueBadge
+                                                        tripId={trip.id}
+                                                        amount={trip.additional_revenue || 0}
+                                                        currency={trip.revenue_currency}
+                                                        reason={trip.additional_revenue_reason}
+                                                        verified={trip.additional_revenue_verified}
+                                                        verifiedBy={trip.additional_revenue_verified_by}
+                                                        verifiedAt={trip.additional_revenue_verified_at}
+                                                        onChanged={onRefresh}
+                                                      />
+                                                    </span>
                                                   )}
                                                 </td>
                                                 <td className="py-2.5 px-3 text-right tabular-nums font-medium text-rose-600 cursor-pointer hover:underline" onClick={(e) => toggleExpenseExpansion(trip.id, e)} title="Click to manage expenses">
@@ -1243,7 +1259,19 @@ const ActiveTrips = ({
                                 </TooltipContent>
                               </Tooltip>
                             ) : (
-                              <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
+                              <span className="inline-flex flex-col items-end gap-0.5">
+                                <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
+                                <AdditionalRevenueBadge
+                                  tripId={trip.id}
+                                  amount={trip.additional_revenue || 0}
+                                  currency={trip.revenue_currency}
+                                  reason={trip.additional_revenue_reason}
+                                  verified={trip.additional_revenue_verified}
+                                  verifiedBy={trip.additional_revenue_verified_by}
+                                  verifiedAt={trip.additional_revenue_verified_at}
+                                  onChanged={onRefresh}
+                                />
+                              </span>
                             )}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums font-medium text-rose-600 cursor-pointer hover:underline" onClick={(e) => toggleExpenseExpansion(trip.id, e)} title="Click to manage expenses">
