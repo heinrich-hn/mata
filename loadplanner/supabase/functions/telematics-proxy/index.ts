@@ -32,8 +32,6 @@ const ValidActions = {
   GEOFENCE_EVENT: 'geofenceEvent',
 } as const;
 
-type ValidAction = typeof ValidActions[keyof typeof ValidActions];
-
 async function getSystemToken(): Promise<string | null> {
   if (systemToken && systemTokenExpiry && Date.now() < systemTokenExpiry) {
     return systemToken;
@@ -65,6 +63,7 @@ async function getSystemToken(): Promise<string | null> {
     systemToken = data.access_token;
     systemTokenExpiry = Date.now() + ((data.expires_in || 3600) * 1000) - 60000;
     
+    console.log('System token obtained, expires at:', new Date(systemTokenExpiry).toISOString());
     return systemToken;
   } catch (error) {
     console.error('System auth error:', error);
@@ -106,7 +105,6 @@ async function makeTelematicsRequest(
   return response;
 }
 
-// Helper function to send standardized error responses
 function sendError(status: number, message: string, details?: any): Response {
   console.error(`Error ${status}: ${message}`, details);
   return new Response(
@@ -122,7 +120,6 @@ function sendError(status: number, message: string, details?: any): Response {
   );
 }
 
-// Helper function to send success responses
 function sendSuccess(data: any, status: number = 200): Response {
   return new Response(
     JSON.stringify(data),
@@ -133,7 +130,30 @@ function sendSuccess(data: any, status: number = 200): Response {
   );
 }
 
-// Handle geofence webhook events
+// Enhanced geofence matching function
+function isGeofenceMatch(geofenceName: string, locationName: string): boolean {
+  if (!geofenceName || !locationName) return false;
+  
+  const normalizedGeofence = geofenceName.toLowerCase().trim();
+  const normalizedLocation = locationName.toLowerCase().trim();
+  
+  // Exact match
+  if (normalizedGeofence === normalizedLocation) return true;
+  
+  // Geofence contains location name
+  if (normalizedGeofence.includes(normalizedLocation)) return true;
+  
+  // Location name contains geofence
+  if (normalizedLocation.includes(normalizedGeofence)) return true;
+  
+  // Remove common prefixes/suffixes and compare
+  const cleanGeofence = normalizedGeofence.replace(/^(geofence[-_\s]*)/i, '').replace(/[-_\s]*geofence$/i, '');
+  const cleanLocation = normalizedLocation.replace(/^(origin|destination|loading|offloading)[-_\s]*/i, '');
+  
+  return cleanGeofence === cleanLocation || cleanGeofence.includes(cleanLocation) || cleanLocation.includes(cleanGeofence);
+}
+
+// Handle geofence webhook events with enhanced logic
 async function handleGeofenceEvent(body: any, supabase: any) {
   const eventType = body.eventType || body.action?.replace('geofenceEvent', '');
   const assetId = body.assetId || body.asset_id;
@@ -141,7 +161,13 @@ async function handleGeofenceEvent(body: any, supabase: any) {
   const timestamp = body.timestamp || new Date().toISOString();
   const eventData = body.data || body;
   
-  console.log(`Geofence event received: ${eventType} for asset ${assetId} at geofence ${geofenceId}`);
+  console.log(`========================================`);
+  console.log(`Geofence event received:`);
+  console.log(`- Event Type: ${eventType}`);
+  console.log(`- Asset ID: ${assetId}`);
+  console.log(`- Geofence ID: ${geofenceId}`);
+  console.log(`- Timestamp: ${timestamp}`);
+  console.log(`========================================`);
   
   // Find the load associated with this asset
   const { data: loadData, error: loadError } = await supabase
@@ -166,9 +192,16 @@ async function handleGeofenceEvent(body: any, supabase: any) {
     return sendSuccess({ message: 'No active load found', event: eventType });
   }
 
+  console.log(`Found load: ${loadData.load_id}`);
+  console.log(`- Current status: ${loadData.status}`);
+  console.log(`- Origin: ${loadData.origin}`);
+  console.log(`- Destination: ${loadData.destination}`);
+  console.log(`- Asset ID: ${loadData.fleet_vehicle?.telematics_asset_id}`);
+
   // Get geofence details from Telematics Guru
   const sysToken = await getSystemToken();
   let geofenceName = `Geofence-${geofenceId}`;
+  let geofenceDetails = null;
   
   if (sysToken && geofenceId) {
     try {
@@ -178,8 +211,11 @@ async function handleGeofenceEvent(body: any, supabase: any) {
       );
 
       if (geofenceResponse.ok) {
-        const geofenceData = await geofenceResponse.json();
-        geofenceName = geofenceData.Name || geofenceData.name || geofenceName;
+        geofenceDetails = await geofenceResponse.json();
+        geofenceName = geofenceDetails.Name || geofenceDetails.name || geofenceName;
+        console.log(`Geofence details retrieved: ${geofenceName}`);
+      } else {
+        console.error(`Failed to fetch geofence details: ${geofenceResponse.status}`);
       }
     } catch (e) {
       console.error('Error fetching geofence details:', e);
@@ -188,15 +224,19 @@ async function handleGeofenceEvent(body: any, supabase: any) {
 
   // Process the geofence event based on type
   const eventTypeLower = (eventType || '').toLowerCase();
+  let statusUpdated = false;
+  let updateReason = '';
   
   if (eventTypeLower.includes('entry')) {
-    // Check if this is the origin geofence
-    const originMatch = loadData.origin?.toLowerCase().includes(geofenceName.toLowerCase()) ||
-                       geofenceName.toLowerCase().includes(loadData.origin?.toLowerCase() || '');
+    console.log(`Processing ENTRY event for geofence: ${geofenceName}`);
+    
+    // Check if this matches the origin
+    const originMatch = isGeofenceMatch(geofenceName, loadData.origin || '');
     
     if (originMatch) {
+      console.log(`✅ MATCH: Geofence "${geofenceName}" matches origin "${loadData.origin}"`);
       // At origin - update load status to loading
-      await supabase
+      const { error: updateError } = await supabase
         .from('loads')
         .update({ 
           status: 'loading',
@@ -204,16 +244,24 @@ async function handleGeofenceEvent(body: any, supabase: any) {
         })
         .eq('id', loadData.id);
       
-      console.log(`Load ${loadData.load_id} arrived at origin: ${geofenceName}`);
+      if (!updateError) {
+        statusUpdated = true;
+        updateReason = `Arrived at origin geofence: ${geofenceName}`;
+        console.log(`✅ Load ${loadData.load_id} status updated to 'loading'`);
+      } else {
+        console.error(`Failed to update load status:`, updateError);
+      }
+    } else {
+      console.log(`❌ No match: Geofence "${geofenceName}" does not match origin "${loadData.origin}"`);
     }
     
-    // Check if this is the destination geofence
-    const destMatch = loadData.destination?.toLowerCase().includes(geofenceName.toLowerCase()) ||
-                     geofenceName.toLowerCase().includes(loadData.destination?.toLowerCase() || '');
+    // Check if this matches the destination
+    const destMatch = isGeofenceMatch(geofenceName, loadData.destination || '');
     
     if (destMatch) {
+      console.log(`✅ MATCH: Geofence "${geofenceName}" matches destination "${loadData.destination}"`);
       // At destination - update load status to offloading
-      await supabase
+      const { error: updateError } = await supabase
         .from('loads')
         .update({ 
           status: 'offloading',
@@ -221,12 +269,27 @@ async function handleGeofenceEvent(body: any, supabase: any) {
         })
         .eq('id', loadData.id);
       
-      console.log(`Load ${loadData.load_id} arrived at destination: ${geofenceName}`);
+      if (!updateError) {
+        statusUpdated = true;
+        updateReason = `Arrived at destination geofence: ${geofenceName}`;
+        console.log(`✅ Load ${loadData.load_id} status updated to 'offloading'`);
+      } else {
+        console.error(`Failed to update load status:`, updateError);
+      }
+    } else {
+      console.log(`❌ No match: Geofence "${geofenceName}" does not match destination "${loadData.destination}"`);
     }
-  } else if (eventTypeLower.includes('exit')) {
+  } 
+  else if (eventTypeLower.includes('exit')) {
+    console.log(`Processing EXIT event for geofence: ${geofenceName}`);
+    
     // Special handling for BV as origin - exit after loading means in-transit
-    if (geofenceName.includes('BV') && loadData.origin?.includes('BV') && loadData.status === 'loading') {
-      await supabase
+    if (isGeofenceMatch(geofenceName, 'BV') && 
+        isGeofenceMatch(loadData.origin || '', 'BV') && 
+        loadData.status === 'loading') {
+      
+      console.log(`✅ BV geofence exit detected while in loading status`);
+      const { error: updateError } = await supabase
         .from('loads')
         .update({ 
           status: 'in-transit',
@@ -234,12 +297,20 @@ async function handleGeofenceEvent(body: any, supabase: any) {
         })
         .eq('id', loadData.id);
       
-      console.log(`Load ${loadData.load_id} departed from BV origin, now in-transit`);
+      if (!updateError) {
+        statusUpdated = true;
+        updateReason = `Departed from BV origin geofence`;
+        console.log(`✅ Load ${loadData.load_id} status updated to 'in-transit'`);
+      } else {
+        console.error(`Failed to update load status:`, updateError);
+      }
+    } else {
+      console.log(`No special handling for exit event from ${geofenceName}`);
     }
   }
 
   // Record the geofence event in database for history
-  await supabase
+  const { error: insertError } = await supabase
     .from('geofence_events')
     .insert({
       load_id: loadData.id,
@@ -248,12 +319,38 @@ async function handleGeofenceEvent(body: any, supabase: any) {
       geofence_name: geofenceName,
       event_type: eventTypeLower.includes('entry') ? 'entry' : 'exit',
       timestamp: timestamp,
-      metadata: eventData || {}
+      metadata: {
+        ...eventData,
+        geofence_details: geofenceDetails,
+        load_status_before: loadData.status,
+        load_status_after: statusUpdated ? (eventTypeLower.includes('entry') && isGeofenceMatch(geofenceName, loadData.origin || '') ? 'loading' : 
+                              (eventTypeLower.includes('entry') && isGeofenceMatch(geofenceName, loadData.destination || '') ? 'offloading' :
+                              (eventTypeLower.includes('exit') ? 'in-transit' : loadData.status))) : loadData.status,
+        status_updated: statusUpdated,
+        update_reason: updateReason
+      }
     });
 
+  if (insertError) {
+    console.error('Failed to record geofence event:', insertError);
+  } else {
+    console.log(`Geofence event recorded in database`);
+  }
+
+  console.log(`========================================`);
+  console.log(`Geofence event processing complete`);
+  console.log(`Status updated: ${statusUpdated}`);
+  if (statusUpdated) console.log(`Reason: ${updateReason}`);
+  console.log(`========================================`);
+  
   return sendSuccess({ 
     success: true, 
-    message: `Processed ${eventType} event for load ${loadData.load_id}` 
+    message: `Processed ${eventType} event for load ${loadData.load_id}`,
+    status_updated: statusUpdated,
+    update_reason: updateReason,
+    current_status: statusUpdated ? (eventTypeLower.includes('entry') && isGeofenceMatch(geofenceName, loadData.origin || '') ? 'loading' : 
+                              (eventTypeLower.includes('entry') && isGeofenceMatch(geofenceName, loadData.destination || '') ? 'offloading' :
+                              (eventTypeLower.includes('exit') ? 'in-transit' : loadData.status))) : loadData.status
   });
 }
 
@@ -265,7 +362,6 @@ async function handleGetPortalAssets(body: any, token?: string) {
     return sendError(401, 'Authentication required. Please provide a valid token or check system credentials.');
   }
 
-  // If organisationId is provided, use it directly
   if (body.organisationId) {
     const assetsResponse = await makeTelematicsRequest(
       `${TELEMATICS_API_BASE}/v1/organisation/${body.organisationId}/asset`,
@@ -280,7 +376,6 @@ async function handleGetPortalAssets(body: any, token?: string) {
     return sendSuccess(assets);
   }
 
-  // Otherwise, get organisations first
   const orgsResponse = await makeTelematicsRequest(
     `${TELEMATICS_API_BASE}/v1/user/organisation`,
     authToken
@@ -296,7 +391,6 @@ async function handleGetPortalAssets(body: any, token?: string) {
     return sendError(404, 'No organisations found for this user');
   }
 
-  // Get the first organisation ID
   const firstOrg = Array.isArray(organisations) ? organisations[0] : organisations;
   const orgId = firstOrg?.Id || firstOrg?.id;
   
@@ -315,7 +409,6 @@ async function handleGetPortalAssets(body: any, token?: string) {
 
   const assets = await assetsResponse.json();
   
-  // Return assets with metadata
   return sendSuccess({
     assets,
     organisation: {
@@ -327,28 +420,24 @@ async function handleGetPortalAssets(body: any, token?: string) {
 }
 
 serve(async (req: Request) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Only accept POST requests
   if (req.method !== 'POST') {
     return sendError(405, 'Method not allowed. Only POST requests are accepted.');
   }
 
   try {
-    // Parse request body
     let body;
     try {
       const bodyText = await req.text();
-      console.log('Raw request received:', bodyText.substring(0, 200)); // Log first 200 chars for debugging
+      console.log('Raw request received:', bodyText.substring(0, 200));
       
       if (!bodyText || bodyText.trim() === '') {
         return sendError(400, 'Request body is empty', { 
           expected_format: {
-            action: 'one of: authenticate, getOrganisations, getAssets, getAssetDetails, getAssetByShareToken, getGeofences, getGeofenceDetails, getPortalAssets',
-            ...(req.headers.get('content-type')?.includes('application/json') ? {} : { note: 'Content-Type should be application/json' })
+            action: 'one of: authenticate, getOrganisations, getAssets, getAssetDetails, getAssetByShareToken, getGeofences, getGeofenceDetails, getPortalAssets, geofenceEvent'
           }
         });
       }
@@ -359,7 +448,6 @@ serve(async (req: Request) => {
       return sendError(400, 'Invalid JSON in request body', e.message);
     }
 
-    // Validate action field
     if (!body.action) {
       return sendError(400, 'Missing required field: action', {
         received_fields: Object.keys(body),
@@ -367,10 +455,8 @@ serve(async (req: Request) => {
       });
     }
 
-    // Create Supabase client for database operations
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // Route to appropriate handler based on action
     switch (body.action) {
       case ValidActions.GEOFENCE_EVENT:
         return await handleGeofenceEvent(body, supabase);

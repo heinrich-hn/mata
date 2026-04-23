@@ -87,62 +87,15 @@ export const DEPOTS: Depot[] = [
     longitude: 32.79458267,
     type: "farm",
     country: "Zimbabwe",
-    radius: 2500,
+    radius: 19050,
     arrivalOffsetMinutes: 45,
-    // BV farm geofence — clockwise loop covering eastern road + NW farm road
-    // Uses fixed ~800m buffer on each side of NW road centerline
-    polygon: [
-      // === East corridor — east side (heading south) ===
-      [-19.15322280, 32.85968967],
-      [-19.16486174, 32.86067196],
-      [-19.17844144, 32.85436184],
-      [-19.18857468, 32.84481543],
-      [-19.19322278, 32.84186454],
-      [-19.19994241, 32.83003739],
-      [-19.20728813, 32.81308618],
-      [-19.20260145, 32.75887887],
-      [-19.20756133, 32.72767889],
-      [-19.20493217, 32.71456586],
-      [-19.19733084, 32.69618007],
-      // === NW road — west side (heading north from junction) ===
-      [-19.17075751, 32.68566728],
-      [-19.15774404, 32.67176944],
-      [-19.13497116, 32.67443991],
-      [-19.12385630, 32.67638862],
-      [-19.10779569, 32.68150338],
-      [-19.09896411, 32.68455270],
-      [-19.08532472, 32.68073312],
-      [-19.07362147, 32.68133286],
-      [-19.07133337, 32.68224088],
-      [-19.06619478, 32.68113774],
-      [-19.05964099, 32.68071749],
-      // === NW road — cap at tip ===
-      [-19.05464099, 32.68871749],
-      // === NW road — east side (heading south back to junction) ===
-      [-19.05964099, 32.69671749],
-      [-19.06619478, 32.69713774],
-      [-19.07133337, 32.69824088],
-      [-19.07362147, 32.69733286],
-      [-19.08532472, 32.69673312],
-      [-19.09896411, 32.70055270],
-      [-19.10779569, 32.69750338],
-      [-19.12385630, 32.69238862],
-      [-19.13497116, 32.69043991],
-      [-19.15774404, 32.68776944],
-      [-19.17075751, 32.70166728],
-      // === East corridor — west side (heading north back to start) ===
-      [-19.17265006, 32.70771862],
-      [-19.17932660, 32.72356648],
-      [-19.18059139, 32.72844540],
-      [-19.17563960, 32.75784133],
-      [-19.18074656, 32.80795900],
-      [-19.17593844, 32.81699578],
-      [-19.17463370, 32.82116114],
-      [-19.17373549, 32.82095882],
-      [-19.16357149, 32.83052818],
-      [-19.16062894, 32.83246338],
-      [-19.15659824, 32.83135315],
-    ],
+    // NOTE: A road-corridor polygon was previously defined here, but it traced
+    // the approach roads as thin loops that did NOT enclose the actual BV
+    // loading point (-19.18146, 32.79458). Because isWithinDepot prefers a
+    // polygon over the radius when both are present, this caused all BV
+    // entry/exit detection to silently fail (no status changes, no actual_*
+    // timestamps, no +45 min offset application). Reverted to the 2.5 km
+    // circular geofence which works with the arrivalOffsetMinutes setting.
   },
   {
     id: "cbc",
@@ -694,12 +647,15 @@ export function isWithinDepot(
 ): boolean {
   if (!depot || !depot.latitude || !depot.longitude) return false;
 
-  // If the depot has a polygon, use point-in-polygon test
+  // Polygon test (if defined). Polygon is treated as ADDITIVE coverage rather
+  // than as a replacement for the radius — this makes detection fail-safe so
+  // a misconfigured polygon (e.g. one that doesn't actually enclose the
+  // depot center) cannot silently disable geofence detection.
   if (depot.polygon && depot.polygon.length >= 3) {
-    return isPointInPolygon(lat, lng, depot.polygon);
+    if (isPointInPolygon(lat, lng, depot.polygon)) return true;
   }
 
-  // Fallback: circular radius check
+  // Circular radius check
   const distanceKm = calculateDistance(
     lat, lng,
     depot.latitude, depot.longitude
