@@ -23,7 +23,7 @@ import { ensureAlert } from '@/lib/alertUtils';
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from 'date-fns';
 import { Eye, Loader2, Pencil, Plus, Search, Trash2, Truck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
 // Update the Vehicle interface to match the actual Supabase table structure
 interface Vehicle {
@@ -53,6 +53,8 @@ interface Vehicle {
 
 const Vehicles = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  // Defer the search term so the query doesn't refetch on every keystroke
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -62,16 +64,16 @@ const Vehicles = () => {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
   const { data: vehicles = [], isLoading } = useQuery<Vehicle[]>({
-    queryKey: ["vehicles", searchTerm, statusFilter, typeFilter],
+    queryKey: ["vehicles", deferredSearchTerm, statusFilter, typeFilter],
     queryFn: async (): Promise<Vehicle[]> => {
       let query = supabase
         .from("vehicles")
         .select("*")
         .order("fleet_number", { ascending: true });
 
-      if (searchTerm) {
+      if (deferredSearchTerm) {
         query = query.or(
-          `fleet_number.ilike.%${searchTerm}%,registration_number.ilike.%${searchTerm}%,make.ilike.%${searchTerm}%,model.ilike.%${searchTerm}%`
+          `fleet_number.ilike.%${deferredSearchTerm}%,registration_number.ilike.%${deferredSearchTerm}%,make.ilike.%${deferredSearchTerm}%,model.ilike.%${deferredSearchTerm}%`
         );
       }
 
@@ -90,6 +92,7 @@ const Vehicles = () => {
 
       return (data || []) as unknown as Vehicle[];
     },
+    staleTime: 60 * 1000,
   });
 
   // Generate alerts for expired license disks

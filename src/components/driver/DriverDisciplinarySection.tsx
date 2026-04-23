@@ -20,6 +20,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { formatLocalDate } from "@/lib/utils";
 import {
     exportDisciplinaryListExcel, exportDisciplinaryListPDF,
     exportDisciplinaryRecordExcel, exportDisciplinaryRecordPDF,
@@ -173,7 +174,7 @@ export default function DriverDisciplinarySection() {
             const row = {
                 driver_id: f.driver_id,
                 title: f.title || null,
-                incident_date: f.incident_date?.toISOString().split("T")[0] ?? new Date().toISOString().split("T")[0],
+                incident_date: formatLocalDate(f.incident_date) ?? formatLocalDate(new Date())!,
                 category: f.category,
                 reason: f.reason,
                 description: f.description || null,
@@ -201,7 +202,7 @@ export default function DriverDisciplinarySection() {
     const hearingMutation = useMutation({
         mutationFn: async ({ id, f }: { id: string; f: HearingForm }) => {
             const { error } = await db.from("driver_disciplinary").update({
-                hearing_date: f.hearing_date?.toISOString().split("T")[0] ?? null,
+                hearing_date: formatLocalDate(f.hearing_date),
                 hearing_time: f.hearing_time || null,
                 hearing_venue: f.hearing_venue || null,
                 hearing_chairperson: f.hearing_chairperson || null,
@@ -224,8 +225,8 @@ export default function DriverDisciplinarySection() {
                 sanction: f.sanction || null,
                 category: f.category,
                 status: f.status,
-                outcome_date: f.outcome_date?.toISOString().split("T")[0] ?? null,
-                follow_up_date: f.follow_up_date?.toISOString().split("T")[0] ?? null,
+                outcome_date: formatLocalDate(f.outcome_date),
+                follow_up_date: formatLocalDate(f.follow_up_date),
             }).eq("id", id);
             if (error) throw error;
         },
@@ -336,6 +337,7 @@ export default function DriverDisciplinarySection() {
 
     // Which actions are available per stage
     const canScheduleHearing = (s: string) => s === "inquiry_logged";
+    const canEditHearing = (s: string) => s === "hearing_scheduled";
     const canRecordOutcome = (s: string) => s === "hearing_scheduled";
 
     // Stats
@@ -465,6 +467,9 @@ export default function DriverDisciplinarySection() {
                                             {canScheduleHearing(rec.status) && (
                                                 <Button variant="ghost" size="icon" onClick={() => openScheduleHearing(rec)} title="Schedule hearing"><Calendar className="h-4 w-4 text-blue-600" /></Button>
                                             )}
+                                            {canEditHearing(rec.status) && (
+                                                <Button variant="ghost" size="icon" onClick={() => openScheduleHearing(rec)} title="Edit hearing details"><Calendar className="h-4 w-4 text-blue-600" /></Button>
+                                            )}
                                             {canRecordOutcome(rec.status) && (
                                                 <Button variant="ghost" size="icon" onClick={() => openRecordOutcome(rec)} title="Record outcome"><Gavel className="h-4 w-4 text-amber-600" /></Button>
                                             )}
@@ -564,7 +569,7 @@ export default function DriverDisciplinarySection() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Calendar className="h-5 w-5 text-blue-600" />
-                            Schedule Hearing
+                            {activeRecord?.hearing_date ? "Edit Hearing Details" : "Schedule Hearing"}
                         </DialogTitle>
                     </DialogHeader>
                     {activeRecord && (
@@ -602,7 +607,7 @@ export default function DriverDisciplinarySection() {
                             hearingMutation.mutate({ id: activeRecord.id, f: hearingForm });
                         }} disabled={hearingMutation.isPending}>
                             {hearingMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-                            Schedule Hearing
+                            {activeRecord?.hearing_date ? "Update Hearing" : "Schedule Hearing"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

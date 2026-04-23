@@ -324,78 +324,59 @@ const JobCards = () => {
       let inspectionsData: VehicleInspectionRow[] = [];
       let partsLinkData: PartRequestLinkRow[] = [];
       let notesData: { job_card_id: string }[] = [];
+      let followUpData: { related_entity_id: string | null }[] = [];
 
-      if (vehicleIds.length > 0) {
-        const { data, error } = await supabase
-          .from("vehicles")
-          .select("id, fleet_number, registration_number")
-          .in("id", vehicleIds);
+      // Run all companion queries in parallel to cut round-trip latency.
+      const [vehiclesRes, inspectionsRes, partsRes, notesRes, followUpRes] = await Promise.all([
+        vehicleIds.length > 0
+          ? supabase
+            .from("vehicles")
+            .select("id, fleet_number, registration_number")
+            .in("id", vehicleIds)
+          : Promise.resolve({ data: [] as typeof vehiclesData, error: null }),
+        inspectionIds.length > 0
+          ? supabase
+            .from("vehicle_inspections")
+            .select("id, inspection_number, inspection_type, inspection_date")
+            .in("id", inspectionIds)
+          : Promise.resolve({ data: [] as VehicleInspectionRow[], error: null }),
+        jobCardIds.length > 0
+          ? supabase
+            .from("parts_requests")
+            .select("job_card_id, part_name, ir_number, created_at, ordered_at")
+            .in("job_card_id", jobCardIds)
+          : Promise.resolve({ data: [] as PartRequestLinkRow[], error: null }),
+        jobCardIds.length > 0
+          ? supabase
+            .from("job_card_notes")
+            .select("job_card_id")
+            .in("job_card_id", jobCardIds)
+          : Promise.resolve({ data: [] as { job_card_id: string }[], error: null }),
+        jobCardIds.length > 0
+          ? supabase
+            .from("action_items")
+            .select("related_entity_id")
+            .eq("related_entity_type", "job_card")
+            .eq("category", "external_follow_up")
+            .in("related_entity_id", jobCardIds)
+          : Promise.resolve({ data: [] as { related_entity_id: string | null }[], error: null }),
+      ]);
 
-        if (error) {
-          throw error;
-        }
+      if (vehiclesRes.error) throw vehiclesRes.error;
+      if (inspectionsRes.error) throw inspectionsRes.error;
+      if (partsRes.error) throw partsRes.error;
+      if (notesRes.error) throw notesRes.error;
+      if (followUpRes.error) throw followUpRes.error;
 
-        vehiclesData = data || [];
-      }
-
-      if (inspectionIds.length > 0) {
-        const { data, error } = await supabase
-          .from("vehicle_inspections")
-          .select("id, inspection_number, inspection_type, inspection_date")
-          .in("id", inspectionIds);
-
-        if (error) {
-          throw error;
-        }
-
-        inspectionsData = (data || []) as VehicleInspectionRow[];
-      }
-
-      if (jobCardIds.length > 0) {
-        const { data, error } = await supabase
-          .from("parts_requests")
-          .select("job_card_id, part_name, ir_number, created_at, ordered_at")
-          .in("job_card_id", jobCardIds);
-
-        if (error) {
-          throw error;
-        }
-
-        partsLinkData = (data || []) as PartRequestLinkRow[];
-      }
-
-      if (jobCardIds.length > 0) {
-        const { data, error } = await supabase
-          .from("job_card_notes")
-          .select("job_card_id")
-          .in("job_card_id", jobCardIds);
-
-        if (error) {
-          throw error;
-        }
-
-        notesData = (data || []) as { job_card_id: string }[];
-      }
+      vehiclesData = (vehiclesRes.data || []) as typeof vehiclesData;
+      inspectionsData = (inspectionsRes.data || []) as VehicleInspectionRow[];
+      partsLinkData = (partsRes.data || []) as PartRequestLinkRow[];
+      notesData = (notesRes.data || []) as { job_card_id: string }[];
+      followUpData = (followUpRes.data || []) as { related_entity_id: string | null }[];
 
       const notesCountMap = new Map<string, number>();
       for (const note of notesData) {
         notesCountMap.set(note.job_card_id, (notesCountMap.get(note.job_card_id) || 0) + 1);
-      }
-
-      let followUpData: { related_entity_id: string | null }[] = [];
-      if (jobCardIds.length > 0) {
-        const { data, error } = await supabase
-          .from("action_items")
-          .select("related_entity_id")
-          .eq("related_entity_type", "job_card")
-          .eq("category", "external_follow_up")
-          .in("related_entity_id", jobCardIds);
-
-        if (error) {
-          throw error;
-        }
-
-        followUpData = (data || []) as { related_entity_id: string | null }[];
       }
 
       const followUpCountMap = new Map<string, number>();
@@ -473,6 +454,7 @@ const JobCards = () => {
         followUpCount: followUpCountMap.get(item.id) || 0,
       })) as JobCard[];
     },
+    staleTime: 60 * 1000,
   });
 
   // Get unique assignees for filter (exclude null, undefined, and empty strings)
@@ -1537,7 +1519,7 @@ const JobCards = () => {
               <div className="space-y-3">
                 {Array.from(
                   allArchivedCards.reduce((map, card) => {
-                    const fleet = card.fleet_number || "Unassigned";
+                    const fleet = card.vehicle?.fleet_number || "Unassigned";
                     if (!map.has(fleet)) map.set(fleet, []);
                     map.get(fleet)!.push(card);
                     return map;
@@ -1547,7 +1529,7 @@ const JobCards = () => {
                   .map(([fleet, cards]) => (
                     <FleetAccordionSection
                       key={`archived-${fleet}`}
-                      fleet={fleet}
+                      fleetLabel={fleet}
                       cards={cards}
                       isOpen={!closedArchivedFleets.has(fleet)}
                       statusVariant="completed"

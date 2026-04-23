@@ -1,4 +1,3 @@
-// src/components/Vehicle/VehicleKPITiles.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";

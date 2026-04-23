@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { useActiveDocumentTypes } from "@/hooks/useActiveDocumentTypes";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { formatLocalDate } from "@/lib/utils";
 import { FileText, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -162,7 +163,7 @@ const VehicleDocumentsSection = ({
                 file_url: publicUrl,
                 uploaded_by: "system",
                 metadata: newDoc.expiry
-                    ? { expiry_date: newDoc.expiry.toISOString().split("T")[0] }
+                    ? { expiry_date: formatLocalDate(newDoc.expiry)! }
                     : null,
             });
             if (error) throw error;
@@ -185,7 +186,7 @@ const VehicleDocumentsSection = ({
         const target = docs.find((d) => d.id === docId);
         const meta = {
             ...(target?.metadata || {}),
-            expiry_date: nextExpiry ? nextExpiry.toISOString().split("T")[0] : undefined,
+            expiry_date: nextExpiry ? formatLocalDate(nextExpiry)! : undefined,
         };
         const { error } = await supabase
             .from("work_documents")
@@ -493,7 +494,7 @@ const VehicleDocumentsSection = ({
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
                                 {d.expiry
-                                    ? getExpiryBadge(d.expiry.toISOString().split("T")[0])
+                                    ? getExpiryBadge(formatLocalDate(d.expiry)!)
                                     : <Badge variant="outline">No expiry set</Badge>}
                                 <Button
                                     variant="ghost"

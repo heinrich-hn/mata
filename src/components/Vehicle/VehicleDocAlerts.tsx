@@ -157,7 +157,9 @@ export default function VehicleDocAlerts() {
 
             return issues;
         },
-        staleTime: 0, // Always re-fetch on focus/remount so inactive vehicles and updates reflect immediately
+        // Mutations elsewhere invalidate this query, so a short staleTime is safe
+        // and avoids re-running the aggregation on every focus/remount.
+        staleTime: 60 * 1000,
     });
 
     const handleExportPDF = () => {

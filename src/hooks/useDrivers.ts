@@ -1,6 +1,7 @@
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 export interface Driver {
   id: string;
@@ -54,24 +55,13 @@ export const useDrivers = () => {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch active drivers only
-  const {
-    data: activeDrivers = [],
-    isLoading: isLoadingActive,
-  } = useQuery<Driver[]>({
-    queryKey: ['drivers', 'active'],
-    queryFn: async (): Promise<Driver[]> => {
-      const { data, error } = await supabase
-        .from('drivers')
-        .select('*')
-        .eq('status', 'active')
-        .order('first_name');
-
-      if (error) throw error;
-      return (data || []) as Driver[];
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // Fetch active drivers only — derived from the main drivers query to avoid a
+  // duplicate fetch of the same table.
+  const activeDrivers = useMemo(
+    () => drivers.filter((d) => d.status === 'active'),
+    [drivers],
+  );
+  const isLoadingActive = isLoading;
 
   // Create driver mutation
   const createDriverMutation = useMutation({
