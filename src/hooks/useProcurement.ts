@@ -175,10 +175,10 @@ export const usePendingRequests = () => {
           inventory:inventory(id, name, part_number, quantity)
         `)
         .in("status", ["pending", "requested", "ordered"])
-         // EXCLUDE fulfilled inventory items (shouldn't be in pending anyway, but just in case)
-         // EXCLUDE items already allocated to job cards from inventory
-         .not('status', 'eq', 'fulfilled')
-         .or('allocated_to_job_card.is.null,allocated_to_job_card.eq.false')
+        // EXCLUDE fulfilled inventory items (shouldn't be in pending anyway, but just in case)
+        // EXCLUDE items already allocated to job cards from inventory
+        .not('status', 'eq', 'fulfilled')
+        .or('allocated_to_job_card.is.null,allocated_to_job_card.eq.false')
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -863,11 +863,16 @@ export const useMarkAsReceived = () => {
 
       const actualQty = received_quantity ?? request.quantity;
 
+      // Restock items (linked to inventory but not to a job card) are fully
+      // fulfilled once received — mark them as such so they leave Cash Manager.
+      const isRestockItem = !!request.inventory_id && !request.job_card_id;
+      const finalStatus = isRestockItem ? "fulfilled" : "received";
+
       // Update request status
       const { data, error } = await supabase
         .from("parts_requests")
         .update({
-          status: "received",
+          status: finalStatus,
           received_date: new Date().toISOString(),
           received_by: received_by || null,
           received_quantity: actualQty,
@@ -976,7 +981,16 @@ export const useCashManagerRequests = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as unknown as PartsRequest[];
+
+      // Exclude restock items (linked to inventory, not to a job card) that have
+      // already been received — their inventory has been updated and they are done.
+      // This handles items received before the status-to-"fulfilled" fix was applied.
+      const filtered = (data || []).filter((item) => {
+        const isRestockItem = !!item.inventory_id && !item.job_card_id;
+        return !(isRestockItem && item.status === "received");
+      });
+
+      return filtered as unknown as PartsRequest[];
     },
   });
 };

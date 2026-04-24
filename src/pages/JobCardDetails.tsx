@@ -209,6 +209,25 @@ const JobCardDetails = () => {
     enabled: !!jobCard?.inspection_id,
   });
 
+  const { data: followUps = [] } = useQuery<{ id: string; title: string; status: string | null; comments: unknown[] | null }[]>({
+    queryKey: ["job_card_followups", id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await supabase
+        .from("action_items")
+        .select("id, title, status, comments")
+        .eq("related_entity_type", "job_card")
+        .eq("related_entity_id", id)
+        .eq("category", "external_follow_up");
+      if (error) throw error;
+      return (data || []).map((item) => ({
+        ...item,
+        comments: Array.isArray(item.comments) ? (item.comments as unknown[]) : null,
+      }));
+    },
+    enabled: !!id,
+  });
+
   const { data: oocReport } = useQuery({
     queryKey: ["ooc_report_for_export", jobCard?.inspection_id],
     queryFn: async () => {
@@ -261,6 +280,29 @@ const JobCardDetails = () => {
   };
 
   const handleStatusChange = async (status: string) => {
+    if (status === "completed") {
+      const incompleteTasks = tasks.filter((t) => t.status !== "completed");
+      if (incompleteTasks.length > 0) {
+        toast({
+          title: "Cannot close job card",
+          description: `${incompleteTasks.length} task${incompleteTasks.length > 1 ? "s are" : " is"} not yet marked as done. All tasks must be completed before closing.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const unansweredFollowUps = followUps.filter(
+        (f) => f.status !== "completed" && f.status !== "cancelled" && (!f.comments || f.comments.length === 0)
+      );
+      if (unansweredFollowUps.length > 0) {
+        toast({
+          title: "Cannot close job card",
+          description: `${unansweredFollowUps.length} follow-up${unansweredFollowUps.length > 1 ? "s have" : " has"} no response. All follow-up items must be addressed before closing.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     await handleJobCardUpdate({ status });
   };
 
