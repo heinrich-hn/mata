@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -165,6 +166,9 @@ export function ViewFleetDialog({
             <DialogTitle className="text-xl font-bold">
               {vehicle.vehicle_id}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              View fleet vehicle details, linked trailers, document expiry dates, and update vehicle availability.
+            </DialogDescription>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"

@@ -15,22 +15,25 @@ export type { BackloadQuantities } from '@/types/Trips';
 export type { BackloadInfo, GeofenceEventType, Load, LoadInsert };
 
 // ---------------------------------------------------------------------------
-// Google Sheets sync helper — fires-and-forgets a POST to the edge function
-// so the Time Comparison sheet stays in sync whenever times change.
+// Google Sheets sync helper (best-effort)
+// Send a narrow payload (single load id) so the edge function does not
+// need to process the full dataset on every edit.
 // ---------------------------------------------------------------------------
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+type GoogleSheetsSyncTrigger = 'create' | 'update';
 
-async function triggerGoogleSheetsSync() {
+async function triggerGoogleSheetsSync(loadId?: string, syncTrigger: GoogleSheetsSyncTrigger = 'update') {
   try {
-    await fetch(`${SUPABASE_URL}/functions/v1/google-sheets-sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    const { error } = await supabase.functions.invoke('google-sheets-sync', {
+      body: {
+        ...(loadId ? { id: loadId } : {}),
+        syncTrigger,
       },
-      body: JSON.stringify({}),
     });
+
+    // Best-effort only: never block UI flows on sync failures.
+    if (error) {
+      // Intentionally silent (no toast) to avoid user-facing noise.
+    }
   } catch {
     // Swallow errors — sheet sync is best-effort and should never block the UI
   }
@@ -159,11 +162,15 @@ export function useCreateLoad() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['loads'] });
       queryClient.invalidateQueries({ queryKey: ['client-loads'] });
       queryClient.invalidateQueries({ queryKey: ['client-active-loads'] });
       toast({ title: 'Load created successfully' });
+
+      // One-time rule: only post to downstream receiver on first creation.
+      const createdId = (data as { id?: string } | null)?.id;
+      triggerGoogleSheetsSync(createdId, 'create');
     },
     onError: (error) => {
       toast({ title: 'Failed to create load', description: error.message, variant: 'destructive' });
@@ -213,20 +220,14 @@ export function useUpdateLoad() {
 
       return data;
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loads'] });
       queryClient.invalidateQueries({ queryKey: ['client-loads'] });
       queryClient.invalidateQueries({ queryKey: ['client-active-loads'] });
       toast({ title: 'Load updated successfully' });
 
-      // Trigger Google Sheets sync when time-related fields changed
-      const timeKeys = [
-        'actual_loading_arrival', 'actual_loading_departure',
-        'actual_offloading_arrival', 'actual_offloading_departure',
-        'time_window', 'status',
-      ];
-      const hasTimeChange = Object.keys(variables).some(k => timeKeys.includes(k));
-      if (hasTimeChange) triggerGoogleSheetsSync();
+      // Intentionally do NOT trigger webhook sync on updates.
+      // Business rule: post once on create, never repost on edits.
     },
     onError: (error) => {
       console.error('[useUpdateLoad] Mutation FAILED:', error.message, error);
@@ -295,8 +296,9 @@ export function useUpdateLoadTimes() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loads'] });
       toast({ title: 'Load times updated successfully' });
-      // Always sync to Google Sheets when times are explicitly updated
-      triggerGoogleSheetsSync();
+
+      // Intentionally do NOT trigger webhook sync on time edits.
+      // Business rule: post once on create, never repost on edits.
     },
     onError: (error) => {
       toast({ title: 'Failed to update load times', description: error.message, variant: 'destructive' });

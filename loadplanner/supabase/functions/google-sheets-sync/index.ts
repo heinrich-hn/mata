@@ -381,6 +381,8 @@ serve(async (req) => {
       body = {};
     }
 
+    const syncTrigger = body?.syncTrigger === 'create' ? 'create' : 'update';
+
     let loadIds: string[] | null = null;
 
     if (body.id) {
@@ -404,9 +406,8 @@ serve(async (req) => {
       `)
       .order('loading_date', { ascending: false });
 
-    if (loadIds && loadIds.length > 0) {
-      query = query.in('id', loadIds);
-    }
+    // Keep Sheets sync as a full snapshot. We only use loadIds later
+    // to scope which rows are eligible for receiver posting.
 
     const { data: loads, error: loadError } = await query.limit(500);
 
@@ -460,23 +461,32 @@ serve(async (req) => {
 
     console.log(`✅ Synced ${dataRows.length} loads to Google Sheets`);
 
-    // ── Only post DELIVERED loads that haven't been synced yet ──
-    const deliveredUnsynced = (loads as any[]).filter(
-      (load) => load.status === 'delivered' && !load.synced_to_dashboard
-    );
+    // ── Post to receiver ONLY on create-triggered syncs (one-time rule) ──
+    const receiverCandidates = loadIds && loadIds.length > 0
+      ? (loads as any[]).filter((load) => loadIds.includes(load.id))
+      : (loads as any[]);
 
-    console.log(`📤 Posting ${deliveredUnsynced.length} delivered+unsynced loads to receiver (${(loads as any[]).length - deliveredUnsynced.length} skipped — not delivered or already synced)...`);
+    const unsyncedCandidates = receiverCandidates.filter((load) => !load.synced_to_dashboard);
+
+    const loadsToPost = syncTrigger === 'create'
+      ? unsyncedCandidates
+      : [];
+
+    console.log(
+      `📤 Posting ${loadsToPost.length} unsynced loads to receiver ` +
+      `(trigger=${syncTrigger}, ${receiverCandidates.length - loadsToPost.length} skipped)...`,
+    );
 
     const receiverResults = {
       success: 0,
       failed: 0,
       created: 0,
       updated: 0,
-      skipped: (loads as any[]).length - deliveredUnsynced.length,
+      skipped: receiverCandidates.length - loadsToPost.length,
       errors: [] as string[]
     };
 
-    for (const load of deliveredUnsynced) {
+    for (const load of loadsToPost) {
       const result = await postToReceiver(load);
       if (result.ok) {
         receiverResults.success++;

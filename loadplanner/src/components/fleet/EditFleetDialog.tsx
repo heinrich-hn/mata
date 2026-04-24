@@ -3,6 +3,7 @@ import { Calendar } from '@/components/ui/calendar';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -165,15 +166,7 @@ export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-2xl max-h-[90vh] overflow-y-auto"
-        aria-describedby="edit-fleet-dialog-description"
-      >
-        {/* Hidden description for accessibility */}
-        <p id="edit-fleet-dialog-description" className="sr-only">
-          Edit fleet vehicle details form. Update vehicle information, expiry dates, and availability status.
-        </p>
-
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -181,6 +174,9 @@ export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialog
             </span>
             Edit Vehicle: {vehicle.vehicle_id}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Edit fleet vehicle details including vehicle information, linked trailers, expiry dates, and availability status.
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
