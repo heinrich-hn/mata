@@ -513,11 +513,10 @@ const InventoryPanel = () => {
                   </div>
                 ) : (
                   filteredInventory.map((item) => (
-                    <div 
-                      key={item.id} 
-                      className={`border rounded p-2 hover:bg-muted/30 transition-colors ${
-                        selectedInventoryIds.has(item.id) ? "ring-2 ring-primary bg-primary/5" : ""
-                      }`}
+                    <div
+                      key={item.id}
+                      className={`border rounded p-2 hover:bg-muted/30 transition-colors ${selectedInventoryIds.has(item.id) ? "ring-2 ring-primary bg-primary/5" : ""
+                        }`}
                     >
                       <div className="flex items-center gap-2">
                         <Checkbox
@@ -540,7 +539,7 @@ const InventoryPanel = () => {
                               </Badge>
                             )}
                           </div>
-                          
+
                           <div className="flex items-center gap-3 text-[11px] mt-0.5">
                             <span className="text-muted-foreground">
                               <span className={`font-medium ${isLowStock(item) ? "text-warning" : "text-foreground"}`}>
@@ -611,7 +610,7 @@ const InventoryPanel = () => {
                               IR {request.ir_number || "N/A"}
                             </Badge>
                           </div>
-                          
+
                           <div className="flex items-center gap-4 text-xs">
                             <span className="text-muted-foreground">
                               Vendor: <span className="font-medium text-foreground">{request.vendors?.name || "Not assigned"}</span>
@@ -625,7 +624,7 @@ const InventoryPanel = () => {
                             </span>
                           </div>
                         </div>
-                        
+
                         <div className="text-right text-xs shrink-0">
                           <p className="font-semibold">${(request.total_price || 0).toFixed(2)}</p>
                           {request.unit_price && (
@@ -643,37 +642,34 @@ const InventoryPanel = () => {
 
         <TabsContent value="warranty" className="mt-4">
           <Card className="shadow-card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Warranty Tracking</CardTitle>
-                  <CardDescription>Track warranty status for parts and procured items</CardDescription>
-                </div>
-                <Button onClick={handleAddWarrantyItem}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Warranty Item
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               <div className="space-y-4">
-                {totalWarrantyItems > 0 && (
-                  <div className="flex gap-4 flex-wrap">
-                    <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg px-4 py-2">
-                      <span className="text-2xl font-bold text-green-600">{activeWarrantyCount}</span>
-                      <span className="text-sm text-green-600 ml-2">Active</span>
-                    </div>
-                    <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg px-4 py-2">
-                      <span className="text-2xl font-bold text-orange-600">{expiringSoonCount}</span>
-                      <span className="text-sm text-orange-600 ml-2">Expiring Soon</span>
-                    </div>
-                    <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2">
-                      <span className="text-2xl font-bold text-red-600">{expiredCount}</span>
-                      <span className="text-sm text-red-600 ml-2">Expired</span>
-                    </div>
+                {/* Inline stats + action bar */}
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
+                    <span className="font-semibold text-green-600">{activeWarrantyCount}</span>
+                    <span className="text-xs text-muted-foreground">active</span>
                   </div>
-                )}
-                
+                  <div className="h-4 w-px bg-border" />
+                  <div className="flex items-center gap-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5 text-orange-500" />
+                    <span className="font-semibold text-orange-500">{expiringSoonCount}</span>
+                    <span className="text-xs text-muted-foreground">expiring soon</span>
+                  </div>
+                  <div className="h-4 w-px bg-border" />
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                    <span className="font-semibold text-red-500">{expiredCount}</span>
+                    <span className="text-xs text-muted-foreground">expired</span>
+                  </div>
+                  <div className="flex-1" />
+                  <Button size="sm" className="h-8 text-xs px-2.5" onClick={handleAddWarrantyItem}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add Warranty Item
+                  </Button>
+                </div>
+
                 {standaloneWarrantyItems.length > 0 && (
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -719,7 +715,7 @@ const InventoryPanel = () => {
                                   </Badge>
                                 )}
                               </div>
-                              
+
                               <div className="flex items-center gap-4 text-xs mb-2">
                                 <span className="text-muted-foreground">
                                   Part/Serial: <span className="font-medium text-foreground font-mono">{item.part_number || item.serial_number || "N/A"}</span>
@@ -739,7 +735,7 @@ const InventoryPanel = () => {
                                   </span>
                                 </span>
                               </div>
-                              
+
                               <div className="flex items-center gap-1">
                                 <Button size="sm" variant="ghost" onClick={() => handleEditWarrantyItem(item)} className="h-7 text-xs px-2">
                                   <Edit className="h-3.5 w-3.5 mr-1" />
@@ -797,7 +793,7 @@ const InventoryPanel = () => {
                                   </Badge>
                                 )}
                               </div>
-                              
+
                               <div className="flex items-center gap-4 text-xs mb-2">
                                 <span className="text-muted-foreground">
                                   Part #: <span className="font-medium text-foreground font-mono">{item.partNumber}</span>
@@ -817,7 +813,7 @@ const InventoryPanel = () => {
                                   </span>
                                 </span>
                               </div>
-                              
+
                               <Button size="sm" variant="ghost" onClick={() => handleManageWarranty(item)} className="h-7 text-xs px-2">
                                 <Edit className="h-3.5 w-3.5 mr-1" />
                                 Edit Warranty

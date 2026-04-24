@@ -1847,15 +1847,7 @@ const Procurement = () => {
                 <Card>
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <CreditCard className="h-5 w-5" />
-                          Cash Manager — Procurement Workflow
-                        </CardTitle>
-                        <CardDescription>
-                          Track procurement through IR → Cash Manager Approval → Order → Receive → Allocate
-                        </CardDescription>
-                      </div>
+                      <div />
                       <div className="flex items-center gap-2">
                         <Select
                           value={statusFilter}
@@ -2397,15 +2389,7 @@ const Procurement = () => {
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <AlertTriangle className="h-5 w-5 text-red-500" />
-                          Items Below Minimum Stock
-                        </CardTitle>
-                        <CardDescription>
-                          These inventory items need to be replenished
-                        </CardDescription>
-                      </div>
+                      <div />
                       <div className="flex items-center gap-2">
                         {selectedRestockItems.size > 0 && (
                           <span className="text-sm text-muted-foreground">
