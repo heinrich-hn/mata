@@ -951,7 +951,6 @@
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    color-adjust: exact !important;
   }
 
   h1,
@@ -1078,6 +1077,23 @@
 /* Fleet popup base */
 .fleet-popup {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Compact Samsara-style popup chrome */
+.fleet-card-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgb(226, 232, 240);
+}
+
+.fleet-card-popup .leaflet-popup-content {
+  margin: 12px 14px;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.fleet-card-popup .leaflet-popup-tip {
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
 }
 
 /* Enhanced Scrollbar Styles */

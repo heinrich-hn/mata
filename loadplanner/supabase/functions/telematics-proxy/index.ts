@@ -153,29 +153,6 @@ function isGeofenceMatch(geofenceName: string, locationName: string): boolean {
   return cleanGeofence === cleanLocation || cleanGeofence.includes(cleanLocation) || cleanLocation.includes(cleanGeofence);
 }
 
-// Depot-specific arrival offset (in minutes). Mirrors the client-side
-// `arrivalOffsetMinutes` in src/lib/depots.ts. Currently only BV uses this:
-// arrival timestamps get +offset, departure timestamps get -offset, to account
-// for the long internal road between the geofence boundary and the actual
-// loading point.
-const DEPOT_ARRIVAL_OFFSETS_MIN: Record<string, number> = {
-  bv: 45,
-};
-
-function getDepotOffsetMinutes(geofenceName: string, locationName: string): number {
-  const candidates = [geofenceName, locationName].map(s => (s || '').toLowerCase().trim());
-  for (const [key, mins] of Object.entries(DEPOT_ARRIVAL_OFFSETS_MIN)) {
-    if (candidates.some(c => c === key || c.includes(key))) return mins;
-  }
-  return 0;
-}
-
-function applyOffset(rawIso: string, offsetMin: number, isArrival: boolean): string {
-  if (!offsetMin) return rawIso;
-  const ms = new Date(rawIso).getTime() + (isArrival ? 1 : -1) * offsetMin * 60_000;
-  return new Date(ms).toISOString();
-}
-
 // Handle geofence webhook events with enhanced logic
 async function handleGeofenceEvent(body: any, supabase: any) {
   const eventType = body.eventType || body.action?.replace('geofenceEvent', '');
@@ -253,16 +230,10 @@ async function handleGeofenceEvent(body: any, supabase: any) {
   const matchesOrigin = isGeofenceMatch(geofenceName, loadData.origin || '');
   const matchesDestination = isGeofenceMatch(geofenceName, loadData.destination || '');
 
-  // Apply BV-style arrival offset: +N min on entry (arrival), -N min on exit (departure).
-  // Mirrors useTrips.ts:362-378 which reads `arrivalOffsetMinutes` from depots.ts.
-  const offsetMin = getDepotOffsetMinutes(geofenceName, matchesOrigin ? loadData.origin : (matchesDestination ? loadData.destination : ''));
-  const adjustedIso = (matchesOrigin || matchesDestination)
-    ? applyOffset(timestamp, offsetMin, isEntry)
-    : timestamp;
-
-  if (offsetMin) {
-    console.log(`Depot offset applied: ${isEntry ? '+' : '-'}${offsetMin}min  raw=${timestamp}  adjusted=${adjustedIso}`);
-  }
+  // Use the raw geofence event timestamp as the actual arrival/departure time.
+  // No depot-specific offset is applied — the status stepper and delivery progress
+  // UI rely on the actual transition time so phases advance immediately on entry/exit.
+  const adjustedIso = timestamp;
 
   const updates: Record<string, any> = { updated_at: new Date().toISOString() };
   let statusUpdated = false;
@@ -370,7 +341,6 @@ async function handleGeofenceEvent(body: any, supabase: any) {
     update_reason: updateReason,
     current_status: newStatus ?? loadData.status,
     fields_written: Object.keys(updates).filter(k => k !== 'updated_at'),
-    offset_applied_min: offsetMin || 0,
   });
 }
 

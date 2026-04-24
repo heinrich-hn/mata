@@ -34,14 +34,6 @@ export interface Depot {
    *   ]
    */
   polygon?: [number, number][];
-  /**
-   * Optional time offset in minutes applied to geofence-triggered timestamps.
-   * For arrival events the offset is ADDED (entry + offset = actual arrival).
-   * For departure events the offset is SUBTRACTED (exit − offset = actual departure).
-   * This accounts for long driveways/roads inside a geofence before reaching
-   * the actual loading/offloading point.
-   */
-  arrivalOffsetMinutes?: number;
 }
 
 /**
@@ -88,14 +80,12 @@ export const DEPOTS: Depot[] = [
     type: "farm",
     country: "Zimbabwe",
     radius: 19050,
-    arrivalOffsetMinutes: 45,
     // NOTE: A road-corridor polygon was previously defined here, but it traced
     // the approach roads as thin loops that did NOT enclose the actual BV
     // loading point (-19.18146, 32.79458). Because isWithinDepot prefers a
     // polygon over the radius when both are present, this caused all BV
-    // entry/exit detection to silently fail (no status changes, no actual_*
-    // timestamps, no +45 min offset application). Reverted to the 2.5 km
-    // circular geofence which works with the arrivalOffsetMinutes setting.
+    // entry/exit detection to silently fail. Reverted to a wide circular
+    // geofence so geofence entry/exit reliably triggers status transitions.
   },
   {
     id: "cbc",

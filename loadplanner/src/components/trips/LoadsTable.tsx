@@ -356,14 +356,14 @@ export function LoadsTable({
             <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableHead className="font-semibold">Load ID</TableHead>
-                    <TableHead className="font-semibold">Schedule</TableHead>
-                    <TableHead className="font-semibold">Route</TableHead>
-                    <TableHead className="font-semibold">Cargo</TableHead>
-                    <TableHead className="font-semibold">Assignment</TableHead>
-                    <TableHead className="font-semibold">Status</TableHead>
-                    <TableHead className="font-semibold w-[120px]">
+                  <TableRow className="bg-muted/50 hover:bg-muted/50 [&>th]:h-9 [&>th]:py-1.5">
+                    <TableHead className="font-semibold text-xs">Load ID</TableHead>
+                    <TableHead className="font-semibold text-xs">Schedule</TableHead>
+                    <TableHead className="font-semibold text-xs">Route</TableHead>
+                    <TableHead className="font-semibold text-xs">Cargo</TableHead>
+                    <TableHead className="font-semibold text-xs">Assignment</TableHead>
+                    <TableHead className="font-semibold text-xs">Status</TableHead>
+                    <TableHead className="font-semibold text-xs w-[120px]">
                       Actions
                     </TableHead>
                   </TableRow>
@@ -375,6 +375,7 @@ export function LoadsTable({
                       className={cn(
                         "cursor-pointer transition-colors hover:bg-muted/30",
                         "animate-fade-in",
+                        "[&>td]:py-2 [&>td]:align-middle",
                         needsVerification(load) && "bg-amber-50 dark:bg-amber-950/20 border-l-4 border-l-amber-500 hover:bg-amber-100/70 dark:hover:bg-amber-950/30",
                       )}
                       style={{ animationDelay: `${index * 50}ms` }}
@@ -385,16 +386,16 @@ export function LoadsTable({
                           {needsVerification(load) && (() => {
                             const missing = getMissingTimes(load);
                             return (
-                              <div className="mb-2 p-2 rounded-md bg-amber-100/80 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                                  <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                              <div className="mb-1.5 p-1.5 rounded-md bg-amber-100/80 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                                  <span className="text-[10px] font-semibold text-amber-800 dark:text-amber-300">
                                     {missing.length === 4 ? 'No actual times recorded' : `${missing.length} time${missing.length !== 1 ? 's' : ''} unverified`}
                                   </span>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-6 text-xs ml-auto border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800"
+                                    className="h-5 text-[10px] px-1.5 ml-auto border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setLoadForDelivery(load);
@@ -402,13 +403,13 @@ export function LoadsTable({
                                       setDeliveryDialogOpen(true);
                                     }}
                                   >
-                                    <Clock className="h-3 w-3 mr-1" />
+                                    <Clock className="h-2.5 w-2.5 mr-0.5" />
                                     Verify Times
                                   </Button>
                                 </div>
                                 <div className="flex flex-wrap gap-1">
                                   {missing.map((m) => (
-                                    <Badge key={m} variant="outline" className="text-[10px] py-0 px-1.5 border-amber-400 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40">
+                                    <Badge key={m} variant="outline" className="text-[9px] py-0 px-1 border-amber-400 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40">
                                       {m}
                                     </Badge>
                                   ))}
@@ -416,7 +417,7 @@ export function LoadsTable({
                               </div>
                             );
                           })()}
-                          <p className="font-semibold text-foreground">
+                          <p className="font-semibold text-foreground text-sm leading-tight">
                             {load.load_id}
                           </p>
                           {(() => {
@@ -433,7 +434,7 @@ export function LoadsTable({
                               </div>
                             );
                           })()}
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
                             <Truck className="h-3 w-3" />
                             {load.fleet_vehicle?.vehicle_id || "Unassigned"}
                           </div>
@@ -651,9 +652,9 @@ export function LoadsTable({
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <User className="h-3.5 w-3.5 text-muted-foreground" />
-                          <div className="text-sm">
+                          <div className="text-xs leading-tight">
                             <p className="font-medium">{load.driver?.name || "Unassigned"}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-[11px] text-muted-foreground">
                               {load.driver?.contact || "-"}
                             </p>
                           </div>
