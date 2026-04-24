@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import {
   Select,
   SelectContent,
@@ -153,18 +153,28 @@ function calculateETA(
 
 type VehicleStatus = "moving" | "idle" | "offline";
 
-const OFFLINE_THRESHOLD_MIN = 30;
+// A vehicle is only "offline" if we have no usable position at all,
+// or the most recent position fix is older than this threshold.
+// Telematics Guru's `lastConnectedUtc` is unreliable for parked vehicles —
+// it tracks the cellular check-in which can lag many hours behind GPS.
+const OFFLINE_THRESHOLD_HOURS = 24;
 
 function getVehicleStatus(asset: TelematicsAsset): VehicleStatus {
-  if (asset.lastConnectedUtc) {
-    const last = new Date(asset.lastConnectedUtc).getTime();
-    if (!isNaN(last)) {
-      const minsAgo = (Date.now() - last) / 60000;
-      if (minsAgo > OFFLINE_THRESHOLD_MIN) return "offline";
-    }
-  } else {
+  // No coordinates at all → device has never reported → offline
+  if (asset.lastLatitude == null || asset.lastLongitude == null) {
     return "offline";
   }
+
+  // If we have any timestamp, only flag as offline when extremely stale.
+  const ts = asset.lastPositionUtc || asset.lastConnectedUtc;
+  if (ts) {
+    const last = new Date(ts).getTime();
+    if (!isNaN(last)) {
+      const hoursAgo = (Date.now() - last) / 3_600_000;
+      if (hoursAgo > OFFLINE_THRESHOLD_HOURS) return "offline";
+    }
+  }
+
   return asset.speedKmH >= 5 ? "moving" : "idle";
 }
 
@@ -1192,7 +1202,7 @@ export default function LiveTrackingPage() {
 
             {/* Floating Sidebar Overlay (Samsara/Motive style) */}
             {assets.length > 0 && (
-              <aside className="absolute top-4 left-4 z-[1000] w-[340px] max-h-[calc(100%-80px)] flex flex-col bg-white dark:bg-slate-900 rounded-xl shadow-xl border overflow-hidden">
+              <aside className="absolute top-4 left-4 z-[1000] w-[340px] h-[calc(100%-32px)] max-h-[calc(100%-32px)] flex flex-col bg-white dark:bg-slate-900 rounded-xl shadow-xl border overflow-hidden">
                 {/* Header: title + search + status filter */}
                 <div className="px-4 pt-4 pb-3 border-b space-y-2.5">
                   <div className="flex items-center justify-between">
@@ -1276,7 +1286,7 @@ export default function LiveTrackingPage() {
                 </div>
 
                 {/* Vehicle list */}
-                <ScrollArea className="flex-1">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
                   {filteredSidebarAssets.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                       <svg className="w-8 h-8 mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -1378,7 +1388,7 @@ export default function LiveTrackingPage() {
                       })}
                     </div>
                   )}
-                </ScrollArea>
+                </div>
               </aside>
             )}
           </div>

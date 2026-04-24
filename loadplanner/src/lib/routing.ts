@@ -46,7 +46,7 @@ export async function calculateRoute(
 
     // Call OSRM API
     const response = await fetch(
-      `${OSRM_BASE_URL}/route/v1/driving/${coordinates}?overview=simplified&geometries=polyline`
+      `${OSRM_BASE_URL}/route/v1/driving/${coordinates}?overview=full&geometries=polyline`
     );
 
     if (!response.ok) {
@@ -72,10 +72,10 @@ export async function calculateRoute(
     };
   } catch (error) {
     console.error('Route calculation failed:', error);
-    
+
     // Fallback to straight-line distance calculation
     const fallbackDistance = calculateStraightLineDistance(waypoints);
-    
+
     return {
       distance: fallbackDistance,
       duration: fallbackDistance / 60 * 60, // Estimate: 60 km/h average
@@ -119,7 +119,7 @@ export async function calculateMultiStopRoute(
       .join(';');
 
     const response = await fetch(
-      `${OSRM_BASE_URL}/route/v1/driving/${coordinates}?overview=simplified&geometries=polyline&steps=false`
+      `${OSRM_BASE_URL}/route/v1/driving/${coordinates}?overview=full&geometries=polyline&steps=false`
     );
 
     if (!response.ok) {
@@ -149,9 +149,9 @@ export async function calculateMultiStopRoute(
     };
   } catch (error) {
     console.error('Multi-stop route calculation failed:', error);
-    
+
     const fallbackDistance = calculateStraightLineDistance(stops);
-    
+
     return {
       distance: fallbackDistance,
       duration: fallbackDistance / 60 * 60,
@@ -165,7 +165,7 @@ export async function calculateMultiStopRoute(
  */
 function calculateStraightLineDistance(waypoints: RouteWaypoint[]): number {
   let totalDistance = 0;
-
+  
   for (let i = 0; i < waypoints.length - 1; i++) {
     const lat1 = waypoints[i].latitude;
     const lon1 = waypoints[i].longitude;
@@ -221,7 +221,6 @@ export function calculateRouteETA(durationMinutes: number): {
 } {
   const eta = new Date();
   eta.setMinutes(eta.getMinutes() + Math.round(durationMinutes));
-
   return {
     eta,
     etaFormatted: eta.toLocaleTimeString([], {
@@ -237,39 +236,56 @@ export function calculateRouteETA(durationMinutes: number): {
  * Useful for displaying the route on a map
  */
 export function decodePolyline(encoded: string): [number, number][] {
+  if (!encoded) return [];
+  
   const coords: [number, number][] = [];
   let index = 0;
   let lat = 0;
   let lng = 0;
-
-  while (index < encoded.length) {
-    let b: number;
-    let shift = 0;
+  const len = encoded.length;
+  
+  while (index < len) {
     let result = 0;
-
+    let shift = 0;
+    let b = 0;
+    
     do {
       b = encoded.charCodeAt(index++) - 63;
       result |= (b & 0x1f) << shift;
       shift += 5;
     } while (b >= 0x20);
-
-    const dlat = result & 1 ? ~(result >> 1) : result >> 1;
-    lat += dlat;
-
-    shift = 0;
+    
+    const deltaLat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += deltaLat;
+    
     result = 0;
-
+    shift = 0;
+    
     do {
       b = encoded.charCodeAt(index++) - 63;
       result |= (b & 0x1f) << shift;
       shift += 5;
     } while (b >= 0x20);
-
-    const dlng = result & 1 ? ~(result >> 1) : result >> 1;
-    lng += dlng;
-
+    
+    const deltaLng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += deltaLng;
+    
     coords.push([lat / 1e5, lng / 1e5]);
   }
-
+  
   return coords;
+}
+
+/**
+ * Get a sample route for preview/demo purposes
+ */
+export function getSampleRoute(): [number, number][] {
+  return [
+    [-26.195, 28.034],  // Johannesburg
+    [-26.204, 28.047],
+    [-26.215, 28.062],
+    [-26.230, 28.080],
+    [-26.245, 28.095],
+    [-26.260, 28.110],  // Pretoria area
+  ];
 }

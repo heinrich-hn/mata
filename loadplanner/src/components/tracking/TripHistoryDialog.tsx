@@ -474,6 +474,14 @@ export function TripHistoryDialog({
     [sortedLoads, selectedLoadId],
   );
 
+  // Past 3 completed trips (excluding the currently selected one)
+  const recentCompleted = useMemo(
+    () => sortedLoads
+      .filter((l) => l.status === "delivered" && l.id !== selectedLoadId)
+      .slice(0, 3),
+    [sortedLoads, selectedLoadId],
+  );
+
   const stops = useMemo(
     () => (selectedLoad ? buildStops(selectedLoad, customLocations) : []),
     [selectedLoad, customLocations],
@@ -632,6 +640,37 @@ export function TripHistoryDialog({
                         <StopCard key={stop.id} stop={stop} isLast={i === stops.length - 1} />
                       ))}
                     </div>
+
+                    {recentCompleted.length > 0 && (
+                      <div className="mt-6 pt-4 border-t">
+                        <div className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-2">
+                          Recent Completed Trips
+                        </div>
+                        <div className="space-y-1.5">
+                          {recentCompleted.map((l) => (
+                            <button
+                              key={l.id}
+                              type="button"
+                              onClick={() => setSelectedLoadId(l.id)}
+                              className="w-full text-left px-3 py-2 rounded border bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 transition-colors"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold truncate">{l.load_id}</span>
+                                <Badge variant="outline" className="text-[10px] py-0 h-4 text-slate-600">Completed</Badge>
+                              </div>
+                              <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                                {l.origin} → {l.destination}
+                              </div>
+                              {l.offloading_date && (
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  Delivered {l.offloading_date}
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -658,7 +697,7 @@ export function TripHistoryDialog({
               >
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                 />
                 <FitToStops points={allPoints} />
 

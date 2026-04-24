@@ -230,8 +230,8 @@ export function AddBackloadDialog({ open, onOpenChange, load }: AddBackloadDialo
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {backloadDestinations.map((dest) => (
-                              <SelectItem key={dest} value={dest}>{dest} Farm</SelectItem>
+                            {Array.from(new Set(backloadDestinations)).map((dest) => (
+                              <SelectItem key={`backload-destination-${dest}`} value={dest}>{dest} Farm</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

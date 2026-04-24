@@ -41,6 +41,7 @@ export default defineConfig(({ mode }) => {
         "buffer": "buffer",
         "process": "process/browser",
         "util": "util",
+        "events": "events",
       },
     },
     define: {

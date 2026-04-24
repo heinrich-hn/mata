@@ -85,8 +85,8 @@ function MapContent({ vehicles, selectedVehicle, onVehicleClick }: {
         </LayersControl.BaseLayer>
         <LayersControl.BaseLayer name="Terrain">
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://stamen.com/">Stamen Design</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png"
           />
         </LayersControl.BaseLayer>
       </LayersControl>

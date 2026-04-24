@@ -493,8 +493,8 @@ export function CreateLoadDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {loadFormConfig.origins.map((origin) => (
-                            <SelectItem key={origin} value={origin}>
+                          {Array.from(new Set(loadFormConfig.origins)).map((origin) => (
+                            <SelectItem key={`origin-${origin}`} value={origin}>
                               {origin} Farm
                             </SelectItem>
                           ))}
@@ -503,8 +503,8 @@ export function CreateLoadDialog({
                               <SelectItem disabled value="__custom_divider__">
                                 <span className="text-xs text-muted-foreground">── Custom Locations ──</span>
                               </SelectItem>
-                              {customOrigins.map((name) => (
-                                <SelectItem key={name} value={name}>
+                              {Array.from(new Set(customOrigins)).map((name) => (
+                                <SelectItem key={`custom-origin-${name}`} value={name}>
                                   ★ {name}
                                 </SelectItem>
                               ))}
@@ -596,11 +596,12 @@ export function CreateLoadDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {(selectedCargoType === "Export"
-                            ? loadFormConfig.exportDestinations
-                            : loadFormConfig.destinations
-                          ).map((dest) => (
-                            <SelectItem key={dest} value={dest}>
+                          {Array.from(new Set(
+                            selectedCargoType === "Export"
+                              ? loadFormConfig.exportDestinations
+                              : loadFormConfig.destinations,
+                          )).map((dest) => (
+                            <SelectItem key={`destination-${dest}`} value={dest}>
                               {dest}
                             </SelectItem>
                           ))}
@@ -609,8 +610,8 @@ export function CreateLoadDialog({
                               <SelectItem disabled value="__custom_dest_divider__">
                                 <span className="text-xs text-muted-foreground">── Custom Locations ──</span>
                               </SelectItem>
-                              {customDestinations.map((name) => (
-                                <SelectItem key={name} value={name}>
+                              {Array.from(new Set(customDestinations)).map((name) => (
+                                <SelectItem key={`custom-destination-${name}`} value={name}>
                                   ★ {name}
                                 </SelectItem>
                               ))}
@@ -788,8 +789,8 @@ export function CreateLoadDialog({
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {loadFormConfig.backloadDestinations.map((dest) => (
-                                <SelectItem key={dest} value={dest}>
+                              {Array.from(new Set(loadFormConfig.backloadDestinations)).map((dest) => (
+                                <SelectItem key={`backload-destination-${dest}`} value={dest}>
                                   {dest} Farm
                                 </SelectItem>
                               ))}
