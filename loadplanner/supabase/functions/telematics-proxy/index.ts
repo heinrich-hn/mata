@@ -410,9 +410,23 @@ async function handleGetPortalAssets(body: any, token?: string) {
 }
 
 serve(async (req: Request) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  // Validate critical environment variables
+  if (!SUPABASE_URL) {
+    console.error('CRITICAL: SUPABASE_URL environment variable is not set');
+    return sendError(500, 'Server configuration error: Missing SUPABASE_URL');
+  }
+
+  if (!SUPABASE_SERVICE_KEY) {
+    console.error('CRITICAL: SUPABASE_SERVICE_ROLE_KEY environment variable is not set');
+    return sendError(500, 'Server configuration error: Missing SUPABASE_SERVICE_ROLE_KEY');
+  }
+
+  console.log('Environment check passed - SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are configured');
 
   if (req.method !== 'POST') {
     return sendError(405, 'Method not allowed. Only POST requests are accepted.');
@@ -445,7 +459,15 @@ serve(async (req: Request) => {
       });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    // Create Supabase client with error handling
+    let supabase;
+    try {
+      supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      console.log('Supabase client created successfully');
+    } catch (clientError) {
+      console.error('Failed to create Supabase client:', clientError);
+      return sendError(500, 'Failed to initialize database connection');
+    }
 
     switch (body.action) {
       case ValidActions.GEOFENCE_EVENT:

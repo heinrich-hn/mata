@@ -142,8 +142,13 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
       setTelematicsAssets(assets || []);
       setLastRefresh(new Date());
       setTelematicsAuthError(false);
+      console.debug('[Geofence] Telematics poll OK', {
+        orgId,
+        assetCount: assets?.length ?? 0,
+        at: new Date().toISOString(),
+      });
     } catch (error) {
-      console.error("Failed to fetch telematics data:", error);
+      console.error('[Geofence] Telematics poll failed:', error);
       if (error instanceof Error && error.message.includes("Authentication")) {
         setTelematicsAuthError(true);
         localStorage.removeItem("telematics_username");
@@ -386,6 +391,11 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
             dwellTrackingRef.current.delete(`${load.id}-origin-dwell`);
             const arrivalEventKey = `${load.id}-loading_arrival-${dateKey}`;
             if (!processedEventsRef.current.has(arrivalEventKey) && !load.actual_loading_arrival) {
+              console.log('[Geofence Transition] loading_arrival', {
+                load: load.load_id,
+                vehicle: eventCtx.vehicleRegistration,
+                geofence: originDepot.name,
+              });
               geofenceUpdateMutation.mutate({
                 loadId: load.id,
                 eventType: "loading_arrival" as GeofenceEventType,
@@ -508,6 +518,11 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
             dwellTrackingRef.current.delete(`${load.id}-dest-dwell`);
             const destArrivalEventKey = `${load.id}-offloading_arrival-${dateKey}`;
             if (!processedEventsRef.current.has(destArrivalEventKey) && !load.actual_offloading_arrival) {
+              console.log('[Geofence Transition] offloading_arrival', {
+                load: load.load_id,
+                vehicle: eventCtx.vehicleRegistration,
+                geofence: destinationDepot.name,
+              });
               geofenceUpdateMutation.mutate({
                 loadId: load.id,
                 eventType: "offloading_arrival" as GeofenceEventType,

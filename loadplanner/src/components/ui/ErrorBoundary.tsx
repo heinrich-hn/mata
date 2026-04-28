@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { logger, reportToUser } from "@/lib/logger";
 
 interface Props {
   children: ReactNode;
@@ -24,7 +25,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[ErrorBoundary]", error, info.componentStack);
+    logger.error('ErrorBoundary', error.message, {
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+    reportToUser('Something went wrong', error.message);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (typeof window !== 'undefined') (window as any).__lastReactError = { error, info };
   }
 
   handleReset = () => {

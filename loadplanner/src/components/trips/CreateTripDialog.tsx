@@ -47,7 +47,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 const formSchema = z.object({
-  clientId: z.string().optional(),
+  clientId: z.string().min(1, "Client is required"),
   priority: z.enum(["high", "medium", "low"]),
   loadingDate: z.date({ required_error: "Loading date is required" }),
   offloadingDate: z.date({ required_error: "Offloading date is required" }),
@@ -238,7 +238,7 @@ export function CreateLoadDialog({
         cargo_type: data.cargoType,
         fleet_vehicle_id: data.fleetVehicleId || null,
         driver_id: data.driverId || null,
-        client_id: data.clientId || null,
+        client_id: data.clientId,
         notes: data.notes,
         status: initialStatus,
       },
@@ -291,10 +291,12 @@ export function CreateLoadDialog({
                   name="clientId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Client</FormLabel>
+                      <FormLabel>
+                        Client <span className="text-destructive">*</span>
+                      </FormLabel>
                       <Select
-                        onValueChange={(val) => field.onChange(val === "__none__" ? "" : val)}
-                        value={field.value || "__none__"}
+                        onValueChange={field.onChange}
+                        value={field.value || ""}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -302,9 +304,6 @@ export function CreateLoadDialog({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="__none__">
-                            <span className="text-muted-foreground">No client</span>
-                          </SelectItem>
                           {clients.map((client) => (
                             <SelectItem key={client.id} value={client.id}>
                               {client.name}

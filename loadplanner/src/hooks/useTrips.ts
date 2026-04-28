@@ -437,6 +437,18 @@ export function useGeofenceLoadUpdate() {
 
       updates.time_window = timeWindowData;
 
+      console.log('[Geofence] Applying load update', {
+        loadId,
+        loadNumber: loadNumber || null,
+        eventType,
+        geofenceName: geofenceName || null,
+        timestamp: isoTimestamp,
+        isManuallySet,
+        statusFrom: currentLoad?.status,
+        statusTo: updates.status ?? currentLoad?.status,
+        fields: Object.keys(updates).filter((k) => k !== 'time_window'),
+      });
+
       const { data, error } = await supabase
         .from('loads')
         .update(updates)
@@ -444,12 +456,16 @@ export function useGeofenceLoadUpdate() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Geofence] loads UPDATE failed', { loadId, eventType, error });
+        throw error;
+      }
 
-      // Log geofence event to geofence_events table
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('geofence_events').insert({
+      // Log geofence event to geofence_events table (don't fail the main update on insert error)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: eventInsertError } = await (supabase as any)
+        .from('geofence_events')
+        .insert({
           load_id: loadId,
           load_number: loadNumber || data?.load_id || null,
           vehicle_registration: vehicleRegistration || null,
@@ -461,8 +477,12 @@ export function useGeofenceLoadUpdate() {
           event_time: timestamp.toISOString(),
           source: 'auto',
         });
-      } catch {
-        // Don't fail the main update if event logging fails
+      if (eventInsertError) {
+        console.error('[Geofence] geofence_events INSERT failed', {
+          loadId,
+          eventType,
+          error: eventInsertError,
+        });
       }
 
       return { data, eventType };
@@ -490,7 +510,13 @@ export function useGeofenceLoadUpdate() {
         variables.onDeliveryComplete();
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      console.error('[Geofence] mutation error', {
+        loadId: variables?.loadId,
+        eventType: variables?.eventType,
+        message: error.message,
+        error,
+      });
       toast({
         title: 'Failed to update load status',
         description: error.message,

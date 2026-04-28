@@ -5,7 +5,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { GeofenceMonitorProvider } from "@/hooks/useGeofenceMonitor";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { logger, reportToUser } from "@/lib/logger";
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import React, { Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import ClientsPage from "./pages/ClientsPage";
@@ -44,6 +50,35 @@ const queryClient = new QueryClient({
       retry: false,
     },
   },
+  // Global error capture: every failed query/mutation across the app
+  // is logged with full context and surfaced via toast — no per-hook
+  // boilerplate required.
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      const key = JSON.stringify(query.queryKey);
+      logger.error('query', `Query failed: ${key}`, {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        queryKey: query.queryKey,
+      });
+      reportToUser(
+        'Failed to load data',
+        error instanceof Error ? error.message : String(error),
+      );
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error, variables, _context, mutation) => {
+      logger.error('mutation', 'Mutation failed', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        mutationKey: mutation.options.mutationKey,
+        variables,
+      });
+      // Don't toast here — most mutation hooks already toast on their own
+      // onError. The console log above is the safety net.
+    },
+  }),
 });
 
 const App = () => (
