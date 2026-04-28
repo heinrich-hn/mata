@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useEffectiveRates } from '@/hooks/useSystemCostRates';
 import type { RouteExpenseItem } from '@/hooks/useRoutePredefinedExpenses';
+import { useRoutePredefinedExpenses } from '@/hooks/useRoutePredefinedExpenses';
 import { useWialonVehicles } from '@/hooks/useWialonVehicles';
 import { supabase } from '@/integrations/supabase/client';
 import type { CostEntry, Trip } from '@/types/operations';
@@ -93,6 +94,9 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
 
   // Track if route was changed to add new expenses
   const [routeChanged, setRouteChanged] = useState(false);
+
+  // Predefined route configs for auto-filling rate when the route is changed
+  const { data: routeConfigs = [] } = useRoutePredefinedExpenses();
 
   // KM mismatch override (new POD book)
   const [kmOverride, setKmOverride] = useState(false);
@@ -243,6 +247,27 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
             });
             return;
           }
+        }
+
+        // Block completion if ending_km < starting_km (negative distance)
+        const endingKmVal = data.ending_km ? parseFloat(data.ending_km) : null;
+        const startingKmVal = data.starting_km ? parseFloat(data.starting_km) : null;
+        if (endingKmVal !== null && startingKmVal !== null && endingKmVal < startingKmVal) {
+          toast({
+            title: 'Cannot Complete Trip — Negative Distance',
+            description: `Ending KM (${endingKmVal.toLocaleString()}) is less than Starting KM (${startingKmVal.toLocaleString()}). This would result in a negative distance. Please correct the odometer readings.`,
+            variant: 'destructive',
+          });
+          return;
+        }
+        const distanceKmVal = data.distance_km ? parseFloat(data.distance_km) : null;
+        if (distanceKmVal !== null && distanceKmVal < 0) {
+          toast({
+            title: 'Cannot Complete Trip — Negative Distance',
+            description: `Distance (${distanceKmVal.toLocaleString()} km) cannot be negative. Please correct the distance value.`,
+            variant: 'destructive',
+          });
+          return;
         }
 
         // Block completion if there are unresolved flags or unverified costs
@@ -608,6 +633,19 @@ const EditTripDialog = ({ isOpen, onClose, trip, onRefresh }: EditTripDialogProp
                           if (value !== trip?.route) {
                             setRouteChanged(true);
                             setSelectedRouteExpenses(expenses || []);
+                            // Auto-fill revenue rate from the new route's default rate
+                            const config = routeConfigs.find(c => c.route === value);
+                            if (config && config.rate_amount > 0) {
+                              form.setValue('revenue_type', config.rate_type);
+                              form.setValue('revenue_currency', config.rate_currency || 'USD');
+                              if (config.rate_type === 'per_km') {
+                                form.setValue('rate_per_km', String(config.rate_amount));
+                                form.setValue('base_revenue', '');
+                              } else {
+                                form.setValue('base_revenue', String(config.rate_amount));
+                                form.setValue('rate_per_km', '');
+                              }
+                            }
                           } else {
                             setRouteChanged(false);
                             setSelectedRouteExpenses([]);

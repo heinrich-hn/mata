@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { COST_CATEGORIES } from '@/constants/costCategories';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useCostCategories } from '@/hooks/useCostCategories';
 import { supabase } from '@/integrations/supabase/client';
 import { Cost } from '@/types/forms';
 import { Flag, Loader2, Save, X } from 'lucide-react';
@@ -41,6 +42,17 @@ export const CostForm = ({ tripId, cost, onSubmit, onCancel }: CostFormProps) =>
   const [availableSubCategories, setAvailableSubCategories] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Load CRUD-managed categories; falls back to constant when empty.
+  const { data: dynamicCategories = [] } = useCostCategories();
+  const categoryNames = dynamicCategories.length > 0
+    ? dynamicCategories.map(c => c.name)
+    : Object.keys(COST_CATEGORIES);
+  const subsByCategory = (name: string): string[] => {
+    const dyn = dynamicCategories.find(c => c.name === name);
+    if (dyn) return dyn.subcategories.map(s => s.name);
+    return [...(COST_CATEGORIES[name as keyof typeof COST_CATEGORIES] || [])];
+  };
+
   useEffect(() => {
     if (cost) {
       setFormData({
@@ -55,18 +67,19 @@ export const CostForm = ({ tripId, cost, onSubmit, onCancel }: CostFormProps) =>
         flagReason: cost.flag_reason || '',
       });
 
-      if (cost.category && COST_CATEGORIES[cost.category as keyof typeof COST_CATEGORIES]) {
-        setAvailableSubCategories([...COST_CATEGORIES[cost.category as keyof typeof COST_CATEGORIES]]);
+      if (cost.category) {
+        const subs = subsByCategory(cost.category);
+        if (subs.length > 0) setAvailableSubCategories(subs);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cost]);
 
   const handleChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
 
     if (field === 'category' && typeof value === 'string') {
-      const subCategories = COST_CATEGORIES[value as keyof typeof COST_CATEGORIES] || [];
-      setAvailableSubCategories([...subCategories]);
+      setAvailableSubCategories(subsByCategory(value));
       setFormData(prev => ({ ...prev, subCategory: '' }));
     }
 
@@ -231,7 +244,7 @@ export const CostForm = ({ tripId, cost, onSubmit, onCancel }: CostFormProps) =>
               <SelectValue placeholder="Select category..." />
             </SelectTrigger>
             <SelectContent>
-              {Object.keys(COST_CATEGORIES).map(key => (
+              {categoryNames.map(key => (
                 <SelectItem key={key} value={key}>{key}</SelectItem>
               ))}
             </SelectContent>

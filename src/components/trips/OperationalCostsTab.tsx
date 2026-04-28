@@ -35,14 +35,18 @@ import {
     ChevronDown,
     ChevronRight,
     DollarSign,
+    FolderTree,
     History,
     Loader2,
     RefreshCw,
+    Route,
     Settings,
     TrendingUp,
 } from 'lucide-react';
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import CostCategoriesSection from './CostCategoriesSection';
+import PredefinedRoutesSection from './PredefinedRoutesSection';
 
 // ─── Formatting helpers ───
 const formatUSD = (n: number) =>
@@ -922,46 +926,88 @@ function ApplyRatesToPeriodSection() {
 
 // ─── Main Component ───
 const OperationalCostsTab = () => {
-    const [section, setSection] = useState<'rates' | 'costs' | 'apply'>('rates');
+    const [section, setSection] = useState<'rates' | 'routes' | 'categories'>('rates');
+    const [ratesSubSection, setRatesSubSection] = useState<'rates' | 'apply' | 'costs'>('rates');
 
     return (
         <div className="space-y-5">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-xl font-semibold">Operational Costs</h2>
+                    <h2 className="text-xl font-semibold">Operations</h2>
                     <p className="text-sm text-muted-foreground">
                         Manage system cost rates and view auto-generated trip expenses
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Button
                         variant={section === 'rates' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setSection('rates')}
                     >
                         <Settings className="h-4 w-4 mr-1" />
-                        Rate Management
+                        Indirect Costs
                     </Button>
                     <Button
-                        variant={section === 'apply' ? 'default' : 'outline'}
+                        variant={section === 'routes' ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => setSection('apply')}
+                        onClick={() => setSection('routes')}
                     >
-                        <RefreshCw className="h-4 w-4 mr-1" />
-                        Apply Rate Changes
+                        <Route className="h-4 w-4 mr-1" />
+                        Route Management
                     </Button>
                     <Button
-                        variant={section === 'costs' ? 'default' : 'outline'}
+                        variant={section === 'categories' ? 'default' : 'outline'}
                         size="sm"
-                        onClick={() => setSection('costs')}
+                        onClick={() => setSection('categories')}
                     >
-                        <DollarSign className="h-4 w-4 mr-1" />
-                        System Costs
+                        <FolderTree className="h-4 w-4 mr-1" />
+                        Categories
                     </Button>
                 </div>
             </div>
 
-            {section === 'rates' ? <RateManagementSection /> : section === 'apply' ? <ApplyRatesToPeriodSection /> : <SystemCostsOverview />}
+            {section === 'rates' ? (
+                <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2 border-b pb-3">
+                        <Button
+                            variant={ratesSubSection === 'rates' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setRatesSubSection('rates')}
+                        >
+                            <Settings className="h-4 w-4 mr-1" />
+                            Rates
+                        </Button>
+                        <Button
+                            variant={ratesSubSection === 'apply' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setRatesSubSection('apply')}
+                        >
+                            <RefreshCw className="h-4 w-4 mr-1" />
+                            Apply Rate Changes
+                        </Button>
+                        <Button
+                            variant={ratesSubSection === 'costs' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            onClick={() => setRatesSubSection('costs')}
+                        >
+                            <DollarSign className="h-4 w-4 mr-1" />
+                            System Costs
+                        </Button>
+                    </div>
+
+                    {ratesSubSection === 'rates' ? (
+                        <RateManagementSection />
+                    ) : ratesSubSection === 'apply' ? (
+                        <ApplyRatesToPeriodSection />
+                    ) : (
+                        <SystemCostsOverview />
+                    )}
+                </div>
+            ) : section === 'routes' ? (
+                <PredefinedRoutesSection />
+            ) : (
+                <CostCategoriesSection />
+            )}
         </div>
     );
 };

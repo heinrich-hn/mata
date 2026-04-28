@@ -297,7 +297,7 @@ const TripManagement = () => {
                 Missed Loads
               </TabsTrigger>
               <TabsTrigger value="operational-costs" className="rounded-lg px-5 py-2.5 text-base font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all duration-200">
-                Operational Costs
+                Operations
               </TabsTrigger>
             </TabsList>
           </div>

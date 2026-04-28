@@ -34,6 +34,7 @@ import {
   FilterX,
   Gauge,
   History,
+  MessageCircle,
   MoreVertical,
   RefreshCw,
   RotateCcw,
@@ -49,6 +50,7 @@ import TripExpenseInline from './TripExpenseInline';
 import AdditionalRevenueBadge from './AdditionalRevenueBadge';
 import TripExpenseExportDialog from './TripExpenseExportDialog';
 import TripExportDialog from './TripExportDialog';
+import ShareTripDialog from './ShareTripDialog';
 
 // Helper function to get week key (Monday of the week)
 const getWeekKey = (dateString: string): string => {
@@ -156,6 +158,15 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
   // Export dialog state
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExpenseExportDialogOpen, setIsExpenseExportDialogOpen] = useState(false);
+  const [shareTripId, setShareTripId] = useState<string | null>(null);
+  const [shareTripNumber, setShareTripNumber] = useState<string>('');
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+
+  const handleShareTrip = (trip: Trip) => {
+    setShareTripId(trip.id);
+    setShareTripNumber(trip.trip_number);
+    setIsShareDialogOpen(true);
+  };
 
   // Inline expense expansion state
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
@@ -303,6 +314,10 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
     const tripsWithPendingCosts = filteredTrips.filter(t => t.hasPendingCosts).length;
     const tripsWithNoBaseRevenue = filteredTrips.filter(t => (!t.base_revenue || t.base_revenue === 0) && !t.zero_revenue_comment).length;
     const tripsWithZeroRevenueComment = filteredTrips.filter(t => (!t.base_revenue || t.base_revenue === 0) && !!t.zero_revenue_comment).length;
+    const tripsWithNegativeDistance = filteredTrips.filter(t =>
+      (t.distance_km !== undefined && t.distance_km !== null && t.distance_km < 0) ||
+      (t.starting_km !== undefined && t.starting_km !== null && t.ending_km !== undefined && t.ending_km !== null && t.ending_km < t.starting_km)
+    ).length;
     const tripsNeedingAttention = filteredTrips.filter(t => t.hasFlaggedCosts || t.hasNoCosts || t.hasPendingCosts || ((!t.base_revenue || t.base_revenue === 0) && !t.zero_revenue_comment)).length;
 
     return {
@@ -318,6 +333,7 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
       tripsWithNoBaseRevenue,
       tripsWithZeroRevenueComment,
       tripsNeedingAttention,
+      tripsWithNegativeDistance,
     };
   }, [filteredTrips]);
 
@@ -463,6 +479,21 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
             >
               View Missing Revenue
             </Button>
+          </div>
+        )}
+
+        {/* Negative Distance Banner Alert */}
+        {stats.tripsWithNegativeDistance > 0 && (
+          <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-4 flex items-start gap-3">
+            <div className="h-9 w-9 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-destructive">Negative Distance Detected</p>
+              <p className="text-sm text-destructive/70 mt-0.5">
+                {stats.tripsWithNegativeDistance} completed trip{stats.tripsWithNegativeDistance === 1 ? '' : 's'} {stats.tripsWithNegativeDistance === 1 ? 'has' : 'have'} ending KM less than starting KM, resulting in a negative distance. Please review and correct the odometer readings.
+              </p>
+            </div>
           </div>
         )}
 
@@ -997,7 +1028,23 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                                                   {trip.ending_km ? trip.ending_km.toLocaleString() : '—'}
                                                 </td>
                                                 <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
-                                                  {trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '—'}
+                                                  {(() => {
+                                                    const hasNegativeDist = (trip.distance_km !== undefined && trip.distance_km !== null && trip.distance_km < 0) || (trip.starting_km !== undefined && trip.starting_km !== null && trip.ending_km !== undefined && trip.ending_km !== null && trip.ending_km < trip.starting_km);
+                                                    return hasNegativeDist ? (
+                                                      <div className="flex items-center justify-end gap-1">
+                                                        <span className="text-destructive font-medium">{trip.distance_km !== undefined && trip.distance_km !== null ? trip.distance_km.toLocaleString() : '—'}</span>
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                                                          </TooltipTrigger>
+                                                          <TooltipContent side="left" className="max-w-xs">
+                                                            <p className="font-medium">Negative Distance</p>
+                                                            <p className="text-xs">Ending KM is less than starting KM. Please review and correct the odometer readings.</p>
+                                                          </TooltipContent>
+                                                        </Tooltip>
+                                                      </div>
+                                                    ) : (trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '—');
+                                                  })()}
                                                 </td>
                                                 <td className="py-2.5 px-3 text-right tabular-nums font-medium">
                                                   {missingRevenue ? (
@@ -1061,6 +1108,9 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                                                       </DropdownMenuItem>
                                                       <DropdownMenuItem onClick={(e) => toggleExpenseExpansion(trip.id, e)} className="gap-2 text-xs text-violet-600">
                                                         <DollarSign className="h-3.5 w-3.5" /> {expandedExpenses.has(trip.id) ? 'Hide' : 'Manage'} Expenses
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuItem onClick={() => handleShareTrip(trip)} className="gap-2 text-xs text-green-700">
+                                                        <MessageCircle className="h-3.5 w-3.5" /> Share via WhatsApp
                                                       </DropdownMenuItem>
                                                       <DropdownMenuSeparator />
                                                       <DropdownMenuItem onClick={() => handleReactivate(trip)} className="gap-2 text-xs text-blue-600">
@@ -1226,7 +1276,23 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                             {trip.ending_km ? trip.ending_km.toLocaleString() : '\u2014'}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
-                            {trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '\u2014'}
+                            {(() => {
+                              const hasNegativeDist = (trip.distance_km !== undefined && trip.distance_km !== null && trip.distance_km < 0) || (trip.starting_km !== undefined && trip.starting_km !== null && trip.ending_km !== undefined && trip.ending_km !== null && trip.ending_km < trip.starting_km);
+                              return hasNegativeDist ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-destructive font-medium">{trip.distance_km !== undefined && trip.distance_km !== null ? trip.distance_km.toLocaleString() : '\u2014'}</span>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="max-w-xs">
+                                      <p className="font-medium">Negative Distance</p>
+                                      <p className="text-xs">Ending KM is less than starting KM. Please review and correct the odometer readings.</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              ) : (trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '\u2014');
+                            })()}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums font-medium">
                             {missingRevenue ? (
@@ -1291,6 +1357,9 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                                 <DropdownMenuItem onClick={(e) => toggleExpenseExpansion(trip.id, e)} className="gap-2 text-xs text-violet-600">
                                   <DollarSign className="h-3.5 w-3.5" /> {expandedExpenses.has(trip.id) ? 'Hide' : 'Manage'} Expenses
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleShareTrip(trip)} className="gap-2 text-xs text-green-700">
+                                  <MessageCircle className="h-3.5 w-3.5" /> Share via WhatsApp
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleReactivate(trip)} className="gap-2 text-xs text-blue-600">
                                   <RotateCcw className="h-3.5 w-3.5" /> Reactivate
@@ -1328,6 +1397,14 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
           isOpen={isExpenseExportDialogOpen}
           onClose={() => setIsExpenseExportDialogOpen(false)}
           trips={filteredTrips}
+        />
+
+        {/* Share Trip Dialog */}
+        <ShareTripDialog
+          open={isShareDialogOpen}
+          onOpenChange={setIsShareDialogOpen}
+          tripId={shareTripId}
+          tripNumber={shareTripNumber}
         />
       </div>
     </TooltipProvider >

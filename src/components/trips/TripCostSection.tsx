@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { COST_CATEGORIES } from '@/constants/costCategories';
+import { useCostCategories } from '@/hooks/useCostCategories';
 import { ChevronDown, ChevronUp, DollarSign, Flag, Plus, Receipt, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
@@ -54,9 +55,19 @@ const TripCostSection = ({ costs, onCostsChange, departureDate }: TripCostSectio
   const [availableSubCategories, setAvailableSubCategories] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Load CRUD-managed categories; falls back to COST_CATEGORIES constant when empty.
+  const { data: dynamicCategories = [] } = useCostCategories();
+  const categoryNames = dynamicCategories.length > 0
+    ? dynamicCategories.map(c => c.name)
+    : Object.keys(COST_CATEGORIES);
+  const subsByCategory = (name: string): string[] => {
+    const dyn = dynamicCategories.find(c => c.name === name);
+    if (dyn) return dyn.subcategories.map(s => s.name);
+    return [...(COST_CATEGORIES[name as keyof typeof COST_CATEGORIES] || [])];
+  };
+
   const handleCategoryChange = (category: string) => {
-    const subCategories = COST_CATEGORIES[category as keyof typeof COST_CATEGORIES] || [];
-    setAvailableSubCategories([...subCategories]);
+    setAvailableSubCategories(subsByCategory(category));
     setCurrentCost(prev => ({ ...prev, category, sub_category: '' }));
     if (errors.category) {
       setErrors(prev => ({ ...prev, category: '' }));
@@ -245,7 +256,7 @@ const TripCostSection = ({ costs, onCostsChange, departureDate }: TripCostSectio
                         <SelectValue placeholder="Select category..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.keys(COST_CATEGORIES).map(key => (
+                        {categoryNames.map(key => (
                           <SelectItem key={key} value={key}>{key}</SelectItem>
                         ))}
                       </SelectContent>

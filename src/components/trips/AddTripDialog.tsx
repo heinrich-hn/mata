@@ -18,6 +18,7 @@ import { useOperations } from '@/contexts/OperationsContext';
 import { useToast } from '@/hooks/use-toast';
 import { useEffectiveRates } from '@/hooks/useSystemCostRates';
 import type { RouteExpenseItem } from '@/hooks/useRoutePredefinedExpenses';
+import { useRoutePredefinedExpenses } from '@/hooks/useRoutePredefinedExpenses';
 import { useWialonVehicles } from '@/hooks/useWialonVehicles';
 import type { CostEntry, Trip } from '@/types/operations';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -87,6 +88,9 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
 
   // State for tracking selected route expenses (from predefined route config)
   const [selectedRouteExpenses, setSelectedRouteExpenses] = useState<RouteExpenseItem[]>([]);
+
+  // Predefined route configs for auto-filling rate when a route is selected
+  const { data: routeConfigs = [] } = useRoutePredefinedExpenses();
 
   // State for tracking costs to be added with the trip
   const [tripCosts, setTripCosts] = useState<TripCostEntry[]>([]);
@@ -520,6 +524,19 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
                           field.onChange(value);
                           setSelectedTollCost(tollCost || null);
                           setSelectedRouteExpenses(expenses || []);
+                          // Auto-fill revenue rate from the selected route's default rate
+                          const config = routeConfigs.find(c => c.route === value);
+                          if (config && config.rate_amount > 0) {
+                            form.setValue('revenue_type', config.rate_type);
+                            form.setValue('revenue_currency', config.rate_currency || 'USD');
+                            if (config.rate_type === 'per_km') {
+                              form.setValue('rate_per_km', String(config.rate_amount));
+                              form.setValue('base_revenue', '');
+                            } else {
+                              form.setValue('base_revenue', String(config.rate_amount));
+                              form.setValue('rate_per_km', '');
+                            }
+                          }
                         }}
                         placeholder="Select route"
                         showTollFee={true}

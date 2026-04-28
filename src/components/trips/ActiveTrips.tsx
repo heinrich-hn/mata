@@ -47,6 +47,7 @@ import TripExpenseInline from './TripExpenseInline';
 import AdditionalRevenueBadge from './AdditionalRevenueBadge';
 import TripExpenseExportDialog from './TripExpenseExportDialog';
 import TripExportDialog from './TripExportDialog';
+import ShareTripDialog from './ShareTripDialog';
 import { compareTripNumbers } from '@/hooks/useTripKmValidation';
 
 // Helper function to get week key (Monday of the week)
@@ -220,6 +221,17 @@ const ActiveTrips = ({
   // Export dialog state
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExpenseExportDialogOpen, setIsExpenseExportDialogOpen] = useState(false);
+
+  // Share trip dialog state
+  const [shareTripId, setShareTripId] = useState<string | null>(null);
+  const [shareTripNumber, setShareTripNumber] = useState<string>('');
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+
+  const handleShareTrip = (trip: Trip) => {
+    setShareTripId(trip.id);
+    setShareTripNumber(trip.trip_number);
+    setIsShareDialogOpen(true);
+  };
 
   // Inline expense expansion state
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
@@ -999,7 +1011,23 @@ const ActiveTrips = ({
                                                   {trip.ending_km ? trip.ending_km.toLocaleString() : '—'}
                                                 </td>
                                                 <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
-                                                  {trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '—'}
+                                                  {(() => {
+                                                    const hasNegativeDist = (trip.distance_km !== undefined && trip.distance_km !== null && trip.distance_km < 0) || (trip.starting_km !== undefined && trip.starting_km !== null && trip.ending_km !== undefined && trip.ending_km !== null && trip.ending_km < trip.starting_km);
+                                                    return hasNegativeDist ? (
+                                                      <div className="flex items-center justify-end gap-1">
+                                                        <span className="text-destructive font-medium">{trip.distance_km !== undefined && trip.distance_km !== null ? trip.distance_km.toLocaleString() : '—'}</span>
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                                                          </TooltipTrigger>
+                                                          <TooltipContent side="left" className="max-w-xs">
+                                                            <p className="font-medium">Negative Distance</p>
+                                                            <p className="text-xs">Ending KM is less than starting KM. Please correct the odometer readings.</p>
+                                                          </TooltipContent>
+                                                        </Tooltip>
+                                                      </div>
+                                                    ) : (trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '—');
+                                                  })()}
                                                 </td>
                                                 <td className="py-2.5 px-3 text-right tabular-nums font-medium">
                                                   {missingRevenue ? (
@@ -1068,6 +1096,9 @@ const ActiveTrips = ({
                                                       </DropdownMenuItem>
                                                       <DropdownMenuItem onClick={(e) => toggleExpenseExpansion(trip.id, e)} className="gap-2 text-xs text-violet-600">
                                                         <DollarSign className="h-3.5 w-3.5" /> {expandedExpenses.has(trip.id) ? 'Hide' : 'Manage'} Expenses
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuItem onClick={() => handleShareTrip(trip)} className="gap-2 text-xs text-green-700">
+                                                        <RouteIcon className="h-3.5 w-3.5" /> Share via WhatsApp
                                                       </DropdownMenuItem>
                                                       <DropdownMenuSeparator />
                                                       <DropdownMenuItem onClick={() => handleDelete(trip.id)} className="gap-2 text-xs text-destructive">
@@ -1233,7 +1264,23 @@ const ActiveTrips = ({
                             {trip.ending_km ? trip.ending_km.toLocaleString() : '—'}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
-                            {trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '—'}
+                            {(() => {
+                              const hasNegativeDist = (trip.distance_km !== undefined && trip.distance_km !== null && trip.distance_km < 0) || (trip.starting_km !== undefined && trip.starting_km !== null && trip.ending_km !== undefined && trip.ending_km !== null && trip.ending_km < trip.starting_km);
+                              return hasNegativeDist ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-destructive font-medium">{trip.distance_km !== undefined && trip.distance_km !== null ? trip.distance_km.toLocaleString() : '—'}</span>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="max-w-xs">
+                                      <p className="font-medium">Negative Distance</p>
+                                      <p className="text-xs">Ending KM is less than starting KM. Please correct the odometer readings.</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              ) : (trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '—');
+                            })()}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums font-medium">
                             {missingRevenue ? (
@@ -1303,6 +1350,9 @@ const ActiveTrips = ({
                                 <DropdownMenuItem onClick={(e) => toggleExpenseExpansion(trip.id, e)} className="gap-2 text-xs text-violet-600">
                                   <DollarSign className="h-3.5 w-3.5" /> {expandedExpenses.has(trip.id) ? 'Hide' : 'Manage'} Expenses
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleShareTrip(trip)} className="gap-2 text-xs text-green-700">
+                                  <RouteIcon className="h-3.5 w-3.5" /> Share via WhatsApp
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleDelete(trip.id)} className="gap-2 text-xs text-destructive">
                                   <Trash2 className="h-3.5 w-3.5" /> Delete
@@ -1340,6 +1390,14 @@ const ActiveTrips = ({
           isOpen={isExpenseExportDialogOpen}
           onClose={() => setIsExpenseExportDialogOpen(false)}
           trips={filteredTrips}
+        />
+
+        {/* Share Trip Dialog */}
+        <ShareTripDialog
+          open={isShareDialogOpen}
+          onOpenChange={setIsShareDialogOpen}
+          tripId={shareTripId}
+          tripNumber={shareTripNumber}
         />
       </div>
     </TooltipProvider >
