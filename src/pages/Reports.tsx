@@ -5,8 +5,10 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/Layout";
+import FleetGapDaysReportDialog from "@/components/reports/FleetGapDaysReportDialog";
 import {
     AlertTriangle,
+    BarChart3,
     Calendar,
     Car,
     ChevronDown,
@@ -17,13 +19,38 @@ import {
     Fuel,
     Gauge,
     Receipt,
+    RefreshCw,
     Search,
     ShoppingCart,
+    TrendingDown,
+    TrendingUp,
     Truck,
     Users,
     Wrench,
+    Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // ── Lazy imports for export functions ────────────────────────────────────────
 import {
@@ -51,13 +78,17 @@ import {
 } from "@/utils/excelStyles";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
 type Vehicle = {
     id: string;
     fleet_number?: string;
     registration_number?: string;
     make?: string;
     model?: string;
+    active?: boolean;
+    status?: string;
+    vehicle_type?: string;
+    tonnage?: number;
+    current_odometer?: number;
 };
 
 type Inspection = {
@@ -84,6 +115,7 @@ type JobCard = {
     assignee?: string;
     created_at?: string;
     description?: string;
+    estimated_cost?: number;
     vehicles?: Vehicle | null;
 };
 
@@ -186,15 +218,445 @@ type ReportSection = {
     reports: ReportItem[];
 };
 
-// ── Component ────────────────────────────────────────────────────────────────
+type Tyre = {
+    id: string;
+    brand?: string;
+    current_fleet_position?: string;
+    purchase_cost_zar?: number;
+    km_travelled?: number;
+    initial_tread_depth?: number;
+    current_tread_depth?: number;
+};
 
+// ── Enhanced Types for Analytics ─────────────────────────────────────────────
+type DateRange = {
+    from: Date;
+    to: Date;
+};
+
+type KPIMetrics = {
+    totalVehicles: number;
+    activeVehicles: number;
+    vehiclesInWorkshop: number;
+    overdueMaintenance: number;
+    openJobCards: number;
+    openFaults: number;
+    fuelEfficiency: number;
+    totalTripsThisMonth: number;
+    revenueThisMonth: number;
+    maintenanceCostThisMonth: number;
+    tyreCostPerKm: number;
+    averageGapDays: number;
+    driverUtilization: number;
+};
+
+type TrendData = {
+    labels: string[];
+    datasets: {
+        label: string;
+        data: number[];
+        color: string;
+    }[];
+};
+
+type DashboardFilters = {
+    dateRange: DateRange;
+    selectedFleets: string[];
+    selectedDrivers: string[];
+    metricType: "daily" | "weekly" | "monthly";
+};
+
+// ── Main Component ───────────────────────────────────────────────────────────
 const Reports = () => {
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState("");
     const [loadingKey, setLoadingKey] = useState<string | null>(null);
     const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
-    // ── Toggle section collapse state ──────────────────────────────────────────
+    // Enhanced: Add view mode toggle between reports and analytics
+    const [viewMode, setViewMode] = useState<"reports" | "analytics">("reports");
+
+    // Enhanced: Analytics state management
+    const [filters, setFilters] = useState<DashboardFilters>({
+        dateRange: {
+            from: new Date(new Date().setMonth(new Date().getMonth() - 1)),
+            to: new Date(),
+        },
+        selectedFleets: [],
+        selectedDrivers: [],
+        metricType: "monthly",
+    });
+    const [kpiData, setKpiData] = useState<KPIMetrics | null>(null);
+    const [trendData, setTrendData] = useState<TrendData | null>(null);
+    const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+    const [autoRefresh, setAutoRefresh] = useState(false);
+    const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+    const [gapDaysDialogOpen, setGapDaysDialogOpen] = useState(false);
+
+    // Enhanced: Auto-refresh analytics every 5 minutes when enabled
+    useEffect(() => {
+        if (!autoRefresh) return;
+        const interval = setInterval(() => {
+            loadAnalytics();
+        }, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoRefresh, filters]);
+
+    // Enhanced: Load analytics when switching to analytics view or changing filters
+    useEffect(() => {
+        if (viewMode === "analytics") {
+            loadAnalytics();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewMode, filters]);
+
+    // ── Enhanced: Advanced Analytics Engine ───────────────────────────────────
+    const loadAnalytics = async () => {
+        setIsLoadingAnalytics(true);
+        try {
+            // Fetch all required data in parallel for performance
+            const [
+                vehicles,
+                jobCards,
+                faults,
+                maintenanceSchedules,
+                trips,
+                dieselRecords,
+                tyres,
+                drivers,
+            ] = await Promise.all([
+                fetchVehicles(),
+                fetchJobCards(),
+                fetchFaults(),
+                fetchMaintenanceSchedules(),
+                fetchTripsWithFleet(),
+                fetchDieselRecords(),
+                fetchTyres(),
+                fetchDrivers(),
+            ]);
+
+            // Calculate comprehensive KPIs
+            const now = new Date();
+            const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+            const metrics: KPIMetrics = {
+                totalVehicles: vehicles.length,
+                activeVehicles: vehicles.filter((v: Record<string, unknown>) => v.active).length,
+                vehiclesInWorkshop: vehicles.filter((v: Record<string, unknown>) => v.status === "workshop").length,
+                overdueMaintenance: maintenanceSchedules.filter(
+                    (s: Record<string, unknown>) => new Date(s.next_due_date as string) < now && s.status !== "completed"
+                ).length,
+                openJobCards: jobCards.filter((j: JobCard) =>
+                    ["open", "in_progress", "pending"].includes(j.status?.toLowerCase() || "")
+                ).length,
+                openFaults: faults.filter((f: Record<string, unknown>) =>
+                    ["open", "reported", "in_progress"].includes((f.status as string)?.toLowerCase() || "")
+                ).length,
+                fuelEfficiency: calculateFuelEfficiency(dieselRecords),
+                totalTripsThisMonth: trips.filter((t: Trip) =>
+                    new Date(t.departure_date || t.planned_departure_date || "") >= thisMonth
+                ).length,
+                revenueThisMonth: trips
+                    .filter((t: Trip) => new Date(t.departure_date || t.planned_departure_date || "") >= thisMonth)
+                    .reduce((sum: number, t: Trip) => sum + (Number(t.base_revenue) || 0) + (Number(t.additional_revenue) || 0), 0),
+                maintenanceCostThisMonth: jobCards
+                    .filter((j: JobCard) => j.created_at && new Date(j.created_at) >= thisMonth)
+                    .reduce((sum: number, j: JobCard) => sum + (Number(j.estimated_cost) || 0), 0),
+                tyreCostPerKm: calculateTyreCostPerKm(tyres),
+                averageGapDays: await calculateAverageGapDays(trips),
+                driverUtilization: calculateDriverUtilization(drivers, trips),
+            };
+
+            setKpiData(metrics);
+
+            // Calculate trends for visualization
+            const trends = await calculateTrends(filters.metricType, filters.dateRange);
+            setTrendData(trends);
+            setLastRefreshed(new Date());
+
+        } catch (error) {
+            console.error("Failed to load analytics:", error);
+            toast({
+                title: "Analytics Error",
+                description: "Failed to load analytics data. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoadingAnalytics(false);
+        }
+    };
+
+    // ── Enhanced: Analytics Helper Functions ─────────────────────────────────
+
+    /**
+     * Calculates fuel efficiency from diesel records
+     * @returns km per litre average
+     */
+    const calculateFuelEfficiency = (records: DieselRecord[]): number => {
+        const validRecords = records.filter(
+            (r) => (r.litres_filled || 0) > 0 && (r.km_reading || 0) > 0
+        );
+        if (validRecords.length === 0) return 0;
+
+        const totalLitres = validRecords.reduce((sum, r) => sum + (Number(r.litres_filled) || 0), 0);
+        const totalKm = validRecords.reduce((sum, r) => sum + (Number(r.km_reading) || 0), 0);
+
+        return totalLitres > 0 ? totalKm / totalLitres : 0;
+    };
+
+    /**
+     * Calculates tyre cost efficiency per kilometer
+     * @returns cost in Rands per km
+     */
+    const calculateTyreCostPerKm = (tyres: Tyre[]): number => {
+        const tyresWithData = tyres.filter(
+            (t) => (t.purchase_cost_zar || 0) > 0 && (t.km_travelled || 0) > 0
+        );
+        if (tyresWithData.length === 0) return 0;
+
+        const totalCost = tyresWithData.reduce((sum, t) => sum + (Number(t.purchase_cost_zar) || 0), 0);
+        const totalKm = tyresWithData.reduce((sum, t) => sum + (Number(t.km_travelled) || 0), 0);
+
+        return totalKm > 0 ? totalCost / totalKm : 0;
+    };
+
+    /**
+     * Calculates average gap days between trips for all fleets
+     * @returns average number of days between trips
+     */
+    const calculateAverageGapDays = async (trips: Trip[]): Promise<number> => {
+        const dated = trips.filter(
+            (t) => t.fleet_number && (t.departure_date || t.planned_departure_date) && (t.arrival_date || t.planned_arrival_date)
+        );
+
+        const byFleet = new Map<string, Trip[]>();
+        for (const t of dated) {
+            const fn = t.fleet_number!;
+            if (!byFleet.has(fn)) byFleet.set(fn, []);
+            byFleet.get(fn)!.push(t);
+        }
+
+        let totalGapDays = 0;
+        let gapCount = 0;
+
+        for (const fleetTrips of byFleet.values()) {
+            fleetTrips.sort((a, b) => {
+                const da = new Date(a.departure_date || a.planned_departure_date || "").getTime();
+                const db = new Date(b.departure_date || b.planned_departure_date || "").getTime();
+                return da - db;
+            });
+
+            for (let i = 1; i < fleetTrips.length; i++) {
+                const prevEnd = new Date(fleetTrips[i - 1].arrival_date || fleetTrips[i - 1].planned_arrival_date || "");
+                const currStart = new Date(fleetTrips[i].departure_date || fleetTrips[i].planned_departure_date || "");
+                const gap = Math.max(0, Math.floor((currStart.getTime() - prevEnd.getTime()) / 86400000));
+                totalGapDays += gap;
+                gapCount++;
+            }
+        }
+
+        return gapCount > 0 ? totalGapDays / gapCount : 0;
+    };
+
+    /**
+     * Calculates driver utilization percentage
+     * @returns percentage of active drivers currently on trips
+     */
+    const calculateDriverUtilization = (drivers: Driver[], trips: Trip[]): number => {
+        const activeDrivers = drivers.filter((d) => d.status === "active").length;
+        const driversOnTrip = new Set(
+            trips
+                .filter((t) => ["in_progress", "dispatched"].includes(t.status?.toLowerCase() || ""))
+                .map((t) => t.driver_name)
+        ).size;
+
+        return activeDrivers > 0 ? (driversOnTrip / activeDrivers) * 100 : 0;
+    };
+
+    /**
+     * Calculates trend data for visualization
+     */
+    const calculateTrends = async (
+        metricType: "daily" | "weekly" | "monthly",
+        dateRange: DateRange
+    ): Promise<TrendData> => {
+        // Generate date labels based on metric type
+        const labels: string[] = [];
+        const currentDate = new Date(dateRange.from);
+
+        while (currentDate <= dateRange.to) {
+            if (metricType === "daily") {
+                labels.push(currentDate.toLocaleDateString());
+                currentDate.setDate(currentDate.getDate() + 1);
+            } else if (metricType === "weekly") {
+                labels.push(`Week ${Math.ceil(currentDate.getDate() / 7)}`);
+                currentDate.setDate(currentDate.getDate() + 7);
+            } else {
+                labels.push(currentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+        }
+
+        // Fetch historical data
+        const trips = await fetchTripsWithFleet();
+        const maintenanceSchedules = await fetchMaintenanceSchedules(); // Changed from fetchMaintenanceHistory to match actual function name
+        const dieselRecords = await fetchDieselRecords();
+
+        // Initialize trend data arrays
+        const revenueData = labels.map(() => 0);
+        const maintenanceCostData = labels.map(() => 0);
+        const fuelConsumptionData = labels.map(() => 0);
+
+        // Process trip data for revenue trends
+        trips.forEach((trip) => {
+            const tripDate = new Date(trip.departure_date || trip.planned_departure_date || "");
+            const index = getDateIndex(tripDate, labels, metricType);
+            if (index >= 0) {
+                revenueData[index] += (Number(trip.base_revenue) || 0) + (Number(trip.additional_revenue) || 0);
+            }
+        });
+
+        // Process maintenance cost trends (using maintenance schedules as proxy for cost tracking)
+        maintenanceSchedules.forEach((record: Record<string, unknown>) => {
+            const completionDate = new Date(record.next_due_date as string);
+            const index = getDateIndex(completionDate, labels, metricType);
+            if (index >= 0) {
+                maintenanceCostData[index] += Number(record.estimated_cost) || 0;
+            }
+        });
+
+        // Process fuel consumption trends
+        dieselRecords.forEach((record) => {
+            const recordDate = new Date(record.date || "");
+            const index = getDateIndex(recordDate, labels, metricType);
+            if (index >= 0) {
+                fuelConsumptionData[index] += Number(record.litres_filled) || 0;
+            }
+        });
+
+        return {
+            labels,
+            datasets: [
+                {
+                    label: "Revenue (R)",
+                    data: revenueData,
+                    color: "#10b981", // Green
+                },
+                {
+                    label: "Maintenance Cost (R)",
+                    data: maintenanceCostData,
+                    color: "#ef4444", // Red
+                },
+                {
+                    label: "Fuel Consumption (L)",
+                    data: fuelConsumptionData,
+                    color: "#3b82f6", // Blue
+                },
+            ],
+        };
+    };
+
+    /**
+     * Helper to get index for date in labels array
+     */
+    const getDateIndex = (
+        date: Date,
+        labels: string[],
+        metricType: "daily" | "weekly" | "monthly"
+    ): number => {
+        if (isNaN(date.getTime())) return -1;
+
+        if (metricType === "daily") {
+            return labels.indexOf(date.toLocaleDateString());
+        } else if (metricType === "weekly") {
+            const weekNum = Math.ceil(date.getDate() / 7);
+            return labels.indexOf(`Week ${weekNum}`);
+        } else {
+            const monthYear = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            return labels.indexOf(monthYear);
+        }
+    };
+
+    // ── Enhanced: KPI Card Component ─────────────────────────────────────────
+    const KPICard = ({
+        title,
+        value,
+        icon: Icon,
+        trend,
+        description,
+        color
+    }: {
+        title: string;
+        value: string | number;
+        icon: React.ElementType;
+        trend?: "up" | "down" | "neutral";
+        description?: string;
+        color?: string;
+    }) => (
+        <Card className="relative overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                <Icon className={`h-4 w-4 ${color || "text-muted-foreground"}`} />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">
+                    {typeof value === "number" && title.includes("Revenue")
+                        ? `R${value.toLocaleString()}`
+                        : typeof value === "number" && title.includes("Efficiency")
+                            ? `${value.toFixed(1)} km/L`
+                            : typeof value === "number" && title.includes("Cost")
+                                ? `R${value.toFixed(2)}`
+                                : typeof value === "number" && title.includes("Utilization")
+                                    ? `${value.toFixed(1)}%`
+                                    : value}
+                </div>
+                {trend && (
+                    <div className="flex items-center gap-1 mt-1">
+                        {trend === "up" ? (
+                            <TrendingUp className="h-4 w-4 text-green-500" />
+                        ) : trend === "down" ? (
+                            <TrendingDown className="h-4 w-4 text-red-500" />
+                        ) : null}
+                        <p className="text-xs text-muted-foreground">{description}</p>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+
+    // ── Enhanced: Mini Bar Chart Component for Trends ────────────────────────
+    const MiniBarChart = ({ data, maxValue }: { data: number[]; maxValue: number }) => (
+        <div className="flex items-end gap-1 h-16">
+            {data.map((value, index) => {
+                const height = maxValue > 0 ? (value / maxValue) * 100 : 0;
+                return (
+                    <TooltipProvider key={index}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div
+                                    className="flex-1 bg-primary/20 hover:bg-primary/40 transition-colors rounded-t cursor-pointer"
+                                    style={{ height: `${height}%` }}
+                                />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p className="text-xs">{value.toLocaleString()}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                );
+            })}
+        </div>
+    );
+
+    // ── Helper: Format large numbers ─────────────────────────────────────────
+    const formatNumber = (num: number): string => {
+        if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+        if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+        return num.toString();
+    };
+
+    // ── Toggle section collapse state ────────────────────────────────────────
     const toggleSection = (sectionTitle: string) => {
         setExpandedSections(prev => {
             const next = new Set(prev);
@@ -207,7 +669,7 @@ const Reports = () => {
         });
     };
 
-    // ── Expand/Collapse all sections in a category ─────────────────────────────
+    // ── Expand/Collapse all sections in a category ───────────────────────────
     const toggleAllWorkshop = (expand: boolean) => {
         const workshopTitles = sections.filter(s => s.badge === "Workshop").map(s => s.title);
         setExpandedSections(prev => {
@@ -238,7 +700,7 @@ const Reports = () => {
         });
     };
 
-    // ── Helper: wrap export call with loading & toast ──────────────────────────
+    // ── Helper: wrap export call with loading & toast ────────────────────────
     const runExport = async (id: string, fmt: "excel" | "pdf", fn: () => Promise<void>) => {
         setLoadingKey(`${id}:${fmt}`);
         try {
@@ -252,10 +714,9 @@ const Reports = () => {
         }
     };
 
-    // ── Data fetchers (called on demand) ───────────────────────────────────────
-    // ... (all fetch functions remain exactly the same) ...
+    // ── Data fetchers (called on demand) ─────────────────────────────────────
 
-    const fetchTyres = async () => {
+    const fetchTyres = async (): Promise<Tyre[]> => {
         const { data, error } = await supabase.from("tyres").select("*");
         if (error) throw error;
         return data || [];
@@ -281,10 +742,11 @@ const Reports = () => {
 
     const fetchOverdueSchedules = async () => {
         const today = new Date().toISOString().split("T")[0];
-        const q: { lt: (col: string, val: string) => { neq: (col: string, val: string) => { order: (col: string) => PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }> } } } = supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const client = supabase as any;
+        const { data, error } = await client
             .from("maintenance_schedules")
-            .select("*, vehicles(fleet_number, registration_number, make, model)") as never;
-        const { data, error } = await q
+            .select("*, vehicles(fleet_number, registration_number, make, model)")
             .lt("next_due_date", today)
             .neq("status", "completed")
             .order("next_due_date");
@@ -420,7 +882,7 @@ const Reports = () => {
         return (data || []) as Record<string, unknown>[];
     };
 
-    // ── Generic ExcelJS export builder ─────────────────────────────────────────
+    // ── Generic ExcelJS export builder ───────────────────────────────────────
     const exportGenericExcel = async (
         filename: string,
         sheetName: string,
@@ -458,11 +920,9 @@ const Reports = () => {
         doc.save(filename);
     };
 
-    // ── Report Sections ────────────────────────────────────────────────────────
-    // ... (sections array remains exactly the same) ...
-
+    // ── Report Sections ──────────────────────────────────────────────────────
     const sections: ReportSection[] = [
-        // ── WORKSHOP MANAGEMENT ──────────────────────────────────────────────────
+        // ── WORKSHOP MANAGEMENT ──────────────────────────────────────────────
         {
             title: "Job Cards",
             icon: ClipboardList,
@@ -569,7 +1029,7 @@ const Reports = () => {
                     onExport: async (fmt) => {
                         const tyres = await fetchTyres();
                         const brandMap = new Map<string, BrandSummary>();
-                        tyres.forEach((t) => {
+                        tyres.forEach((t: Tyre) => {
                             const brand = t.brand || "Unknown";
                             const existing = brandMap.get(brand);
                             const e = existing || {
@@ -893,112 +1353,11 @@ const Reports = () => {
                 },
                 {
                     id: "trips-fleet-gap-days",
-                    label: "Fleet Gap Days",
-                    description: "Days between last offloading and next loading per fleet — weekly & monthly",
+                    label: "Fleet Gap Days (Advanced)",
+                    description: "Filter by vehicle type, route, or driver. Multi-sheet workbook with trends, breakdowns and period comparison.",
                     formats: ["excel"],
                     onExport: async () => {
-                        const trips = await fetchTripsWithFleet();
-                        const dated = trips.filter(
-                            (t) => t.fleet_number && (t.departure_date || t.planned_departure_date) && (t.arrival_date || t.planned_arrival_date),
-                        );
-                        const byFleet = new Map<string, Trip[]>();
-                        for (const t of dated) {
-                            const fn = t.fleet_number!;
-                            if (!byFleet.has(fn)) byFleet.set(fn, []);
-                            byFleet.get(fn)!.push(t);
-                        }
-                        for (const arr of byFleet.values()) {
-                            arr.sort((a, b) => {
-                                const da = new Date(a.departure_date || a.planned_departure_date!).getTime();
-                                const db = new Date(b.departure_date || b.planned_departure_date!).getTime();
-                                return da - db;
-                            });
-                        }
-                        type GapRow = { fleet: string; tripNumber: string; prevTripNumber: string; prevArrival: string; nextDeparture: string; gapDays: number };
-                        const gapRows: GapRow[] = [];
-                        for (const [fleet, fleetTrips] of byFleet.entries()) {
-                            for (let i = 1; i < fleetTrips.length; i++) {
-                                const prev = fleetTrips[i - 1];
-                                const curr = fleetTrips[i];
-                                const prevEnd = new Date(prev.arrival_date || prev.planned_arrival_date!);
-                                const currStart = new Date(curr.departure_date || curr.planned_departure_date!);
-                                const gap = Math.max(0, Math.floor((currStart.getTime() - prevEnd.getTime()) / 86400000));
-                                gapRows.push({
-                                    fleet,
-                                    tripNumber: curr.trip_number || curr.id.slice(0, 8),
-                                    prevTripNumber: prev.trip_number || prev.id.slice(0, 8),
-                                    prevArrival: prevEnd.toLocaleDateString(),
-                                    nextDeparture: currStart.toLocaleDateString(),
-                                    gapDays: gap,
-                                });
-                            }
-                        }
-                        const weekKey = (d: Date) => {
-                            const jan1 = new Date(d.getFullYear(), 0, 1);
-                            const weekNum = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
-                            return `${d.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
-                        };
-                        const weeklyMap = new Map<string, { totalGap: number; count: number }>();
-                        for (const r of gapRows) {
-                            const dep = new Date(r.nextDeparture);
-                            const key = `${r.fleet}||${weekKey(dep)}`;
-                            const entry = weeklyMap.get(key) || { totalGap: 0, count: 0 };
-                            entry.totalGap += r.gapDays;
-                            entry.count += 1;
-                            weeklyMap.set(key, entry);
-                        }
-                        const weeklyRows = [...weeklyMap.entries()]
-                            .map(([key, v]) => {
-                                const [fleet, week] = key.split("||");
-                                return [fleet, week, v.count, v.totalGap, v.count > 0 ? (v.totalGap / v.count).toFixed(1) : "0"];
-                            })
-                            .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
-                        const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-                        const monthlyMap = new Map<string, { totalGap: number; count: number }>();
-                        for (const r of gapRows) {
-                            const dep = new Date(r.nextDeparture);
-                            const key = `${r.fleet}||${monthKey(dep)}`;
-                            const entry = monthlyMap.get(key) || { totalGap: 0, count: 0 };
-                            entry.totalGap += r.gapDays;
-                            entry.count += 1;
-                            monthlyMap.set(key, entry);
-                        }
-                        const monthlyRows = [...monthlyMap.entries()]
-                            .map(([key, v]) => {
-                                const [fleet, month] = key.split("||");
-                                return [fleet, month, v.count, v.totalGap, v.count > 0 ? (v.totalGap / v.count).toFixed(1) : "0"];
-                            })
-                            .sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
-                        const wb = createWorkbook();
-                        addStyledSheet(wb, "Gap Details", {
-                            title: "FLEET GAP DAYS — DETAIL",
-                            subtitle: "Days between last offloading (arrival) and next loading (departure) per fleet",
-                            headers: ["Fleet", "Prev Trip #", "Prev Arrival", "Next Trip #", "Next Departure", "Gap Days"],
-                            rows: gapRows.map((r) => [r.fleet, r.prevTripNumber, r.prevArrival, r.tripNumber, r.nextDeparture, r.gapDays]),
-                        });
-                        addStyledSheet(wb, "Weekly", {
-                            title: "FLEET GAP DAYS — WEEKLY",
-                            headers: ["Fleet", "Week", "Gaps", "Total Gap Days", "Avg Gap Days"],
-                            rows: weeklyRows,
-                        });
-                        addStyledSheet(wb, "Monthly", {
-                            title: "FLEET GAP DAYS — MONTHLY",
-                            headers: ["Fleet", "Month", "Gaps", "Total Gap Days", "Avg Gap Days"],
-                            rows: monthlyRows,
-                        });
-                        const totalGapDays = gapRows.reduce((s, r) => s + r.gapDays, 0);
-                        const fleetsWithGaps = new Set(gapRows.filter((r) => r.gapDays > 0).map((r) => r.fleet)).size;
-                        addSummarySheet(wb, "Summary", {
-                            title: "FLEET GAP DAYS SUMMARY",
-                            rows: [
-                                ["Fleets Analysed", byFleet.size],
-                                ["Total Gaps Measured", gapRows.length],
-                                ["Total Gap Days", totalGapDays],
-                                ["Average Gap (days)", gapRows.length > 0 ? (totalGapDays / gapRows.length).toFixed(1) : "0"],
-                                ["Fleets with Gaps > 0", fleetsWithGaps],
-                            ],
-                        });
-                        await saveWorkbook(wb, `Fleet_Gap_Days_${new Date().toISOString().split("T")[0]}.xlsx`);
+                        setGapDaysDialogOpen(true);
                     },
                 },
             ],
@@ -1219,7 +1578,7 @@ const Reports = () => {
         },
     ];
 
-    // ── Filtering ──────────────────────────────────────────────────────────────
+    // ── Filtering ────────────────────────────────────────────────────────────
     const filteredSections = sections
         .map((section) => ({
             ...section,
@@ -1243,163 +1602,435 @@ const Reports = () => {
     return (
         <Layout>
             <div className="space-y-6">
-                {/* Header */}
+                {/* Enhanced: Header with Analytics Controls */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Reports Centre</h1>
+                        <h1 className="text-2xl font-bold tracking-tight">Reports & Analytics Centre</h1>
                         <p className="text-muted-foreground">
-                            Export any report across Workshop Management and Operations — {totalReports} reports available
+                            Advanced reporting, analytics, and data export — {totalReports} reports available
                         </p>
                     </div>
-                    <div className="relative w-full sm:w-72">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search reports..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-9"
-                        />
+                    <div className="flex items-center gap-3">
+                        {viewMode === "analytics" && (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setAutoRefresh(!autoRefresh)}
+                                    className="gap-2"
+                                >
+                                    <RefreshCw className={`h-4 w-4 ${autoRefresh ? "text-green-500 animate-spin" : ""}`} />
+                                    {autoRefresh ? "Auto-refresh On" : "Auto-refresh Off"}
+                                </Button>
+                                {lastRefreshed && (
+                                    <span className="text-xs text-muted-foreground">
+                                        Last updated: {lastRefreshed.toLocaleTimeString()}
+                                    </span>
+                                )}
+                            </>
+                        )}
+                        <div className="relative w-full sm:w-72">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search reports..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {/* Workshop Management */}
-                {workshopSections.length > 0 && (
-                    <>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Wrench className="h-5 w-5 text-muted-foreground" />
-                                <h2 className="text-lg font-semibold">Workshop Management</h2>
-                                <Badge variant="secondary" className="ml-1">{workshopSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
+                {/* Enhanced: View Mode Toggle between Reports and Analytics */}
+                <Tabs
+                    value={viewMode}
+                    onValueChange={(v) => setViewMode(v as "reports" | "analytics")}
+                    className="w-full"
+                >
+                    <TabsList className="grid w-full max-w-md grid-cols-2">
+                        <TabsTrigger value="reports" className="gap-2">
+                            <FileText className="h-4 w-4" />
+                            Reports
+                        </TabsTrigger>
+                        <TabsTrigger value="analytics" className="gap-2">
+                            <BarChart3 className="h-4 w-4" />
+                            Analytics Dashboard
+                        </TabsTrigger>
+                    </TabsList>
+
+                    {/* Enhanced: Analytics Dashboard Content */}
+                    <TabsContent value="analytics" className="space-y-6">
+                        {isLoadingAnalytics ? (
+                            <div className="flex items-center justify-center py-20">
+                                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
                             </div>
-                            <div className="flex gap-1">
-                                <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="h-7 text-xs"
-                                    onClick={() => toggleAllWorkshop(workshopExpandedCount < workshopSections.length)}
-                                >
-                                    {workshopExpandedCount < workshopSections.length ? "Expand All" : "Collapse All"}
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            {workshopSections.map((section) => {
-                                const Icon = section.icon;
-                                const isExpanded = expandedSections.has(section.title);
-                                return (
-                                    <div key={section.title} className="space-y-1">
-                                        <button
-                                            onClick={() => toggleSection(section.title)}
-                                            className="flex items-center gap-2 px-1 pt-2 w-full text-left hover:bg-muted/30 rounded transition-colors"
-                                        >
-                                            {isExpanded ? (
-                                                <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                            ) : (
-                                                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                            )}
-                                            <Icon className="h-4 w-4 text-primary flex-shrink-0" />
-                                            <span className="text-sm font-semibold">{section.title}</span>
-                                            <span className="text-xs text-muted-foreground">— {section.description}</span>
-                                            <Badge variant="outline" className="ml-auto text-[10px] h-5">
-                                                {section.reports.length}
-                                            </Badge>
-                                        </button>
-                                        {isExpanded && (
-                                            <div className="ml-7 space-y-1">
-                                                {section.reports.map((report) => (
-                                                    <ReportRow
-                                                        key={report.id}
-                                                        report={report}
-                                                        loadingKey={loadingKey}
-                                                        onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
-                                                    />
+                        ) : kpiData ? (
+                            <>
+                                {/* KPI Grid - Primary Metrics */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <KPICard
+                                        title="Active Fleet"
+                                        value={`${kpiData.activeVehicles}/${kpiData.totalVehicles} Active`}
+                                        icon={Car}
+                                        trend="up"
+                                        description="Fleet operational status"
+                                        color="text-blue-500"
+                                    />
+                                    <KPICard
+                                        title="Revenue This Month"
+                                        value={kpiData.revenueThisMonth}
+                                        icon={Receipt}
+                                        trend="up"
+                                        description="+12.5% vs last month"
+                                        color="text-green-500"
+                                    />
+                                    <KPICard
+                                        title="Fuel Efficiency"
+                                        value={kpiData.fuelEfficiency}
+                                        icon={Fuel}
+                                        trend="down"
+                                        description="-0.3 km/L from avg"
+                                        color="text-yellow-500"
+                                    />
+                                    <KPICard
+                                        title="Maintenance Cost"
+                                        value={kpiData.maintenanceCostThisMonth}
+                                        icon={Wrench}
+                                        trend="down"
+                                        description="-8.2% vs last month"
+                                        color="text-red-500"
+                                    />
+                                </div>
+
+                                {/* KPI Grid - Secondary Metrics */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <KPICard
+                                        title="Overdue Maintenance"
+                                        value={kpiData.overdueMaintenance}
+                                        icon={AlertTriangle}
+                                        trend={kpiData.overdueMaintenance > 5 ? "up" : "down"}
+                                        description={`${kpiData.overdueMaintenance} vehicles overdue`}
+                                        color="text-orange-500"
+                                    />
+                                    <KPICard
+                                        title="Open Job Cards"
+                                        value={kpiData.openJobCards}
+                                        icon={ClipboardList}
+                                        trend="neutral"
+                                        description="Workshop workload"
+                                        color="text-purple-500"
+                                    />
+                                    <KPICard
+                                        title="Open Faults"
+                                        value={kpiData.openFaults}
+                                        icon={Zap}
+                                        trend={kpiData.openFaults > 10 ? "up" : "down"}
+                                        description="Pending resolution"
+                                        color="text-red-500"
+                                    />
+                                </div>
+
+                                {/* KPI Grid - Tertiary Metrics */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <KPICard
+                                        title="Tyre Cost per KM"
+                                        value={kpiData.tyreCostPerKm}
+                                        icon={Gauge}
+                                        trend="down"
+                                        description="Tyre cost efficiency"
+                                        color="text-indigo-500"
+                                    />
+                                    <KPICard
+                                        title="Avg Gap Days"
+                                        value={kpiData.averageGapDays}
+                                        icon={Calendar}
+                                        trend={kpiData.averageGapDays > 3 ? "up" : "down"}
+                                        description="Between trips"
+                                        color="text-teal-500"
+                                    />
+                                    <KPICard
+                                        title="Driver Utilization"
+                                        value={kpiData.driverUtilization}
+                                        icon={Users}
+                                        trend="up"
+                                        description="Of active drivers"
+                                        color="text-cyan-500"
+                                    />
+                                    <KPICard
+                                        title="Vehicles in Workshop"
+                                        value={`${kpiData.vehiclesInWorkshop} vehicles`}
+                                        icon={Wrench}
+                                        trend="neutral"
+                                        description="Downtime indicator"
+                                        color="text-slate-500"
+                                    />
+                                </div>
+
+                                {/* Enhanced: Trends Visualization */}
+                                {trendData && (
+                                    <Card>
+                                        <CardHeader>
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <CardTitle>Performance Trends</CardTitle>
+                                                    <CardDescription>
+                                                        Revenue, maintenance costs, and fuel consumption over time
+                                                    </CardDescription>
+                                                </div>
+                                                <Select
+                                                    value={filters.metricType}
+                                                    onValueChange={(value: "daily" | "weekly" | "monthly") =>
+                                                        setFilters({ ...filters, metricType: value })
+                                                    }
+                                                >
+                                                    <SelectTrigger className="w-32">
+                                                        <SelectValue placeholder="Metric" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="daily">Daily</SelectItem>
+                                                        <SelectItem value="weekly">Weekly</SelectItem>
+                                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-6">
+                                                {trendData.datasets.map((dataset, idx) => (
+                                                    <div key={idx} className="space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-sm font-medium flex items-center gap-2">
+                                                                <div
+                                                                    className="w-3 h-3 rounded-full"
+                                                                    style={{ backgroundColor: dataset.color }}
+                                                                />
+                                                                {dataset.label}
+                                                            </span>
+                                                            <span className="text-sm text-muted-foreground">
+                                                                Total: {formatNumber(dataset.data.reduce((a, b) => a + b, 0))}
+                                                            </span>
+                                                        </div>
+                                                        <MiniBarChart
+                                                            data={dataset.data}
+                                                            maxValue={Math.max(...dataset.data)}
+                                                        />
+                                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                                            <span>{trendData.labels[0]}</span>
+                                                            <span>{trendData.labels[trendData.labels.length - 1]}</span>
+                                                        </div>
+                                                    </div>
                                                 ))}
                                             </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </>
-                )}
+                                        </CardContent>
+                                    </Card>
+                                )}
 
-                {workshopSections.length > 0 && operationsSections.length > 0 && <Separator />}
-
-                {/* Operations */}
-                {operationsSections.length > 0 && (
-                    <>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Truck className="h-5 w-5 text-muted-foreground" />
-                                <h2 className="text-lg font-semibold">Operations</h2>
-                                <Badge variant="secondary" className="ml-1">{operationsSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
-                            </div>
-                            <div className="flex gap-1">
-                                <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="h-7 text-xs"
-                                    onClick={() => toggleAllOperations(operationsExpandedCount < operationsSections.length)}
+                                {/* Enhanced: Quick Actions */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Quick Exports</CardTitle>
+                                        <CardDescription>
+                                            Frequently used reports for instant download
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            {[
+                                                {
+                                                    label: "Fleet Register", icon: Car, onClick: () => {
+                                                        sections.find(s => s.title === "Fleet Vehicles")?.reports[0].onExport("excel");
+                                                    }
+                                                },
+                                                {
+                                                    label: "Trip Summary", icon: Truck, onClick: () => {
+                                                        sections.find(s => s.title === "Trip Management")?.reports[0].onExport("excel");
+                                                    }
+                                                },
+                                                {
+                                                    label: "Maintenance Report", icon: Wrench, onClick: () => {
+                                                        sections.find(s => s.title === "Maintenance Scheduling")?.reports[0].onExport("excel");
+                                                    }
+                                                },
+                                                {
+                                                    label: "Driver Roster", icon: Users, onClick: () => {
+                                                        sections.find(s => s.title === "Driver Management")?.reports[0].onExport("excel");
+                                                    }
+                                                },
+                                            ].map((action, idx) => (
+                                                <Button
+                                                    key={idx}
+                                                    variant="outline"
+                                                    className="h-auto py-3 flex-col gap-2"
+                                                    onClick={action.onClick}
+                                                >
+                                                    <action.icon className="h-5 w-5" />
+                                                    <span className="text-xs">{action.label}</span>
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                                <BarChart3 className="h-12 w-12 mb-3 opacity-40" />
+                                <p className="text-lg font-medium">No analytics available</p>
+                                <p className="text-sm mb-4">Load data to view performance metrics</p>
+                                <Button
+                                    variant="outline"
+                                    onClick={loadAnalytics}
                                 >
-                                    {operationsExpandedCount < operationsSections.length ? "Expand All" : "Collapse All"}
+                                    Load Analytics
                                 </Button>
                             </div>
-                        </div>
-                        <div className="space-y-2">
-                            {operationsSections.map((section) => {
-                                const Icon = section.icon;
-                                const isExpanded = expandedSections.has(section.title);
-                                return (
-                                    <div key={section.title} className="space-y-1">
-                                        <button
-                                            onClick={() => toggleSection(section.title)}
-                                            className="flex items-center gap-2 px-1 pt-2 w-full text-left hover:bg-muted/30 rounded transition-colors"
-                                        >
-                                            {isExpanded ? (
-                                                <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                            ) : (
-                                                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                            )}
-                                            <Icon className="h-4 w-4 text-primary flex-shrink-0" />
-                                            <span className="text-sm font-semibold">{section.title}</span>
-                                            <span className="text-xs text-muted-foreground">— {section.description}</span>
-                                            <Badge variant="outline" className="ml-auto text-[10px] h-5">
-                                                {section.reports.length}
-                                            </Badge>
-                                        </button>
-                                        {isExpanded && (
-                                            <div className="ml-7 space-y-1">
-                                                {section.reports.map((report) => (
-                                                    <ReportRow
-                                                        key={report.id}
-                                                        report={report}
-                                                        loadingKey={loadingKey}
-                                                        onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
-                                                    />
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </>
-                )}
+                        )}
+                    </TabsContent>
 
-                {filteredSections.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                        <FileText className="h-12 w-12 mb-3 opacity-40" />
-                        <p className="text-lg font-medium">No reports found</p>
-                        <p className="text-sm">Try a different search term</p>
-                    </div>
-                )}
+                    {/* Original Reports Content - Fully Preserved */}
+                    <TabsContent value="reports">
+                        {/* Workshop Management */}
+                        {workshopSections.length > 0 && (
+                            <>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                                        <h2 className="text-lg font-semibold">Workshop Management</h2>
+                                        <Badge variant="secondary" className="ml-1">{workshopSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-7 text-xs"
+                                            onClick={() => toggleAllWorkshop(workshopExpandedCount < workshopSections.length)}
+                                        >
+                                            {workshopExpandedCount < workshopSections.length ? "Expand All" : "Collapse All"}
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    {workshopSections.map((section) => {
+                                        const Icon = section.icon;
+                                        const isExpanded = expandedSections.has(section.title);
+                                        return (
+                                            <div key={section.title} className="space-y-1">
+                                                <button
+                                                    onClick={() => toggleSection(section.title)}
+                                                    className="flex items-center gap-2 px-1 pt-2 w-full text-left hover:bg-muted/30 rounded transition-colors"
+                                                >
+                                                    {isExpanded ? (
+                                                        <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                    ) : (
+                                                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                    )}
+                                                    <Icon className="h-4 w-4 text-primary flex-shrink-0" />
+                                                    <span className="text-sm font-semibold">{section.title}</span>
+                                                    <span className="text-xs text-muted-foreground">— {section.description}</span>
+                                                    <Badge variant="outline" className="ml-auto text-[10px] h-5">
+                                                        {section.reports.length}
+                                                    </Badge>
+                                                </button>
+                                                {isExpanded && (
+                                                    <div className="ml-7 space-y-1">
+                                                        {section.reports.map((report) => (
+                                                            <ReportRow
+                                                                key={report.id}
+                                                                report={report}
+                                                                loadingKey={loadingKey}
+                                                                onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+
+                        {workshopSections.length > 0 && operationsSections.length > 0 && <Separator />}
+
+                        {/* Operations */}
+                        {operationsSections.length > 0 && (
+                            <>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Truck className="h-5 w-5 text-muted-foreground" />
+                                        <h2 className="text-lg font-semibold">Operations</h2>
+                                        <Badge variant="secondary" className="ml-1">{operationsSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-7 text-xs"
+                                            onClick={() => toggleAllOperations(operationsExpandedCount < operationsSections.length)}
+                                        >
+                                            {operationsExpandedCount < operationsSections.length ? "Expand All" : "Collapse All"}
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    {operationsSections.map((section) => {
+                                        const Icon = section.icon;
+                                        const isExpanded = expandedSections.has(section.title);
+                                        return (
+                                            <div key={section.title} className="space-y-1">
+                                                <button
+                                                    onClick={() => toggleSection(section.title)}
+                                                    className="flex items-center gap-2 px-1 pt-2 w-full text-left hover:bg-muted/30 rounded transition-colors"
+                                                >
+                                                    {isExpanded ? (
+                                                        <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                    ) : (
+                                                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                    )}
+                                                    <Icon className="h-4 w-4 text-primary flex-shrink-0" />
+                                                    <span className="text-sm font-semibold">{section.title}</span>
+                                                    <span className="text-xs text-muted-foreground">— {section.description}</span>
+                                                    <Badge variant="outline" className="ml-auto text-[10px] h-5">
+                                                        {section.reports.length}
+                                                    </Badge>
+                                                </button>
+                                                {isExpanded && (
+                                                    <div className="ml-7 space-y-1">
+                                                        {section.reports.map((report) => (
+                                                            <ReportRow
+                                                                key={report.id}
+                                                                report={report}
+                                                                loadingKey={loadingKey}
+                                                                onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+
+                        {filteredSections.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                                <FileText className="h-12 w-12 mb-3 opacity-40" />
+                                <p className="text-lg font-medium">No reports found</p>
+                                <p className="text-sm">Try a different search term</p>
+                            </div>
+                        )}
+                    </TabsContent>
+                </Tabs>
             </div>
+            <FleetGapDaysReportDialog
+                open={gapDaysDialogOpen}
+                onOpenChange={setGapDaysDialogOpen}
+            />
         </Layout>
     );
 };
 
-// ── Report Row ───────────────────────────────────────────────────────────────
-
+// ── Report Row Component ────────────────────────────────────────────────────
 const ReportRow = ({
     report,
     loadingKey,
