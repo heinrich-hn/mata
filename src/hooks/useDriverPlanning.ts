@@ -330,7 +330,15 @@ export const useDriverPlanning = (selectedMonth: Date) => {
             }
 
             const { maxStreak, currentStreak } = computeConsecutiveWorkingDays(dayStatuses, dayNotes, daysInMonth);
-            const isOverworked = maxStreak >= OVERWORK_CONSECUTIVE_THRESHOLD || daysAtWork >= OVERWORK_MONTHLY_THRESHOLD;
+
+            // Fatigue calculation excludes Mutare days — Mutare is treated as a
+            // depot/home location that does not contribute to overwork risk.
+            const fatigueWorkDays = Object.entries(dayStatuses).reduce((count, [key, status]) => {
+                if (status !== 'at_work') return count;
+                if (dayNotes[key] === 'Mutare') return count;
+                return count + 1;
+            }, 0);
+            const isOverworked = maxStreak >= OVERWORK_CONSECUTIVE_THRESHOLD || fatigueWorkDays >= OVERWORK_MONTHLY_THRESHOLD;
 
             result.push({
                 driverName,

@@ -50,6 +50,9 @@ function formatWhatsAppMessage(event: Event): string {
     `*Severity:* ${(event.severity ?? 'N/A').toUpperCase()}`,
     `*Fleet:* ${event.fleet_number ?? 'N/A'}`,
   ];
+  if (event.risk_score != null) {
+    lines.push(`*Risk Score:* ${event.risk_score}/5`);
+  }
   if (event.description) {
     lines.push(``, `*Details:* ${event.description}`);
   }
@@ -910,6 +913,10 @@ export default function DriverBehaviorGrid() {
             }}
             onStartDebrief={startDebrief}
             onExportPDF={exportPDF}
+            onEdit={() => {
+              setDetailsOpen(false);
+              setEditOpen(true);
+            }}
           />
 
           <DriverBehaviorEditModal

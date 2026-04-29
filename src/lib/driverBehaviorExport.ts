@@ -15,6 +15,7 @@ interface DriverBehaviorEventExtended {
   severity?: string | null;
   location?: string | null;
   points?: number | null;
+  risk_score?: number | null;
   description?: string | null;
   status?: string | null;
   debriefed_at?: string | null;
@@ -192,6 +193,9 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, sn
   doc.text(`Location: ${locationDisplay}`, margin + 5, detailsY + 21);
   if (event.points) {
     doc.text(`Points: ${event.points}`, pageWidth / 2 + 10, detailsY + 21);
+  }
+  if (event.risk_score != null) {
+    doc.text(`Risk Score: ${event.risk_score}/5`, margin + 5, detailsY + 28);
   }
 
   yPos += 40;
@@ -559,10 +563,10 @@ export const generateDriverBehaviorExcel = async (
   // ── Data sheets ───────────────────────────────────────────────────────
   const headers = [
     'Date', 'Time', 'Driver', 'Fleet Number', 'Event Type', 'Description',
-    'Video/Media Link', 'Severity', 'Points', 'Status',
+    'Video/Media Link', 'Severity', 'Points', 'Risk Score', 'Status',
     'Debriefed On', 'Debriefed By', 'Coaching Notes', 'Action Plan',
   ];
-  const colWidths = [13, 10, 20, 14, 20, 35, 30, 12, 10, 12, 13, 18, 35, 35];
+  const colWidths = [13, 10, 20, 14, 20, 35, 30, 12, 10, 11, 12, 13, 18, 35, 35];
 
   const addDataSheet = (name: string, sheetEvents: DriverBehaviorEventExtended[], statusColor: string) => {
     if (sheetEvents.length === 0) return;
@@ -614,6 +618,7 @@ export const generateDriverBehaviorExcel = async (
         videoLink ? 'View Video' : '',
         (sev).charAt(0).toUpperCase() + sev.slice(1),
         ev.points ?? 0,
+        ev.risk_score != null ? `${ev.risk_score}/5` : '',
         ev.status || 'open',
         ev.debriefed_at ? format(new Date(ev.debriefed_at), 'MMM dd, yyyy') : '',
         ev.debrief_conducted_by || '',
@@ -633,7 +638,7 @@ export const generateDriverBehaviorExcel = async (
         const cell = row.getCell(c);
         xlBorder(cell);
         if (c !== 7 || !videoLink) xlFont(cell, false, 9, XC.darkText);
-        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: c === 6 || c === 13 || c === 14 };
+        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: c === 6 || c === 14 || c === 15 };
 
         if (idx % 2 === 1) xlFill(cell, XC.altRow);
 
@@ -642,6 +647,10 @@ export const generateDriverBehaviorExcel = async (
           xlFont(cell, true, 9, severityColor[sev] || XC.darkText);
           xlFill(cell, severityBgColor[sev] || XC.altRow);
         }
+        // Risk score emphasis
+        if (c === 10 && ev.risk_score != null) {
+          xlFont(cell, true, 9, 'FF7E22CE');
+        }
       }
     });
 
@@ -649,7 +658,7 @@ export const generateDriverBehaviorExcel = async (
     const totalPoints = sheetEvents.reduce((s, e) => s + (e.points || 0), 0);
     const totRow = ws2.addRow([
       'TOTAL', '', '', '', '', '', '', '',
-      totalPoints, `${sheetEvents.length} events`, '', '', '', '',
+      totalPoints, '', `${sheetEvents.length} events`, '', '', '', '',
     ]);
     totRow.height = 22;
     for (let c = 1; c <= headers.length; c++) {
@@ -757,10 +766,10 @@ export const generateDriverBehaviorPDF = (
 
   // Auto table for events
   const tableHeaders = type === 'debriefed'
-    ? ['Date', 'Driver', 'Fleet', 'Event Type', 'Severity', 'Pts', 'Media', 'Debriefed On', 'By', 'Coaching Notes']
+    ? ['Date', 'Driver', 'Fleet', 'Event Type', 'Severity', 'Pts', 'Risk', 'Media', 'Debriefed On', 'By', 'Coaching Notes']
     : type === 'pending'
-      ? ['Date', 'Driver', 'Fleet', 'Event Type', 'Description', 'Severity', 'Pts', 'Media', 'Status']
-      : ['Date', 'Driver', 'Fleet', 'Event Type', 'Severity', 'Pts', 'Media', 'Status', 'Debriefed On'];
+      ? ['Date', 'Driver', 'Fleet', 'Event Type', 'Description', 'Severity', 'Pts', 'Risk', 'Media', 'Status']
+      : ['Date', 'Driver', 'Fleet', 'Event Type', 'Severity', 'Pts', 'Risk', 'Media', 'Status', 'Debriefed On'];
 
   const sorted = [...events].sort((a, b) =>
     (severityOrder[a.severity ?? 'low'] ?? 3) - (severityOrder[b.severity ?? 'low'] ?? 3)
@@ -771,11 +780,13 @@ export const generateDriverBehaviorPDF = (
     const sev = (ev.severity || 'medium').charAt(0).toUpperCase() + (ev.severity || 'medium').slice(1);
     const dateStr = format(new Date(ev.event_date), 'MMM dd');
     const hasMedia = ev.location && /^https?:\/\//i.test(ev.location) ? '📹 Yes' : '';
+    const risk = ev.risk_score != null ? `${ev.risk_score}/5` : '';
 
     if (type === 'debriefed') {
       return [
         dateStr, ev.driver_name, ev.fleet_number || '', ev.event_type, sev,
         ev.points ?? 0,
+        risk,
         hasMedia,
         ev.debriefed_at ? format(new Date(ev.debriefed_at), 'MMM dd') : '',
         ev.debrief_conducted_by || '',
@@ -785,12 +796,12 @@ export const generateDriverBehaviorPDF = (
       return [
         dateStr, ev.driver_name, ev.fleet_number || '', ev.event_type,
         (ev.description || '').substring(0, 50),
-        sev, ev.points ?? 0, hasMedia, ev.status || 'open',
+        sev, ev.points ?? 0, risk, hasMedia, ev.status || 'open',
       ];
     }
     return [
       dateStr, ev.driver_name, ev.fleet_number || '', ev.event_type, sev,
-      ev.points ?? 0, hasMedia, ev.status || 'open',
+      ev.points ?? 0, risk, hasMedia, ev.status || 'open',
       ev.debriefed_at ? format(new Date(ev.debriefed_at), 'MMM dd') : '',
     ];
   });

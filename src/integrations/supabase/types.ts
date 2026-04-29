@@ -2817,6 +2817,7 @@ export type Database = {
           id: string
           location: string | null
           points: number | null
+          risk_score: number | null
           severity: string | null
           status: string | null
           updated_at: string | null
@@ -2848,6 +2849,7 @@ export type Database = {
           id?: string
           location?: string | null
           points?: number | null
+          risk_score?: number | null
           severity?: string | null
           status?: string | null
           updated_at?: string | null
@@ -2879,6 +2881,7 @@ export type Database = {
           id?: string
           location?: string | null
           points?: number | null
+          risk_score?: number | null
           severity?: string | null
           status?: string | null
           updated_at?: string | null

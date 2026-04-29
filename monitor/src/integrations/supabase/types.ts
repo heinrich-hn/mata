@@ -557,8 +557,8 @@ export type Database = {
           new_status: Database["public"]["Enums"]["evaluation_status"]
           notes: string | null
           previous_status:
-            | Database["public"]["Enums"]["evaluation_status"]
-            | null
+          | Database["public"]["Enums"]["evaluation_status"]
+          | null
           scheduled_date: string | null
           score: number | null
         }
@@ -574,8 +574,8 @@ export type Database = {
           new_status: Database["public"]["Enums"]["evaluation_status"]
           notes?: string | null
           previous_status?:
-            | Database["public"]["Enums"]["evaluation_status"]
-            | null
+          | Database["public"]["Enums"]["evaluation_status"]
+          | null
           scheduled_date?: string | null
           score?: number | null
         }
@@ -591,8 +591,8 @@ export type Database = {
           new_status?: Database["public"]["Enums"]["evaluation_status"]
           notes?: string | null
           previous_status?:
-            | Database["public"]["Enums"]["evaluation_status"]
-            | null
+          | Database["public"]["Enums"]["evaluation_status"]
+          | null
           scheduled_date?: string | null
           score?: number | null
         }
@@ -2677,6 +2677,7 @@ export type Database = {
           id: string
           location: string | null
           points: number | null
+          risk_score: number | null
           severity: string | null
           status: string | null
           updated_at: string | null
@@ -2708,6 +2709,7 @@ export type Database = {
           id?: string
           location?: string | null
           points?: number | null
+          risk_score?: number | null
           severity?: string | null
           status?: string | null
           updated_at?: string | null
@@ -2739,6 +2741,7 @@ export type Database = {
           id?: string
           location?: string | null
           points?: number | null
+          risk_score?: number | null
           severity?: string | null
           status?: string | null
           updated_at?: string | null
@@ -4671,8 +4674,8 @@ export type Database = {
           vehicle_id: string | null
           vehicle_number: string | null
           weather_condition:
-            | Database["public"]["Enums"]["weather_condition"]
-            | null
+          | Database["public"]["Enums"]["weather_condition"]
+          | null
         }
         Insert: {
           closed_at?: string | null
@@ -4704,8 +4707,8 @@ export type Database = {
           vehicle_id?: string | null
           vehicle_number?: string | null
           weather_condition?:
-            | Database["public"]["Enums"]["weather_condition"]
-            | null
+          | Database["public"]["Enums"]["weather_condition"]
+          | null
         }
         Update: {
           closed_at?: string | null
@@ -4737,8 +4740,8 @@ export type Database = {
           vehicle_id?: string | null
           vehicle_number?: string | null
           weather_condition?:
-            | Database["public"]["Enums"]["weather_condition"]
-            | null
+          | Database["public"]["Enums"]["weather_condition"]
+          | null
         }
         Relationships: [
           {
@@ -6204,8 +6207,8 @@ export type Database = {
           alert_type: Database["public"]["Enums"]["maintenance_alert_type"]
           created_at: string | null
           delivery_status:
-            | Database["public"]["Enums"]["maintenance_delivery_status"]
-            | null
+          | Database["public"]["Enums"]["maintenance_delivery_status"]
+          | null
           due_date: string
           error_message: string | null
           hours_until_due: number | null
@@ -6226,8 +6229,8 @@ export type Database = {
           alert_type: Database["public"]["Enums"]["maintenance_alert_type"]
           created_at?: string | null
           delivery_status?:
-            | Database["public"]["Enums"]["maintenance_delivery_status"]
-            | null
+          | Database["public"]["Enums"]["maintenance_delivery_status"]
+          | null
           due_date: string
           error_message?: string | null
           hours_until_due?: number | null
@@ -6248,8 +6251,8 @@ export type Database = {
           alert_type?: Database["public"]["Enums"]["maintenance_alert_type"]
           created_at?: string | null
           delivery_status?:
-            | Database["public"]["Enums"]["maintenance_delivery_status"]
-            | null
+          | Database["public"]["Enums"]["maintenance_delivery_status"]
+          | null
           due_date?: string
           error_message?: string | null
           hours_until_due?: number | null
@@ -10705,8 +10708,8 @@ export type Database = {
       work_order_documents: {
         Row: {
           approval_status:
-            | Database["public"]["Enums"]["document_approval_status"]
-            | null
+          | Database["public"]["Enums"]["document_approval_status"]
+          | null
           description: string | null
           document_type: Database["public"]["Enums"]["document_type"]
           file_format: string | null
@@ -10725,8 +10728,8 @@ export type Database = {
         }
         Insert: {
           approval_status?:
-            | Database["public"]["Enums"]["document_approval_status"]
-            | null
+          | Database["public"]["Enums"]["document_approval_status"]
+          | null
           description?: string | null
           document_type: Database["public"]["Enums"]["document_type"]
           file_format?: string | null
@@ -10745,8 +10748,8 @@ export type Database = {
         }
         Update: {
           approval_status?:
-            | Database["public"]["Enums"]["document_approval_status"]
-            | null
+          | Database["public"]["Enums"]["document_approval_status"]
+          | null
           description?: string | null
           document_type?: Database["public"]["Enums"]["document_type"]
           file_format?: string | null
@@ -12332,193 +12335,193 @@ export type Database = {
     Enums: {
       alert_priority: "critical" | "high" | "medium" | "low"
       alert_status:
-        | "active"
-        | "acknowledged"
-        | "investigating"
-        | "resolved"
-        | "dismissed"
+      | "active"
+      | "acknowledged"
+      | "investigating"
+      | "resolved"
+      | "dismissed"
       alert_type:
-        | "repeat_repair_3month"
-        | "similar_component"
-        | "similar_category"
-        | "fleet_pattern"
-        | "quality_issue"
-        | "cost_overrun"
+      | "repeat_repair_3month"
+      | "similar_component"
+      | "similar_category"
+      | "fleet_pattern"
+      | "quality_issue"
+      | "cost_overrun"
       approval_level:
-        | "technician"
-        | "quality_control"
-        | "supervisor"
-        | "final_approval"
+      | "technician"
+      | "quality_control"
+      | "supervisor"
+      | "final_approval"
       candidate_status:
-        | "new"
-        | "in_progress"
-        | "hired"
-        | "rejected"
-        | "withdrawn"
+      | "new"
+      | "in_progress"
+      | "hired"
+      | "rejected"
+      | "withdrawn"
       document_approval_status:
-        | "pending"
-        | "approved"
-        | "rejected"
-        | "revision_required"
+      | "pending"
+      | "approved"
+      | "rejected"
+      | "revision_required"
       document_type:
-        | "before_photo"
-        | "after_photo"
-        | "progress_photo"
-        | "receipt"
-        | "invoice"
-        | "cra_report"
-        | "quality_check"
-        | "completion_certificate"
-        | "other"
+      | "before_photo"
+      | "after_photo"
+      | "progress_photo"
+      | "receipt"
+      | "invoice"
+      | "cra_report"
+      | "quality_check"
+      | "completion_certificate"
+      | "other"
       driver_document_type:
-        | "license"
-        | "pdp"
-        | "passport"
-        | "medical"
-        | "retest"
-        | "defensive_driving"
+      | "license"
+      | "pdp"
+      | "passport"
+      | "medical"
+      | "retest"
+      | "defensive_driving"
       driver_status: "active" | "inactive" | "suspended" | "terminated"
       evaluation_status: "pending" | "passed" | "failed" | "scheduled"
       evaluation_step: "interview" | "yard_test" | "road_test"
       fault_severity: "critical" | "high" | "medium" | "low"
       fault_status:
-        | "identified"
-        | "acknowledged"
-        | "job_card_created"
-        | "in_progress"
-        | "resolved"
-        | "closed"
+      | "identified"
+      | "acknowledged"
+      | "job_card_created"
+      | "in_progress"
+      | "resolved"
+      | "closed"
       incident_document_type:
-        | "incident_report"
-        | "police_report"
-        | "insurance_application"
-        | "insurance_claim"
-        | "witness_statement"
-        | "damage_assessment"
-        | "repair_quote"
-        | "medical_report"
-        | "photo_evidence"
-        | "video_evidence"
-        | "correspondence"
-        | "other"
+      | "incident_report"
+      | "police_report"
+      | "insurance_application"
+      | "insurance_claim"
+      | "witness_statement"
+      | "damage_assessment"
+      | "repair_quote"
+      | "medical_report"
+      | "photo_evidence"
+      | "video_evidence"
+      | "correspondence"
+      | "other"
       incident_status: "open" | "processing" | "closed" | "claimed"
       incident_type:
-        | "collision"
-        | "theft"
-        | "vandalism"
-        | "fire"
-        | "mechanical_failure"
-        | "tire_blowout"
-        | "cargo_damage"
-        | "driver_injury"
-        | "third_party_injury"
-        | "weather_related"
-        | "road_hazard"
-        | "other"
+      | "collision"
+      | "theft"
+      | "vandalism"
+      | "fire"
+      | "mechanical_failure"
+      | "tire_blowout"
+      | "cargo_damage"
+      | "driver_injury"
+      | "third_party_injury"
+      | "weather_related"
+      | "road_hazard"
+      | "other"
       inspection_item_status: "pass" | "fail" | "attention" | "not_applicable"
       inspection_status: "pending" | "in_progress" | "completed" | "cancelled"
       load_priority: "low" | "medium" | "high" | "urgent"
       load_status:
-        | "pending"
-        | "assigned"
-        | "in_transit"
-        | "delivered"
-        | "cancelled"
-        | "failed_delivery"
-        | "Pending"
-        | "Assigned"
-        | "arrived_at_loading_point"
-        | "Arrived at Loading Point"
-        | "Start Loading"
-        | "start_loading"
-        | "Loading Completed"
-        | "loading_completed"
-        | "In Transit"
-        | "arrived_at_offloading_point"
-        | "arrived_at_delivery"
-        | "arrived_at_loading"
-        | "loading"
-        | "offloading"
-        | "offloading_completed"
-        | "completed"
-        | "on_hold"
+      | "pending"
+      | "assigned"
+      | "in_transit"
+      | "delivered"
+      | "cancelled"
+      | "failed_delivery"
+      | "Pending"
+      | "Assigned"
+      | "arrived_at_loading_point"
+      | "Arrived at Loading Point"
+      | "Start Loading"
+      | "start_loading"
+      | "Loading Completed"
+      | "loading_completed"
+      | "In Transit"
+      | "arrived_at_offloading_point"
+      | "arrived_at_delivery"
+      | "arrived_at_loading"
+      | "loading"
+      | "offloading"
+      | "offloading_completed"
+      | "completed"
+      | "on_hold"
       location_type:
-        | "depot"
-        | "customer"
-        | "border_post"
-        | "truck_stop"
-        | "toll_gate"
-        | "market"
-        | "port"
-        | "supplier"
-        | "service_center"
-        | "other"
+      | "depot"
+      | "customer"
+      | "border_post"
+      | "truck_stop"
+      | "toll_gate"
+      | "market"
+      | "port"
+      | "supplier"
+      | "service_center"
+      | "other"
       maintenance_alert_type: "upcoming" | "overdue" | "completed" | "cancelled"
       maintenance_delivery_status:
-        | "pending"
-        | "sent"
-        | "delivered"
-        | "failed"
-        | "acknowledged"
+      | "pending"
+      | "sent"
+      | "delivered"
+      | "failed"
+      | "acknowledged"
       maintenance_notification_method: "email" | "sms" | "in_app" | "all"
       tyre_condition:
-        | "excellent"
-        | "good"
-        | "fair"
-        | "poor"
-        | "needs_replacement"
+      | "excellent"
+      | "good"
+      | "fair"
+      | "poor"
+      | "needs_replacement"
       tyre_position:
-        | "front_left"
-        | "front_right"
-        | "rear_left_outer"
-        | "rear_left_inner"
-        | "rear_right_inner"
-        | "rear_right_outer"
-        | "spare"
+      | "front_left"
+      | "front_right"
+      | "rear_left_outer"
+      | "rear_left_inner"
+      | "rear_right_inner"
+      | "rear_right_outer"
+      | "spare"
       tyre_wear_pattern: "even" | "center" | "edge" | "cupping" | "feathering"
       vehicle_type:
-        | "truck"
-        | "trailer"
-        | "van"
-        | "bus"
-        | "rigid_truck"
-        | "horse_truck"
-        | "refrigerated_truck"
-        | "reefer"
-        | "interlink"
+      | "truck"
+      | "trailer"
+      | "van"
+      | "bus"
+      | "rigid_truck"
+      | "horse_truck"
+      | "refrigerated_truck"
+      | "reefer"
+      | "interlink"
       waypoint_type:
-        | "pickup"
-        | "delivery"
-        | "rest_stop"
-        | "customs"
-        | "weigh_station"
+      | "pickup"
+      | "delivery"
+      | "rest_stop"
+      | "customs"
+      | "weigh_station"
       wear_pattern:
-        | "even"
-        | "center"
-        | "edge"
-        | "cupping"
-        | "feathering"
-        | "flat_spot"
+      | "even"
+      | "center"
+      | "edge"
+      | "cupping"
+      | "feathering"
+      | "flat_spot"
       weather_condition:
-        | "clear"
-        | "cloudy"
-        | "rain"
-        | "heavy_rain"
-        | "fog"
-        | "snow"
-        | "hail"
-        | "windy"
-        | "storm"
-        | "unknown"
+      | "clear"
+      | "cloudy"
+      | "rain"
+      | "heavy_rain"
+      | "fog"
+      | "snow"
+      | "hail"
+      | "windy"
+      | "storm"
+      | "unknown"
       work_order_status:
-        | "draft"
-        | "pending_approval"
-        | "approved"
-        | "in_progress"
-        | "pending_documentation"
-        | "pending_closure"
-        | "completed"
-        | "cancelled"
+      | "draft"
+      | "pending_approval"
+      | "approved"
+      | "in_progress"
+      | "pending_documentation"
+      | "pending_closure"
+      | "completed"
+      | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -12532,116 +12535,116 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+  ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-    ? R
-    : never
+  ? R
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
+    DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] &
+    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+  ? R
+  : never
+  : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
+    Insert: infer I
+  }
+  ? I
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Insert: infer I
+  }
+  ? I
+  : never
+  : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
+    Update: infer U
+  }
+  ? U
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Update: infer U
+  }
+  ? U
+  : never
+  : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Enums"]
+  | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+  : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["CompositeTypes"]
+  | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+  : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
 
 export const Constants = {
   public: {

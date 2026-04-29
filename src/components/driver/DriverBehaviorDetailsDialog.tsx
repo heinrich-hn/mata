@@ -22,6 +22,7 @@ import {
   Clock,
   FileText,
   MessageSquare,
+  Pencil,
   Shield,
   User,
 } from "lucide-react";
@@ -34,6 +35,7 @@ interface DriverBehaviorDetailsDialogProps {
   onOpenChange: (open: boolean) => void;
   onStartDebrief: () => void;
   onExportPDF: () => void;
+  onEdit?: () => void;
 }
 
 const DriverBehaviorDetailsDialog = ({
@@ -42,6 +44,7 @@ const DriverBehaviorDetailsDialog = ({
   onOpenChange,
   onStartDebrief,
   onExportPDF,
+  onEdit,
 }: DriverBehaviorDetailsDialogProps) => {
   const isDebriefed = !!event.debriefed_at;
 
@@ -146,15 +149,26 @@ const DriverBehaviorDetailsDialog = ({
                   {event.event_type}
                 </Badge>
               </div>
-              {event.points !== undefined && event.points > 0 && (
-                <div className="text-right">
-                  <p className="text-sm text-gray-600 mb-1">Points Assigned</p>
-                  <div className="flex items-center gap-2 text-orange-600 font-bold text-xl">
-                    <AlertCircle className="w-6 h-6" />
-                    <span>{event.points}</span>
+              <div className="flex items-center gap-6">
+                {event.risk_score != null && (
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600 mb-1">Risk Score</p>
+                    <div className="flex items-center gap-2 text-purple-700 font-bold text-xl">
+                      <Shield className="w-6 h-6" />
+                      <span>{event.risk_score}/5</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                {event.points !== undefined && event.points !== null && event.points > 0 && (
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600 mb-1">Points Assigned</p>
+                    <div className="flex items-center gap-2 text-orange-600 font-bold text-xl">
+                      <AlertCircle className="w-6 h-6" />
+                      <span>{event.points}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <Separator />
@@ -292,7 +306,7 @@ const DriverBehaviorDetailsDialog = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-wrap gap-3 pt-4">
               {!isDebriefed && (
                 <Button
                   onClick={onStartDebrief}
@@ -300,6 +314,17 @@ const DriverBehaviorDetailsDialog = ({
                 >
                   <MessageSquare className="w-5 h-5 mr-2" />
                   Start Coaching Session
+                </Button>
+              )}
+              {onEdit && (
+                <Button
+                  onClick={onEdit}
+                  variant="outline"
+                  className="flex-1 h-12 text-base font-medium border-amber-300 text-amber-700 hover:bg-amber-50"
+                  title={isDebriefed ? "Adjust points or risk score for this debriefed event" : "Edit event details"}
+                >
+                  <Pencil className="w-5 h-5 mr-2" />
+                  {isDebriefed ? "Edit Points & Risk" : "Edit"}
                 </Button>
               )}
               <Button

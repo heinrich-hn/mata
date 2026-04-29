@@ -152,7 +152,7 @@ export const useDriverPerformanceSummary = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("driver_behavior_events")
-        .select("driver_name, severity, event_type, points, status");
+        .select("driver_name, severity, event_type, points, status, risk_score");
 
       if (error) throw error;
 
@@ -168,6 +168,11 @@ export const useDriverPerformanceSummary = () => {
         open_events: number;
         resolved_events: number;
         event_types: Record<string, number>;
+        risk_score_total: number;
+        risk_score_count: number;
+        avg_risk_score: number | null;
+        max_risk_score: number | null;
+        risk_by_event_type: Record<string, { total: number; count: number; avg: number }>;
       }>();
 
       data?.forEach((event) => {
@@ -182,6 +187,11 @@ export const useDriverPerformanceSummary = () => {
           open_events: 0,
           resolved_events: 0,
           event_types: {},
+          risk_score_total: 0,
+          risk_score_count: 0,
+          avg_risk_score: null,
+          max_risk_score: null,
+          risk_by_event_type: {},
         };
 
         existing.total_events++;
@@ -203,7 +213,30 @@ export const useDriverPerformanceSummary = () => {
         const eventType = event.event_type || "unknown";
         existing.event_types[eventType] = (existing.event_types[eventType] || 0) + 1;
 
+        // Risk score aggregation (only count assigned scores)
+        if (typeof event.risk_score === "number") {
+          existing.risk_score_total += event.risk_score;
+          existing.risk_score_count++;
+          existing.max_risk_score = Math.max(
+            existing.max_risk_score ?? 0,
+            event.risk_score,
+          );
+
+          const bucket = existing.risk_by_event_type[eventType] || { total: 0, count: 0, avg: 0 };
+          bucket.total += event.risk_score;
+          bucket.count++;
+          bucket.avg = bucket.total / bucket.count;
+          existing.risk_by_event_type[eventType] = bucket;
+        }
+
         driverMap.set(event.driver_name, existing);
+      });
+
+      // Finalise avg risk score per driver
+      driverMap.forEach((v) => {
+        v.avg_risk_score = v.risk_score_count > 0
+          ? v.risk_score_total / v.risk_score_count
+          : null;
       });
 
       return Array.from(driverMap.values()).sort((a, b) => b.total_events - a.total_events);

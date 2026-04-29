@@ -145,6 +145,26 @@ export default function DriverPlanningSection() {
         setIsLeaveDialogOpen(true);
     };
 
+    // ─── Location Breakdown Helper ───────────────────────────────────────────
+    // Build a map of { location -> days } for at_work days.
+    // - Trip days are bucketed under "On Trip" (auto-derived).
+    // - Manual at_work days use the dayNote (location); empty notes go to "Unspecified".
+    const buildLocationBreakdown = (driver: DriverPlanningData): Array<{ location: string; days: number }> => {
+        const counts: Record<string, number> = {};
+        for (const day of daysInMonth) {
+            const key = format(day, 'yyyy-MM-dd');
+            const status = driver.dayStatuses[key] || 'off';
+            if (status !== 'at_work') continue;
+            const tripName = driver.tripDays[key];
+            const note = driver.dayNotes[key];
+            const bucket = tripName ? 'On Trip' : (note && note.trim() ? note.trim() : 'Unspecified');
+            counts[bucket] = (counts[bucket] || 0) + 1;
+        }
+        return Object.entries(counts)
+            .map(([location, days]) => ({ location, days }))
+            .sort((a, b) => b.days - a.days);
+    };
+
     // ─── Bulk Export: All Drivers Excel ──────────────────────────────────────
 
     const handleExportAllExcel = async () => {
@@ -181,6 +201,60 @@ export default function DriverPlanningSection() {
                 return undefined;
             },
         });
+
+        // ━━━ Sheet: Workdays by Location (per driver breakdown) ━━━
+        {
+            // Build per-driver breakdown rows. Each driver gets one row per location.
+            const breakdownRows: (string | number)[][] = [];
+            for (const driver of planningData) {
+                const breakdown = buildLocationBreakdown(driver);
+                if (breakdown.length === 0) {
+                    breakdownRows.push([driver.driverName, '—', 0, driver.daysAtWork]);
+                    continue;
+                }
+                breakdown.forEach((entry, i) => {
+                    breakdownRows.push([
+                        i === 0 ? driver.driverName : '',
+                        entry.location,
+                        entry.days,
+                        i === 0 ? driver.daysAtWork : '',
+                    ]);
+                });
+            }
+            // Aggregate fleet-wide totals by location
+            const fleetTotals: Record<string, number> = {};
+            for (const driver of planningData) {
+                for (const { location, days } of buildLocationBreakdown(driver)) {
+                    fleetTotals[location] = (fleetTotals[location] || 0) + days;
+                }
+            }
+            const fleetRows = Object.entries(fleetTotals)
+                .sort((a, b) => b[1] - a[1])
+                .map(([loc, days]): (string | number)[] => ['', `Σ ${loc}`, days, '']);
+
+            addStyledSheet(wb, 'Workdays by Location', {
+                title: `Workdays by Location – ${monthLabel}`,
+                subtitle: generatedSubtitle(`${planningData.length} drivers • ${totalWorkDays} total work days`),
+                headers: ['Driver', 'Location', 'Days', 'Driver Total'],
+                rows: [
+                    ...breakdownRows,
+                    ['', '', '', ''],
+                    ['── Fleet Totals by Location ──', '', '', ''],
+                    ...fleetRows,
+                    ['', 'TOTAL', totalWorkDays, ''],
+                ],
+                cellStyler: (rowData, colIndex) => {
+                    const loc = String(rowData[1] || '');
+                    if (loc.startsWith('Σ') || loc === 'TOTAL') {
+                        return { ...bodyFont, bold: true, color: { argb: '1F3864' } };
+                    }
+                    if (colIndex === 3 && rowData[3] !== '') {
+                        return { ...bodyFont, bold: true };
+                    }
+                    return undefined;
+                },
+            });
+        }
 
         // ━━━ Sheet 2: Monthly Calendar Grid (colorful calendar-style) ━━━
         {
@@ -510,6 +584,29 @@ export default function DriverPlanningSection() {
                     styleBodyRow(ws, tripHeaderRow + 1 + i, i % 2 === 1);
                 });
             }
+
+            // Add per-driver Workdays-by-Location breakdown
+            {
+                const breakdown = buildLocationBreakdown(driver);
+                const lastRow2 = ws.lastRow?.number || 0;
+                const sectionRow = lastRow2 + 2;
+                ws.getCell(`A${sectionRow}`).value = `Workdays by Location (Total: ${driver.daysAtWork})`;
+                ws.getCell(`A${sectionRow}`).font = { bold: true, size: 11, name: 'Calibri' };
+                const hdr = sectionRow + 1;
+                ws.getRow(hdr).values = ['Location', 'Days'];
+                styleHeaderRow(ws, hdr);
+                if (breakdown.length === 0) {
+                    const r = ws.getRow(hdr + 1);
+                    r.values = ['—', 0];
+                    styleBodyRow(ws, hdr + 1, false);
+                } else {
+                    breakdown.forEach((entry, i) => {
+                        const r = ws.getRow(hdr + 1 + i);
+                        r.values = [entry.location, entry.days];
+                        styleBodyRow(ws, hdr + 1 + i, i % 2 === 1);
+                    });
+                }
+            }
         }
 
         await saveWorkbook(wb, `Driver_Planning_Schedule_${format(selectedMonth, 'yyyy_MM')}.xlsx`);
@@ -562,25 +659,33 @@ export default function DriverPlanningSection() {
 
         autoTable(doc, {
             startY: 92,
-            head: [['Driver', 'Work', 'Trip', 'Leave', 'Off Day', 'Off', 'Streak', 'Status', 'Trips']],
-            body: planningData.map((d) => [
-                d.driverName,
-                String(d.daysAtWork),
-                String(d.daysOnTrip),
-                String(d.daysOnLeave),
-                String(d.daysOffDay),
-                String(d.daysOff),
-                `${d.maxConsecutiveWorkingDays}d`,
-                d.isOverworked ? 'OVERWORKED' : 'Normal',
-                d.trips.length > 0 ? d.trips.map((t) => t.trip_number || '—').join(', ') : 'None',
-            ]),
+            head: [['Driver', 'Work', 'Trip', 'Leave', 'Off Day', 'Off', 'Streak', 'Status', 'Workdays by Location', 'Trips']],
+            body: planningData.map((d) => {
+                const breakdown = buildLocationBreakdown(d);
+                const breakdownStr = breakdown.length > 0
+                    ? breakdown.map((b) => `${b.location}: ${b.days}d`).join(', ')
+                    : '—';
+                return [
+                    d.driverName,
+                    String(d.daysAtWork),
+                    String(d.daysOnTrip),
+                    String(d.daysOnLeave),
+                    String(d.daysOffDay),
+                    String(d.daysOff),
+                    `${d.maxConsecutiveWorkingDays}d`,
+                    d.isOverworked ? 'OVERWORKED' : 'Normal',
+                    breakdownStr,
+                    d.trips.length > 0 ? d.trips.map((t) => t.trip_number || '—').join(', ') : 'None',
+                ];
+            }),
             theme: 'grid',
             headStyles: { fillColor: brandColor, fontSize: 7, halign: 'center' },
             styles: { fontSize: 7, cellPadding: 2 },
             columnStyles: {
-                0: { fontStyle: 'bold', cellWidth: 35 },
+                0: { fontStyle: 'bold', cellWidth: 32 },
                 7: { halign: 'center' },
-                8: { cellWidth: 50 },
+                8: { cellWidth: 70 },
+                9: { cellWidth: 40 },
             },
             didParseCell: (data) => {
                 if (data.section === 'body' && data.column.index === 7) {
@@ -593,6 +698,81 @@ export default function DriverPlanningSection() {
                 }
             },
         });
+
+        // ━━━ Page: Workdays by Location (per driver + fleet totals) ━━━
+        {
+            const breakdownBody: string[][] = [];
+            const fleetTotals: Record<string, number> = {};
+            for (const driver of planningData) {
+                const breakdown = buildLocationBreakdown(driver);
+                if (breakdown.length === 0) {
+                    breakdownBody.push([driver.driverName, '—', '0', String(driver.daysAtWork)]);
+                    continue;
+                }
+                breakdown.forEach((entry, i) => {
+                    breakdownBody.push([
+                        i === 0 ? driver.driverName : '',
+                        entry.location,
+                        String(entry.days),
+                        i === 0 ? String(driver.daysAtWork) : '',
+                    ]);
+                    fleetTotals[entry.location] = (fleetTotals[entry.location] || 0) + entry.days;
+                });
+            }
+
+            doc.addPage();
+            doc.setFillColor(...brandColor);
+            doc.rect(0, 0, 297, 14, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(11);
+            doc.text(`Workdays by Location – ${monthLabel}`, 14, 10);
+            doc.setTextColor(0, 0, 0);
+
+            autoTable(doc, {
+                startY: 20,
+                head: [['Driver', 'Location', 'Days', 'Driver Total']],
+                body: breakdownBody,
+                theme: 'grid',
+                headStyles: { fillColor: brandColor, fontSize: 8 },
+                styles: { fontSize: 8, cellPadding: 2 },
+                columnStyles: {
+                    0: { fontStyle: 'bold', cellWidth: 45 },
+                    1: { cellWidth: 60 },
+                    2: { halign: 'center', cellWidth: 20 },
+                    3: { halign: 'center', cellWidth: 25, fontStyle: 'bold' },
+                },
+            });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fleetY = (doc as any).lastAutoTable?.finalY || 80;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Fleet Totals by Location', 14, fleetY + 8);
+            doc.setFont('helvetica', 'normal');
+
+            const fleetSorted = Object.entries(fleetTotals).sort((a, b) => b[1] - a[1]);
+            autoTable(doc, {
+                startY: fleetY + 11,
+                head: [['Location', 'Total Days']],
+                body: [
+                    ...fleetSorted.map(([loc, days]) => [loc, String(days)]),
+                    ['TOTAL', String(totalWorkDaysPdf)],
+                ],
+                theme: 'grid',
+                headStyles: { fillColor: [5, 150, 105], fontSize: 8 },
+                styles: { fontSize: 8, cellPadding: 2 },
+                columnStyles: {
+                    0: { cellWidth: 80, fontStyle: 'bold' },
+                    1: { halign: 'center', cellWidth: 30 },
+                },
+                didParseCell: (data) => {
+                    if (data.section === 'body' && data.cell.raw === 'TOTAL') {
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.fillColor = [243, 244, 246];
+                    }
+                },
+            });
+        }
 
         // ━━━ Page 2: Trip Assignments ━━━
         const allTripsPdf: string[][] = [];
@@ -664,10 +844,13 @@ export default function DriverPlanningSection() {
                 currentY += 6;
             }
 
+            // Workdays-by-Location summary box — rendered AFTER the daily schedule
+            // table to avoid overlapping the table content on the right side.
+            const driverBreakdown = buildLocationBreakdown(driver);
+
             // Daily schedule table
             autoTable(doc, {
-                startY: currentY + 2,
-                head: [['Date', 'Day', 'Status', 'Load Ref / Trip #', 'Location', 'Route']],
+                startY: currentY + 2, head: [['Date', 'Day', 'Status', 'Load Ref / Trip #', 'Location', 'Route']],
                 body: daysInMonth.map((day) => {
                     const key = format(day, 'yyyy-MM-dd');
                     const status = driver.dayStatuses[key] || 'off';
@@ -679,7 +862,7 @@ export default function DriverPlanningSection() {
                         const arr = t.arrival_date || t.departure_date;
                         return key >= dep && key <= arr;
                     });
-                    const route = matchingTrip ? `${matchingTrip.origin || '?'} → ${matchingTrip.destination || '?'}` : '';
+                    const route = matchingTrip ? `${matchingTrip.origin || '?'} -> ${matchingTrip.destination || '?'}` : '';
                     return [
                         format(day, 'dd MMM'),
                         format(day, 'EEE'),
@@ -693,12 +876,12 @@ export default function DriverPlanningSection() {
                 headStyles: { fillColor: brandColor, fontSize: 7.5, halign: 'center' },
                 styles: { fontSize: 7, cellPadding: 1.5 },
                 columnStyles: {
-                    0: { cellWidth: 20 },
-                    1: { cellWidth: 14 },
-                    2: { cellWidth: 22 },
-                    3: { cellWidth: 40 },
-                    4: { cellWidth: 30 },
-                    5: { cellWidth: 50 },
+                    0: { cellWidth: 18 },
+                    1: { cellWidth: 12 },
+                    2: { cellWidth: 18 },
+                    3: { cellWidth: 38 },
+                    4: { cellWidth: 32 },
+                    5: { cellWidth: 60 },
                 },
                 didParseCell: (data) => {
                     if (data.section === 'body' && data.column.index === 2) {
@@ -710,6 +893,28 @@ export default function DriverPlanningSection() {
                     }
                 },
             });
+
+            // Workdays-by-Location summary table (below the daily schedule)
+            {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const afterScheduleY = (doc as any).lastAutoTable?.finalY || 160;
+                autoTable(doc, {
+                    startY: afterScheduleY + 6,
+                    head: [[`Workdays by Location (Total: ${driver.daysAtWork})`, 'Days']],
+                    body: driverBreakdown.length > 0
+                        ? driverBreakdown.map((entry) => [entry.location, String(entry.days)])
+                        : [['No work days recorded', '0']],
+                    theme: 'grid',
+                    headStyles: { fillColor: brandColor, fontSize: 8 },
+                    styles: { fontSize: 7.5, cellPadding: 2 },
+                    columnStyles: {
+                        0: { cellWidth: 80, fontStyle: 'bold' },
+                        1: { halign: 'center', cellWidth: 20 },
+                    },
+                    margin: { left: 14 },
+                    tableWidth: 100,
+                });
+            }
 
             // Trip details section if driver has trips
             if (driver.trips.length > 0) {
@@ -842,11 +1047,12 @@ export default function DriverPlanningSection() {
                             )}
                             {/* Legend - compact inline */}
                             <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Work</span>
+                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-700 inline-block" /> Trip (Work)</span>
+                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-200 border border-yellow-300 inline-block" /> Work · Mutare</span>
+                                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-200 border border-red-300 inline-block" /> Work · Other</span>
                                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Leave</span>
                                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-purple-300 inline-block" /> Off Day</span>
                                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-slate-200 border inline-block" /> Off</span>
-                                <span className="flex items-center gap-1 pl-1.5 border-l border-slate-300"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Trip</span>
                             </div>
                         </div>
                     </div>
@@ -944,10 +1150,25 @@ function DayCell({ driverName, dateKey, currentStatus, tripName, dayNote, isFutu
         await onClearStatus({ driverName, date: dateKey });
     };
 
+    // Color rules for at_work cells:
+    //  - Auto-derived from a trip (tripName present)        → dark green
+    //  - Manual at_work at Mutare                           → light yellow
+    //  - Manual at_work at any other location (or no note)  → light red
+    const atWorkColor =
+        currentStatus === 'at_work'
+            ? tripName
+                ? 'bg-green-700'
+                : dayNote === 'Mutare'
+                    ? 'bg-yellow-200'
+                    : 'bg-red-200'
+            : null;
+
+    const cellColor = atWorkColor ?? DAY_STATUS_COLORS[currentStatus];
+
     if (isAutomatic) {
         return (
             <div
-                className={`w-5 h-5 rounded-[3px] mx-auto ${DAY_STATUS_COLORS[currentStatus]}`}
+                className={`w-5 h-5 rounded-[3px] mx-auto ${cellColor}`}
                 title={DAY_STATUS_LABELS[currentStatus]}
             />
         );
@@ -966,7 +1187,7 @@ function DayCell({ driverName, dateKey, currentStatus, tripName, dayNote, isFutu
                     className="w-5 h-5 rounded-[3px] mx-auto relative focus:outline-none focus:ring-1 focus:ring-slate-400 focus:ring-offset-1 cursor-pointer transition-transform hover:scale-110"
                     type="button"
                 >
-                    <div className={`w-full h-full rounded-[3px] ${DAY_STATUS_COLORS[currentStatus]}`} />
+                    <div className={`w-full h-full rounded-[3px] ${cellColor}`} />
                     {tripName && (
                         <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-green-500 border border-white" />
                     )}

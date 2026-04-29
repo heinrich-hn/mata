@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { getDefaultRiskScore } from "@/lib/driverBehaviorRiskScores";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -185,15 +186,43 @@ export default function DriverBehaviorEditModal({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Speeding">Speeding</SelectItem>
-                    <SelectItem value="Harsh Braking">Harsh Braking</SelectItem>
-                    <SelectItem value="Harsh Acceleration">Harsh Acceleration</SelectItem>
-                    <SelectItem value="Sharp Cornering">Sharp Cornering</SelectItem>
-                    <SelectItem value="Accident">Accident</SelectItem>
-                    <SelectItem value="Near Miss">Near Miss</SelectItem>
-                    <SelectItem value="Traffic Violation">Traffic Violation</SelectItem>
-                    <SelectItem value="Customer Complaint">Customer Complaint</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    {(() => {
+                      // Canonical event types ingested by the
+                      // import-driver-behavior edge function (EVENT_TYPE_MAP values).
+                      const canonical = [
+                        "Harsh Acceleration",
+                        "Harsh Braking",
+                        "Sharp Cornering",
+                        "Speed Limit Violation",
+                        "Lane Weaving",
+                        "Tailgating",
+                        "Distracted Driving",
+                        "Cell Phone Use",
+                        "Seatbelt Violation",
+                        "Driver Unbelted",
+                        "Passenger Unbelted",
+                        "Passenger Limit",
+                        "Fatigue Alert",
+                        "Yawn Alert",
+                        "Obstruction",
+                        "Violent Left Turn",
+                        "Violent Turn",
+                        "Possible Accident",
+                        "Accident",
+                        "Near Miss",
+                        "Traffic Violation",
+                        "Customer Complaint",
+                        "Speeding",
+                        "Other",
+                      ];
+                      const current = edited.event_type ?? event.event_type;
+                      const all = current && !canonical.includes(current)
+                        ? [...canonical, current]
+                        : canonical;
+                      return all.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
@@ -248,6 +277,51 @@ export default function DriverBehaviorEditModal({
                   onChange={(e) => setEdited({ ...edited, points: parseInt(e.target.value) || 0 })}
                 />
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="risk_score">Risk Score (1-5)</Label>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={
+                    edited.risk_score != null
+                      ? String(edited.risk_score)
+                      : event.risk_score != null
+                        ? String(event.risk_score)
+                        : "__none__"
+                  }
+                  onValueChange={(v) =>
+                    setEdited({ ...edited, risk_score: v === "__none__" ? null : Number(v) })
+                  }
+                >
+                  <SelectTrigger id="risk_score" className="flex-1">
+                    <SelectValue placeholder="Not assigned" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Not assigned</SelectItem>
+                    <SelectItem value="1">1 — Minimal</SelectItem>
+                    <SelectItem value="2">2 — Low</SelectItem>
+                    <SelectItem value="3">3 — Moderate</SelectItem>
+                    <SelectItem value="4">4 — High</SelectItem>
+                    <SelectItem value="5">5 — Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const type = edited.event_type ?? event.event_type;
+                    setEdited({ ...edited, risk_score: getDefaultRiskScore(type) });
+                  }}
+                  title="Auto-suggest risk score from event type"
+                >
+                  Auto-suggest
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Suggested for {edited.event_type ?? event.event_type}: {getDefaultRiskScore(edited.event_type ?? event.event_type)}/5
+              </p>
             </div>
 
             <div>

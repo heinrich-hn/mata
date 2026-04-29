@@ -19,6 +19,7 @@ import { useSurfsightDevices, resolveEventMedia, isSurfsightUrl } from "@/hooks/
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { generateDriverCoachingPDF, fetchAllSnapshotsBase64 } from "@/lib/driverBehaviorExport";
+import { getDefaultRiskScore } from "@/lib/driverBehaviorRiskScores";
 import { format } from "date-fns";
 import {
   AlertTriangle,
@@ -71,6 +72,9 @@ export default function DriverCoachingModal({
   const [conductedBy, setConductedBy] = useState("");
   const [coachingNotes, setCoachingNotes] = useState("");
   const [actionPlan, setActionPlan] = useState("");
+  const [riskScore, setRiskScore] = useState<number | null>(
+    event.risk_score ?? getDefaultRiskScore(event.event_type),
+  );
   const [driverAcknowledged, setDriverAcknowledged] = useState(false);
   const [driverSignature, setDriverSignature] = useState(event.driver_name || "");
   const [debrieferSignature, setDebrieferSignature] = useState("");
@@ -108,6 +112,7 @@ export default function DriverCoachingModal({
       ...(conductedBy ? { debrief_conducted_by: conductedBy } : {}),
       ...(coachingNotes ? { debrief_notes: coachingNotes } : {}),
       ...(actionPlan ? { coaching_action_plan: actionPlan } : {}),
+      ...(riskScore != null ? { risk_score: riskScore } : {}),
       ...(driverSignature ? { driver_signature: driverSignature } : {}),
       ...(debrieferSignature ? { debriefer_signature: debrieferSignature } : {}),
       ...(witnessSignature ? { witness_signature: witnessSignature } : {}),
@@ -130,12 +135,17 @@ export default function DriverCoachingModal({
       toast({ title: "Acknowledgment Required", description: "Driver must acknowledge", variant: "destructive" });
       return;
     }
+    if (riskScore == null) {
+      toast({ title: "Risk Score Required", description: "Assign a risk score (1-5) for this event type", variant: "destructive" });
+      return;
+    }
 
     const coachingData: CoachingInsert = {
       debrief_date: format(new Date(), "yyyy-MM-dd"),
       debrief_conducted_by: conductedBy,
       debrief_notes: coachingNotes,
       coaching_action_plan: actionPlan,
+      risk_score: riskScore,
       driver_acknowledged: driverAcknowledged,
       driver_signature: driverSignature || null,
       debriefer_signature: debrieferSignature || null,
@@ -296,6 +306,30 @@ export default function DriverCoachingModal({
                 rows={3}
                 className="mt-1.5 resize-none text-base"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="riskScore" className="text-base font-medium text-gray-800">
+                Risk Score for {event.event_type} <span className="text-red-500">*</span>
+              </Label>
+              <p className="text-xs text-gray-500 mt-1 mb-1.5">
+                Auto-suggested based on event type — adjust if needed (1 = minimal, 5 = critical).
+              </p>
+              <Select
+                value={riskScore != null ? String(riskScore) : ""}
+                onValueChange={(v) => setRiskScore(v ? Number(v) : null)}
+              >
+                <SelectTrigger id="riskScore" className="h-11 text-base">
+                  <SelectValue placeholder="Select risk score (1-5)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 — Minimal</SelectItem>
+                  <SelectItem value="2">2 — Low</SelectItem>
+                  <SelectItem value="3">3 — Moderate</SelectItem>
+                  <SelectItem value="4">4 — High</SelectItem>
+                  <SelectItem value="5">5 — Critical</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
