@@ -23,18 +23,10 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import {
-    addStyledSheet,
-    addSummarySheet,
-    createWorkbook,
-    saveWorkbook,
-} from "@/utils/excelStyles";
-import {
-    generateReportPDF,
-    type ReportColumn,
-    type ReportSection,
-    type ReportSpec,
-} from "@/lib/tripReportExports";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
     CalendarRange,
     Download,
@@ -67,18 +59,8 @@ type Trip = {
 
 type GapRow = {
     fleet: string;
-    vehicleType: string;
-    driver: string;
-    route: string;
-    origin: string;
-    destination: string;
-    tripNumber: string;
-    prevTripNumber: string;
-    prevArrival: Date;
     nextDeparture: Date;
     gapDays: number;
-    distanceKm: number;
-    revenueUSD: number;
 };
 
 type FilterState = {
@@ -102,36 +84,24 @@ const monthsAgoISO = (n: number) => {
     return d.toISOString().split("T")[0];
 };
 
-const safeNum = (v: unknown): number => {
-    const n = typeof v === "number" ? v : Number(v);
-    return Number.isFinite(n) ? n : 0;
+// ISO 8601 week number (Monday-start, week containing Thursday belongs to that year).
+const isoWeekKey = (d: Date): string => {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
 };
 
-const fmtDate = (d: Date) => d.toLocaleDateString();
+const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 
-const weekKey = (d: Date) => {
-    const jan1 = new Date(d.getFullYear(), 0, 1);
-    const weekNum = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
-    return `${d.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
-};
+const fmtDateLong = (d: Date) =>
+    d.toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
 
-const monthKey = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-
-// ── Stat helpers ────────────────────────────────────────────────────────────
-const mean = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
-const median = (arr: number[]) => {
-    if (!arr.length) return 0;
-    const s = [...arr].sort((a, b) => a - b);
-    const mid = Math.floor(s.length / 2);
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-};
-const stdDev = (arr: number[]) => {
-    if (arr.length < 2) return 0;
-    const m = mean(arr);
-    return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - 1));
-};
-const round = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
+// Number formatting matching the user's example: "5.00", "12.00", etc.
+const fmt2 = (n: number) =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ── Component ───────────────────────────────────────────────────────────────
 export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
@@ -207,8 +177,8 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         };
     }, [allTrips]);
 
-    // ── Build filtered gap rows ─────────────────────────────────────────────
-    const gapRows = useMemo<GapRow[]>(() => {
+    // ── Build filtered gap rows + total fleets in scope ─────────────────────
+    const { gapRows, totalFleetsInScope } = useMemo(() => {
         const fromDate = filters.from ? new Date(filters.from) : null;
         const toDate = filters.to ? new Date(`${filters.to}T23:59:59`) : null;
 
@@ -230,9 +200,11 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
             return true;
         });
 
+        const fleetSet = new Set<string>();
         const byFleet = new Map<string, Trip[]>();
         for (const t of trips) {
             const fn = t.fleet_number!;
+            fleetSet.add(fn);
             if (!byFleet.has(fn)) byFleet.set(fn, []);
             byFleet.get(fn)!.push(t);
         }
@@ -258,49 +230,83 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 );
                 rows.push({
                     fleet,
-                    vehicleType: curr.vehicle_type || prev.vehicle_type || "Unknown",
-                    driver: curr.driver_name || "—",
-                    route: `${curr.origin || "—"} → ${curr.destination || "—"}`,
-                    origin: curr.origin || "—",
-                    destination: curr.destination || "—",
-                    tripNumber: curr.trip_number || curr.id.slice(0, 8),
-                    prevTripNumber: prev.trip_number || prev.id.slice(0, 8),
-                    prevArrival: prevEnd,
                     nextDeparture: currStart,
                     gapDays: gap,
-                    distanceKm: safeNum(curr.distance_km),
-                    revenueUSD:
-                        safeNum(curr.final_invoice_amount) ||
-                        safeNum(curr.base_revenue) + safeNum(curr.additional_revenue),
                 });
             }
         }
-        return rows;
+        return { gapRows: rows, totalFleetsInScope: fleetSet.size };
     }, [allTrips, filters]);
+
+    // ── Aggregate gap rows by week × fleet ─────────────────────────────────
+    type FleetWeekRow = {
+        fleet: string;
+        week: string;
+        gaps: number;
+        totalGapDays: number;
+        avgGapDays: number;
+    };
+    type WeekBlock = {
+        week: string;
+        rows: FleetWeekRow[];
+        totalDaysStanding: number;
+        totalWorkingDays: number;
+        pctStanding: number;
+        pctMinus5: number;
+    };
+
+    const weekBlocks = useMemo<WeekBlock[]>(() => {
+        const buckets = new Map<string, Map<string, { gaps: number; total: number }>>();
+        for (const r of gapRows) {
+            const wk = isoWeekKey(r.nextDeparture);
+            if (!buckets.has(wk)) buckets.set(wk, new Map());
+            const fleetMap = buckets.get(wk)!;
+            const e = fleetMap.get(r.fleet) || { gaps: 0, total: 0 };
+            e.gaps += 1;
+            e.total += r.gapDays;
+            fleetMap.set(r.fleet, e);
+        }
+        const sortedWeeks = [...buckets.keys()].sort().reverse(); // most recent first
+        const totalWorkingDaysPerWeek = totalFleetsInScope * 7;
+        return sortedWeeks.map((wk) => {
+            const fleetMap = buckets.get(wk)!;
+            const rows: FleetWeekRow[] = [...fleetMap.entries()]
+                .map(([fleet, v]) => ({
+                    fleet,
+                    week: wk,
+                    gaps: v.gaps,
+                    totalGapDays: v.total,
+                    avgGapDays: v.gaps > 0 ? v.total / v.gaps : 0,
+                }))
+                .sort((a, b) =>
+                    a.fleet.localeCompare(b.fleet, undefined, { numeric: true }),
+                );
+            const totalDaysStanding = rows.reduce((s, r) => s + r.totalGapDays, 0);
+            const pctStanding =
+                totalWorkingDaysPerWeek > 0
+                    ? (totalDaysStanding / totalWorkingDaysPerWeek) * 100
+                    : 0;
+            return {
+                week: wk,
+                rows,
+                totalDaysStanding,
+                totalWorkingDays: totalWorkingDaysPerWeek,
+                pctStanding: Math.round(pctStanding),
+                pctMinus5: Math.max(0, Math.round(pctStanding) - 5),
+            };
+        });
+    }, [gapRows, totalFleetsInScope]);
 
     // ── Live preview KPIs ───────────────────────────────────────────────────
     const kpi = useMemo(() => {
-        const gaps = gapRows.map((r) => r.gapDays);
-        const fleets = new Set(gapRows.map((r) => r.fleet));
-        const idle = gapRows.filter((r) => r.gapDays > 0).length;
-        const longGaps = gapRows.filter((r) => r.gapDays >= 7).length;
+        const totalGapDays = gapRows.reduce((s, r) => s + r.gapDays, 0);
         return {
             measured: gapRows.length,
-            fleets: fleets.size,
-            totalGapDays: gaps.reduce((a, b) => a + b, 0),
-            avg: round(mean(gaps)),
-            median: round(median(gaps)),
-            stdDev: round(stdDev(gaps)),
-            max: gaps.length ? Math.max(...gaps) : 0,
-            min: gaps.length ? Math.min(...gaps) : 0,
-            idleEvents: idle,
-            longIdleEvents: longGaps,
-            utilisationPct:
-                gapRows.length > 0
-                    ? round(((gapRows.length - idle) / gapRows.length) * 100)
-                    : 0,
+            fleets: totalFleetsInScope,
+            weeks: weekBlocks.length,
+            totalGapDays,
         };
-    }, [gapRows]);
+    }, [gapRows, totalFleetsInScope, weekBlocks]);
 
     const toggleSet = (key: keyof FilterState, value: string) => {
         setFilters((prev) => {
@@ -320,9 +326,9 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
             fleets: new Set(),
         }));
 
-    // ── Excel export with rich analytics ────────────────────────────────────
+    // ── Excel export (professional weekly format) ───────────────────────────
     const handleExport = async () => {
-        if (gapRows.length === 0) {
+        if (weekBlocks.length === 0) {
             toast({
                 title: "Nothing to export",
                 description: "Adjust filters — current selection has no gap data.",
@@ -332,301 +338,268 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         }
         setExporting(true);
         try {
-            const wb = createWorkbook();
+            const wb = new ExcelJS.Workbook();
+            wb.creator = "Car Craft Co Fleet Management";
+            wb.created = new Date();
 
-            // 1) Executive Summary
-            addSummarySheet(wb, "Executive Summary", {
-                title: "FLEET GAP DAYS — EXECUTIVE SUMMARY",
-                subtitle: `Period ${filters.from} → ${filters.to}`,
-                rows: [
-                    ["Reporting Period", `${filters.from} → ${filters.to}`],
-                    ["Fleets Analysed", kpi.fleets],
-                    ["Gap Events Measured", kpi.measured],
-                    ["Idle Events (gap > 0)", kpi.idleEvents],
-                    ["Extended Idle Events (≥ 7 days)", kpi.longIdleEvents],
-                    ["Total Gap Days", kpi.totalGapDays],
-                    ["Average Gap (days)", kpi.avg],
-                    ["Median Gap (days)", kpi.median],
-                    ["Std. Deviation (days)", kpi.stdDev],
-                    ["Maximum Gap (days)", kpi.max],
-                    ["Minimum Gap (days)", kpi.min],
-                    ["Effective Utilisation %", `${kpi.utilisationPct}%`],
-                ],
+            const ws = wb.addWorksheet("Fleet Gap Days — Weekly", {
+                views: [{ state: "normal", showGridLines: false }],
+                pageSetup: {
+                    paperSize: 9, // A4
+                    orientation: "portrait",
+                    fitToPage: true,
+                    fitToWidth: 1,
+                    fitToHeight: 0,
+                    margins: {
+                        left: 0.5,
+                        right: 0.5,
+                        top: 0.6,
+                        bottom: 0.6,
+                        header: 0.3,
+                        footer: 0.3,
+                    },
+                },
             });
 
-            // 2) Filters Applied
-            addSummarySheet(wb, "Filters Applied", {
-                title: "FILTERS APPLIED TO THIS REPORT",
-                rows: [
-                    ["Date From", filters.from],
-                    ["Date To", filters.to],
-                    [
-                        "Vehicle Types",
-                        filters.vehicleTypes.size ? [...filters.vehicleTypes].join(", ") : "All",
-                    ],
-                    ["Fleets", filters.fleets.size ? [...filters.fleets].join(", ") : "All"],
-                    ["Drivers", filters.drivers.size ? [...filters.drivers].join(", ") : "All"],
-                    ["Routes", filters.routes.size ? [...filters.routes].join(", ") : "All"],
-                ],
-            });
-
-            // 3) Gap Details
-            addStyledSheet(wb, "Gap Details", {
-                title: "FLEET GAP DAYS — DETAIL",
-                subtitle: "Each gap = days between previous arrival and next departure",
-                headers: [
-                    "Fleet",
-                    "Vehicle Type",
-                    "Driver",
-                    "Prev Trip #",
-                    "Prev Arrival",
-                    "Next Trip #",
-                    "Next Departure",
-                    "Route",
-                    "Gap Days",
-                    "Distance (km)",
-                    "Revenue (USD)",
-                ],
-                rows: gapRows.map((r) => [
-                    r.fleet,
-                    r.vehicleType,
-                    r.driver,
-                    r.prevTripNumber,
-                    fmtDate(r.prevArrival),
-                    r.tripNumber,
-                    fmtDate(r.nextDeparture),
-                    r.route,
-                    r.gapDays,
-                    round(r.distanceKm, 0),
-                    round(r.revenueUSD, 2),
-                ]),
-            });
-
-            // Helper to compute breakdown rows
-            const buildBreakdown = (
-                grouper: (r: GapRow) => string,
-            ): (string | number)[][] => {
-                const map = new Map<string, GapRow[]>();
-                for (const r of gapRows) {
-                    const k = grouper(r) || "—";
-                    if (!map.has(k)) map.set(k, []);
-                    map.get(k)!.push(r);
-                }
-                const rows = [...map.entries()].map(([k, arr]) => {
-                    const gaps = arr.map((r) => r.gapDays);
-                    const total = gaps.reduce((a, b) => a + b, 0);
-                    const idle = arr.filter((r) => r.gapDays > 0).length;
-                    const utilisation =
-                        arr.length > 0 ? round(((arr.length - idle) / arr.length) * 100) : 0;
-                    return [
-                        k,
-                        arr.length,
-                        total,
-                        round(mean(gaps)),
-                        round(median(gaps)),
-                        round(stdDev(gaps)),
-                        gaps.length ? Math.max(...gaps) : 0,
-                        idle,
-                        `${utilisation}%`,
-                    ];
-                });
-                rows.sort((a, b) => Number(b[2]) - Number(a[2]));
-                return rows;
-            };
-
-            const breakdownHeaders = [
-                "Group",
-                "Gap Events",
-                "Total Gap Days",
-                "Avg Gap",
-                "Median Gap",
-                "Std. Dev",
-                "Max Gap",
-                "Idle Events",
-                "Utilisation %",
+            // Column widths (5 columns: Fleet | Week | Gaps | Total Gap Days | Avg Gap Days)
+            ws.columns = [
+                { width: 14 },
+                { width: 14 },
+                { width: 12 },
+                { width: 18 },
+                { width: 16 },
             ];
 
-            // 4) By Fleet
-            addStyledSheet(wb, "By Fleet", {
-                title: "PERFORMANCE BREAKDOWN — BY FLEET",
-                headers: ["Fleet", ...breakdownHeaders.slice(1)],
-                rows: buildBreakdown((r) => r.fleet),
-            });
+            // Tokens
+            const NAVY = "FF1F3864";
+            const NAVY_LIGHT = "FFE8EEF6";
+            const ALT = "FFF7F9FC";
+            const BORDER = "FFD9D9D9";
+            const GREY_TEXT = "FF666666";
+            const WHITE = "FFFFFFFF";
+            const TOTAL_BG = "FFD1FAE5";
+            const TOTAL_TXT = "FF065F46";
 
-            // 5) By Vehicle Type
-            addStyledSheet(wb, "By Vehicle Type", {
-                title: "PERFORMANCE BREAKDOWN — BY VEHICLE TYPE",
-                headers: ["Vehicle Type", ...breakdownHeaders.slice(1)],
-                rows: buildBreakdown((r) => r.vehicleType),
-            });
+            const thinBorder = {
+                top: { style: "thin" as const, color: { argb: BORDER } },
+                bottom: { style: "thin" as const, color: { argb: BORDER } },
+                left: { style: "thin" as const, color: { argb: BORDER } },
+                right: { style: "thin" as const, color: { argb: BORDER } },
+            };
 
-            // 6) By Driver
-            addStyledSheet(wb, "By Driver", {
-                title: "PERFORMANCE BREAKDOWN — BY DRIVER",
-                headers: ["Driver", ...breakdownHeaders.slice(1)],
-                rows: buildBreakdown((r) => r.driver),
-            });
+            let cursor = 1;
 
-            // 7) By Route
-            addStyledSheet(wb, "By Route", {
-                title: "PERFORMANCE BREAKDOWN — BY ROUTE",
-                headers: ["Route", ...breakdownHeaders.slice(1)],
-                rows: buildBreakdown((r) => r.route),
-            });
+            for (let bIdx = 0; bIdx < weekBlocks.length; bIdx++) {
+                const block = weekBlocks[bIdx];
 
-            // 8) Weekly Trend with WoW change
-            const weeklyMap = new Map<string, { totalGap: number; count: number }>();
-            for (const r of gapRows) {
-                const k = weekKey(r.nextDeparture);
-                const e = weeklyMap.get(k) || { totalGap: 0, count: 0 };
-                e.totalGap += r.gapDays;
-                e.count += 1;
-                weeklyMap.set(k, e);
-            }
-            const weeklySorted = [...weeklyMap.entries()].sort(([a], [b]) => a.localeCompare(b));
-            const weeklyRows: (string | number)[][] = weeklySorted.map(([wk, v], idx) => {
-                const avg = v.count > 0 ? v.totalGap / v.count : 0;
-                let wow: string | number = "—";
-                if (idx > 0) {
-                    const prev = weeklySorted[idx - 1][1];
-                    const prevAvg = prev.count > 0 ? prev.totalGap / prev.count : 0;
-                    if (prevAvg > 0) wow = `${round(((avg - prevAvg) / prevAvg) * 100)}%`;
-                }
-                return [wk, v.count, v.totalGap, round(avg), wow];
-            });
-            addStyledSheet(wb, "Weekly Trend", {
-                title: "GAP DAYS — WEEKLY TREND",
-                subtitle: "Avg gap per week with week-over-week change",
-                headers: ["Week", "Gap Events", "Total Gap Days", "Avg Gap", "WoW Δ"],
-                rows: weeklyRows,
-            });
-
-            // 9) Monthly Trend with MoM change
-            const monthlyMap = new Map<string, { totalGap: number; count: number }>();
-            for (const r of gapRows) {
-                const k = monthKey(r.nextDeparture);
-                const e = monthlyMap.get(k) || { totalGap: 0, count: 0 };
-                e.totalGap += r.gapDays;
-                e.count += 1;
-                monthlyMap.set(k, e);
-            }
-            const monthlySorted = [...monthlyMap.entries()].sort(([a], [b]) =>
-                a.localeCompare(b),
-            );
-            const monthlyRows: (string | number)[][] = monthlySorted.map(([mk, v], idx) => {
-                const avg = v.count > 0 ? v.totalGap / v.count : 0;
-                let mom: string | number = "—";
-                if (idx > 0) {
-                    const prev = monthlySorted[idx - 1][1];
-                    const prevAvg = prev.count > 0 ? prev.totalGap / prev.count : 0;
-                    if (prevAvg > 0) mom = `${round(((avg - prevAvg) / prevAvg) * 100)}%`;
-                }
-                return [mk, v.count, v.totalGap, round(avg), mom];
-            });
-            addStyledSheet(wb, "Monthly Trend", {
-                title: "GAP DAYS — MONTHLY TREND",
-                subtitle: "Avg gap per month with month-over-month change",
-                headers: ["Month", "Gap Events", "Total Gap Days", "Avg Gap", "MoM Δ"],
-                rows: monthlyRows,
-            });
-
-            // 10) Period Comparison: split current period in half (recent vs prior)
-            if (gapRows.length >= 2) {
-                const sortedByDate = [...gapRows].sort(
-                    (a, b) => a.nextDeparture.getTime() - b.nextDeparture.getTime(),
-                );
-                const mid = Math.floor(sortedByDate.length / 2);
-                const prior = sortedByDate.slice(0, mid);
-                const recent = sortedByDate.slice(mid);
-
-                const stat = (arr: GapRow[]) => {
-                    const gaps = arr.map((r) => r.gapDays);
-                    const total = gaps.reduce((a, b) => a + b, 0);
-                    const idle = arr.filter((r) => r.gapDays > 0).length;
-                    return {
-                        events: arr.length,
-                        total,
-                        avg: round(mean(gaps)),
-                        median: round(median(gaps)),
-                        max: gaps.length ? Math.max(...gaps) : 0,
-                        idle,
-                        utilisation:
-                            arr.length > 0 ? round(((arr.length - idle) / arr.length) * 100) : 0,
-                    };
+                // Title row
+                ws.mergeCells(cursor, 1, cursor, 5);
+                const titleCell = ws.getCell(cursor, 1);
+                titleCell.value = "FLEET GAP DAYS — WEEKLY";
+                titleCell.font = {
+                    name: "Calibri",
+                    bold: true,
+                    size: 14,
+                    color: { argb: NAVY },
                 };
-                const sp = stat(prior);
-                const sr = stat(recent);
-                const delta = (a: number, b: number) =>
-                    a === 0 ? "—" : `${round(((b - a) / a) * 100)}%`;
+                titleCell.alignment = { vertical: "middle", horizontal: "left" };
+                ws.getRow(cursor).height = 26;
+                cursor += 1;
 
-                addStyledSheet(wb, "Period Comparison", {
-                    title: "PERFORMANCE COMPARISON — PRIOR HALF vs RECENT HALF",
-                    subtitle: "Splits the filtered window in half for trend direction",
-                    headers: ["Metric", "Prior Half", "Recent Half", "Δ (%)"],
-                    rows: [
-                        ["Gap Events", sp.events, sr.events, delta(sp.events, sr.events)],
-                        ["Total Gap Days", sp.total, sr.total, delta(sp.total, sr.total)],
-                        ["Avg Gap (days)", sp.avg, sr.avg, delta(sp.avg, sr.avg)],
-                        ["Median Gap (days)", sp.median, sr.median, delta(sp.median, sr.median)],
-                        ["Max Gap (days)", sp.max, sr.max, delta(sp.max, sr.max)],
-                        ["Idle Events", sp.idle, sr.idle, delta(sp.idle, sr.idle)],
-                        [
-                            "Utilisation %",
-                            `${sp.utilisation}%`,
-                            `${sr.utilisation}%`,
-                            delta(sp.utilisation, sr.utilisation),
-                        ],
-                    ],
+                // Subtitle row
+                ws.mergeCells(cursor, 1, cursor, 5);
+                const subCell = ws.getCell(cursor, 1);
+                subCell.value = `Generated: ${fmtDateLong(new Date())} • Car Craft Co Fleet Management • ${block.week}`;
+                subCell.font = {
+                    name: "Calibri",
+                    italic: true,
+                    size: 9,
+                    color: { argb: GREY_TEXT },
+                };
+                subCell.alignment = { vertical: "middle", horizontal: "left" };
+                ws.getRow(cursor).height = 16;
+                cursor += 2; // blank spacer row
+
+                // Header row
+                const headerRow = ws.getRow(cursor);
+                headerRow.values = ["Fleet", "Week", "Gaps", "Total Gap Days", "Avg Gap Days"];
+                headerRow.height = 22;
+                headerRow.eachCell((cell) => {
+                    cell.fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: NAVY },
+                    };
+                    cell.font = {
+                        name: "Calibri",
+                        bold: true,
+                        size: 10,
+                        color: { argb: WHITE },
+                    };
+                    cell.alignment = {
+                        vertical: "middle",
+                        horizontal: "center",
+                        wrapText: true,
+                    };
+                    cell.border = thinBorder;
                 });
+                cursor += 1;
+
+                // Data rows
+                block.rows.forEach((r, i) => {
+                    const row = ws.getRow(cursor);
+                    row.values = [
+                        r.fleet,
+                        r.week,
+                        r.gaps,
+                        r.totalGapDays,
+                        round(r.avgGapDays, 2),
+                    ];
+                    row.eachCell((cell, colNum) => {
+                        cell.font = { name: "Calibri", size: 10, color: { argb: "FF111827" } };
+                        cell.alignment = {
+                            vertical: "middle",
+                            horizontal: colNum <= 2 ? "left" : "right",
+                        };
+                        cell.border = thinBorder;
+                        if (i % 2 === 1) {
+                            cell.fill = {
+                                type: "pattern",
+                                pattern: "solid",
+                                fgColor: { argb: ALT },
+                            };
+                        }
+                        if (colNum >= 3 && typeof cell.value === "number") {
+                            cell.numFmt = "#,##0.00";
+                        }
+                    });
+                    cursor += 1;
+                });
+
+                // Total Days Standing Between Trips (highlighted)
+                {
+                    const row = ws.getRow(cursor);
+                    ws.mergeCells(cursor, 1, cursor, 3);
+                    row.getCell(1).value = "Total Days Standing Between Trips";
+                    row.getCell(4).value = block.totalDaysStanding;
+                    row.getCell(1).font = {
+                        name: "Calibri",
+                        bold: true,
+                        size: 10,
+                        color: { argb: NAVY },
+                    };
+                    row.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
+                    row.getCell(1).fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: NAVY_LIGHT },
+                    };
+                    row.getCell(4).font = {
+                        name: "Calibri",
+                        bold: true,
+                        size: 10,
+                        color: { argb: NAVY },
+                    };
+                    row.getCell(4).alignment = { vertical: "middle", horizontal: "right" };
+                    row.getCell(4).fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: NAVY_LIGHT },
+                    };
+                    row.getCell(4).numFmt = "#,##0.00";
+                    row.getCell(5).fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: NAVY_LIGHT },
+                    };
+                    [1, 2, 3, 4, 5].forEach((c) => (row.getCell(c).border = thinBorder));
+                    row.height = 20;
+                    cursor += 2; // spacer
+                }
+
+                // Total Working Days
+                {
+                    const row = ws.getRow(cursor);
+                    ws.mergeCells(cursor, 1, cursor, 3);
+                    row.getCell(1).value = "Total Working Days";
+                    row.getCell(4).value = block.totalWorkingDays;
+                    row.getCell(1).font = { name: "Calibri", bold: true, size: 10 };
+                    row.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
+                    row.getCell(4).font = { name: "Calibri", bold: true, size: 10 };
+                    row.getCell(4).alignment = { vertical: "middle", horizontal: "right" };
+                    row.getCell(4).numFmt = "#,##0.00";
+                    [1, 2, 3, 4, 5].forEach((c) => (row.getCell(c).border = thinBorder));
+                    cursor += 1;
+                }
+
+                // Percentage of Days Standing
+                {
+                    const row = ws.getRow(cursor);
+                    ws.mergeCells(cursor, 1, cursor, 3);
+                    row.getCell(1).value = "Percentage of Days Standing";
+                    row.getCell(4).value = `${block.pctStanding}%`;
+                    row.getCell(1).font = { name: "Calibri", bold: true, size: 10 };
+                    row.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
+                    row.getCell(4).font = { name: "Calibri", bold: true, size: 10 };
+                    row.getCell(4).alignment = { vertical: "middle", horizontal: "right" };
+                    [1, 2, 3, 4, 5].forEach((c) => (row.getCell(c).border = thinBorder));
+                    cursor += 2; // spacer
+                }
+
+                // Total Percentage -5%
+                {
+                    const row = ws.getRow(cursor);
+                    ws.mergeCells(cursor, 1, cursor, 3);
+                    row.getCell(1).value = "Total Percentage -5%";
+                    row.getCell(4).value = `${block.pctMinus5}%`;
+                    row.getCell(1).font = {
+                        name: "Calibri",
+                        bold: true,
+                        size: 10,
+                        color: { argb: TOTAL_TXT },
+                    };
+                    row.getCell(1).alignment = { vertical: "middle", horizontal: "left" };
+                    row.getCell(1).fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: TOTAL_BG },
+                    };
+                    row.getCell(4).font = {
+                        name: "Calibri",
+                        bold: true,
+                        size: 10,
+                        color: { argb: TOTAL_TXT },
+                    };
+                    row.getCell(4).alignment = { vertical: "middle", horizontal: "right" };
+                    row.getCell(4).fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: TOTAL_BG },
+                    };
+                    row.getCell(5).fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: TOTAL_BG },
+                    };
+                    [1, 2, 3, 4, 5].forEach((c) => (row.getCell(c).border = thinBorder));
+                    cursor += 1;
+                }
+
+                // Spacer between weekly blocks
+                if (bIdx < weekBlocks.length - 1) cursor += 3;
             }
 
-            // 11) Top 10 longest gaps + Top/Bottom fleets
-            const topGaps = [...gapRows]
-                .sort((a, b) => b.gapDays - a.gapDays)
-                .slice(0, 10)
-                .map((r) => [
-                    r.fleet,
-                    r.vehicleType,
-                    r.driver,
-                    r.route,
-                    fmtDate(r.prevArrival),
-                    fmtDate(r.nextDeparture),
-                    r.gapDays,
-                ]);
-            addStyledSheet(wb, "Top 10 Longest Gaps", {
-                title: "TOP 10 LONGEST IDLE GAPS",
-                headers: [
-                    "Fleet",
-                    "Vehicle Type",
-                    "Driver",
-                    "Route",
-                    "Prev Arrival",
-                    "Next Departure",
-                    "Gap Days",
-                ],
-                rows: topGaps,
-            });
-
-            const fleetBreakdown = buildBreakdown((r) => r.fleet);
-            const top5Fleets = fleetBreakdown.slice(0, 5);
-            const bottom5Fleets = [...fleetBreakdown]
-                .sort((a, b) => Number(a[2]) - Number(b[2]))
-                .slice(0, 5);
-            addStyledSheet(wb, "Fleet Leaderboard", {
-                title: "FLEETS — TOP 5 (MOST IDLE) vs BOTTOM 5 (LEAST IDLE)",
-                headers: ["Rank", "Group", ...breakdownHeaders.slice(1)],
-                rows: [
-                    ...top5Fleets.map((r, i) => [`Top ${i + 1}`, ...r]),
-                    ["", "", "", "", "", "", "", "", "", ""],
-                    ...bottom5Fleets.map((r, i) => [`Bottom ${i + 1}`, ...r]),
-                ],
-            });
-
-            const fname = `Fleet_Gap_Days_${filters.from}_to_${filters.to}.xlsx`;
-            await saveWorkbook(wb, fname);
+            const fname = `Fleet_Gap_Days_Weekly_${filters.from}_to_${filters.to}.xlsx`;
+            const buffer = await wb.xlsx.writeBuffer();
+            saveAs(
+                new Blob([buffer], {
+                    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                }),
+                fname,
+            );
             toast({
                 title: "Report exported",
-                description: `${fname} downloaded with ${kpi.measured} gap events across ${kpi.fleets} fleets.`,
+                description: `${fname} • ${weekBlocks.length} week${weekBlocks.length === 1 ? "" : "s"}`,
             });
             onOpenChange(false);
         } catch (err) {
@@ -641,9 +614,9 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         }
     };
 
-    // ── Professional PDF export ─────────────────────────────────────────────
+    // ── PDF export (professional weekly format) ─────────────────────────────
     const handleExportPdf = async () => {
-        if (gapRows.length === 0) {
+        if (weekBlocks.length === 0) {
             toast({
                 title: "Nothing to export",
                 description: "Adjust filters — current selection has no gap data.",
@@ -653,301 +626,160 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         }
         setExportingPdf(true);
         try {
-            // Shared breakdown helper (mirrors Excel logic)
-            const buildBreakdownRows = (
-                grouper: (r: GapRow) => string,
-                limit?: number,
-            ): (string | number)[][] => {
-                const map = new Map<string, GapRow[]>();
-                for (const r of gapRows) {
-                    const k = grouper(r) || "—";
-                    if (!map.has(k)) map.set(k, []);
-                    map.get(k)!.push(r);
-                }
-                const rows = [...map.entries()].map(([k, arr]) => {
-                    const gaps = arr.map((r) => r.gapDays);
-                    const total = gaps.reduce((a, b) => a + b, 0);
-                    const idle = arr.filter((r) => r.gapDays > 0).length;
-                    const utilisation =
-                        arr.length > 0 ? round(((arr.length - idle) / arr.length) * 100) : 0;
-                    return [
-                        k,
-                        arr.length,
-                        total,
-                        round(mean(gaps)),
-                        round(median(gaps)),
-                        round(stdDev(gaps)),
-                        gaps.length ? Math.max(...gaps) : 0,
-                        idle,
-                        utilisation,
-                    ] as (string | number)[];
+            const doc = new jsPDF("portrait", "mm", "a4") as jsPDF & {
+                lastAutoTable: { finalY: number };
+            };
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const NAVY: [number, number, number] = [31, 56, 100];
+            const ALT: [number, number, number] = [247, 249, 252];
+            const NAVY_LIGHT: [number, number, number] = [232, 238, 246];
+            const TOTAL_BG: [number, number, number] = [209, 250, 229];
+            const TOTAL_TXT: [number, number, number] = [6, 95, 70];
+            const generatedAt = fmtDateLong(new Date());
+
+            const drawHeaderBand = () => {
+                doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.rect(0, 0, pageWidth, 20, "F");
+                doc.setTextColor(255, 255, 255);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(13);
+                doc.text("FLEET GAP DAYS — WEEKLY", 14, 13);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.text("Car Craft Co Fleet Management", pageWidth - 14, 13, {
+                    align: "right",
                 });
-                rows.sort((a, b) => Number(b[2]) - Number(a[2]));
-                return limit ? rows.slice(0, limit) : rows;
             };
 
-            const breakdownColumns = (groupHeader: string): ReportColumn[] => [
-                { header: groupHeader, width: 28, align: "left" },
-                { header: "Gap Events", width: 14, align: "right", format: "integer" },
-                { header: "Total Gap Days", width: 16, align: "right", format: "integer" },
-                { header: "Avg Gap", width: 12, align: "right", format: "decimal" },
-                { header: "Median Gap", width: 14, align: "right", format: "decimal" },
-                { header: "Std. Dev", width: 12, align: "right", format: "decimal" },
-                { header: "Max Gap", width: 12, align: "right", format: "integer" },
-                { header: "Idle Events", width: 14, align: "right", format: "integer" },
-                { header: "Utilisation %", width: 14, align: "right", format: "decimal" },
-            ];
-
-            const sections: ReportSection[] = [];
-
-            // 1) Executive Summary table
-            sections.push({
-                heading: "Executive Summary",
-                columns: [
-                    { header: "Metric", width: 32, align: "left" },
-                    { header: "Value", width: 24, align: "right" },
-                ],
-                rows: [
-                    ["Reporting Period", `${filters.from} → ${filters.to}`],
-                    ["Fleets Analysed", kpi.fleets],
-                    ["Gap Events Measured", kpi.measured],
-                    ["Idle Events (gap > 0)", kpi.idleEvents],
-                    ["Extended Idle Events (≥ 7 days)", kpi.longIdleEvents],
-                    ["Total Gap Days", kpi.totalGapDays],
-                    ["Average Gap (days)", kpi.avg],
-                    ["Median Gap (days)", kpi.median],
-                    ["Std. Deviation (days)", kpi.stdDev],
-                    ["Maximum Gap (days)", kpi.max],
-                    ["Minimum Gap (days)", kpi.min],
-                    ["Effective Utilisation %", `${kpi.utilisationPct}%`],
-                ],
-            });
-
-            // 2) Filters Applied
-            sections.push({
-                heading: "Filters Applied",
-                columns: [
-                    { header: "Filter", width: 22, align: "left" },
-                    { header: "Value", width: 60, align: "left" },
-                ],
-                rows: [
-                    ["Date From", filters.from],
-                    ["Date To", filters.to],
-                    [
-                        "Vehicle Types",
-                        filters.vehicleTypes.size ? [...filters.vehicleTypes].join(", ") : "All",
-                    ],
-                    ["Fleets", filters.fleets.size ? [...filters.fleets].join(", ") : "All"],
-                    ["Drivers", filters.drivers.size ? [...filters.drivers].join(", ") : "All"],
-                    ["Routes", filters.routes.size ? [...filters.routes].join(", ") : "All"],
-                ],
-            });
-
-            // 3) Top 10 Longest Gaps
-            sections.push({
-                heading: "Top 10 Longest Idle Gaps",
-                columns: [
-                    { header: "Fleet", width: 14, align: "left" },
-                    { header: "Vehicle Type", width: 18, align: "left" },
-                    { header: "Driver", width: 22, align: "left" },
-                    { header: "Route", width: 36, align: "left" },
-                    { header: "Prev Arrival", width: 16, align: "left" },
-                    { header: "Next Departure", width: 16, align: "left" },
-                    { header: "Gap Days", width: 12, align: "right", format: "integer" },
-                ],
-                rows: [...gapRows]
-                    .sort((a, b) => b.gapDays - a.gapDays)
-                    .slice(0, 10)
-                    .map((r) => [
-                        r.fleet,
-                        r.vehicleType,
-                        r.driver,
-                        r.route,
-                        fmtDate(r.prevArrival),
-                        fmtDate(r.nextDeparture),
-                        r.gapDays,
-                    ]),
-            });
-
-            // 4–7) Breakdowns (drivers/routes capped to top 20 for PDF readability)
-            sections.push({
-                heading: "Performance Breakdown — By Fleet",
-                columns: breakdownColumns("Fleet"),
-                rows: buildBreakdownRows((r) => r.fleet),
-            });
-            sections.push({
-                heading: "Performance Breakdown — By Vehicle Type",
-                columns: breakdownColumns("Vehicle Type"),
-                rows: buildBreakdownRows((r) => r.vehicleType),
-            });
-            sections.push({
-                heading: "Performance Breakdown — By Driver (Top 20)",
-                columns: breakdownColumns("Driver"),
-                rows: buildBreakdownRows((r) => r.driver, 20),
-            });
-            sections.push({
-                heading: "Performance Breakdown — By Route (Top 20)",
-                columns: breakdownColumns("Route"),
-                rows: buildBreakdownRows((r) => r.route, 20),
-            });
-
-            // 8) Weekly Trend
-            const weeklyMap = new Map<string, { totalGap: number; count: number }>();
-            for (const r of gapRows) {
-                const k = weekKey(r.nextDeparture);
-                const e = weeklyMap.get(k) || { totalGap: 0, count: 0 };
-                e.totalGap += r.gapDays;
-                e.count += 1;
-                weeklyMap.set(k, e);
-            }
-            const weeklySorted = [...weeklyMap.entries()].sort(([a], [b]) => a.localeCompare(b));
-            sections.push({
-                heading: "Weekly Trend (WoW Δ)",
-                columns: [
-                    { header: "Week", width: 16, align: "left" },
-                    { header: "Gap Events", width: 14, align: "right", format: "integer" },
-                    { header: "Total Gap Days", width: 16, align: "right", format: "integer" },
-                    { header: "Avg Gap", width: 12, align: "right", format: "decimal" },
-                    { header: "WoW Δ", width: 12, align: "right" },
-                ],
-                rows: weeklySorted.map(([wk, v], idx) => {
-                    const avg = v.count > 0 ? v.totalGap / v.count : 0;
-                    let wow: string | number = "—";
-                    if (idx > 0) {
-                        const prev = weeklySorted[idx - 1][1];
-                        const prevAvg = prev.count > 0 ? prev.totalGap / prev.count : 0;
-                        if (prevAvg > 0) wow = `${round(((avg - prevAvg) / prevAvg) * 100)}%`;
-                    }
-                    return [wk, v.count, v.totalGap, round(avg), wow];
-                }),
-            });
-
-            // 9) Monthly Trend
-            const monthlyMap = new Map<string, { totalGap: number; count: number }>();
-            for (const r of gapRows) {
-                const k = monthKey(r.nextDeparture);
-                const e = monthlyMap.get(k) || { totalGap: 0, count: 0 };
-                e.totalGap += r.gapDays;
-                e.count += 1;
-                monthlyMap.set(k, e);
-            }
-            const monthlySorted = [...monthlyMap.entries()].sort(([a], [b]) =>
-                a.localeCompare(b),
-            );
-            sections.push({
-                heading: "Monthly Trend (MoM Δ)",
-                columns: [
-                    { header: "Month", width: 16, align: "left" },
-                    { header: "Gap Events", width: 14, align: "right", format: "integer" },
-                    { header: "Total Gap Days", width: 16, align: "right", format: "integer" },
-                    { header: "Avg Gap", width: 12, align: "right", format: "decimal" },
-                    { header: "MoM Δ", width: 12, align: "right" },
-                ],
-                rows: monthlySorted.map(([mk, v], idx) => {
-                    const avg = v.count > 0 ? v.totalGap / v.count : 0;
-                    let mom: string | number = "—";
-                    if (idx > 0) {
-                        const prev = monthlySorted[idx - 1][1];
-                        const prevAvg = prev.count > 0 ? prev.totalGap / prev.count : 0;
-                        if (prevAvg > 0) mom = `${round(((avg - prevAvg) / prevAvg) * 100)}%`;
-                    }
-                    return [mk, v.count, v.totalGap, round(avg), mom];
-                }),
-            });
-
-            // 10) Period Comparison
-            if (gapRows.length >= 2) {
-                const sortedByDate = [...gapRows].sort(
-                    (a, b) => a.nextDeparture.getTime() - b.nextDeparture.getTime(),
+            const drawSubLine = (week: string, y: number) => {
+                doc.setTextColor(102, 102, 102);
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(9);
+                doc.text(
+                    `Generated: ${generatedAt} • Car Craft Co Fleet Management`,
+                    14,
+                    y,
                 );
-                const mid = Math.floor(sortedByDate.length / 2);
-                const prior = sortedByDate.slice(0, mid);
-                const recent = sortedByDate.slice(mid);
-                const stat = (arr: GapRow[]) => {
-                    const gaps = arr.map((r) => r.gapDays);
-                    const total = gaps.reduce((a, b) => a + b, 0);
-                    const idle = arr.filter((r) => r.gapDays > 0).length;
-                    return {
-                        events: arr.length,
-                        total,
-                        avg: round(mean(gaps)),
-                        median: round(median(gaps)),
-                        max: gaps.length ? Math.max(...gaps) : 0,
-                        idle,
-                        utilisation:
-                            arr.length > 0
-                                ? round(((arr.length - idle) / arr.length) * 100)
-                                : 0,
-                    };
-                };
-                const sp = stat(prior);
-                const sr = stat(recent);
-                const delta = (a: number, b: number) =>
-                    a === 0 ? "—" : `${round(((b - a) / a) * 100)}%`;
-                sections.push({
-                    heading: "Period Comparison — Prior Half vs Recent Half",
-                    columns: [
-                        { header: "Metric", width: 26, align: "left" },
-                        { header: "Prior Half", width: 16, align: "right" },
-                        { header: "Recent Half", width: 16, align: "right" },
-                        { header: "Δ (%)", width: 14, align: "right" },
-                    ],
-                    rows: [
-                        ["Gap Events", sp.events, sr.events, delta(sp.events, sr.events)],
-                        ["Total Gap Days", sp.total, sr.total, delta(sp.total, sr.total)],
-                        ["Avg Gap (days)", sp.avg, sr.avg, delta(sp.avg, sr.avg)],
-                        ["Median Gap (days)", sp.median, sr.median, delta(sp.median, sr.median)],
-                        ["Max Gap (days)", sp.max, sr.max, delta(sp.max, sr.max)],
-                        ["Idle Events", sp.idle, sr.idle, delta(sp.idle, sr.idle)],
-                        [
-                            "Utilisation %",
-                            `${sp.utilisation}%`,
-                            `${sr.utilisation}%`,
-                            delta(sp.utilisation, sr.utilisation),
-                        ],
-                    ],
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.text(`Week ${week}`, pageWidth - 14, y, { align: "right" });
+            };
+
+            for (let bIdx = 0; bIdx < weekBlocks.length; bIdx++) {
+                const block = weekBlocks[bIdx];
+                if (bIdx > 0) doc.addPage();
+
+                drawHeaderBand();
+                drawSubLine(block.week, 28);
+
+                const tableStartY = 34;
+                autoTable(doc, {
+                    startY: tableStartY,
+                    head: [["Fleet", "Week", "Gaps", "Total Gap Days", "Avg Gap Days"]],
+                    body: block.rows.map((r) => [
+                        r.fleet,
+                        r.week,
+                        fmt2(r.gaps),
+                        fmt2(r.totalGapDays),
+                        fmt2(r.avgGapDays),
+                    ]),
+                    theme: "grid",
+                    styles: {
+                        font: "helvetica",
+                        fontSize: 9,
+                        cellPadding: 2.6,
+                        valign: "middle",
+                        lineColor: [217, 217, 217],
+                        lineWidth: 0.1,
+                    },
+                    headStyles: {
+                        fillColor: NAVY,
+                        textColor: 255,
+                        fontStyle: "bold",
+                        halign: "center",
+                        fontSize: 9.5,
+                    },
+                    bodyStyles: { textColor: [17, 24, 39] },
+                    alternateRowStyles: { fillColor: ALT },
+                    columnStyles: {
+                        0: { halign: "left", cellWidth: 28 },
+                        1: { halign: "left", cellWidth: 28 },
+                        2: { halign: "right", cellWidth: 26 },
+                        3: { halign: "right", cellWidth: 36 },
+                        4: { halign: "right", cellWidth: 32 },
+                    },
+                    margin: { left: 14, right: 14 },
+                });
+
+                let y = doc.lastAutoTable.finalY + 4;
+                const valueColX = pageWidth - 14;
+                const labelX = 14;
+
+                // Total Days Standing Between Trips (highlighted band)
+                const bandH = 8;
+                doc.setFillColor(NAVY_LIGHT[0], NAVY_LIGHT[1], NAVY_LIGHT[2]);
+                doc.rect(14, y, pageWidth - 28, bandH, "F");
+                doc.setDrawColor(217, 217, 217);
+                doc.setLineWidth(0.1);
+                doc.rect(14, y, pageWidth - 28, bandH, "S");
+                doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.text("Total Days Standing Between Trips", labelX + 2, y + 5.5);
+                doc.text(fmt2(block.totalDaysStanding), valueColX - 2, y + 5.5, {
+                    align: "right",
+                });
+                y += bandH + 6;
+
+                // Total Working Days
+                doc.setTextColor(17, 24, 39);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.text("Total Working Days", labelX, y);
+                doc.text(fmt2(block.totalWorkingDays), valueColX, y, { align: "right" });
+                y += 6;
+
+                // Percentage of Days Standing
+                doc.text("Percentage of Days Standing", labelX, y);
+                doc.text(`${block.pctStanding}%`, valueColX, y, { align: "right" });
+                y += 8;
+
+                // Total Percentage -5% (highlighted)
+                doc.setFillColor(TOTAL_BG[0], TOTAL_BG[1], TOTAL_BG[2]);
+                doc.rect(14, y - 5, pageWidth - 28, 8, "F");
+                doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+                doc.setLineWidth(0.3);
+                doc.rect(14, y - 5, pageWidth - 28, 8, "S");
+                doc.setTextColor(TOTAL_TXT[0], TOTAL_TXT[1], TOTAL_TXT[2]);
+                doc.setFont("helvetica", "bold");
+                doc.text("Total Percentage -5%", labelX + 2, y + 0.5);
+                doc.text(`${block.pctMinus5}%`, valueColX - 2, y + 0.5, { align: "right" });
+            }
+
+            // Footer on every page
+            const pageCount = doc.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setDrawColor(226, 232, 240);
+                doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
+                doc.setFontSize(8);
+                doc.setTextColor(120, 120, 120);
+                doc.setFont("helvetica", "normal");
+                doc.text(
+                    "Car Craft Co Fleet Management • Fleet Gap Days",
+                    14,
+                    pageHeight - 6,
+                );
+                doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 6, {
+                    align: "right",
                 });
             }
 
-            // 11) Fleet Leaderboard (Top 5 + Bottom 5)
-            const fleetBreakdown = buildBreakdownRows((r) => r.fleet);
-            const top5 = fleetBreakdown.slice(0, 5);
-            const bottom5 = [...fleetBreakdown]
-                .sort((a, b) => Number(a[2]) - Number(b[2]))
-                .slice(0, 5);
-            sections.push({
-                heading: "Fleet Leaderboard — Top 5 (Most Idle) vs Bottom 5 (Least Idle)",
-                columns: [
-                    { header: "Rank", width: 12, align: "left" },
-                    ...breakdownColumns("Fleet"),
-                ],
-                rows: [
-                    ...top5.map((r, i) => [`Top ${i + 1}`, ...r]),
-                    ...bottom5.map((r, i) => [`Bottom ${i + 1}`, ...r]),
-                ],
-            });
-
-            const spec: ReportSpec = {
-                title: "Fleet Gap Days — Advanced Analytics Report",
-                subtitle: "Idle time analysis with multi-dimension breakdowns and trends",
-                dateFrom: filters.from,
-                dateTo: filters.to,
-                filenameBase: `Fleet_Gap_Days_${filters.from}_to_${filters.to}`,
-                summary: [
-                    { label: "Gap Events", value: kpi.measured.toLocaleString() },
-                    { label: "Fleets", value: kpi.fleets.toLocaleString() },
-                    { label: "Total Gap Days", value: kpi.totalGapDays.toLocaleString() },
-                    { label: "Avg Gap", value: `${kpi.avg} d` },
-                    { label: "Idle Events", value: kpi.idleEvents.toLocaleString() },
-                    { label: "Utilisation", value: `${kpi.utilisationPct}%` },
-                ],
-                sections,
-            };
-
-            generateReportPDF(spec);
+            doc.save(`Fleet_Gap_Days_Weekly_${filters.from}_to_${filters.to}.pdf`);
             toast({
                 title: "PDF report generated",
-                description: `${kpi.measured} gap events across ${kpi.fleets} fleets.`,
+                description: `${weekBlocks.length} week${weekBlocks.length === 1 ? "" : "s"} • ${kpi.fleets} fleet${kpi.fleets === 1 ? "" : "s"}`,
             });
             onOpenChange(false);
         } catch (err) {
@@ -975,11 +807,10 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                                 Trip Management
                             </p>
                             <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                                Fleet Gap Days — Advanced Report
+                                Fleet Gap Days — Weekly Report
                             </DialogTitle>
                             <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-                                Filter by vehicle type, route, or driver and export a multi-sheet
-                                analytics workbook with trends, breakdowns and comparisons.
+                                Per-week summary of standing days by fleet, with utilisation totals.
                             </DialogDescription>
                         </div>
                     </div>
@@ -1107,21 +938,16 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                                     Preview — Computed from current filters
                                 </p>
                                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                    <KpiTile label="Gap Events" value={kpi.measured.toLocaleString()} />
+                                    <KpiTile label="Weeks" value={kpi.weeks.toLocaleString()} />
                                     <KpiTile label="Fleets" value={kpi.fleets.toLocaleString()} />
-                                    <KpiTile label="Total Gap Days" value={kpi.totalGapDays.toLocaleString()} />
-                                    <KpiTile label="Avg Gap" value={`${kpi.avg} d`} />
-                                    <KpiTile label="Median Gap" value={`${kpi.median} d`} />
-                                    <KpiTile label="Max Gap" value={`${kpi.max} d`} />
                                     <KpiTile
-                                        label="Idle Events"
-                                        value={kpi.idleEvents.toLocaleString()}
-                                        accent="amber"
+                                        label="Gap Events"
+                                        value={kpi.measured.toLocaleString()}
                                     />
                                     <KpiTile
-                                        label="Utilisation"
-                                        value={`${kpi.utilisationPct}%`}
-                                        accent="emerald"
+                                        label="Total Gap Days"
+                                        value={kpi.totalGapDays.toLocaleString()}
+                                        accent="amber"
                                     />
                                 </div>
                             </section>
@@ -1132,7 +958,7 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 <DialogFooter className="px-6 py-4 border-t border-slate-200/70 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/30">
                     <div className="flex w-full flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Excel: 11 sheets · PDF: 11 sections — Executive Summary · Filters · Top 10 · 4 Breakdowns · Weekly · Monthly · Period Comparison · Leaderboard
+                            Per-week blocks: Fleet · Week · Gaps · Total Gap Days · Avg Gap Days, with utilisation totals.
                         </p>
                         <div className="flex items-center gap-2">
                             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -1140,7 +966,9 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                             </Button>
                             <Button
                                 onClick={handleExport}
-                                disabled={exporting || exportingPdf || loading || gapRows.length === 0}
+                                disabled={
+                                    exporting || exportingPdf || loading || weekBlocks.length === 0
+                                }
                                 variant="outline"
                                 className="gap-2 border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
                             >
@@ -1153,7 +981,9 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                             </Button>
                             <Button
                                 onClick={handleExportPdf}
-                                disabled={exporting || exportingPdf || loading || gapRows.length === 0}
+                                disabled={
+                                    exporting || exportingPdf || loading || weekBlocks.length === 0
+                                }
                                 className="gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
                             >
                                 {exportingPdf ? (

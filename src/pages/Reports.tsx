@@ -1,7 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import Layout from "@/components/Layout";
@@ -593,37 +592,72 @@ const Reports = () => {
         trend?: "up" | "down" | "neutral";
         description?: string;
         color?: string;
-    }) => (
-        <Card className="relative overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                <Icon className={`h-4 w-4 ${color || "text-muted-foreground"}`} />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">
-                    {typeof value === "number" && title.includes("Revenue")
-                        ? `R${value.toLocaleString()}`
-                        : typeof value === "number" && title.includes("Efficiency")
-                            ? `${value.toFixed(1)} km/L`
-                            : typeof value === "number" && title.includes("Cost")
-                                ? `R${value.toFixed(2)}`
-                                : typeof value === "number" && title.includes("Utilization")
-                                    ? `${value.toFixed(1)}%`
-                                    : value}
-                </div>
-                {trend && (
-                    <div className="flex items-center gap-1 mt-1">
-                        {trend === "up" ? (
-                            <TrendingUp className="h-4 w-4 text-green-500" />
-                        ) : trend === "down" ? (
-                            <TrendingDown className="h-4 w-4 text-red-500" />
-                        ) : null}
-                        <p className="text-xs text-muted-foreground">{description}</p>
+    }) => {
+        // Static lookup so Tailwind's JIT picks up these classes.
+        const accentMatch = (color || "").match(/text-(\w+)-(\d{3})/);
+        const accentTone = (accentMatch?.[1] ?? "slate") as
+            | "slate" | "blue" | "green" | "yellow" | "red" | "orange"
+            | "purple" | "indigo" | "teal" | "cyan";
+        const accentMap: Record<string, { bar: string; icon: string }> = {
+            slate: { bar: "bg-slate-500/80", icon: "bg-slate-50 dark:bg-slate-900/50" },
+            blue: { bar: "bg-blue-500/80", icon: "bg-blue-50 dark:bg-blue-950/40" },
+            green: { bar: "bg-emerald-500/80", icon: "bg-emerald-50 dark:bg-emerald-950/40" },
+            yellow: { bar: "bg-amber-500/80", icon: "bg-amber-50 dark:bg-amber-950/40" },
+            red: { bar: "bg-rose-500/80", icon: "bg-rose-50 dark:bg-rose-950/40" },
+            orange: { bar: "bg-orange-500/80", icon: "bg-orange-50 dark:bg-orange-950/40" },
+            purple: { bar: "bg-violet-500/80", icon: "bg-violet-50 dark:bg-violet-950/40" },
+            indigo: { bar: "bg-indigo-500/80", icon: "bg-indigo-50 dark:bg-indigo-950/40" },
+            teal: { bar: "bg-teal-500/80", icon: "bg-teal-50 dark:bg-teal-950/40" },
+            cyan: { bar: "bg-cyan-500/80", icon: "bg-cyan-50 dark:bg-cyan-950/40" },
+        };
+        const accent = accentMap[accentTone];
+        if (!accent && import.meta.env.DEV) {
+            console.warn(
+                `[Reports/KPICard] Unknown accent tone "${accentTone}" derived from color="${color}". Falling back to "slate". Add it to accentMap or pass a supported tone.`,
+            );
+        }
+        const { bar: accentBar, icon: iconBg } = accent ?? accentMap.slate;
+        return (
+            <Card className="relative overflow-hidden border-slate-200/80 shadow-sm transition-shadow hover:shadow-md dark:border-slate-800">
+                <div className={`absolute inset-x-0 top-0 h-[3px] ${accentBar}`} />
+                <CardHeader className="flex flex-row items-start justify-between pb-2 space-y-0 pt-5">
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                            {title}
+                        </p>
                     </div>
-                )}
-            </CardContent>
-        </Card>
-    );
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-md ${iconBg}`}>
+                        <Icon className={`h-4 w-4 ${color || "text-slate-500"}`} />
+                    </div>
+                </CardHeader>
+                <CardContent className="pb-5">
+                    <div className="text-2xl font-semibold tabular-nums tracking-tight text-slate-900 dark:text-slate-100">
+                        {typeof value === "number" && title.includes("Revenue")
+                            ? `R${value.toLocaleString()}`
+                            : typeof value === "number" && title.includes("Efficiency")
+                                ? `${value.toFixed(1)} km/L`
+                                : typeof value === "number" && title.includes("Cost")
+                                    ? `R${value.toFixed(2)}`
+                                    : typeof value === "number" && title.includes("Utilization")
+                                        ? `${value.toFixed(1)}%`
+                                        : value}
+                    </div>
+                    {trend && description && (
+                        <div className="mt-2 flex items-center gap-1.5">
+                            {trend === "up" ? (
+                                <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                            ) : trend === "down" ? (
+                                <TrendingDown className="h-3.5 w-3.5 text-rose-500" />
+                            ) : null}
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {description}
+                            </p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        );
+    };
 
     // ── Enhanced: Mini Bar Chart Component for Trends ────────────────────────
     const MiniBarChart = ({ data, maxValue }: { data: number[]; maxValue: number }) => (
@@ -1602,72 +1636,93 @@ const Reports = () => {
     return (
         <Layout>
             <div className="space-y-6">
-                {/* Enhanced: Header with Analytics Controls */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Reports & Analytics Centre</h1>
-                        <p className="text-muted-foreground">
-                            Advanced reporting, analytics, and data export — {totalReports} reports available
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        {viewMode === "analytics" && (
-                            <>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setAutoRefresh(!autoRefresh)}
-                                    className="gap-2"
-                                >
-                                    <RefreshCw className={`h-4 w-4 ${autoRefresh ? "text-green-500 animate-spin" : ""}`} />
-                                    {autoRefresh ? "Auto-refresh On" : "Auto-refresh Off"}
-                                </Button>
-                                {lastRefreshed && (
-                                    <span className="text-xs text-muted-foreground">
-                                        Last updated: {lastRefreshed.toLocaleTimeString()}
+                {/* Page header — refined hero card */}
+                <div className="rounded-xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/60 p-5 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:to-slate-900/40">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex items-start gap-4">
+                            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                                <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                                    Fleet Intelligence
+                                </p>
+                                <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
+                                    Reports &amp; Analytics Centre
+                                </h1>
+                                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                                    Advanced reporting, analytics, and data export
+                                    <span className="ml-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                        {totalReports} reports
                                     </span>
-                                )}
-                            </>
-                        )}
-                        <div className="relative w-full sm:w-72">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search reports..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9"
-                            />
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                            {viewMode === "analytics" && (
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setAutoRefresh(!autoRefresh)}
+                                        className="h-9 gap-2"
+                                    >
+                                        <RefreshCw className={`h-3.5 w-3.5 ${autoRefresh ? "animate-spin text-emerald-500" : "text-slate-500"}`} />
+                                        <span className="text-xs">{autoRefresh ? "Auto-refresh On" : "Auto-refresh Off"}</span>
+                                    </Button>
+                                    {lastRefreshed && (
+                                        <span className="hidden text-[11px] text-slate-500 sm:inline dark:text-slate-400">
+                                            Updated {lastRefreshed.toLocaleTimeString()}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            <div className="relative w-full sm:w-72">
+                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                    placeholder="Search reports…"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="h-9 border-slate-200 bg-white pl-9 shadow-sm dark:border-slate-800 dark:bg-slate-950"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Enhanced: View Mode Toggle between Reports and Analytics */}
+                {/* View Mode Toggle between Reports and Analytics */}
                 <Tabs
                     value={viewMode}
                     onValueChange={(v) => setViewMode(v as "reports" | "analytics")}
                     className="w-full"
                 >
-                    <TabsList className="grid w-full max-w-md grid-cols-2">
-                        <TabsTrigger value="reports" className="gap-2">
+                    <TabsList className="inline-flex h-10 rounded-lg bg-slate-100/80 p-1 dark:bg-slate-900/50">
+                        <TabsTrigger
+                            value="reports"
+                            className="gap-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
+                        >
                             <FileText className="h-4 w-4" />
                             Reports
                         </TabsTrigger>
-                        <TabsTrigger value="analytics" className="gap-2">
+                        <TabsTrigger
+                            value="analytics"
+                            className="gap-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
+                        >
                             <BarChart3 className="h-4 w-4" />
                             Analytics Dashboard
                         </TabsTrigger>
                     </TabsList>
 
                     {/* Enhanced: Analytics Dashboard Content */}
-                    <TabsContent value="analytics" className="space-y-6">
+                    <TabsContent value="analytics" className="mt-6 space-y-6">
                         {isLoadingAnalytics ? (
-                            <div className="flex items-center justify-center py-20">
-                                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+                            <div className="flex items-center justify-center rounded-xl border border-slate-200/80 bg-white py-20 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+                                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                             </div>
                         ) : kpiData ? (
                             <>
                                 {/* KPI Grid - Primary Metrics */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                                     <KPICard
                                         title="Active Fleet"
                                         value={`${kpiData.activeVehicles}/${kpiData.totalVehicles} Active`}
@@ -1768,11 +1823,11 @@ const Reports = () => {
 
                                 {/* Enhanced: Trends Visualization */}
                                 {trendData && (
-                                    <Card>
-                                        <CardHeader>
+                                    <Card className="border-slate-200/80 shadow-sm dark:border-slate-800">
+                                        <CardHeader className="border-b border-slate-200/70 dark:border-slate-800">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <CardTitle>Performance Trends</CardTitle>
+                                                    <CardTitle className="text-base">Performance Trends</CardTitle>
                                                     <CardDescription>
                                                         Revenue, maintenance costs, and fuel consumption over time
                                                     </CardDescription>
@@ -1826,15 +1881,15 @@ const Reports = () => {
                                 )}
 
                                 {/* Enhanced: Quick Actions */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Quick Exports</CardTitle>
+                                <Card className="border-slate-200/80 shadow-sm dark:border-slate-800">
+                                    <CardHeader className="border-b border-slate-200/70 dark:border-slate-800">
+                                        <CardTitle className="text-base">Quick Exports</CardTitle>
                                         <CardDescription>
                                             Frequently used reports for instant download
                                         </CardDescription>
                                     </CardHeader>
-                                    <CardContent>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <CardContent className="pt-5">
+                                        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                                             {[
                                                 {
                                                     label: "Fleet Register", icon: Car, onClick: () => {
@@ -1860,11 +1915,13 @@ const Reports = () => {
                                                 <Button
                                                     key={idx}
                                                     variant="outline"
-                                                    className="h-auto py-3 flex-col gap-2"
+                                                    className="group h-auto flex-col gap-2 border-slate-200 py-4 hover:border-slate-300 hover:bg-slate-50/60 dark:border-slate-800 dark:hover:bg-slate-900/40"
                                                     onClick={action.onClick}
                                                 >
-                                                    <action.icon className="h-5 w-5" />
-                                                    <span className="text-xs">{action.label}</span>
+                                                    <span className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 text-slate-600 transition-colors group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:group-hover:bg-slate-700">
+                                                        <action.icon className="h-4 w-4" />
+                                                    </span>
+                                                    <span className="text-xs font-medium">{action.label}</span>
                                                 </Button>
                                             ))}
                                         </div>
@@ -1872,14 +1929,15 @@ const Reports = () => {
                                 </Card>
                             </>
                         ) : (
-                            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                                <BarChart3 className="h-12 w-12 mb-3 opacity-40" />
-                                <p className="text-lg font-medium">No analytics available</p>
-                                <p className="text-sm mb-4">Load data to view performance metrics</p>
-                                <Button
-                                    variant="outline"
-                                    onClick={loadAnalytics}
-                                >
+                            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/40 py-16 text-center dark:border-slate-700 dark:bg-slate-900/20">
+                                <BarChart3 className="mb-3 h-10 w-10 text-slate-300 dark:text-slate-600" />
+                                <p className="text-base font-medium text-slate-700 dark:text-slate-200">
+                                    No analytics available
+                                </p>
+                                <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+                                    Load data to view performance metrics
+                                </p>
+                                <Button variant="outline" onClick={loadAnalytics}>
                                     Load Analytics
                                 </Button>
                             </div>
@@ -1887,136 +1945,144 @@ const Reports = () => {
                     </TabsContent>
 
                     {/* Original Reports Content - Fully Preserved */}
-                    <TabsContent value="reports">
+                    <TabsContent value="reports" className="mt-6 space-y-6">
                         {/* Workshop Management */}
                         {workshopSections.length > 0 && (
-                            <>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Wrench className="h-5 w-5 text-muted-foreground" />
-                                        <h2 className="text-lg font-semibold">Workshop Management</h2>
-                                        <Badge variant="secondary" className="ml-1">{workshopSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-7 text-xs"
-                                            onClick={() => toggleAllWorkshop(workshopExpandedCount < workshopSections.length)}
+                            <ReportCategoryCard
+                                title="Workshop Management"
+                                description="Maintenance, faults, parts, inspections and tyre operations"
+                                icon={Wrench}
+                                accent="amber"
+                                count={workshopSections.reduce((s, sec) => s + sec.reports.length, 0)}
+                                allExpanded={workshopExpandedCount >= workshopSections.length}
+                                onToggleAll={() => toggleAllWorkshop(workshopExpandedCount < workshopSections.length)}
+                            >
+                                {workshopSections.map((section, idx) => {
+                                    const Icon = section.icon;
+                                    const isExpanded = expandedSections.has(section.title);
+                                    return (
+                                        <div
+                                            key={section.title}
+                                            className={idx === 0 ? "" : "border-t border-slate-200/70 dark:border-slate-800"}
                                         >
-                                            {workshopExpandedCount < workshopSections.length ? "Expand All" : "Collapse All"}
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    {workshopSections.map((section) => {
-                                        const Icon = section.icon;
-                                        const isExpanded = expandedSections.has(section.title);
-                                        return (
-                                            <div key={section.title} className="space-y-1">
-                                                <button
-                                                    onClick={() => toggleSection(section.title)}
-                                                    className="flex items-center gap-2 px-1 pt-2 w-full text-left hover:bg-muted/30 rounded transition-colors"
+                                            <button
+                                                onClick={() => toggleSection(section.title)}
+                                                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-900/30"
+                                            >
+                                                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
+                                                    <Icon className="h-3.5 w-3.5" />
+                                                </span>
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                                        {section.title}
+                                                    </span>
+                                                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                                                        {section.description}
+                                                    </span>
+                                                </span>
+                                                <Badge
+                                                    variant="outline"
+                                                    className="h-5 border-slate-200 text-[10px] tabular-nums dark:border-slate-700"
                                                 >
-                                                    {isExpanded ? (
-                                                        <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                                    ) : (
-                                                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                                    )}
-                                                    <Icon className="h-4 w-4 text-primary flex-shrink-0" />
-                                                    <span className="text-sm font-semibold">{section.title}</span>
-                                                    <span className="text-xs text-muted-foreground">— {section.description}</span>
-                                                    <Badge variant="outline" className="ml-auto text-[10px] h-5">
-                                                        {section.reports.length}
-                                                    </Badge>
-                                                </button>
-                                                {isExpanded && (
-                                                    <div className="ml-7 space-y-1">
-                                                        {section.reports.map((report) => (
-                                                            <ReportRow
-                                                                key={report.id}
-                                                                report={report}
-                                                                loadingKey={loadingKey}
-                                                                onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
-                                                            />
-                                                        ))}
-                                                    </div>
+                                                    {section.reports.length}
+                                                </Badge>
+                                                {isExpanded ? (
+                                                    <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />
                                                 )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </>
+                                            </button>
+                                            {isExpanded && (
+                                                <div className="space-y-1.5 bg-slate-50/40 px-4 pb-4 pt-1 dark:bg-slate-900/20">
+                                                    {section.reports.map((report) => (
+                                                        <ReportRow
+                                                            key={report.id}
+                                                            report={report}
+                                                            loadingKey={loadingKey}
+                                                            onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </ReportCategoryCard>
                         )}
-
-                        {workshopSections.length > 0 && operationsSections.length > 0 && <Separator />}
 
                         {/* Operations */}
                         {operationsSections.length > 0 && (
-                            <>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Truck className="h-5 w-5 text-muted-foreground" />
-                                        <h2 className="text-lg font-semibold">Operations</h2>
-                                        <Badge variant="secondary" className="ml-1">{operationsSections.reduce((s, sec) => s + sec.reports.length, 0)}</Badge>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-7 text-xs"
-                                            onClick={() => toggleAllOperations(operationsExpandedCount < operationsSections.length)}
+                            <ReportCategoryCard
+                                title="Operations"
+                                description="Trips, drivers, fuel, procurement and analytics"
+                                icon={Truck}
+                                accent="blue"
+                                count={operationsSections.reduce((s, sec) => s + sec.reports.length, 0)}
+                                allExpanded={operationsExpandedCount >= operationsSections.length}
+                                onToggleAll={() => toggleAllOperations(operationsExpandedCount < operationsSections.length)}
+                            >
+                                {operationsSections.map((section, idx) => {
+                                    const Icon = section.icon;
+                                    const isExpanded = expandedSections.has(section.title);
+                                    return (
+                                        <div
+                                            key={section.title}
+                                            className={idx === 0 ? "" : "border-t border-slate-200/70 dark:border-slate-800"}
                                         >
-                                            {operationsExpandedCount < operationsSections.length ? "Expand All" : "Collapse All"}
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    {operationsSections.map((section) => {
-                                        const Icon = section.icon;
-                                        const isExpanded = expandedSections.has(section.title);
-                                        return (
-                                            <div key={section.title} className="space-y-1">
-                                                <button
-                                                    onClick={() => toggleSection(section.title)}
-                                                    className="flex items-center gap-2 px-1 pt-2 w-full text-left hover:bg-muted/30 rounded transition-colors"
+                                            <button
+                                                onClick={() => toggleSection(section.title)}
+                                                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-900/30"
+                                            >
+                                                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
+                                                    <Icon className="h-3.5 w-3.5" />
+                                                </span>
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                                        {section.title}
+                                                    </span>
+                                                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                                                        {section.description}
+                                                    </span>
+                                                </span>
+                                                <Badge
+                                                    variant="outline"
+                                                    className="h-5 border-slate-200 text-[10px] tabular-nums dark:border-slate-700"
                                                 >
-                                                    {isExpanded ? (
-                                                        <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                                    ) : (
-                                                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                                    )}
-                                                    <Icon className="h-4 w-4 text-primary flex-shrink-0" />
-                                                    <span className="text-sm font-semibold">{section.title}</span>
-                                                    <span className="text-xs text-muted-foreground">— {section.description}</span>
-                                                    <Badge variant="outline" className="ml-auto text-[10px] h-5">
-                                                        {section.reports.length}
-                                                    </Badge>
-                                                </button>
-                                                {isExpanded && (
-                                                    <div className="ml-7 space-y-1">
-                                                        {section.reports.map((report) => (
-                                                            <ReportRow
-                                                                key={report.id}
-                                                                report={report}
-                                                                loadingKey={loadingKey}
-                                                                onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
-                                                            />
-                                                        ))}
-                                                    </div>
+                                                    {section.reports.length}
+                                                </Badge>
+                                                {isExpanded ? (
+                                                    <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />
                                                 )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </>
+                                            </button>
+                                            {isExpanded && (
+                                                <div className="space-y-1.5 bg-slate-50/40 px-4 pb-4 pt-1 dark:bg-slate-900/20">
+                                                    {section.reports.map((report) => (
+                                                        <ReportRow
+                                                            key={report.id}
+                                                            report={report}
+                                                            loadingKey={loadingKey}
+                                                            onExport={(fmt) => runExport(report.id, fmt, () => report.onExport(fmt))}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </ReportCategoryCard>
                         )}
 
                         {filteredSections.length === 0 && (
-                            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-                                <FileText className="h-12 w-12 mb-3 opacity-40" />
-                                <p className="text-lg font-medium">No reports found</p>
-                                <p className="text-sm">Try a different search term</p>
+                            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/40 py-16 dark:border-slate-700 dark:bg-slate-900/20">
+                                <FileText className="mb-3 h-10 w-10 text-slate-300 dark:text-slate-600" />
+                                <p className="text-base font-medium text-slate-700 dark:text-slate-200">
+                                    No reports found
+                                </p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                    Try a different search term
+                                </p>
                             </div>
                         )}
                     </TabsContent>
@@ -2027,6 +2093,85 @@ const Reports = () => {
                 onOpenChange={setGapDaysDialogOpen}
             />
         </Layout>
+    );
+};
+
+// ── Category Card (Workshop / Operations) ───────────────────────────────────
+const ReportCategoryCard = ({
+    title,
+    description,
+    icon: Icon,
+    accent,
+    count,
+    allExpanded,
+    onToggleAll,
+    children,
+}: {
+    title: string;
+    description: string;
+    icon: React.ElementType;
+    accent: "amber" | "blue";
+    count: number;
+    allExpanded: boolean;
+    onToggleAll: () => void;
+    children: React.ReactNode;
+}) => {
+    const accentMap: Record<string, { bar: string; chip: string; iconBg: string }> = {
+        amber: {
+            bar: "bg-amber-500/80",
+            chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+            iconBg: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300",
+        },
+        blue: {
+            bar: "bg-blue-500/80",
+            chip: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+            iconBg: "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300",
+        },
+    };
+    const a = accentMap[accent];
+    return (
+        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+            <div className={`absolute inset-x-0 top-0 h-[3px] ${a.bar}`} />
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 px-4 py-3 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-md ${a.iconBg}`}>
+                        <Icon className="h-4 w-4" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                {title}
+                            </h2>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${a.chip}`}>
+                                {count}
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {description}
+                        </p>
+                    </div>
+                </div>
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 gap-1.5 text-xs text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                    onClick={onToggleAll}
+                >
+                    {allExpanded ? (
+                        <>
+                            <ChevronDown className="h-3.5 w-3.5" />
+                            Collapse All
+                        </>
+                    ) : (
+                        <>
+                            <ChevronRight className="h-3.5 w-3.5" />
+                            Expand All
+                        </>
+                    )}
+                </Button>
+            </div>
+            <div>{children}</div>
+        </div>
     );
 };
 
@@ -2044,24 +2189,28 @@ const ReportRow = ({
     const pdfLoading = loadingKey === `${report.id}:pdf`;
     const anyLoading = excelLoading || pdfLoading;
     return (
-        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white px-3.5 py-2.5 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50/40 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-slate-700 dark:hover:bg-slate-900/40">
             <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{report.label}</p>
-                <p className="text-xs text-muted-foreground truncate">{report.description}</p>
+                <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {report.label}
+                </p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    {report.description}
+                </p>
             </div>
-            <div className="flex gap-1.5 flex-shrink-0">
+            <div className="flex flex-shrink-0 gap-1.5">
                 {report.formats.includes("excel") && (
                     <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 gap-1.5 text-xs"
+                        className="h-8 gap-1.5 border-emerald-200 bg-emerald-50/60 text-xs text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
                         disabled={anyLoading}
                         onClick={() => onExport("excel")}
                     >
                         {excelLoading ? (
-                            <div className="animate-spin h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full" />
+                            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                         ) : (
-                            <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" />
+                            <FileSpreadsheet className="h-3.5 w-3.5" />
                         )}
                         Excel
                     </Button>
@@ -2070,14 +2219,14 @@ const ReportRow = ({
                     <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 gap-1.5 text-xs"
+                        className="h-8 gap-1.5 border-rose-200 bg-rose-50/60 text-xs text-rose-800 hover:bg-rose-100 hover:text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300 dark:hover:bg-rose-950/50"
                         disabled={anyLoading}
                         onClick={() => onExport("pdf")}
                     >
                         {pdfLoading ? (
-                            <div className="animate-spin h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full" />
+                            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                         ) : (
-                            <FileText className="h-3.5 w-3.5 text-red-600" />
+                            <FileText className="h-3.5 w-3.5" />
                         )}
                         PDF
                     </Button>
