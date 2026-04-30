@@ -28,7 +28,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDeleteLoad, type Load } from "@/hooks/useTrips";
-import { exportLoadToPdf } from "@/lib/exportTripsToPdf";
 import { shareTripViaWhatsApp, shareWeeklyScheduleViaWhatsApp } from "@/lib/exportTripWhatsApp";
 import { parseTimeWindow as parseTimeWindowData } from "@/lib/timeWindow";
 import { cn, getLocationDisplayName } from "@/lib/utils";
@@ -64,6 +63,7 @@ import { AddThirdPartyBackloadDialog } from "./AddThirdPartyBackloadDialog";
 import { AssignSubcontractorDialog } from "./AssignSubcontractorDialog";
 import { AlterLoadTimesDialog } from "./AlterTripTimesDialog";
 import { DeliveryConfirmationDialog } from "./DeliveryConfirmationDialog";
+import { ExportLoadConfirmationDialog } from "./ExportLoadConfirmationDialog";
 import { StatusStepper } from "./StatusToggle";
 import { VehicleTrackingDialog } from "./VehicleTrackingDialog";
 
@@ -175,6 +175,8 @@ export function LoadsTable({
   const [loadForBreakdown, setLoadForBreakdown] = useState<Load | null>(null);
   const [subcontractorDialogOpen, setSubcontractorDialogOpen] = useState(false);
   const [loadForSubcontractor, setLoadForSubcontractor] = useState<Load | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [loadForExport, setLoadForExport] = useState<Load | null>(null);
 
   const deleteLoad = useDeleteLoad();
 
@@ -251,13 +253,13 @@ export function LoadsTable({
     setThirdPartyBackloadDialogOpen(true);
   };
 
-  const handleExportPdf = async (e: React.MouseEvent, load: Load) => {
+  // Export to PDF goes through the rate-prompt dialog so the user can choose
+  // to add a Rate to the "Load Confirmation" PDF before downloading. The
+  // rate is display-only and is not persisted to the load.
+  const handleExportPdf = (e: React.MouseEvent, load: Load) => {
     e.stopPropagation();
-    try {
-      await exportLoadToPdf(load, loads);
-    } catch {
-      // PDF export failed silently
-    }
+    setLoadForExport(load);
+    setExportDialogOpen(true);
   };
 
   const handleConfirmDelete = () => {
@@ -786,7 +788,7 @@ export function LoadsTable({
                               }
                             >
                               <FileDown className="h-4 w-4 mr-2" />
-                              Export to PDF
+                              Export Load Confirmation
                             </DropdownMenuItem>
 
                             {load.driver && (
@@ -936,6 +938,14 @@ export function LoadsTable({
         }}
         load={loadForSubcontractor}
       />
-    </div>
+      <ExportLoadConfirmationDialog
+        open={exportDialogOpen}
+        onOpenChange={(open) => {
+          setExportDialogOpen(open);
+          if (!open) setLoadForExport(null);
+        }}
+        load={loadForExport}
+        allLoads={loads}
+      />    </div>
   );
 }

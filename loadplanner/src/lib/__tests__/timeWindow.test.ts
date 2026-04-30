@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  formatTimeAsSAST,
   parseTimeWindow,
   parseTimeWindowForForm,
   parseTimeWindowOrNull,
@@ -170,6 +171,61 @@ describe("parseTimeWindowForForm", () => {
     });
     expect(result.originPlannedArrival).toBe("10:00");
     expect(result.destPlannedDeparture).toBe("20:00");
+  });
+
+  // Regression: the geofence pipeline writes ISO 8601 timestamps into
+  // time_window.origin.plannedArrival when an admin saves an auto-captured
+  // value back without coercing it. Since the form binds these directly to
+  // <input type="time">, the browser would reject any ISO string with the
+  // warning "does not conform to the required format" and silently leave
+  // the field blank. parseTimeWindowForForm must always emit HH:mm.
+  it("coerces ISO 8601 timestamps to HH:mm (SAST) for time-input compatibility", () => {
+    const json = JSON.stringify({
+      origin: {
+        plannedArrival: "2026-04-29T11:45:12.814Z", // 11:45 UTC → 13:45 SAST
+        plannedDeparture: "2026-04-29T13:00:00Z",   // 13:00 UTC → 15:00 SAST
+      },
+      destination: {
+        plannedArrival: "2026-04-30T06:00:00Z",     // 06:00 UTC → 08:00 SAST
+        plannedDeparture: "2026-04-30T09:30:00Z",   // 09:30 UTC → 11:30 SAST
+      },
+    });
+
+    const result = parseTimeWindowForForm(json);
+
+    expect(result.originPlannedArrival).toBe("13:45");
+    expect(result.originPlannedDeparture).toBe("15:00");
+    expect(result.destPlannedArrival).toBe("08:00");
+    expect(result.destPlannedDeparture).toBe("11:30");
+  });
+});
+
+describe("formatTimeAsSAST", () => {
+  it("returns empty string for null/undefined/empty input", () => {
+    expect(formatTimeAsSAST(null)).toBe("");
+    expect(formatTimeAsSAST(undefined)).toBe("");
+    expect(formatTimeAsSAST("")).toBe("");
+  });
+
+  it("passes HH:mm through unchanged (with zero-padding)", () => {
+    expect(formatTimeAsSAST("13:45")).toBe("13:45");
+    expect(formatTimeAsSAST("9:05")).toBe("09:05");
+  });
+
+  it("strips seconds from HH:mm:ss", () => {
+    expect(formatTimeAsSAST("11:45:12")).toBe("11:45");
+    expect(formatTimeAsSAST("9:05:30")).toBe("09:05");
+  });
+
+  // Regression for the bug reported: feeding an ISO 8601 string to
+  // <input type="time"> caused the browser warning
+  //   "The specified value '2026-04-29T11:45:12.814Z' does not conform to
+  //    the required format..."
+  // formatTimeAsSAST must convert to HH:mm in SAST (UTC+2) so the input is valid.
+  it("converts ISO 8601 UTC timestamps to HH:mm in SAST", () => {
+    expect(formatTimeAsSAST("2026-04-29T11:45:12.814Z")).toBe("13:45");
+    expect(formatTimeAsSAST("2026-04-29T00:00:00Z")).toBe("02:00");
+    expect(formatTimeAsSAST("2026-04-29T22:00:00Z")).toBe("00:00"); // wraps midnight SAST
   });
 });
 

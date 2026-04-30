@@ -185,16 +185,31 @@ const STATUS_COLOR: Record<VehicleStatus, string> = {
   offline: "#64748b", // slate-500
 };
 
+// Escape user-provided strings before injecting into the divIcon HTML so a
+// driver name like `O'Brien & "Bob"` can't break the markup.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function createVehicleIcon(
   asset: TelematicsAsset,
   hasActiveLoad = false,
+  fleetNumber?: string | null,
+  driverName?: string | null,
 ): L.DivIcon {
   const status = getVehicleStatus(asset);
   const rotation = asset.heading || 0;
 
   let inner: string;
-  let size: [number, number] = [28, 28];
-  let anchor: [number, number] = [14, 14];
+  // Glyph dimensions only — the label is appended outside this box and the
+  // overall divIcon size is computed below to include both.
+  let glyphW = 28;
+  let glyphH = 28;
 
   if (status === "moving") {
     // Green triangle pointing in direction of travel
@@ -210,8 +225,8 @@ function createVehicleIcon(
           <path d="M12 2 L21 21 L12 17 L3 21 Z" fill="${STATUS_COLOR.moving}" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>
         </svg>
       </div>`;
-    size = [30, 30];
-    anchor = [15, 15];
+    glyphW = 30;
+    glyphH = 30;
   } else if (status === "idle") {
     // Orange parallel bars
     inner = `
@@ -232,98 +247,122 @@ function createVehicleIcon(
         border:2px solid white;border-radius:2px;
         box-shadow:0 1px 3px rgba(0,0,0,0.18);
       "></div>`;
-    size = [22, 22];
-    anchor = [11, 11];
+    glyphW = 22;
+    glyphH = 22;
   }
 
+  // Always-on label: "Fleet # · Driver". Falls back gracefully when either
+  // piece of data is missing so we don't render an empty pill.
+  const truncate = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+  const fleetLabel = fleetNumber
+    ? truncate(fleetNumber.trim(), 10)
+    : truncate((asset.name || asset.code || `#${asset.id}`).trim(), 10);
+  const driverLabel = driverName ? truncate(driverName.trim(), 18) : "";
+  const labelText = driverLabel ? `${fleetLabel} · ${driverLabel}` : fleetLabel;
+  const labelHtml = `
+    <div style="
+      margin-top:2px;
+      max-width:160px;
+      padding:1px 5px;
+      background:rgba(15,23,42,0.78);
+      color:white;
+      font-size:10px;
+      font-weight:600;
+      line-height:1.25;
+      border-radius:3px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      font-family:system-ui,-apple-system,sans-serif;
+      box-shadow:0 1px 2px rgba(0,0,0,0.18);
+      pointer-events:none;
+    ">${escapeHtml(labelText)}</div>
+  `;
+
+  // Marker total size: glyph width vs label max width (160px), plus label
+  // height + spacing below the glyph. Anchor stays on the glyph centre so
+  // the position pin stays accurate regardless of label length.
+  const labelHeight = 16; // 10px font + 1px*2 padding + small breathing room
+  const labelGap = 2;
+  const totalW = Math.max(glyphW, 160);
+  const totalH = glyphH + labelGap + labelHeight;
+  const anchorX = totalW / 2;
+  const anchorY = glyphH / 2;
+
   const html = `
-    <div class="fleet-vehicle-marker" style="position:relative;display:flex;align-items:center;justify-content:center;">
-      ${inner}
-      ${hasActiveLoad ? `
-        <div style="
-          position:absolute;top:-2px;right:-2px;
-          width:9px;height:9px;border-radius:50%;
-          background:#4f46e5;border:1.5px solid white;
-          box-shadow:0 0 0 1px rgba(79,70,229,0.3);
-          z-index:5;
-        "></div>` : ''}
+    <div class="fleet-vehicle-marker" style="
+      position:relative;
+      width:${totalW}px;
+      display:flex;flex-direction:column;align-items:center;
+    ">
+      <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+        ${inner}
+        ${hasActiveLoad ? `
+          <div style="
+            position:absolute;top:-2px;right:-2px;
+            width:9px;height:9px;border-radius:50%;
+            background:#4f46e5;border:1.5px solid white;
+            box-shadow:0 0 0 1px rgba(79,70,229,0.3);
+            z-index:5;
+          "></div>` : ''}
+      </div>
+      ${labelHtml}
     </div>`;
 
   return L.divIcon({
     html,
     className: "fleet-vehicle-marker-wrapper",
-    iconSize: size,
-    iconAnchor: anchor,
-    popupAnchor: [0, -anchor[1]],
+    iconSize: [totalW, totalH],
+    iconAnchor: [anchorX, anchorY],
+    popupAnchor: [0, -anchorY],
   });
 }
 
-// Depot marker — refined corporate icon set
-function createDepotIcon(type: string): L.DivIcon {
-  const config: Record<string, { bg: string; icon: string }> = {
-    depot: {
-      bg: "#047857",
-      icon: `<path d="M3 21h18M4 18h16M6 18V10l6-5 6 5v8" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="rgba(255,255,255,0.15)"/><path d="M10 18v-4h4v4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
-    },
-    warehouse: {
-      bg: "#0369a1",
-      icon: `<rect x="3" y="8" width="18" height="13" rx="1" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.15)"/><path d="M3 8L12 3L21 8" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h8M8 17h5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>`,
-    },
-    market: {
-      bg: "#b91c1c",
-      icon: `<path d="M3 3h18l-2 9H5L3 3z" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.15)"/><circle cx="9" cy="18" r="2" stroke="white" stroke-width="1.5"/><circle cx="17" cy="18" r="2" stroke="white" stroke-width="1.5"/>`,
-    },
-    default: {
-      bg: "#7c3aed",
-      icon: `<circle cx="12" cy="10" r="7" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.15)"/><path d="M12 17L12 21" stroke="white" stroke-width="1.5" stroke-linecap="round"/><path d="M9 21h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>`,
-    },
-  };
-  const { bg, icon } = config[type] || config.default;
+// Classic blue teardrop pin (Google-Maps style) — the tip sits exactly on
+// the marker's coordinate so iconAnchor is the bottom-centre of the SVG.
+// One shared SVG is used for both depots and custom locations so they look
+// identical on the map; the `type` argument is preserved for the call site
+// signature but no longer changes the visual.
+const PIN_SVG = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="32" viewBox="0 0 22 32" fill="none">
+    <defs>
+      <linearGradient id="pinFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#3b82f6"/>
+        <stop offset="100%" stop-color="#1d4ed8"/>
+      </linearGradient>
+    </defs>
+    <path d="M11 1 C5.477 1 1 5.477 1 11 c0 7.5 10 20 10 20 s10 -12.5 10 -20 C21 5.477 16.523 1 11 1 z"
+          fill="url(#pinFill)"
+          stroke="#ffffff"
+          stroke-width="1.4"
+          stroke-linejoin="round"/>
+    <circle cx="11" cy="11" r="3.6" fill="#ffffff"/>
+  </svg>
+`;
 
+function createPinIcon(): L.DivIcon {
   return L.divIcon({
     html: `
-      <div class="fleet-depot-marker" style="
-        width:30px;height:30px;
-        background:${bg};
-        border-radius:8px;
-        border:2px solid rgba(255,255,255,0.95);
-        box-shadow:0 1px 3px rgba(0,0,0,0.12),0 2px 6px rgba(0,0,0,0.08);
-        display:flex;align-items:center;justify-content:center;
-      ">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">${icon}</svg>
-      </div>
-    `,
-    className: "fleet-depot-marker-wrapper",
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-  });
-}
-
-// Custom location marker — map-pin style
-const createCustomLocationIcon = (): L.DivIcon => {
-  return L.divIcon({
-    html: `
-      <div class="fleet-custom-marker" style="
+      <div class="fleet-location-pin" style="
         position:relative;display:flex;flex-direction:column;align-items:center;
+        filter:drop-shadow(0 2px 3px rgba(0,0,0,0.25));
       ">
-        <div style="
-          width:26px;height:26px;
-          background:linear-gradient(135deg,#f97316,#ea580c);
-          border-radius:50% 50% 50% 4px;
-          transform:rotate(-45deg);
-          border:2px solid rgba(255,255,255,0.95);
-          box-shadow:0 1px 3px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.08);
-          display:flex;align-items:center;justify-content:center;
-        ">
-          <div style="width:8px;height:8px;background:white;border-radius:50%;transform:rotate(45deg);"></div>
-        </div>
+        ${PIN_SVG}
       </div>
     `,
-    className: "fleet-custom-marker-wrapper",
-    iconSize: [26, 34],
-    iconAnchor: [13, 30],
+    className: "fleet-location-pin-wrapper",
+    iconSize: [22, 32],
+    iconAnchor: [11, 32], // tip of the pin
+    popupAnchor: [0, -28],
   });
-};
+}
+
+// Public API kept stable for existing call sites.
+function createDepotIcon(_type: string): L.DivIcon {
+  return createPinIcon();
+}
+
+const createCustomLocationIcon = (): L.DivIcon => createPinIcon();
 
 function FitBounds({ assets }: { assets: TelematicsAsset[] }) {
   const map = useMap();
@@ -1098,11 +1137,19 @@ export default function LiveTrackingPage() {
                   {assets.map((asset) => {
                     const load = getLoadForAsset(asset);
                     if (asset.lastLatitude === null || asset.lastLongitude === null) return null;
+                    // Prefer the linked fleet vehicle's registration as the
+                    // fleet number; fall back to the telematics asset name.
+                    const fleetNumber =
+                      load?.vehicle?.registration ||
+                      asset.name ||
+                      asset.code ||
+                      `#${asset.id}`;
+                    const driverName = load?.driver?.name || null;
                     return (
                       <Marker
                         key={asset.id}
                         position={[asset.lastLatitude, asset.lastLongitude]}
-                        icon={createVehicleIcon(asset, !!load)}
+                        icon={createVehicleIcon(asset, !!load, fleetNumber, driverName)}
                         ref={(ref) => {
                           if (ref) markerRefs.current.set(asset.id, ref);
                         }}

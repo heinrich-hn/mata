@@ -30,7 +30,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { type Load, useCreateLoad, useUpdateLoad } from '@/hooks/useTrips';
 import * as timeWindowLib from '@/lib/timeWindow';
-import { computeTimeVariance } from '@/lib/timeWindow';
+import { computeTimeVariance, formatTimeAsSAST } from '@/lib/timeWindow';
 import { getLocationDisplayName, safeFormatDate } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addDays, format, formatISO, parseISO } from 'date-fns';
@@ -180,11 +180,22 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
       } catch { /* ignore */ }
       const originTw = (tw.origin && typeof tw.origin === 'object') ? (tw.origin as Record<string, unknown>) : {};
       const destTw = (tw.destination && typeof tw.destination === 'object') ? (tw.destination as Record<string, unknown>) : {};
+      // The geofence monitor writes ISO 8601 timestamps (e.g. "2026-04-29T11:45:12.814Z")
+      // into time_window.origin.actualArrival, but <input type="time"> only accepts
+      // "HH:mm" / "HH:mm:ss" — feeding it an ISO string makes the browser reject the
+      // value and log "does not conform to the required format". Always coerce to
+      // HH:mm (SAST) before assigning to the form field. Prefer the dedicated
+      // timestamp columns (actual_loading_arrival, etc.) when available since those
+      // are always full ISO strings written by the geofence pipeline.
+      const originActualArrivalIso = load.actual_loading_arrival || times.origin.actualArrival || '';
+      const originActualDepartureIso = load.actual_loading_departure || times.origin.actualDeparture || '';
+      const destActualArrivalIso = load.actual_offloading_arrival || times.destination.actualArrival || '';
+      const destActualDepartureIso = load.actual_offloading_departure || times.destination.actualDeparture || '';
       form.reset({
-        originActualArrival: times.origin.actualArrival,
-        originActualDeparture: times.origin.actualDeparture,
-        destActualArrival: times.destination.actualArrival,
-        destActualDeparture: times.destination.actualDeparture,
+        originActualArrival: formatTimeAsSAST(originActualArrivalIso),
+        originActualDeparture: formatTimeAsSAST(originActualDepartureIso),
+        destActualArrival: formatTimeAsSAST(destActualArrivalIso),
+        destActualDeparture: formatTimeAsSAST(destActualDepartureIso),
         deliveryNotes: '',
         originArrivalNote: (typeof originTw.arrivalNote === 'string') ? originTw.arrivalNote : '',
         originDepartureNote: (typeof originTw.departureNote === 'string') ? originTw.departureNote : '',

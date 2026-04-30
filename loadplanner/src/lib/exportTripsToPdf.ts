@@ -110,7 +110,27 @@ function formatExpiryDate(dateString: string | null | undefined): string {
   }
 }
 
-export async function exportLoadToPdf(load: Load, allLoads: Load[]): Promise<void> {
+/**
+ * Optional extras supplied by the caller that affect only the rendered PDF
+ * (never persisted to the load row).
+ */
+export interface ExportLoadToPdfOptions {
+  /**
+   * A rate to print on the Load Confirmation document. Display-only; not
+   * stored anywhere. When omitted no rate row is rendered.
+   */
+  rate?: {
+    amount: number;
+    currency: string;
+  };
+}
+
+export async function exportLoadToPdf(
+  load: Load,
+  allLoads: Load[],
+  options: ExportLoadToPdfOptions = {},
+): Promise<void> {
+  const { rate } = options;
   // Fetch full driver and vehicle details in parallel
   const [fullDriver, fullVehicle] = await Promise.all([
     load.driver?.id ? fetchFullDriver(load.driver.id) : Promise.resolve(null),
@@ -195,7 +215,7 @@ export async function exportLoadToPdf(load: Load, allLoads: Load[]): Promise<voi
   doc.setTextColor(...pdfColors.navy);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text("LOAD REPORT", pageWidth - margin, 14, { align: "right" });
+  doc.text("LOAD CONFIRMATION", pageWidth - margin, 14, { align: "right" });
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
@@ -258,6 +278,20 @@ export async function exportLoadToPdf(load: Load, allLoads: Load[]): Promise<voi
   );
   col1Y = addKeyValue("Quantity:", `${load.quantity} units`, col1Y);
   col1Y = addKeyValue("Weight:", `${load.weight} T`, col1Y);
+  // Optional rate (display-only — never persisted to the load row).
+  // Rendered in Load Details so it sits with the other commercial fields,
+  // making it obvious this is a Load Confirmation document.
+  if (rate && Number.isFinite(rate.amount) && rate.amount > 0) {
+    const formattedAmount = rate.amount.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    col1Y = addKeyValue(
+      "Rate:",
+      `${rate.currency} ${formattedAmount}`,
+      col1Y,
+    );
+  }
 
   // Column 2
   doc.setFontSize(9);
@@ -952,6 +986,7 @@ export async function exportLoadToPdf(load: Load, allLoads: Load[]): Promise<voi
     );
   }
 
-  // Save the PDF
-  doc.save(`${load.load_id}-report.pdf`);
+  // Save the PDF as "Load Confirmation" so the filename matches the
+  // document title shown in the header.
+  doc.save(`Load-Confirmation-${load.load_id}.pdf`);
 }

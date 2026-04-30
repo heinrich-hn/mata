@@ -112,6 +112,12 @@ export interface FormTimeDefaults {
 /**
  * Parse time_window into the flattened shape consumed by load form `defaultValues`.
  * Falls back to sensible default times when the stored values are empty.
+ *
+ * All output values are coerced to "HH:mm" via `formatTimeAsSAST` so that they
+ * are safe to assign directly to `<input type="time">`. ISO 8601 timestamps
+ * stored by the geofence pipeline (e.g. "2026-04-29T11:45:12.814Z") would
+ * otherwise be rejected by the browser with the warning:
+ *   "The specified value … does not conform to the required format".
  */
 export function parseTimeWindowForForm(
   timeWindow: unknown,
@@ -124,10 +130,10 @@ export function parseTimeWindowForForm(
 ): FormTimeDefaults {
   const tw = parseTimeWindow(timeWindow);
   return {
-    originPlannedArrival: tw.origin.plannedArrival || defaults.originPlannedArrival,
-    originPlannedDeparture: tw.origin.plannedDeparture || defaults.originPlannedDeparture,
-    destPlannedArrival: tw.destination.plannedArrival || defaults.destPlannedArrival,
-    destPlannedDeparture: tw.destination.plannedDeparture || defaults.destPlannedDeparture,
+    originPlannedArrival: formatTimeAsSAST(tw.origin.plannedArrival) || defaults.originPlannedArrival,
+    originPlannedDeparture: formatTimeAsSAST(tw.origin.plannedDeparture) || defaults.originPlannedDeparture,
+    destPlannedArrival: formatTimeAsSAST(tw.destination.plannedArrival) || defaults.destPlannedArrival,
+    destPlannedDeparture: formatTimeAsSAST(tw.destination.plannedDeparture) || defaults.destPlannedDeparture,
     backload: tw.backload,
   };
 }

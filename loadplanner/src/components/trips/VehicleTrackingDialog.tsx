@@ -22,7 +22,6 @@ import {
   formatLastConnected,
   getAssetDetails,
   getHeadingDirection,
-  getStatusColor,
   isAuthenticated,
   type TelematicsAsset,
 } from '@/lib/telematicsGuru';
@@ -42,34 +41,53 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-// Create vehicle marker icon
+// Create vehicle marker icon.
+// Stationary vehicles render as a solid red dot, moving vehicles as a green
+// arrow pointing in the direction of travel — gives operators an immediate,
+// at-a-glance read on whether the truck is rolling and where it's headed.
 function createVehicleIcon(asset: TelematicsAsset): L.DivIcon {
-  const color = getStatusColor(asset);
+  const isMoving = (asset.speedKmH ?? 0) >= 5;
   const rotation = asset.heading || 0;
 
-  return L.divIcon({
-    html: `
-      <div style="width:48px;height:48px;position:relative;display:flex;align-items:center;justify-content:center;">
+  if (isMoving) {
+    // Green arrow (triangle) pointing in heading direction
+    const html = `
+      <div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
         <div style="
-          width:40px;height:40px;border-radius:50%;background:${color};
-          border:4px solid white;display:flex;align-items:center;justify-content:center;
-          box-shadow:0 4px 12px rgba(0,0,0,0.3);transform:rotate(${rotation}deg);
+          width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+          transform:rotate(${rotation}deg);transform-origin:center;
+          filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));
         ">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L12 22M12 2L5 9M12 2L19 9"/>
+          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2 L21 21 L12 17 L3 21 Z" fill="#16a34a" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
           </svg>
         </div>
-        ${asset.inTrip
-        ? `<div style="position:absolute;top:0;right:0;width:14px;height:14px;border-radius:50%;background:#22c55e;border:2px solid white;animation:pulse 1.5s infinite;"></div>`
-        : ''
-      }
       </div>
-      <style>@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:0.7}}</style>
-    `,
+    `;
+    return L.divIcon({
+      html,
+      className: 'vehicle-marker',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+      popupAnchor: [0, -20],
+    });
+  }
+
+  // Stationary: solid red dot
+  const html = `
+    <div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
+      <div style="
+        width:18px;height:18px;border-radius:50%;background:#dc2626;
+        border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);
+      "></div>
+    </div>
+  `;
+  return L.divIcon({
+    html,
     className: 'vehicle-marker',
-    iconSize: [48, 48],
-    iconAnchor: [24, 24],
-    popupAnchor: [0, -24],
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -12],
   });
 }
 
@@ -354,22 +372,25 @@ export function VehicleTrackingDialog({
           {/* Status Bar */}
           <div className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-2">
             <div className="flex items-center gap-4">
-              {asset && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: getStatusColor(asset) }}
-                    />
-                    <span className="text-sm font-medium">
-                      {asset.inTrip ? 'Moving' : 'Stationary'}
-                    </span>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {asset.speedKmH} km/h • {getHeadingDirection(asset.heading || 0)}
-                  </div>
-                </>
-              )}
+              {asset && (() => {
+                const isMoving = (asset.speedKmH ?? 0) >= 5;
+                return (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: isMoving ? '#16a34a' : '#dc2626' }}
+                      />
+                      <span className="text-sm font-medium">
+                        {isMoving ? 'Moving' : 'Stationary'}
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {asset.speedKmH} km/h{isMoving ? ` • ${getHeadingDirection(asset.heading || 0)}` : ''}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-2">
               {lastUpdate && (
