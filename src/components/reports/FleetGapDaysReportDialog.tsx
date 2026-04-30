@@ -224,10 +224,21 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 );
                 if (Number.isNaN(prevEnd.getTime()) || Number.isNaN(currStart.getTime()))
                     continue;
-                const gap = Math.max(
-                    0,
-                    Math.floor((currStart.getTime() - prevEnd.getTime()) / 86400000),
+                // Count calendar days strictly between prevEnd and currStart.
+                // Example: prevEnd = 26/04, currStart = 28/04 → 1 gap day (27/04).
+                // Same-day or next-day continuation → 0 gap days.
+                const prevEndDay = Date.UTC(
+                    prevEnd.getFullYear(),
+                    prevEnd.getMonth(),
+                    prevEnd.getDate(),
                 );
+                const currStartDay = Date.UTC(
+                    currStart.getFullYear(),
+                    currStart.getMonth(),
+                    currStart.getDate(),
+                );
+                const dayDiff = Math.round((currStartDay - prevEndDay) / 86400000);
+                const gap = Math.max(0, dayDiff - 1);
                 rows.push({
                     fleet,
                     nextDeparture: currStart,
