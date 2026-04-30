@@ -123,14 +123,25 @@ export interface ExportLoadToPdfOptions {
     amount: number;
     currency: string;
   };
+  /**
+   * When false, the PDF is not auto-downloaded — the caller receives the
+   * Blob and filename in the return value and is responsible for handling
+   * it (e.g. attaching to an email share sheet). Defaults to true.
+   */
+  download?: boolean;
+}
+
+export interface ExportLoadToPdfResult {
+  blob: Blob;
+  filename: string;
 }
 
 export async function exportLoadToPdf(
   load: Load,
   allLoads: Load[],
   options: ExportLoadToPdfOptions = {},
-): Promise<void> {
-  const { rate } = options;
+): Promise<ExportLoadToPdfResult> {
+  const { rate, download = true } = options;
   // Fetch full driver and vehicle details in parallel
   const [fullDriver, fullVehicle] = await Promise.all([
     load.driver?.id ? fetchFullDriver(load.driver.id) : Promise.resolve(null),
@@ -987,6 +998,12 @@ export async function exportLoadToPdf(
   }
 
   // Save the PDF as "Load Confirmation" so the filename matches the
-  // document title shown in the header.
-  doc.save(`Load-Confirmation-${load.load_id}.pdf`);
+  // document title shown in the header. The same blob is returned so the
+  // caller can also attach it to a share sheet (e.g. email via Outlook).
+  const filename = `Load-Confirmation-${load.load_id}.pdf`;
+  if (download) {
+    doc.save(filename);
+  }
+  const blob = doc.output("blob");
+  return { blob, filename };
 }
