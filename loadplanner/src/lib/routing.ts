@@ -23,6 +23,64 @@ export interface RouteWaypoint {
 // OSRM Demo server - for production, consider self-hosting OSRM or using a paid service
 const OSRM_BASE_URL = 'https://router.project-osrm.org';
 
+// OpenRouteService - primary routing provider (uses driving-hgv profile suited to fleet trucks)
+const ORS_BASE_URL = 'https://api.openrouteservice.org/v2/directions/driving-hgv';
+const ORS_API_KEY = (import.meta.env.VITE_ORS_API_KEY as string | undefined) ?? '';
+
+/**
+ * Calculate a route via OpenRouteService (driving-hgv profile).
+ * Returns null on any failure so callers can fall back to OSRM/haversine.
+ */
+export async function calculateRouteORS(
+  waypoints: RouteWaypoint[]
+): Promise<RouteResult | null> {
+  if (!ORS_API_KEY || waypoints.length < 2) return null;
+
+  try {
+    const response = await fetch(ORS_BASE_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: ORS_API_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        coordinates: waypoints.map((w) => [w.longitude, w.latitude]),
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`ORS routing failed: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const route = data?.routes?.[0];
+    if (!route?.geometry || !route?.summary) return null;
+
+    return {
+      distance: route.summary.distance / 1000,
+      duration: route.summary.duration / 60,
+      geometry: route.geometry,
+    };
+  } catch (error) {
+    console.warn('ORS routing error:', error);
+    return null;
+  }
+}
+
+/**
+ * Calculate a route preferring ORS, falling back to OSRM, then haversine
+ * (the OSRM helper already falls back internally).
+ */
+export async function calculateRouteSmart(
+  waypoints: RouteWaypoint[]
+): Promise<RouteResult> {
+  const ors = await calculateRouteORS(waypoints);
+  if (ors && !ors.error && ors.distance > 0) return ors;
+  return calculateRoute(waypoints);
+}
+
 /**
  * Calculate road-based route between two or more waypoints
  * Uses OSRM (Open Source Routing Machine) for actual road network routing
@@ -165,7 +223,7 @@ export async function calculateMultiStopRoute(
  */
 function calculateStraightLineDistance(waypoints: RouteWaypoint[]): number {
   let totalDistance = 0;
-  
+
   for (let i = 0; i < waypoints.length - 1; i++) {
     const lat1 = waypoints[i].latitude;
     const lon1 = waypoints[i].longitude;
@@ -237,42 +295,42 @@ export function calculateRouteETA(durationMinutes: number): {
  */
 export function decodePolyline(encoded: string): [number, number][] {
   if (!encoded) return [];
-  
+
   const coords: [number, number][] = [];
   let index = 0;
   let lat = 0;
   let lng = 0;
   const len = encoded.length;
-  
+
   while (index < len) {
     let result = 0;
     let shift = 0;
     let b = 0;
-    
+
     do {
       b = encoded.charCodeAt(index++) - 63;
       result |= (b & 0x1f) << shift;
       shift += 5;
     } while (b >= 0x20);
-    
+
     const deltaLat = ((result & 1) ? ~(result >> 1) : (result >> 1));
     lat += deltaLat;
-    
+
     result = 0;
     shift = 0;
-    
+
     do {
       b = encoded.charCodeAt(index++) - 63;
       result |= (b & 0x1f) << shift;
       shift += 5;
     } while (b >= 0x20);
-    
+
     const deltaLng = ((result & 1) ? ~(result >> 1) : (result >> 1));
     lng += deltaLng;
-    
+
     coords.push([lat / 1e5, lng / 1e5]);
   }
-  
+
   return coords;
 }
 

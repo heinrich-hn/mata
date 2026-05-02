@@ -128,11 +128,11 @@ export default function ClientOverviewPage() {
             {/* Decorative background elements */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-            
+
             <CardContent className="p-6 relative">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <motion.h2 
+                  <motion.h2
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 }}
@@ -140,7 +140,7 @@ export default function ClientOverviewPage() {
                   >
                     Welcome back{client?.contact_person ? `, ${client.contact_person.split(' ')[0]}` : ''}
                   </motion.h2>
-                  <motion.p 
+                  <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.3 }}
@@ -149,7 +149,7 @@ export default function ClientOverviewPage() {
                     Here's an overview of your shipment activity with <span className="font-semibold text-primary">{client?.name || 'your account'}</span>
                   </motion.p>
                 </div>
-                <motion.div 
+                <motion.div
                   initial={{ scale: 0, rotate: -10 }}
                   animate={{ scale: 1, rotate: 0 }}
                   transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
@@ -216,7 +216,7 @@ export default function ClientOverviewPage() {
             <Card className="border-subtle shadow-lg overflow-hidden">
               <CardHeader className="border-b border-subtle bg-gradient-to-r from-primary/5 via-transparent to-transparent py-4">
                 <div className="flex items-center gap-3">
-                  <motion.div 
+                  <motion.div
                     whileHover={{ scale: 1.05 }}
                     className="p-2 rounded-lg bg-primary/10 text-primary shadow-sm"
                   >
@@ -289,8 +289,8 @@ export default function ClientOverviewPage() {
                   <CardDescription>Shipments currently in progress</CardDescription>
                 </div>
                 <Link to={`${basePath}/${clientId}/deliveries`}>
-                  <Badge 
-                    variant="outline" 
+                  <Badge
+                    variant="outline"
                     className="cursor-pointer hover:bg-accent hover:scale-105 transition-all duration-200"
                   >
                     View All
@@ -307,7 +307,7 @@ export default function ClientOverviewPage() {
                   ))}
                 </div>
               ) : activeLoads.length === 0 ? (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="text-center py-8 text-muted-foreground"
@@ -343,8 +343,8 @@ export default function ClientOverviewPage() {
                   <CardDescription>Next scheduled deliveries</CardDescription>
                 </div>
                 <Link to={`${basePath}/${clientId}/loads`}>
-                  <Badge 
-                    variant="outline" 
+                  <Badge
+                    variant="outline"
                     className="cursor-pointer hover:bg-accent hover:scale-105 transition-all duration-200"
                   >
                     View All
@@ -361,7 +361,7 @@ export default function ClientOverviewPage() {
                   ))}
                 </div>
               ) : upcomingLoads.length === 0 ? (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="text-center py-8 text-muted-foreground"
@@ -407,7 +407,7 @@ export default function ClientOverviewPage() {
               ) : (
                 <>
                   <div className="text-center">
-                    <motion.div 
+                    <motion.div
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ delay: 0.2, type: "spring" }}
@@ -446,7 +446,7 @@ export default function ClientOverviewPage() {
         </motion.div>
 
         {/* Recent Activity */}
-        <motion.div 
+        <motion.div
           className="lg:col-span-2"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -468,7 +468,7 @@ export default function ClientOverviewPage() {
                   ))}
                 </div>
               ) : recentActivity.length === 0 ? (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="text-center py-8 text-muted-foreground"
@@ -533,14 +533,14 @@ function StatsCard({
       <Card className="kpi-card shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden">
         <CardContent className="p-0">
           <div className="flex items-center gap-3 p-4">
-            <motion.div 
+            <motion.div
               whileHover={{ scale: 1.1, rotate: 5 }}
               className={cn('flex h-12 w-12 items-center justify-center rounded-xl border shadow-sm', colorClasses[color])}
             >
               <Icon className="h-5 w-5" />
             </motion.div>
             <div>
-              <motion.p 
+              <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: delay + 0.1 }}
@@ -562,7 +562,7 @@ function ActiveLoadItem({ load, index }: { load: Load; index: number }) {
   const destination = getLocationDisplayName(load.destination);
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.1 }}
@@ -570,7 +570,7 @@ function ActiveLoadItem({ load, index }: { load: Load; index: number }) {
       className="py-3.5 flex items-center justify-between px-1.5 rounded-lg transition-all duration-200"
     >
       <div className="flex items-center gap-3">
-        <motion.div 
+        <motion.div
           whileHover={{ rotate: 5 }}
           className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-200 dark:border-blue-800 shadow-sm"
         >
@@ -583,7 +583,7 @@ function ActiveLoadItem({ load, index }: { load: Load; index: number }) {
           </p>
         </div>
       </div>
-      <Badge 
+      <Badge
         variant={load.status === 'in-transit' ? 'default' : 'outline'}
         className="animate-pulse"
       >
@@ -598,7 +598,7 @@ function UpcomingLoadItem({ load, index }: { load: Load; index: number }) {
   const destination = getLocationDisplayName(load.destination);
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.1 }}
@@ -606,7 +606,7 @@ function UpcomingLoadItem({ load, index }: { load: Load; index: number }) {
       className="py-3.5 flex items-center justify-between px-1.5 rounded-lg transition-all duration-200"
     >
       <div className="flex items-center gap-3">
-        <motion.div 
+        <motion.div
           whileHover={{ rotate: 5 }}
           className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-200 dark:border-amber-800 shadow-sm"
         >
@@ -657,7 +657,7 @@ function RecentActivityItem({ load, index }: { load: Load; index: number }) {
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.1 }}
@@ -665,20 +665,20 @@ function RecentActivityItem({ load, index }: { load: Load; index: number }) {
       className="py-3 flex items-center justify-between px-1.5 rounded-lg transition-all duration-200"
     >
       <div className="flex items-center gap-3">
-        <motion.div 
+        <motion.div
           whileHover={{ scale: 1.1 }}
           className={cn('flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm', getStatusColor())}
         >
           {getStatusIcon()}
         </motion.div>
         <div>
-          <p className="text-sm">
+          <div className="text-sm flex items-center gap-1.5">
             <span className="font-semibold">{load.load_id}</span>
-            <span className="text-muted-foreground"> • </span>
+            <span className="text-muted-foreground">•</span>
             <Badge variant="outline" className="text-xs px-1.5 py-0">
               {load.status}
             </Badge>
-          </p>
+          </div>
           <p className="text-xs text-muted-foreground">
             {getLocationDisplayName(load.origin)} → {getLocationDisplayName(load.destination)}
           </p>

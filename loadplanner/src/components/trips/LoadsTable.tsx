@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { useDeleteLoad, type Load } from "@/hooks/useTrips";
 import { shareTripViaWhatsApp, shareWeeklyScheduleViaWhatsApp } from "@/lib/exportTripWhatsApp";
+import { exportRoutePdf } from "@/lib/exportRoutePdf";
 import { parseTimeWindow as parseTimeWindowData } from "@/lib/timeWindow";
 import { cn, getLocationDisplayName } from "@/lib/utils";
 import {
@@ -57,6 +58,7 @@ import {
   User,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useMemo, useState } from "react";
 import { AddBackloadDialog } from "./AddBackloadDialog";
 import { AddThirdPartyBackloadDialog } from "./AddThirdPartyBackloadDialog";
@@ -173,6 +175,7 @@ export function LoadsTable({
   const [loadForDieselOrder, setLoadForDieselOrder] = useState<Load | null>(null);
   const [breakdownDialogOpen, setBreakdownDialogOpen] = useState(false);
   const [loadForBreakdown, setLoadForBreakdown] = useState<Load | null>(null);
+  const [routeExporting, setRouteExporting] = useState<string | null>(null);
   const [subcontractorDialogOpen, setSubcontractorDialogOpen] = useState(false);
   const [loadForSubcontractor, setLoadForSubcontractor] = useState<Load | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -260,6 +263,19 @@ export function LoadsTable({
     e.stopPropagation();
     setLoadForExport(load);
     setExportDialogOpen(true);
+  };
+
+  const handleExportRoutePdf = async (e: React.MouseEvent, load: Load) => {
+    e.stopPropagation();
+    if (routeExporting) return;
+    setRouteExporting(load.id);
+    try {
+      await exportRoutePdf(load);
+    } catch {
+      toast.error("Failed to generate route PDF. Please try again.");
+    } finally {
+      setRouteExporting(null);
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -789,6 +805,21 @@ export function LoadsTable({
                             >
                               <FileDown className="h-4 w-4 mr-2" />
                               Export Load Confirmation
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={(e) =>
+                                handleExportRoutePdf(e as unknown as React.MouseEvent, load)
+                              }
+                              disabled={routeExporting === load.id}
+                            >
+                              <MapPin
+                                className={cn(
+                                  "h-4 w-4 mr-2",
+                                  routeExporting === load.id && "animate-pulse",
+                                )}
+                              />
+                              {routeExporting === load.id ? "Generating…" : "Export Route PDF"}
                             </DropdownMenuItem>
 
                             {load.driver && (

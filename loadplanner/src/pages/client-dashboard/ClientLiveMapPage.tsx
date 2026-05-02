@@ -139,7 +139,15 @@ function FitBounds({ assets, loads, allDepots }: { assets: TelematicsAsset[]; lo
   const map = useMap();
 
   useEffect(() => {
-    if (!map || !map.getContainer()) return;
+    if (!map) return;
+    // Bail early if the underlying DOM container has been torn down.
+    let container: HTMLElement | null = null;
+    try {
+      container = map.getContainer();
+    } catch {
+      return;
+    }
+    if (!container || !container.isConnected) return;
 
     const points: [number, number][] = [];
 
@@ -160,12 +168,34 @@ function FitBounds({ assets, loads, allDepots }: { assets: TelematicsAsset[]; lo
 
     if (points.length === 0) return;
 
-    try {
-      const bounds = L.latLngBounds(points);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
-    } catch (error) {
-      console.warn('FitBounds error:', error);
-    }
+    let cancelled = false;
+    // Defer one frame so React commits + Leaflet panes are settled before we
+    // start a transition; this is what was causing _leaflet_pos to be
+    // undefined when the previous animation finished after unmount.
+    const raf = window.requestAnimationFrame(() => {
+      if (cancelled) return;
+      if (!map.getContainer()?.isConnected) return;
+      try {
+        const bounds = L.latLngBounds(points);
+        // animate:false avoids the zoom-transition-end callback that crashes
+        // when the component unmounts mid-animation.
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12, animate: false });
+      } catch (error) {
+        console.warn('FitBounds error:', error);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+      // Cancel any in-flight pan/zoom so its end handler doesn't fire after
+      // the panes have been removed by react-leaflet's unmount.
+      try {
+        map.stop();
+      } catch {
+        /* map already disposed */
+      }
+    };
   }, [assets, loads, map, allDepots]);
 
   return null;

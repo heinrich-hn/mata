@@ -1114,5 +1114,1607 @@
     "address": "Unnamed Road, Harare, Zimbabwe",
     "latitude": -17.8521763,
     "longitude": 31.1325613
+  },
+  {
+    "name": "Tswana Fuels Botswana - Francistown",
+    "address": "Francistown, Botswana",
+    "latitude": -21.170833,
+    "longitude": 27.514722
+  },
+  {
+    "name": "XFuels Thohoyandou",
+    "address": "Thohoyandou, South Africa",
+    "latitude": -22.965,
+    "longitude": 30.483
+  },
+  {
+    "name": "Majuba King Warden",
+    "address": "Warden, South Africa",
+    "latitude": -27.858219,
+    "longitude": 28.965526
+  },
+  {
+    "name": "Tswana Fuels Botswana - Gaborone Block 3",
+    "address": "Gaborone, Botswana",
+    "latitude": -24.5733,
+    "longitude": 25.9737
+  },
+  {
+    "name": "Karan MOZ - Nhamatanda 2",
+    "address": "Nhamatanda, Mozambique",
+    "latitude": -19.2692,
+    "longitude": 34.2125
+  },
+  {
+    "name": "Tswana Fuels Botswana - Kazungula",
+    "address": "Kazungula, Botswana",
+    "latitude": -17.797809,
+    "longitude": 25.258065
+  },
+  {
+    "name": "Tswana Fuels Botswana - Lobatse",
+    "address": "Lobatse, Botswana",
+    "latitude": -25.2137,
+    "longitude": 25.6786
+  },
+  {
+    "name": "Tswana Fuels Botswana - Mamuno",
+    "address": "Mamuno, Botswana",
+    "latitude": -22.278,
+    "longitude": 20.033
+  },
+  {
+    "name": "Beckatto R40 (Pty) Ltd - Phalaborwa",
+    "address": "Phalaborwa, South Africa",
+    "latitude": -23.943,
+    "longitude": 31.141
+  },
+  {
+    "name": "Kapele Energy (Pty) Ltd - Rustenburg",
+    "address": "Rustenburg, South Africa",
+    "latitude": -25.6826,
+    "longitude": 27.2443
+  },
+  {
+    "name": "Tswana Fuels Botswana - Sherwood",
+    "address": "Sherwood, Botswana",
+    "latitude": -24.595,
+    "longitude": 25.91
+  },
+  {
+    "name": "Karan Zambia Nakonde",
+    "address": "Nakonde, Zambia",
+    "latitude": -9.342,
+    "longitude": 32.77
+  },
+  {
+    "name": "Astro Fuels Krugersdorp",
+    "address": "Krugersdorp, South Africa",
+    "latitude": -26.085,
+    "longitude": 27.775
+  },
+  {
+    "name": "Tswana Fuels Botswana - Tlokweng",
+    "address": "Tlokweng, Botswana",
+    "latitude": -24.6692,
+    "longitude": 26.0179
+  },
+  {
+    "name": "OVK Cradock",
+    "address": "Cradock, South Africa",
+    "latitude": -32.164,
+    "longitude": 25.619
+  },
+  {
+    "name": "Truckers Diesel CC - Delmas",
+    "address": "Delmas, South Africa",
+    "latitude": -26.147,
+    "longitude": 28.683
+  },
+  {
+    "name": "Big 5 Fuel-Cato Ridge (Pty) Ltd",
+    "address": "Cato Ridge, South Africa",
+    "latitude": -29.74,
+    "longitude": 30.58
+  },
+  {
+    "name": "Mbombela Truck Stop (Pty) Ltd",
+    "address": "Mbombela, South Africa",
+    "latitude": -25.474,
+    "longitude": 30.971
+  },
+  {
+    "name": "Big 5 Fuel Holdings (Pty) Ltd - Bronkhorstspruit",
+    "address": "Bronkhorstspruit, South Africa",
+    "latitude": -25.808,
+    "longitude": 28.742
+  },
+  {
+    "name": "Stadler N1 Vaal",
+    "address": "Vaal, South Africa",
+    "latitude": -26.832,
+    "longitude": 27.959
+  },
+  {
+    "name": "Four Arrow Investments 219 (Pty) Ltd - Phalaborwa",
+    "address": "Phalaborwa, South Africa",
+    "latitude": -23.943,
+    "longitude": 31.141
+  },
+  {
+    "name": "Keystone Fuels (Pty) Ltd - Phela Energies Harrismith",
+    "address": "Harrismith, South Africa",
+    "latitude": -28.272,
+    "longitude": 29.127
+  },
+  {
+    "name": "OVK Senekal",
+    "address": "Senekal, South Africa",
+    "latitude": -28.321,
+    "longitude": 27.621
+  },
+  {
+    "name": "Optiera (Pty) Ltd (Convee Trading Zeerust)",
+    "address": "Zeerust, South Africa",
+    "latitude": -25.543,
+    "longitude": 26.081
+  },
+  {
+    "name": "MS Petroleum Potchefstroom",
+    "address": "Potchefstroom, South Africa",
+    "latitude": -26.699,
+    "longitude": 27.099
+  },
+  {
+    "name": "Stadler Durban",
+    "address": "Durban, South Africa",
+    "latitude": -29.852,
+    "longitude": 31.005
+  },
+  {
+    "name": "Mams Mega Stop Vryburg",
+    "address": "Vryburg, South Africa",
+    "latitude": -26.958,
+    "longitude": 24.724
+  },
+  {
+    "name": "Laser Fast Truck Stop Meyerton",
+    "address": "Meyerton, South Africa",
+    "latitude": -26.559,
+    "longitude": 28.02
+  },
+  {
+    "name": "Midway Motors Truckstop Estcourt",
+    "address": "Estcourt, South Africa",
+    "latitude": -29.01,
+    "longitude": 29.865
+  },
+  {
+    "name": "BF Filling Station Polokwane",
+    "address": "Polokwane, South Africa",
+    "latitude": -23.896,
+    "longitude": 29.449
+  },
+  {
+    "name": "Whelson Chirundu Zimbabwe (Supergroup SA)",
+    "address": "Chirundu, Zimbabwe",
+    "latitude": -16.037,
+    "longitude": 28.852
+  },
+  {
+    "name": "Southway Engen Durban (Twoline Trading)",
+    "address": "Durban, South Africa",
+    "latitude": -29.827,
+    "longitude": 30.907
+  },
+  {
+    "name": "IMPI Fuels Newtown Secunda",
+    "address": "Secunda, South Africa",
+    "latitude": -26.516,
+    "longitude": 29.194
+  },
+  {
+    "name": "Kuhle Fuels Kendal",
+    "address": "Kendal, South Africa",
+    "latitude": -26.086,
+    "longitude": 28.998
+  },
+  {
+    "name": "Industry Petroleum TransAgri Bloemhof",
+    "address": "Bloemhof, South Africa",
+    "latitude": -27.647,
+    "longitude": 25.607
+  },
+  {
+    "name": "Industry Petroleum Schweizer",
+    "address": "Schweizer-Reneke, South Africa",
+    "latitude": -27.184,
+    "longitude": 25.331
+  },
+  {
+    "name": "IPetroleum Zambesi Truck Stop",
+    "address": "Zambesi, South Africa",
+    "latitude": -25.384,
+    "longitude": 28.338
+  },
+  {
+    "name": "Industry Petroleum Wadeville",
+    "address": "Wadeville, Germiston, South Africa",
+    "latitude": -26.267,
+    "longitude": 28.188
+  },
+  {
+    "name": "Industry Petroleum TransAgri Klerksdorp",
+    "address": "Klerksdorp, South Africa",
+    "latitude": -26.852,
+    "longitude": 26.658
+  },
+  {
+    "name": "Econo Grootvlei",
+    "address": "Grootvlei, South Africa",
+    "latitude": -26.472,
+    "longitude": 28.491
+  },
+  {
+    "name": "Ditlou Diesel Olifantshoek",
+    "address": "Olifantshoek, South Africa",
+    "latitude": -27.944,
+    "longitude": 22.738
+  },
+  {
+    "name": "Nkomazi Truck Stop Malalane",
+    "address": "Malalane, South Africa",
+    "latitude": -25.483,
+    "longitude": 31.517
+  },
+  {
+    "name": "Ultra Petroleum Griekwastad",
+    "address": "Griekwastad, South Africa",
+    "latitude": -28.848,
+    "longitude": 23.25
+  },
+  {
+    "name": "Nkomazi Fuel Barberton",
+    "address": "Barberton, South Africa",
+    "latitude": -25.786,
+    "longitude": 31.053
+  },
+  {
+    "name": "Nkomazi Truck Stop Kathu",
+    "address": "Kathu, South Africa",
+    "latitude": -27.698,
+    "longitude": 23.055
+  },
+  {
+    "name": "GBP Fuels Bethal (WinWin GBP Fuels)",
+    "address": "Bethal, South Africa",
+    "latitude": -26.458,
+    "longitude": 29.466
+  },
+  {
+    "name": "N17 Truckstop Warburton",
+    "address": "Warburton, South Africa",
+    "latitude": -26.24,
+    "longitude": 30.578
+  },
+  {
+    "name": "Baruk Petroleum Bloemfontein",
+    "address": "Bloemfontein, South Africa",
+    "latitude": -29.085,
+    "longitude": 26.161
+  },
+  {
+    "name": "Nkomazi Fuel Nelspruit",
+    "address": "Nelspruit, South Africa",
+    "latitude": -25.483,
+    "longitude": 30.981
+  },
+  {
+    "name": "Express Petroleum Ugie",
+    "address": "Ugie, South Africa",
+    "latitude": -31.199,
+    "longitude": 28.223
+  },
+  {
+    "name": "Majuba King Petroleum Ermelo",
+    "address": "Ermelo, South Africa",
+    "latitude": -26.518,
+    "longitude": 29.986
+  },
+  {
+    "name": "Nkomazi Fuel Cato Ridge",
+    "address": "Cato Ridge, South Africa",
+    "latitude": -29.736,
+    "longitude": 30.578
+  },
+  {
+    "name": "Industry Petroleum Midpoint Harrismith",
+    "address": "Harrismith, South Africa",
+    "latitude": -28.272,
+    "longitude": 29.127
+  },
+  {
+    "name": "Nexus Fuels Ermelo",
+    "address": "Ermelo, South Africa",
+    "latitude": -26.518,
+    "longitude": 29.986
+  },
+  {
+    "name": "Stadler Piketberg",
+    "address": "Piketberg, South Africa",
+    "latitude": -32.903,
+    "longitude": 18.754
+  },
+  {
+    "name": "JFK Laeveld Marble Hall",
+    "address": "Marble Hall, South Africa",
+    "latitude": -24.973,
+    "longitude": 29.29
+  },
+  {
+    "name": "E Z Trade 530 Middelburg",
+    "address": "Middelburg, South Africa",
+    "latitude": -25.775,
+    "longitude": 29.458
+  },
+  {
+    "name": "Ecflo Echo Machadodorp",
+    "address": "Machadodorp, South Africa",
+    "latitude": -25.669,
+    "longitude": 30.251
+  },
+  {
+    "name": "Fuel 1 Parow",
+    "address": "Parow, Cape Town, South Africa",
+    "latitude": -33.899,
+    "longitude": 18.594
+  },
+  {
+    "name": "Laingsburg Truck Stop",
+    "address": "Laingsburg, South Africa",
+    "latitude": -33.195,
+    "longitude": 20.859
+  },
+  {
+    "name": "Xtreme Fuel Sandfontein Northam",
+    "address": "Northam, South Africa",
+    "latitude": -24.951,
+    "longitude": 27.266
+  },
+  {
+    "name": "Bethlehem Diesel",
+    "address": "Bethlehem, South Africa",
+    "latitude": -28.23,
+    "longitude": 28.306
+  },
+  {
+    "name": "Fuel 1 Paarden Eiland",
+    "address": "Paarden Eiland, Cape Town, South Africa",
+    "latitude": -33.914,
+    "longitude": 18.474
+  },
+  {
+    "name": "A2Z Diesel Depot Vryburg",
+    "address": "Vryburg, South Africa",
+    "latitude": -26.958,
+    "longitude": 24.724
+  },
+  {
+    "name": "BB Energy Vryheid",
+    "address": "Vryheid, South Africa",
+    "latitude": -27.762,
+    "longitude": 30.792
+  },
+  {
+    "name": "Marblehall Truck Stop",
+    "address": "Marble Hall, South Africa",
+    "latitude": -24.973,
+    "longitude": 29.29
+  },
+  {
+    "name": "Mooi River Truck Stop",
+    "address": "Mooi River, South Africa",
+    "latitude": -29.21,
+    "longitude": 29.998
+  },
+  {
+    "name": "DieselGo Howick",
+    "address": "Howick, South Africa",
+    "latitude": -29.488,
+    "longitude": 30.221
+  },
+  {
+    "name": "Fuel 1 Bellville",
+    "address": "Bellville, Cape Town, South Africa",
+    "latitude": -33.898,
+    "longitude": 18.637
+  },
+  {
+    "name": "Exel Filling Station Hanover Northern Cape",
+    "address": "Hanover, South Africa",
+    "latitude": -31.068,
+    "longitude": 24.446
+  },
+  {
+    "name": "Xtreme Fuel Mokopane",
+    "address": "Mokopane, South Africa",
+    "latitude": -24.183,
+    "longitude": 29.013
+  },
+  {
+    "name": "Whelson Harare Zimbabwe (Supergroup SA)",
+    "address": "Harare, Zimbabwe",
+    "latitude": -17.827,
+    "longitude": 31.052
+  },
+  {
+    "name": "SAF Peacevale",
+    "address": "Peacevale, South Africa",
+    "latitude": -29.752,
+    "longitude": 30.626
+  },
+  {
+    "name": "OVK Queenstown",
+    "address": "Queenstown, South Africa",
+    "latitude": -31.896,
+    "longitude": 26.876
+  },
+  {
+    "name": "Oilco Musina (Own Use)",
+    "address": "Musina, South Africa",
+    "latitude": -22.331,
+    "longitude": 30.044
+  },
+  {
+    "name": "Q4 Diesel Depot Eloff",
+    "address": "Eloff, South Africa",
+    "latitude": -26.177,
+    "longitude": 28.608
+  },
+  {
+    "name": "Vision Petroleum Postmasburg",
+    "address": "Postmasburg, South Africa",
+    "latitude": -28.323,
+    "longitude": 23.081
+  },
+  {
+    "name": "Rousseau Lichtenburg",
+    "address": "Lichtenburg, South Africa",
+    "latitude": -26.15,
+    "longitude": 26.159
+  },
+  {
+    "name": "Fuel 1 Manhattan",
+    "address": "Manhattan, Cape Town, South Africa",
+    "latitude": -33.903,
+    "longitude": 18.636
+  },
+  {
+    "name": "Fuel 1 Kraaifontein",
+    "address": "Kraaifontein, Cape Town, South Africa",
+    "latitude": -33.838,
+    "longitude": 18.725
+  },
+  {
+    "name": "BDN Diesel Depot Alberton",
+    "address": "Alberton, South Africa",
+    "latitude": -26.305,
+    "longitude": 28.131
+  },
+  {
+    "name": "MPT Fuel Middelburg",
+    "address": "Middelburg, South Africa",
+    "latitude": -25.775,
+    "longitude": 29.458
+  },
+  {
+    "name": "Nkomazi Fuel Upington",
+    "address": "Upington, South Africa",
+    "latitude": -28.452,
+    "longitude": 21.232
+  },
+  {
+    "name": "Gaspet Koedoeskop (Ubuntu Gas Petroleum)",
+    "address": "Koedoeskop, South Africa",
+    "latitude": -25.085,
+    "longitude": 27.9
+  },
+  {
+    "name": "Truck Station Umgeni Durban",
+    "address": "Durban, South Africa",
+    "latitude": -29.816,
+    "longitude": 30.984
+  },
+  {
+    "name": "MBC Fuels Modimolle",
+    "address": "Modimolle, South Africa",
+    "latitude": -24.703,
+    "longitude": 28.402
+  },
+  {
+    "name": "Karan DRC 10 Lubumbashi",
+    "address": "Lubumbashi, DRC",
+    "latitude": -11.664,
+    "longitude": 27.482
+  },
+  {
+    "name": "Africa Wholesale Diesel Richards Bay",
+    "address": "Richards Bay, South Africa",
+    "latitude": -28.799,
+    "longitude": 32.065
+  },
+  {
+    "name": "Stadler Kraaifontein",
+    "address": "Kraaifontein, Cape Town, South Africa",
+    "latitude": -33.838,
+    "longitude": 18.725
+  },
+  {
+    "name": "Fuel it Kroonstad",
+    "address": "Kroonstad, South Africa",
+    "latitude": -27.654,
+    "longitude": 27.234
+  },
+  {
+    "name": "Quantum Standerton",
+    "address": "Standerton, South Africa",
+    "latitude": -26.935,
+    "longitude": 29.251
+  },
+  {
+    "name": "Econo Langplaas Brits",
+    "address": "Brits, South Africa",
+    "latitude": -25.637,
+    "longitude": 27.791
+  },
+  {
+    "name": "Truck Station Randfontein",
+    "address": "Randfontein, South Africa",
+    "latitude": -26.171,
+    "longitude": 27.694
+  },
+  {
+    "name": "Nexus Fuels Carolina",
+    "address": "Carolina, South Africa",
+    "latitude": -26.074,
+    "longitude": 30.116
+  },
+  {
+    "name": "Bosveld Bela Bela",
+    "address": "Bela Bela, South Africa",
+    "latitude": -24.883,
+    "longitude": 28.291
+  },
+  {
+    "name": "Kwa Nokeng Martins Drift",
+    "address": "Martins Drift, Botswana/South Africa Border",
+    "latitude": -22.996,
+    "longitude": 27.935
+  },
+  {
+    "name": "Evander Petroleum and Gas",
+    "address": "Evander, South Africa",
+    "latitude": -26.466,
+    "longitude": 29.102
+  },
+  {
+    "name": "Nexus Fuels Belfast",
+    "address": "Belfast, South Africa",
+    "latitude": -25.688,
+    "longitude": 30.031
+  },
+  {
+    "name": "Kwa Nokeng Kazungula",
+    "address": "Kazungula, Botswana",
+    "latitude": -17.798,
+    "longitude": 25.243
+  },
+  {
+    "name": "Kwa Nokeng Lobatse",
+    "address": "Lobatse, Botswana",
+    "latitude": -25.214,
+    "longitude": 25.679
+  },
+  {
+    "name": "Kwa Nokeng Pandamatenga",
+    "address": "Pandamatenga, Botswana",
+    "latitude": -18.541,
+    "longitude": 25.637
+  },
+  {
+    "name": "Kwa Nokeng Maun",
+    "address": "Maun, Botswana",
+    "latitude": -19.991,
+    "longitude": 23.413
+  },
+  {
+    "name": "Kwa Nokeng Mamuno",
+    "address": "Mamuno, Botswana",
+    "latitude": -22.278,
+    "longitude": 20.033
+  },
+  {
+    "name": "Kwa Nokeng Phakalane",
+    "address": "Phakalane, Gaborone, Botswana",
+    "latitude": -24.613,
+    "longitude": 25.931
+  },
+  {
+    "name": "Kwa Nokeng Letlhakane",
+    "address": "Letlhakane, Botswana",
+    "latitude": -21.413,
+    "longitude": 25.588
+  },
+  {
+    "name": "Kwa Nokeng Tlokweng",
+    "address": "Tlokweng, Botswana",
+    "latitude": -24.669,
+    "longitude": 26.018
+  },
+  {
+    "name": "Stadler Colesberg",
+    "address": "Colesberg, South Africa",
+    "latitude": -30.717,
+    "longitude": 25.102
+  },
+  {
+    "name": "Engen Truck Stop Beaufort West",
+    "address": "Beaufort West, South Africa",
+    "latitude": -32.351,
+    "longitude": 22.582
+  },
+  {
+    "name": "Kwa Nokeng Francistown",
+    "address": "Francistown, Botswana",
+    "latitude": -21.171,
+    "longitude": 27.515
+  },
+  {
+    "name": "JEV Petroleum Nelspruit",
+    "address": "Nelspruit, South Africa",
+    "latitude": -25.483,
+    "longitude": 30.981
+  },
+  {
+    "name": "Stadler Hopetown",
+    "address": "Hopetown, South Africa",
+    "latitude": -29.578,
+    "longitude": 24.285
+  },
+  {
+    "name": "Engen Sydney Road Durban",
+    "address": "Durban, South Africa",
+    "latitude": -29.832,
+    "longitude": 30.997
+  },
+  {
+    "name": "Stadler Warrenton",
+    "address": "Warrenton, South Africa",
+    "latitude": -28.112,
+    "longitude": 24.847
+  },
+  {
+    "name": "Cuamba - Engen",
+    "address": "Cuamba, Mozambique",
+    "latitude": -14.816,
+    "longitude": 36.54
+  },
+  {
+    "name": "Nampula Galp",
+    "address": "Nampula, Mozambique",
+    "latitude": -15.116,
+    "longitude": 39.265
+  },
+  {
+    "name": "Ropax Casino Truckstop East London",
+    "address": "East London, South Africa",
+    "latitude": -32.971,
+    "longitude": 27.898
+  },
+  {
+    "name": "OILCO Musina t/a Upfreight Energy",
+    "address": "Musina, South Africa",
+    "latitude": -22.331,
+    "longitude": 30.044
+  },
+  {
+    "name": "Stadler Wolmaransstad",
+    "address": "Wolmaransstad, South Africa",
+    "latitude": -27.197,
+    "longitude": 25.986
+  },
+  {
+    "name": "Nkomazi Fuel Richards Bay",
+    "address": "Richards Bay, South Africa",
+    "latitude": -28.799,
+    "longitude": 32.065
+  },
+  {
+    "name": "Stadler Kimberley",
+    "address": "Kimberley, South Africa",
+    "latitude": -28.744,
+    "longitude": 24.772
+  },
+  {
+    "name": "Clix Auto Logistics Bulawayo",
+    "address": "Bulawayo, Zimbabwe",
+    "latitude": -20.164738,
+    "longitude": 28.581678
+  },
+  {
+    "name": "Kroondal Diesel Rustenburg",
+    "address": "Rustenburg, South Africa",
+    "latitude": -25.683,
+    "longitude": 27.244
+  },
+  {
+    "name": "Stadler Prieska",
+    "address": "Prieska, South Africa",
+    "latitude": -29.668,
+    "longitude": 22.744
+  },
+  {
+    "name": "Edge Fuel Upington",
+    "address": "Upington, South Africa",
+    "latitude": -28.452,
+    "longitude": 21.232
+  },
+  {
+    "name": "Africa Truck Stop Brakpan",
+    "address": "Brakpan, South Africa",
+    "latitude": -26.302,
+    "longitude": 28.369
+  },
+  {
+    "name": "Highlands Commodities cc Bronkhorstspruit",
+    "address": "Bronkhorstspruit, South Africa",
+    "latitude": -25.808,
+    "longitude": 28.742
+  },
+  {
+    "name": "Stadler Mosselbaai",
+    "address": "Mossel Bay, South Africa",
+    "latitude": -34.181,
+    "longitude": 22.139
+  },
+  {
+    "name": "Leloko Innovations Zebediela",
+    "address": "Zebediela, South Africa",
+    "latitude": -24.31,
+    "longitude": 29.27
+  },
+  {
+    "name": "Stadler Harrismith",
+    "address": "Harrismith, South Africa",
+    "latitude": -28.272,
+    "longitude": 29.127
+  },
+  {
+    "name": "Berin CCOV Witbank",
+    "address": "Witbank, South Africa",
+    "latitude": -25.872,
+    "longitude": 29.255
+  },
+  {
+    "name": "Zama Retailers Newcastle",
+    "address": "Newcastle, South Africa",
+    "latitude": -27.757,
+    "longitude": 29.929
+  },
+  {
+    "name": "Stadler Bloemfontein",
+    "address": "Bloemfontein, South Africa",
+    "latitude": -29.085,
+    "longitude": 26.161
+  },
+  {
+    "name": "Stadler Beaufort Wes",
+    "address": "Beaufort West, South Africa",
+    "latitude": -32.351,
+    "longitude": 22.582
+  },
+  {
+    "name": "Econo Uraniaville Klerksdorp",
+    "address": "Klerksdorp, South Africa",
+    "latitude": -26.852,
+    "longitude": 26.658
+  },
+  {
+    "name": "Fueland Investments Tzaneen",
+    "address": "Tzaneen, South Africa",
+    "latitude": -23.827,
+    "longitude": 30.159
+  },
+  {
+    "name": "Karan DRC 8 Kolwezi",
+    "address": "Kolwezi, DRC",
+    "latitude": -10.715,
+    "longitude": 25.47
+  },
+  {
+    "name": "Karan DRC 2 Lubumbashi",
+    "address": "Lubumbashi, DRC",
+    "latitude": -11.664,
+    "longitude": 27.482
+  },
+  {
+    "name": "Karan DRC 5 Lubumbashi",
+    "address": "Lubumbashi, DRC",
+    "latitude": -11.664,
+    "longitude": 27.482
+  },
+  {
+    "name": "Karan DRC 3 Lubumbashi",
+    "address": "Lubumbashi, DRC",
+    "latitude": -11.664,
+    "longitude": 27.482
+  },
+  {
+    "name": "Lion Park Truck Stop Pietermaritzburg",
+    "address": "Pietermaritzburg, South Africa",
+    "latitude": -29.611,
+    "longitude": 30.373
+  },
+  {
+    "name": "Quantum Pietermaritzburg",
+    "address": "Pietermaritzburg, South Africa",
+    "latitude": -29.611,
+    "longitude": 30.373
+  },
+  {
+    "name": "Ecflo Echo Mogoshandi Lebowakgomo",
+    "address": "Lebowakgomo, South Africa",
+    "latitude": -24.305,
+    "longitude": 29.562
+  },
+  {
+    "name": "Mega 1 Stop Potchefstroom (Moneyline (Pty) Ltd)",
+    "address": "Potchefstroom, South Africa",
+    "latitude": -26.699,
+    "longitude": 27.099
+  },
+  {
+    "name": "Industry Petroleum Musina",
+    "address": "Musina, South Africa",
+    "latitude": -22.331,
+    "longitude": 30.044
+  },
+  {
+    "name": "N2 Eco Fuel Pongola",
+    "address": "Pongola, South Africa",
+    "latitude": -27.376,
+    "longitude": 31.615
+  },
+  {
+    "name": "Karan DRC Kolwezi",
+    "address": "Kolwezi, DRC",
+    "latitude": -10.715,
+    "longitude": 25.47
+  },
+  {
+    "name": "Inyameko Trading Durban",
+    "address": "Durban, South Africa",
+    "latitude": -29.852,
+    "longitude": 31.005
+  },
+  {
+    "name": "United Truck Park Cato Ridge",
+    "address": "Cato Ridge, South Africa",
+    "latitude": -29.736,
+    "longitude": 30.578
+  },
+  {
+    "name": "Falkfuel Marblehall Truck Stop",
+    "address": "Marble Hall, South Africa",
+    "latitude": -24.973,
+    "longitude": 29.29
+  },
+  {
+    "name": "Force Petroleum Kimberley",
+    "address": "Kimberley, South Africa",
+    "latitude": -28.744,
+    "longitude": 24.772
+  },
+  {
+    "name": "Karan Zambia Mbereshi",
+    "address": "Mbereshi, Zambia",
+    "latitude": -10.278,
+    "longitude": 28.776
+  },
+  {
+    "name": "Karan Zambia Solwezi",
+    "address": "Solwezi, Zambia",
+    "latitude": -12.18,
+    "longitude": 26.405
+  },
+  {
+    "name": "Isomaster Fuel Midrand",
+    "address": "Midrand, South Africa",
+    "latitude": -25.982,
+    "longitude": 28.129
+  },
+  {
+    "name": "Burnside Nelspruit (Prima Onderberg)",
+    "address": "Nelspruit, South Africa",
+    "latitude": -25.483,
+    "longitude": 30.981
+  },
+  {
+    "name": "Karan Zambia Mkushi",
+    "address": "Mkushi, Zambia",
+    "latitude": -13.623,
+    "longitude": 29.398
+  },
+  {
+    "name": "XFuels Mokopane",
+    "address": "Mokopane, South Africa",
+    "latitude": -24.183,
+    "longitude": 29.013
+  },
+  {
+    "name": "Stadler Jan Kemp",
+    "address": "Jan Kempdorp, South Africa",
+    "latitude": -27.921,
+    "longitude": 24.835
+  },
+  {
+    "name": "Limpopo Fuels Phalaborwa",
+    "address": "Phalaborwa, South Africa",
+    "latitude": -23.943,
+    "longitude": 31.141
+  },
+  {
+    "name": "Ipex Filling Station",
+    "address": "Mokopane, South Africa",
+    "latitude": -24.183,
+    "longitude": 29.013
+  },
+  {
+    "name": "Karan Zambia Shimabala",
+    "address": "Shimabala, Zambia",
+    "latitude": -15.738,
+    "longitude": 28.255
+  },
+  {
+    "name": "Infinity Diesel Pretoria (CShell 106)",
+    "address": "Pretoria, South Africa",
+    "latitude": -25.745,
+    "longitude": 28.188
+  },
+  {
+    "name": "Karan Zambia Linda",
+    "address": "Linda, Zambia",
+    "latitude": -15.402,
+    "longitude": 28.276
+  },
+  {
+    "name": "ATS Mosselbaai",
+    "address": "Mossel Bay, South Africa",
+    "latitude": -34.181,
+    "longitude": 22.139
+  },
+  {
+    "name": "HMI Fuel Germiston",
+    "address": "Germiston, South Africa",
+    "latitude": -26.205,
+    "longitude": 28.164
+  },
+  {
+    "name": "Uptank Diesel Depot Rosslyn",
+    "address": "Rosslyn, Pretoria, South Africa",
+    "latitude": -25.616,
+    "longitude": 28.092
+  },
+  {
+    "name": "Tarlton Truckstop (Setjhaba Energy (Pty) Ltd)",
+    "address": "Tarlton, South Africa",
+    "latitude": -26.062,
+    "longitude": 27.635
+  },
+  {
+    "name": "Industry Petroleum Pietermaritzburg",
+    "address": "Pietermaritzburg, South Africa",
+    "latitude": -29.611,
+    "longitude": 30.373
+  },
+  {
+    "name": "Karan Zambia 12 Miles",
+    "address": "12 Miles, Zambia",
+    "latitude": -15.421,
+    "longitude": 28.424
+  },
+  {
+    "name": "BG Petro Hennenman (Coco Haven cc)",
+    "address": "Hennenman, South Africa",
+    "latitude": -27.975,
+    "longitude": 27.026
+  },
+  {
+    "name": "Karan Zambia Ibex",
+    "address": "Ibex, Zambia",
+    "latitude": -12.983,
+    "longitude": 28.647
+  },
+  {
+    "name": "Karan Rwanda Gyseni",
+    "address": "Gisenyi, Rwanda",
+    "latitude": -1.668920,
+    "longitude": 29.263395
+  },
+  {
+    "name": "Karan DRC Likaski",
+    "address": "Likasi, DRC",
+    "latitude": -10.981,
+    "longitude": 26.739
+  },
+  {
+    "name": "Karan DRC 7 Lubumbashi",
+    "address": "Lubumbashi, DRC",
+    "latitude": -11.664,
+    "longitude": 27.482
+  },
+  {
+    "name": "Karan DRC Station Kalubwe Lubumbashi",
+    "address": "Lubumbashi, DRC",
+    "latitude": -11.664,
+    "longitude": 27.482
+  },
+  {
+    "name": "Karan Rwanda Rusizi",
+    "address": "Rusizi, Rwanda",
+    "latitude": -2.486810,
+    "longitude": 28.932955
+  },
+  {
+    "name": "EFFA Fuel Heidelberg",
+    "address": "Heidelberg, South Africa",
+    "latitude": -26.503,
+    "longitude": 28.351
+  },
+  {
+    "name": "Karan Rwanda Masaka Kigali",
+    "address": "Masaka, Kigali, Rwanda",
+    "latitude": -1.993460,
+    "longitude": 30.198208
+  },
+  {
+    "name": "Karan Rwanda Rebero Kigali",
+    "address": "Rebero, Kigali, Rwanda",
+    "latitude": -1.991105,
+    "longitude": 30.064499
+  },
+  {
+    "name": "Karan Rwanda Kicukiro Kigali",
+    "address": "Kicukiro, Kigali, Rwanda",
+    "latitude": -1.998321,
+    "longitude": 30.094473
+  },
+  {
+    "name": "Rubbervale Gravelotte",
+    "address": "Gravelotte, South Africa",
+    "latitude": -23.956,
+    "longitude": 30.622
+  },
+  {
+    "name": "Gauteng Truck Stop and Diesel",
+    "address": "Gauteng, South Africa",
+    "latitude": -26.114,
+    "longitude": 28.08
+  },
+  {
+    "name": "JRJ Diesel - Hartbeesfontein",
+    "address": "Hartbeesfontein, South Africa",
+    "latitude": -26.755,
+    "longitude": 26.427
+  },
+  {
+    "name": "NFD Weimanns Garage Petrosol",
+    "address": "Petrosol, Namibia",
+    "latitude": -22.118,
+    "longitude": 16.943
+  },
+  {
+    "name": "Nkomazi Fuel Pongola",
+    "address": "Pongola, South Africa",
+    "latitude": -27.376,
+    "longitude": 31.615
+  },
+  {
+    "name": "Ultimate Fuel Rustenburg",
+    "address": "Rustenburg, South Africa",
+    "latitude": -25.683,
+    "longitude": 27.244
+  },
+  {
+    "name": "NFD Shell Service Station (Petrosol) Kamanjab",
+    "address": "Kamanjab, Namibia",
+    "latitude": -19.631,
+    "longitude": 14.845
+  },
+  {
+    "name": "Stadler Johannesburg South",
+    "address": "Johannesburg South, South Africa",
+    "latitude": -26.295,
+    "longitude": 28.059
+  },
+  {
+    "name": "SKK Fuel Group - Rustenburg",
+    "address": "Rustenburg, South Africa",
+    "latitude": -25.683,
+    "longitude": 27.244
+  },
+  {
+    "name": "Engen - Trafford Road Truck Stop (Pinetown)",
+    "address": "Pinetown, Durban, South Africa",
+    "latitude": -29.822,
+    "longitude": 30.845
+  },
+  {
+    "name": "NFD Okahandja Osona Service Station (Petrosol)",
+    "address": "Okahandja, Namibia",
+    "latitude": -21.983,
+    "longitude": 16.913
+  },
+  {
+    "name": "Puma Truck Inn Trawal West Coast",
+    "address": "Trawal, West Coast, South Africa",
+    "latitude": -32.331,
+    "longitude": 18.315
+  },
+  {
+    "name": "Asvos Distributors (PTY) Ltd - White River",
+    "address": "White River, South Africa",
+    "latitude": -25.327,
+    "longitude": 31.011
+  },
+  {
+    "name": "Karan MOZ - Magawanine",
+    "address": "Magawanine, Mozambique",
+    "latitude": -25.767147,
+    "longitude": 32.623932
+  },
+  {
+    "name": "FYL Fuels Witbank",
+    "address": "Witbank, South Africa",
+    "latitude": -25.872,
+    "longitude": 29.255
+  },
+  {
+    "name": "Jetpark Diesel Supplies - Boksburg",
+    "address": "Boksburg, South Africa",
+    "latitude": -26.225,
+    "longitude": 28.255
+  },
+  {
+    "name": "MBT South Gate - Polokwane",
+    "address": "Polokwane, South Africa",
+    "latitude": -23.896,
+    "longitude": 29.449
+  },
+  {
+    "name": "Karan DRC 11 Lubumbashi",
+    "address": "Lubumbashi, DRC",
+    "latitude": -11.664,
+    "longitude": 27.482
+  },
+  {
+    "name": "NFD Omaruru Shell Service Station, Agra",
+    "address": "Omaruru, Namibia",
+    "latitude": -21.425,
+    "longitude": 15.957
+  },
+  {
+    "name": "NFD Katima Mulilo Petrosol",
+    "address": "Katima Mulilo, Namibia",
+    "latitude": -17.499,
+    "longitude": 24.278
+  },
+  {
+    "name": "Nampula - Sara Lda",
+    "address": "Nampula, Mozambique",
+    "latitude": -15.116,
+    "longitude": 39.265
+  },
+  {
+    "name": "Fuego Fuels Polokwane",
+    "address": "Polokwane, South Africa",
+    "latitude": -23.896,
+    "longitude": 29.449
+  },
+  {
+    "name": "Taiba Trucking and Diesel depot - Boksburg",
+    "address": "Boksburg, South Africa",
+    "latitude": -26.225,
+    "longitude": 28.255
+  },
+  {
+    "name": "NFD Grunau Kaap Agri Shell",
+    "address": "Grunau, Namibia",
+    "latitude": -27.735,
+    "longitude": 18.378
+  },
+  {
+    "name": "NFD Gobabis Agra",
+    "address": "Gobabis, Namibia",
+    "latitude": -22.451,
+    "longitude": 18.969
+  },
+  {
+    "name": "NFD Keetmanshoop B1 Puma",
+    "address": "Keetmanshoop, Namibia",
+    "latitude": -26.577,
+    "longitude": 18.132
+  },
+  {
+    "name": "NFD Ondangwa Kaap Agri",
+    "address": "Ondangwa, Namibia",
+    "latitude": -17.916,
+    "longitude": 15.978
+  },
+  {
+    "name": "NFD Keetmanshoop Kaap Agri",
+    "address": "Keetmanshoop, Namibia",
+    "latitude": -26.577,
+    "longitude": 18.132
+  },
+  {
+    "name": "NFD Okahandja Petrosol",
+    "address": "Okahandja, Namibia",
+    "latitude": -21.983,
+    "longitude": 16.913
+  },
+  {
+    "name": "NFD Rundu Ndama Shell",
+    "address": "Rundu, Namibia",
+    "latitude": -17.921,
+    "longitude": 19.766
+  },
+  {
+    "name": "NFD Otjiwarongo Petrosol",
+    "address": "Otjiwarongo, Namibia",
+    "latitude": -20.463,
+    "longitude": 16.641
+  },
+  {
+    "name": "NFD Rundu Kavango Total",
+    "address": "Rundu, Namibia",
+    "latitude": -17.921,
+    "longitude": 19.766
+  },
+  {
+    "name": "NFD Mariental Shell Kaap Agri COC",
+    "address": "Mariental, Namibia",
+    "latitude": -24.626,
+    "longitude": 17.962
+  },
+  {
+    "name": "NFD Ohakane Petrosol",
+    "address": "Ohakane, Namibia",
+    "latitude": -17.405,
+    "longitude": 15.881
+  },
+  {
+    "name": "NFD Noordoewer Orange River Shell",
+    "address": "Noordoewer, Namibia",
+    "latitude": -28.563,
+    "longitude": 17.626
+  },
+  {
+    "name": "NFD Otavi Agra",
+    "address": "Otavi, Namibia",
+    "latitude": -19.642,
+    "longitude": 17.34
+  },
+  {
+    "name": "NFD Windhoek Lafrenz Shell",
+    "address": "Windhoek, Namibia",
+    "latitude": -22.571,
+    "longitude": 17.082
+  },
+  {
+    "name": "NFD Tsumeb Agra",
+    "address": "Tsumeb, Namibia",
+    "latitude": -19.241,
+    "longitude": 17.714
+  },
+  {
+    "name": "Zeerust Truck Stop",
+    "address": "Zeerust, South Africa",
+    "latitude": -25.543,
+    "longitude": 26.075
+  },
+  {
+    "name": "NFD Omakange Petrosol",
+    "address": "Omakange, Namibia",
+    "latitude": -17.91,
+    "longitude": 14.883
+  },
+  {
+    "name": "NFD Walvis Bay - Engen One Stop Service Station",
+    "address": "Walvis Bay, Namibia",
+    "latitude": -22.959,
+    "longitude": 14.496
+  },
+  {
+    "name": "NFD Grootfontein Agra",
+    "address": "Grootfontein, Namibia",
+    "latitude": -19.571,
+    "longitude": 18.116
+  },
+  {
+    "name": "Senatla Energies Maanhaarrand",
+    "address": "Maanhaarrand, South Africa",
+    "latitude": -25.745,
+    "longitude": 27.457
+  },
+  {
+    "name": "NFD Swakopmund Engen Truck Port",
+    "address": "Swakopmund, Namibia",
+    "latitude": -22.683,
+    "longitude": 14.527
+  },
+  {
+    "name": "Eco Wholesale Diesel (Pty) Ltd-Eco Fuel Piet Retief",
+    "address": "Piet Retief, South Africa",
+    "latitude": -27.005,
+    "longitude": 30.806
+  },
+  {
+    "name": "Royale Energy Moorreesburg (Boland Diesel)",
+    "address": "Moorreesburg, South Africa",
+    "latitude": -33.156,
+    "longitude": 18.669
+  },
+  {
+    "name": "Karan Zambia - Mpika",
+    "address": "Mpika, Zambia",
+    "latitude": -11.837,
+    "longitude": 31.452
+  },
+  {
+    "name": "SAF Louis Trichardt",
+    "address": "Louis Trichardt, South Africa",
+    "latitude": -23.042,
+    "longitude": 29.897
+  },
+  {
+    "name": "NFD Oshakati - Oneshilla Service Station",
+    "address": "Oshakati, Namibia",
+    "latitude": -17.786,
+    "longitude": 15.694
+  },
+  {
+    "name": "NFD Petrosol Gochas",
+    "address": "Gochas, Namibia",
+    "latitude": -24.817,
+    "longitude": 18.809
+  },
+  {
+    "name": "NFD Tsumeb Le Platz Service station",
+    "address": "Tsumeb, Namibia",
+    "latitude": -19.241,
+    "longitude": 17.714
+  },
+  {
+    "name": "NFD Otavi Shell",
+    "address": "Otavi, Namibia",
+    "latitude": -19.642,
+    "longitude": 17.34
+  },
+  {
+    "name": "NFD Okahandja Truck Stop",
+    "address": "Okahandja, Namibia",
+    "latitude": -21.983,
+    "longitude": 16.913
+  },
+  {
+    "name": "NFD Usakos Oasis Shell",
+    "address": "Usakos, Namibia",
+    "latitude": -22.0,
+    "longitude": 15.583
+  },
+  {
+    "name": "NFD Rehoboth B1 Service Station",
+    "address": "Rehoboth, Namibia",
+    "latitude": -23.315,
+    "longitude": 17.082
+  },
+  {
+    "name": "Mass Petroleum Sasolburg",
+    "address": "Sasolburg, South Africa",
+    "latitude": -26.818,
+    "longitude": 27.824
+  },
+  {
+    "name": "Big 5 Fuel Holdings (Pty) Ltd-Mega Stop - Richardsbay",
+    "address": "Richards Bay, South Africa",
+    "latitude": -28.799,
+    "longitude": 32.065
+  },
+  {
+    "name": "Prima Onderberg Hectorspruit",
+    "address": "Hectorspruit, South Africa",
+    "latitude": -25.444,
+    "longitude": 31.679
+  },
+  {
+    "name": "Stadler Swellendam",
+    "address": "Swellendam, South Africa",
+    "latitude": -34.024,
+    "longitude": 20.433
+  },
+  {
+    "name": "MOJ Musina",
+    "address": "Musina, South Africa",
+    "latitude": -22.331,
+    "longitude": 30.044
+  },
+  {
+    "name": "Elegant Fuel Lephalale",
+    "address": "Lephalale, South Africa",
+    "latitude": -23.668,
+    "longitude": 27.739
+  },
+  {
+    "name": "Barkly-Wes Motors CC",
+    "address": "Barkly West, South Africa",
+    "latitude": -28.539,
+    "longitude": 24.521
+  },
+  {
+    "name": "Karan MOZ - Parque EN4",
+    "address": "EN4, Mozambique",
+    "latitude": -25.814602,
+    "longitude": 32.396733
+  },
+  {
+    "name": "Cromane Energy - Middelburg",
+    "address": "Middelburg, South Africa",
+    "latitude": -25.775,
+    "longitude": 29.458
+  },
+  {
+    "name": "SEO Komatipoort",
+    "address": "Komatipoort, South Africa",
+    "latitude": -25.445,
+    "longitude": 31.956
+  },
+  {
+    "name": "Mafura Energy - Vanderbijlpark",
+    "address": "Vanderbijlpark, South Africa",
+    "latitude": -26.699,
+    "longitude": 27.84
+  },
+  {
+    "name": "JC Truckstop Sasolburg",
+    "address": "Sasolburg, South Africa",
+    "latitude": -26.818,
+    "longitude": 27.824
+  },
+  {
+    "name": "Vecto Bulk Olifantsfontein",
+    "address": "Olifantsfontein, South Africa",
+    "latitude": -25.963,
+    "longitude": 28.232
+  },
+  {
+    "name": "Nkomazi New site - Nelspruit",
+    "address": "Nelspruit, South Africa",
+    "latitude": -25.483,
+    "longitude": 30.981
+  },
+  {
+    "name": "Karan MOZ - Maxixe",
+    "address": "Maxixe, Mozambique",
+    "latitude": -23.877878,
+    "longitude": 35.330843
+  },
+  {
+    "name": "PE Fuel Distributors - Port Elizabeth",
+    "address": "Port Elizabeth, South Africa",
+    "latitude": -33.961,
+    "longitude": 25.615
+  },
+  {
+    "name": "Stanger Fuel Depot (Ascobar Investments)",
+    "address": "Stanger, South Africa",
+    "latitude": -29.343,
+    "longitude": 31.28
+  },
+  {
+    "name": "Karan Moz - Ponta Gea",
+    "address": "Ponta Gea, Mozambique",
+    "latitude": -19.849,
+    "longitude": 34.845
+  },
+  {
+    "name": "Karan MOZ - Inchope",
+    "address": "Inchope, Mozambique",
+    "latitude": -19.211108,
+    "longitude": 33.925777
+  },
+  {
+    "name": "Karan MOZ - Mafambisse",
+    "address": "Mafambisse, Mozambique",
+    "latitude": -19.481,
+    "longitude": 34.625
+  },
+  {
+    "name": "Platinum Petroleum Supplies Burgersfort",
+    "address": "Burgersfort, South Africa",
+    "latitude": -24.672,
+    "longitude": 30.323
+  },
+  {
+    "name": "Trichardt Diesel Depot and Truckstop (Pty) Ltd",
+    "address": "Trichardt, South Africa",
+    "latitude": -26.492,
+    "longitude": 29.226
+  },
+  {
+    "name": "Karan MOZ - Nampula",
+    "address": "Nampula, Mozambique",
+    "latitude": -15.116,
+    "longitude": 39.265
+  },
+  {
+    "name": "Karan Moz Mossurize",
+    "address": "Mossurize, Mozambique",
+    "latitude": -20.539,
+    "longitude": 33.172
+  },
+  {
+    "name": "Karan Moz - Gorangosa",
+    "address": "Gorangosa, Mozambique",
+    "latitude": -18.669,
+    "longitude": 34.074
+  },
+  {
+    "name": "AfriQ Petroleum Vaalwater",
+    "address": "Vaalwater, South Africa",
+    "latitude": -24.296,
+    "longitude": 28.119
+  },
+  {
+    "name": "Karan MOZ - Macaneta",
+    "address": "Macaneta, Mozambique",
+    "latitude": -25.774,
+    "longitude": 32.715
+  },
+  {
+    "name": "Karan MOZ - Matola Gare",
+    "address": "Matola, Mozambique",
+    "latitude": -25.908,
+    "longitude": 32.466
+  },
+  {
+    "name": "Karan MOZ - Mahotas",
+    "address": "Mahotas, Mozambique",
+    "latitude": -25.908,
+    "longitude": 32.466
+  },
+  {
+    "name": "Astron Pietermaritzburg (Kondeni Fuels (Pty) Ltd)",
+    "address": "Pietermaritzburg, South Africa",
+    "latitude": -29.611,
+    "longitude": 30.373
+  },
+  {
+    "name": "Ordod Oil Company (Ltd) - Lusaka Zambia",
+    "address": "Lusaka, Zambia",
+    "latitude": -15.388,
+    "longitude": 28.323
+  },
+  {
+    "name": "Royale Energy Polokwane",
+    "address": "Polokwane, South Africa",
+    "latitude": -23.896,
+    "longitude": 29.449
+  },
+  {
+    "name": "Ordod Oil Company (Ltd) - Ndola Zambia",
+    "address": "Ndola, Zambia",
+    "latitude": -12.969,
+    "longitude": 28.635
   }
 ]
