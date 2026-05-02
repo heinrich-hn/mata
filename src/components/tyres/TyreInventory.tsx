@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,8 +20,8 @@ import {
   exportBayTyresToExcel,
   exportBayTyresToPDF,
 } from "@/utils/tyreExport";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowRightLeft, Ban, Download, Eye, FileSpreadsheet, FileText, History, Package, Pencil, Plus, Trash2, Truck, Wrench } from "lucide-react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { ArrowRightLeft, Ban, Download, Eye, FileSpreadsheet, FileText, History, Package, Pencil, Plus, ShoppingCart, Trash2, Truck, Wrench, X } from "lucide-react";
 import { useState } from "react";
 import AddBayTyreDialog from "../dialogs/AddBayTyreDialog";
 import AddTyreDialog from "../dialogs/AddTyreDialog";
@@ -35,6 +36,8 @@ import RemoveTyreDialog from "../dialogs/RemoveTyreDialog";
 import TyreInventoryImportModal from "../dialogs/TyreInventoryImportModal";
 import ViewTyreDialog from "../dialogs/ViewTyreDialog";
 import ViewInstalledTyreDialog from "../dialogs/ViewInstalledTyreDialog";
+import StartProcurementDialog from "@/components/dialogs/StartProcurementDialog";
+import type { PartsRequest } from "@/hooks/useProcurement";
 
 // Extend Tyre type with optional vehicle-related fields
 type TyreWithPosition = Database["public"]["Tables"]["tyres"]["Row"] & {
@@ -91,6 +94,13 @@ interface TyreStock {
 
 const TyreInventory = () => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Multi-select state for retread bay procurement
+  const [selectedRetreadIds, setSelectedRetreadIds] = useState<Set<string>>(new Set());
+  const [isProcuring, setIsProcuring] = useState(false);
+  const [retreadProcurementOpen, setRetreadProcurementOpen] = useState(false);
+  const [retreadProcurementRequests, setRetreadProcurementRequests] = useState<PartsRequest[]>([]);
 
   // Dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -219,6 +229,73 @@ const TyreInventory = () => {
   const holdingBayTyres = bayTyres.filter(t => t.position === "holding-bay" || t.position === "main-warehouse" || !t.position);
   const retreadBayTyres = bayTyres.filter(t => t.position === "retread-bay");
   const scrapAndSoldTyres = bayTyres.filter(t => t.position === "scrap" || t.position === "sold");
+
+  // ── Retread bay procurement helpers ─────────────────────────────────────
+  const toggleRetreadSelection = (id: string) => {
+    setSelectedRetreadIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllRetread = () => {
+    if (retreadBayTyres.length > 0 && retreadBayTyres.every(t => selectedRetreadIds.has(t.id))) {
+      setSelectedRetreadIds(new Set());
+    } else {
+      setSelectedRetreadIds(new Set(retreadBayTyres.map(t => t.id)));
+    }
+  };
+
+  const procureRetreadTyres = async (tyres: TyreWithPosition[]) => {
+    if (tyres.length === 0) return;
+    setIsProcuring(true);
+    try {
+      const rows = tyres.map(t => {
+        const noteParts = [
+          t.serial_number ? `Serial: ${t.serial_number}` : null,
+          t.dot_code ? `DOT: ${t.dot_code}` : null,
+          "Source: Retread Bay",
+        ].filter(Boolean) as string[];
+        return {
+          part_name: `Retread Tyre - ${[t.brand, t.model, t.size].filter(Boolean).join(" ")}`.trim(),
+          part_number: t.serial_number || t.dot_code || null,
+          quantity: 1,
+          status: "pending",
+          tyre_id: t.id,
+          notes: noteParts.join(" | "),
+        };
+      });
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("parts_requests")
+        .insert(rows)
+        .select("id");
+      if (insertError) throw insertError;
+
+      // Fetch back with full joins so StartProcurementDialog has all the fields it needs
+      const ids = (inserted || []).map(r => r.id);
+      const { data: fullRows, error: fetchError } = await supabase
+        .from("parts_requests")
+        .select(`
+          *,
+          job_card:job_cards(id, job_number, title, status, vehicle_id),
+          vendor:vendors(id, vendor_name, contact_person, phone),
+          inventory:inventory(id, name, part_number, quantity)
+        `)
+        .in("id", ids);
+      if (fetchError) throw fetchError;
+
+      queryClient.invalidateQueries({ queryKey: ["procurement-requests"] });
+      setRetreadProcurementRequests((fullRows || []) as unknown as PartsRequest[]);
+      setRetreadProcurementOpen(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create procurement request";
+      toast({ title: "Error", description: message, variant: "destructive" });
+    } finally {
+      setIsProcuring(false);
+    }
+  };
 
   // Fetch position history
   const { data: positionHistory = [] } = useQuery({
@@ -401,12 +478,24 @@ const TyreInventory = () => {
       );
     }
 
+    const isRetreadBay = bayType === "retread-bay";
+    const allRetreadSelected = isRetreadBay && tyres.length > 0 && tyres.every(t => selectedRetreadIds.has(t.id));
+
     return (
       <div className="rounded-lg border overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-gradient-to-r from-muted/80 to-muted/50 hover:from-muted/80 hover:to-muted/50 border-b-2 border-muted">
+                {isRetreadBay && (
+                  <TableHead className="w-10 py-3.5">
+                    <Checkbox
+                      checked={allRetreadSelected}
+                      onCheckedChange={() => toggleSelectAllRetread()}
+                      aria-label="Select all retread tyres"
+                    />
+                  </TableHead>
+                )}
                 <TableHead className="min-w-[120px] py-3.5 font-semibold text-foreground/80">Serial Number</TableHead>
                 <TableHead className="min-w-[160px] py-3.5 font-semibold text-foreground/80">Brand / Model</TableHead>
                 <TableHead className="min-w-[100px] py-3.5 font-semibold text-foreground/80">Size</TableHead>
@@ -424,11 +513,21 @@ const TyreInventory = () => {
                   key={tyre.id}
                   className={`
                     ${index % 2 === 0 ? "bg-background" : "bg-muted/10"}
+                    ${isRetreadBay && selectedRetreadIds.has(tyre.id) ? "bg-orange-50/50 dark:bg-orange-950/10" : ""}
                     transition-all duration-200 ease-in-out
                     hover:bg-primary/5 hover:shadow-[inset_4px_0_0_0_hsl(var(--primary))]
                     group cursor-pointer
                   `}
                 >
+                  {isRetreadBay && (
+                    <TableCell className="py-3.5" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedRetreadIds.has(tyre.id)}
+                        onCheckedChange={() => toggleRetreadSelection(tyre.id)}
+                        aria-label={`Select tyre ${tyre.serial_number || tyre.id}`}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="font-mono text-sm py-3.5 text-muted-foreground">
                     {tyre.serial_number || tyre.id.substring(0, 8)}
                   </TableCell>
@@ -522,6 +621,18 @@ const TyreInventory = () => {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
+                      {isRetreadBay && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:border-orange-300"
+                          disabled={isProcuring}
+                          onClick={(e) => { e.stopPropagation(); procureRetreadTyres([tyre]); }}
+                          title="Start Procurement"
+                        >
+                          <ShoppingCart className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="destructive"
@@ -1008,6 +1119,36 @@ const TyreInventory = () => {
               </div>
             </CardHeader>
             <CardContent>
+              {selectedRetreadIds.size > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-4 p-3 rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900">
+                  <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100">
+                    {selectedRetreadIds.size} selected
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    Each tyre will be created as an individual procurement request (preserves DOT &amp; serial number).
+                  </span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => procureRetreadTyres(retreadBayTyres.filter(t => selectedRetreadIds.has(t.id)))}
+                      disabled={isProcuring}
+                      className="bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      <ShoppingCart className="h-4 w-4 mr-1.5" />
+                      Procure {selectedRetreadIds.size} Tyre{selectedRetreadIds.size > 1 ? "s" : ""}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedRetreadIds(new Set())}
+                      disabled={isProcuring}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              )}
               {renderTyreTable(retreadBayTyres, "retread-bay")}
             </CardContent>
           </Card>
@@ -1316,6 +1457,17 @@ const TyreInventory = () => {
           refetchBays();
           setSelectedBayTyre(null);
         }}
+      />
+
+      <StartProcurementDialog
+        open={retreadProcurementOpen}
+        onOpenChange={(open) => {
+          setRetreadProcurementOpen(open);
+          if (!open) {
+            setSelectedRetreadIds(new Set());
+          }
+        }}
+        requests={retreadProcurementRequests}
       />
     </div>
   );
