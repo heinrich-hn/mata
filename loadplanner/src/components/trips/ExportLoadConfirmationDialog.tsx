@@ -16,8 +16,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useClients } from "@/hooks/useClients";
 import type { Load } from "@/hooks/useTrips";
+import { downloadEmlWithAttachment } from "@/lib/emlExport";
 import { exportLoadToPdf } from "@/lib/exportTripsToPdf";
 import { format, parseISO } from "date-fns";
 import { FileDown, Loader2, Mail } from "lucide-react";
@@ -36,66 +38,83 @@ const CURRENCIES = ["USD", "ZAR", "BWP", "ZMW"] as const;
 type Currency = (typeof CURRENCIES)[number];
 
 /**
- * Always-CC'd internal recipients on every Load Confirmation email.
+ * Default internal recipients pre-filled in the CC field on every Load
+ * Confirmation email. The user can edit them before sending.
  */
-const ALWAYS_CC_EMAILS = [
+const DEFAULT_CC_EMAILS = [
     "Vimbai@matanuska.co.zw",
     "accounts@matanuska.co.za",
     "tanaka@matanuska.co.zw",
 ] as const;
 
-/**
- * Build the email subject + body that pre-populates the Outlook draft.
- * Kept short so it fits comfortably in a `mailto:` URL on every browser.
- */
-function buildEmailContent(load: Load, filename: string): { subject: string; body: string } {
-    const safeDate = (iso?: string) => {
-        if (!iso) return "—";
-        try {
-            return format(parseISO(iso), "dd MMM yyyy");
-        } catch {
-            return iso;
-        }
-    };
+const EMAIL_RE = /^[^\s,;]+@[^\s,;]+\.[^\s,;]+$/;
 
-    const subject = `Load Confirmation — ${load.load_id}`;
-    const bodyLines = [
+function splitAddresses(input: string): string[] {
+    return input
+        .split(/[,;\n]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+function isValidEmailList(input: string, { allowEmpty = true } = {}): boolean {
+    const addresses = splitAddresses(input);
+    if (addresses.length === 0) return allowEmpty;
+    return addresses.every((addr) => EMAIL_RE.test(addr));
+}
+
+function safeFormatDate(iso?: string): string {
+    if (!iso) return "—";
+    try {
+        return format(parseISO(iso), "dd MMM yyyy");
+    } catch {
+        return iso;
+    }
+}
+
+function defaultEmailBody(load: Load): string {
+    return [
         "Hi,",
         "",
         `Please find attached the Load Confirmation for ${load.load_id}.`,
         "",
-        `Route: ${load.origin} → ${load.destination}`,
-        `Loading: ${safeDate(load.loading_date)}`,
-        `Offloading: ${safeDate(load.offloading_date)}`,
-        "",
-        `Attachment: ${filename}`,
+        `Route:      ${load.origin} → ${load.destination}`,
+        `Loading:    ${safeFormatDate(load.loading_date)}`,
+        `Offloading: ${safeFormatDate(load.offloading_date)}`,
         "",
         "Kind regards,",
-    ];
-    return { subject, body: bodyLines.join("\n") };
+        "MATA Fleet",
+    ].join("\n");
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error || new Error("Read failed"));
+        reader.onload = () => {
+            const result = reader.result as string;
+            const idx = result.indexOf(",");
+            resolve(idx >= 0 ? result.slice(idx + 1) : result);
+        };
+        reader.readAsDataURL(blob);
+    });
 }
 
 /**
  * Quick-Action dialog that prompts for an optional Rate before exporting the
  * trip as a "Load Confirmation" PDF.
  *
- * The rate is for display on the PDF only — it is never persisted to the load
- * row, so this dialog does not call any mutation.
+ * The rate is for display on the PDF only — never persisted to the load row.
  *
  * Two actions are offered:
  *  - "Download PDF" — saves the PDF locally.
- *  - "Email via Outlook" — saves the PDF locally AND opens the user's default
- *    mail app (Outlook on Windows / Mac when configured) with the client's
- *    email pre-filled, plus subject + body referencing the document. On
- *    devices that support the Web Share API with files (modern mobile + some
- *    desktops) the file is offered to the share sheet so apps like Outlook
- *    can attach it directly.
- *
- * Note: web pages cannot programmatically attach a file to a desktop email
- * client — that is a fundamental browser/OS security restriction. The user
- * must drag the just-downloaded PDF into the draft (or use the Web Share
- * sheet on supported platforms). The dialog explains this clearly so it is
- * never misleading.
+ *  - "Email via Outlook" — generates the PDF, embeds it inside an `.eml`
+ *    draft (with editable To/CC/subject/body) and downloads that file.
+ *    Opening the downloaded `.eml` launches Outlook with the PDF already
+ *    attached. This is the only reliable cross-platform way to attach a
+ *    file to an email from a web app — `mailto:` URLs cannot carry
+ *    attachments and modern Outlook builds also drop the body for anything
+ *    larger than a tiny URL. Both the To and CC fields are editable so users
+ *    can override the auto-filled client email or the default internal CC list.
  */
 export function ExportLoadConfirmationDialog({
     open,
@@ -108,23 +127,31 @@ export function ExportLoadConfirmationDialog({
     const [exporting, setExporting] = useState(false);
     const [emailing, setEmailing] = useState(false);
 
+    // Editable email recipients & content
+    const [toEmail, setToEmail] = useState("");
+    const [ccEmails, setCcEmails] = useState(DEFAULT_CC_EMAILS.join(", "));
+    const [emailSubject, setEmailSubject] = useState("");
+    const [emailBody, setEmailBody] = useState("");
+
     const { data: clients = [] } = useClients();
     const client = useMemo(
         () => (load?.client_id ? clients.find((c) => c.id === load.client_id) ?? null : null),
         [clients, load?.client_id],
     );
     const clientEmail = client?.contact_email?.trim() || "";
-    const canEmail = !!load && clientEmail.length > 0;
 
     // Reset every time the dialog reopens with a (possibly different) load
     useEffect(() => {
-        if (open) {
-            setRate("");
-            setCurrency("USD");
-            setExporting(false);
-            setEmailing(false);
-        }
-    }, [open, load?.id]);
+        if (!open || !load) return;
+        setRate("");
+        setCurrency("USD");
+        setExporting(false);
+        setEmailing(false);
+        setToEmail(clientEmail);
+        setCcEmails(DEFAULT_CC_EMAILS.join(", "));
+        setEmailSubject(`Load Confirmation — ${load.load_id}`);
+        setEmailBody(defaultEmailBody(load));
+    }, [open, load, clientEmail]);
 
     /**
      * Parse the optional rate field into the shape consumed by exportLoadToPdf.
@@ -152,72 +179,51 @@ export function ExportLoadConfirmationDialog({
         }
     };
 
+    const toIsValid = isValidEmailList(toEmail, { allowEmpty: false });
+    const ccIsValid = isValidEmailList(ccEmails, { allowEmpty: true });
+    const canEmail = !!load && toIsValid && ccIsValid;
+
     const handleEmail = async () => {
-        if (!load || !canEmail) return;
+        if (!load) return;
+        if (!toIsValid) {
+            toast.error("Enter a valid To email address");
+            return;
+        }
+        if (!ccIsValid) {
+            toast.error("CC list contains an invalid address");
+            return;
+        }
+
         setEmailing(true);
         try {
-            // Generate the PDF without auto-saving so we can attempt a share-
-            // sheet attach first; fall back to download + mailto.
+            // Generate the PDF without auto-saving so we can embed it in the .eml draft
             const { blob, filename } = await exportLoadToPdf(load, allLoads, {
                 rate: buildRate(),
                 download: false,
             });
 
-            const { subject, body } = buildEmailContent(load, filename);
+            const pdfBase64 = await blobToBase64(blob);
 
-            // Progressive enhancement: when the platform supports sharing
-            // files (Web Share API level 2), offer the file to the OS share
-            // sheet. On modern Windows + macOS Outlook this lets the user
-            // pick "Mail/Outlook" and have the PDF pre-attached.
-            const file = new File([blob], filename, { type: "application/pdf" });
-            const sharePayload: ShareData & { files?: File[] } = {
-                title: subject,
-                text: body,
-                files: [file],
-            };
-            const navAny = navigator as Navigator & {
-                canShare?: (data: ShareData & { files?: File[] }) => boolean;
-                share?: (data: ShareData & { files?: File[] }) => Promise<void>;
-            };
-            if (
-                typeof navAny.canShare === "function" &&
-                typeof navAny.share === "function" &&
-                navAny.canShare(sharePayload)
-            ) {
-                try {
-                    await navAny.share(sharePayload);
-                    onOpenChange(false);
-                    return;
-                } catch (shareErr) {
-                    // User aborted the share sheet, or the platform refused —
-                    // fall back to the mailto flow below.
-                    if ((shareErr as Error)?.name === "AbortError") {
-                        return;
-                    }
-                    console.warn("[ExportLoadConfirmation] navigator.share failed; falling back to mailto", shareErr);
-                }
-            }
+            // Normalise address lists so the .eml has clean comma-separated values
+            const toFinal = splitAddresses(toEmail).join(", ");
+            const ccFinal = splitAddresses(ccEmails).join(", ");
+            const subjectFinal =
+                emailSubject.trim() || `Load Confirmation — ${load.load_id}`;
+            const bodyFinal =
+                emailBody.trim().length > 0 ? emailBody : defaultEmailBody(load);
 
-            // Fallback: download the PDF locally + open the user's default
-            // mail client with to/subject/body pre-filled. The user must
-            // attach the just-downloaded file manually — browsers do not
-            // permit silent attachments.
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            // Revoke after a tick so the download has time to start.
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-            const ccList = ALWAYS_CC_EMAILS.join(",");
-            const mailto = `mailto:${encodeURIComponent(clientEmail)}?cc=${encodeURIComponent(ccList)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            window.location.href = mailto;
+            downloadEmlWithAttachment({
+                to: toFinal,
+                cc: ccFinal || undefined,
+                subject: subjectFinal,
+                body: bodyFinal,
+                pdfBase64,
+                pdfFileName: filename,
+                fileName: `LoadConfirmation-${load.load_id}`,
+            });
 
             toast.success(
-                `${filename} downloaded — attach it to the email draft that just opened.`,
+                "Email draft downloaded — open the .eml file to launch Outlook with the PDF already attached.",
             );
             onOpenChange(false);
         } catch (err) {
@@ -234,15 +240,16 @@ export function ExportLoadConfirmationDialog({
 
     return (
         <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <FileDown className="h-5 w-5 text-primary" />
                         Export Load Confirmation
                     </DialogTitle>
                     <DialogDescription>
-                        Add an optional rate to display on the PDF. This will not change
-                        the trip — it is only printed on the exported document.
+                        Add an optional rate and adjust the email recipients before
+                        sending. The rate is only printed on the PDF — it is not saved
+                        to the load.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -286,34 +293,94 @@ export function ExportLoadConfirmationDialog({
                         Leave the rate blank to export without a price line.
                     </p>
 
-                    {/* Email recipient summary */}
-                    <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-1 min-w-0">
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                    {/* Editable recipient block */}
+                    <div className="space-y-3 rounded-md border bg-muted/30 p-3">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Mail className="h-3.5 w-3.5 shrink-0" />
-                            <span className="font-medium">Email recipient</span>
-                        </div>
-                        {client ? (
-                            clientEmail ? (
-                                <div className="text-foreground break-words">
+                            <span className="font-medium">Email draft</span>
+                            {client && (
+                                <span className="ml-1 truncate">
+                                    · client:{" "}
                                     <span className="font-medium">{client.name}</span>
-                                    <span className="text-muted-foreground"> — </span>
-                                    <span className="break-all">{clientEmail}</span>
-                                </div>
-                            ) : (
-                                <div className="text-amber-600 dark:text-amber-400 break-words">
-                                    {client.name} has no contact email — add one on the Clients
-                                    page to enable email.
-                                </div>
-                            )
-                        ) : (
-                            <div className="text-muted-foreground break-words">
-                                No client linked to this load — emailing is disabled.
-                            </div>
-                        )}
-                        <div className="pt-1 text-muted-foreground break-words">
-                            <span className="font-medium">CC:</span>{" "}
-                            <span className="break-all">{ALWAYS_CC_EMAILS.join(", ")}</span>
+                                </span>
+                            )}
                         </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="load-confirmation-to" className="text-xs">
+                                To
+                            </Label>
+                            <Input
+                                id="load-confirmation-to"
+                                type="email"
+                                placeholder="recipient@example.com"
+                                value={toEmail}
+                                onChange={(e) => setToEmail(e.target.value)}
+                                disabled={busy}
+                                aria-invalid={!toIsValid}
+                            />
+                            {!toIsValid && toEmail.trim().length > 0 && (
+                                <p className="text-[11px] text-destructive">
+                                    Enter a valid email address.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="load-confirmation-cc" className="text-xs">
+                                CC{" "}
+                                <span className="text-muted-foreground">
+                                    (comma-separated)
+                                </span>
+                            </Label>
+                            <Input
+                                id="load-confirmation-cc"
+                                type="text"
+                                placeholder="finance@example.com, ops@example.com"
+                                value={ccEmails}
+                                onChange={(e) => setCcEmails(e.target.value)}
+                                disabled={busy}
+                                aria-invalid={!ccIsValid}
+                            />
+                            {!ccIsValid && (
+                                <p className="text-[11px] text-destructive">
+                                    One or more CC addresses are invalid.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="load-confirmation-subject" className="text-xs">
+                                Subject
+                            </Label>
+                            <Input
+                                id="load-confirmation-subject"
+                                type="text"
+                                value={emailSubject}
+                                onChange={(e) => setEmailSubject(e.target.value)}
+                                disabled={busy}
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="load-confirmation-body" className="text-xs">
+                                Body
+                            </Label>
+                            <Textarea
+                                id="load-confirmation-body"
+                                rows={6}
+                                value={emailBody}
+                                onChange={(e) => setEmailBody(e.target.value)}
+                                disabled={busy}
+                                className="font-mono text-xs"
+                            />
+                        </div>
+
+                        <p className="text-[11px] text-muted-foreground">
+                            The PDF is embedded in a downloadable <code>.eml</code>{" "}
+                            draft — opening it launches Outlook with the file already
+                            attached.
+                        </p>
                     </div>
                 </div>
 
@@ -353,8 +420,8 @@ export function ExportLoadConfirmationDialog({
                         className="w-full sm:w-auto whitespace-nowrap"
                         title={
                             canEmail
-                                ? "Open Outlook with the PDF and the client email pre-filled"
-                                : "No client email available for this load"
+                                ? "Generate an .eml draft with the PDF attached and open it in Outlook"
+                                : "Fix the email recipients to enable sending"
                         }
                     >
                         {emailing ? (
