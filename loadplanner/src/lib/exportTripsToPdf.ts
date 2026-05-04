@@ -162,28 +162,37 @@ export async function exportLoadToPdf(
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
+  const margin = 18;
   let yPos = 20;
 
   // Colors
-  const headerBg: [number, number, number] = [241, 245, 249]; // Light gray
+  const headerBg: [number, number, number] = [248, 250, 252]; // Subtle slate
+  const cardBorder: [number, number, number] = [226, 232, 240]; // Border slate
   const successColor: [number, number, number] = pdfColors.success;
   const warningColor: [number, number, number] = [234, 179, 8]; // Yellow/Orange
 
-  // Helper to add section header
+  // Helper to add a refined section header — thin accent bar + uppercase title
+  // with a hairline rule below. Cleaner than full-fill bars.
   const addSectionHeader = (
     title: string,
-    color: [number, number, number] = pdfColors.blue,
+    color: [number, number, number] = pdfColors.navy,
   ): number => {
+    // Left accent bar
     doc.setFillColor(...color);
-    doc.rect(margin, yPos, pageWidth - 2 * margin, 8, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
+    doc.rect(margin, yPos - 3, 2.5, 7, "F");
+    // Title
+    doc.setTextColor(...color);
+    doc.setFontSize(10.5);
     doc.setFont("helvetica", "bold");
-    doc.text(title, margin + 4, yPos + 5.5);
+    doc.text(title.toUpperCase(), margin + 6, yPos + 1.5);
+    // Hairline rule
+    doc.setDrawColor(...cardBorder);
+    doc.setLineWidth(0.3);
+    doc.line(margin, yPos + 5, pageWidth - margin, yPos + 5);
+    // Reset
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
-    return yPos + 12;
+    return yPos + 11;
   };
 
   // Helper to add key-value row
@@ -206,69 +215,98 @@ export async function exportLoadToPdf(
   const timeWindow = timeWindowLib.parseTimeWindow(load.time_window);
 
   // ========== HEADER ==========
-  // Top accent strip
+  // Solid navy banner across the top with company branding
+  const bannerHeight = 26;
   doc.setFillColor(...pdfColors.navy);
-  doc.rect(0, 0, pageWidth, 3, "F");
+  doc.rect(0, 0, pageWidth, bannerHeight, "F");
+  // Thin accent stripe at the bottom of the banner
+  doc.setFillColor(...pdfColors.accent);
+  doc.rect(0, bannerHeight, pageWidth, 1.2, "F");
 
-  // Company name
-  doc.setTextColor(...pdfColors.navy);
-  doc.setFontSize(16);
+  // Company name (left of banner)
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
-  doc.text(COMPANY_NAME, margin, 14);
+  doc.text(COMPANY_NAME, margin, 13);
 
-  // System subtitle
-  doc.setTextColor(...pdfColors.textMuted);
-  doc.setFontSize(7);
+  // Tagline / system name (left of banner, smaller)
+  doc.setTextColor(214, 228, 240); // soft light blue
+  doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.text(SYSTEM_NAME, margin, 19);
 
-  // Document title (right-aligned)
-  doc.setTextColor(...pdfColors.navy);
-  doc.setFontSize(18);
+  // Document title (right of banner)
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.text("LOAD CONFIRMATION", pageWidth - margin, 14, { align: "right" });
+  doc.text("LOAD CONFIRMATION", pageWidth - margin, 13, { align: "right" });
 
-  doc.setFontSize(12);
+  // Load ID under title (right of banner)
+  doc.setTextColor(214, 228, 240);
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...pdfColors.blue);
-  doc.text(load.load_id, pageWidth - margin, 21, { align: "right" });
+  doc.text(load.load_id, pageWidth - margin, 19, { align: "right" });
 
-  // Status badge
-  const statusText = statusLabels[load.status] || load.status;
-  const statusWidth = doc.getTextWidth(statusText) + 10;
-  doc.setFillColor(...pdfColors.lightBlue);
-  doc.roundedRect(
-    pageWidth - margin - statusWidth,
-    24,
-    statusWidth,
-    8,
-    2,
-    2,
-    "F",
-  );
-  doc.setTextColor(
-    ...(load.status === "delivered" ? successColor : pdfColors.navy),
-  );
-  doc.setFontSize(9);
+  // ----- Meta strip below banner: company contact (left) + doc meta (right) -----
+  const metaTop = bannerHeight + 6;
+
+  // Left: company contact block
+  doc.setTextColor(...pdfColors.textPrimary);
+  doc.setFontSize(8.5);
   doc.setFont("helvetica", "bold");
-  doc.text(statusText.toUpperCase(), pageWidth - margin - statusWidth + 5, 29);
-
-  // Generated date
+  doc.text("Issued by", margin, metaTop);
+  doc.setFont("helvetica", "normal");
   doc.setTextColor(...pdfColors.textMuted);
   doc.setFontSize(8);
+  doc.text("Heinrich Nel — General Manager, Transport", margin, metaTop + 4.5);
+  doc.text("heinrich@matanuska.co.za  •  +27 66 273 1270", margin, metaTop + 9);
+  doc.text("matanuska.co.zw", margin, metaTop + 13.5);
+
+  // Right: document meta block (right-aligned)
+  const metaRightX = pageWidth - margin;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...pdfColors.textPrimary);
+  doc.text("Document Date", metaRightX, metaTop, { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.text(
-    `Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`,
-    margin,
-    24,
-  );
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.setFontSize(8);
+  doc.text(format(new Date(), "dd MMMM yyyy  •  HH:mm"), metaRightX, metaTop + 4.5, { align: "right" });
 
-  // Separator line
-  doc.setDrawColor(...pdfColors.navy);
-  doc.setLineWidth(0.5);
-  doc.line(margin, 35, pageWidth - margin, 35);
+  // Status pill (right-aligned, below date)
+  const statusText = statusLabels[load.status] || load.status;
+  const statusLabel = statusText.toUpperCase();
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  const pillTextWidth = doc.getTextWidth(statusLabel);
+  const pillW = pillTextWidth + 8;
+  const pillH = 6;
+  const pillX = metaRightX - pillW;
+  const pillY = metaTop + 8;
+  // Pick pill colors based on status
+  let pillFill: [number, number, number] = pdfColors.lightBlue;
+  let pillText: [number, number, number] = pdfColors.navy;
+  if (load.status === "delivered") {
+    pillFill = pdfColors.successLight;
+    pillText = pdfColors.success;
+  } else if ((load.status as string) === "cancelled") {
+    pillFill = pdfColors.dangerLight;
+    pillText = pdfColors.danger;
+  } else if ((load.status as string) === "in-transit" || (load.status as string) === "in_transit") {
+    pillFill = pdfColors.warningLight;
+    pillText = pdfColors.warning;
+  }
+  doc.setFillColor(...pillFill);
+  doc.roundedRect(pillX, pillY, pillW, pillH, 1.5, 1.5, "F");
+  doc.setTextColor(...pillText);
+  doc.text(statusLabel, pillX + pillW / 2, pillY + 4.2, { align: "center" });
 
-  yPos = 42;
+  // Separator below the meta strip
+  doc.setDrawColor(...cardBorder);
+  doc.setLineWidth(0.4);
+  doc.line(margin, metaTop + 19, pageWidth - margin, metaTop + 19);
+
+  yPos = metaTop + 26;
   doc.setTextColor(0, 0, 0);
 
   // ========== LOAD DETAILS ==========
@@ -350,70 +388,83 @@ export async function exportLoadToPdf(
   // ========== ROUTE ==========
   yPos = addSectionHeader("Route Information");
 
-  // Origin
+  const cardW = (pageWidth - 2 * margin) / 2 - 5;
+  const cardH = 38;
+
+  // Origin card — bordered with subtle fill, colored top accent strip
   doc.setFillColor(...headerBg);
-  doc.rect(margin, yPos, (pageWidth - 2 * margin) / 2 - 5, 35, "F");
-  doc.setFontSize(9);
+  doc.roundedRect(margin, yPos, cardW, cardH, 1.5, 1.5, "F");
+  doc.setDrawColor(...cardBorder);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, yPos, cardW, cardH, 1.5, 1.5, "S");
+  // Top accent stripe
+  doc.setFillColor(...pdfColors.success);
+  doc.rect(margin, yPos, cardW, 1.2, "F");
+  // Label
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...pdfColors.success);
-  doc.text("ORIGIN", margin + 4, yPos + 6);
-  doc.setTextColor(0, 0, 0);
+  doc.text("ORIGIN", margin + 5, yPos + 7);
+  // Location name
+  doc.setTextColor(...pdfColors.charcoal);
   doc.setFontSize(11);
-  doc.text(load.origin, margin + 4, yPos + 14);
+  doc.setFont("helvetica", "bold");
+  const originLines = doc.splitTextToSize(load.origin, cardW - 10);
+  doc.text(originLines.slice(0, 2), margin + 5, yPos + 15);
+  // Times
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.text(
-    `Planned Arr: ${timeWindow.origin.plannedArrival}`,
-    margin + 4,
-    yPos + 22,
-  );
-  doc.text(
-    `Planned Dep: ${timeWindow.origin.plannedDeparture}`,
-    margin + 4,
-    yPos + 28,
-  );
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.text("Planned Arrival", margin + 5, yPos + 27);
+  doc.text("Planned Departure", margin + 5, yPos + 33);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...pdfColors.charcoal);
+  doc.text(timeWindow.origin.plannedArrival || "—", margin + cardW - 5, yPos + 27, { align: "right" });
+  doc.text(timeWindow.origin.plannedDeparture || "—", margin + cardW - 5, yPos + 33, { align: "right" });
 
-  // Destination
-  const destX = margin + (pageWidth - 2 * margin) / 2 + 5;
+  // Destination card — same styling, blue accent
+  const destX = margin + cardW + 10;
   doc.setFillColor(...headerBg);
-  doc.rect(destX, yPos, (pageWidth - 2 * margin) / 2 - 5, 35, "F");
-  doc.setFontSize(9);
+  doc.roundedRect(destX, yPos, cardW, cardH, 1.5, 1.5, "F");
+  doc.setDrawColor(...cardBorder);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(destX, yPos, cardW, cardH, 1.5, 1.5, "S");
+  doc.setFillColor(...pdfColors.blue);
+  doc.rect(destX, yPos, cardW, 1.2, "F");
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...pdfColors.blue);
-  doc.text("DESTINATION", destX + 4, yPos + 6);
-  doc.setTextColor(0, 0, 0);
+  doc.text("DESTINATION", destX + 5, yPos + 7);
+  doc.setTextColor(...pdfColors.charcoal);
   doc.setFontSize(11);
-  doc.text(load.destination, destX + 4, yPos + 14);
+  doc.setFont("helvetica", "bold");
+  const destLines = doc.splitTextToSize(load.destination, cardW - 10);
+  doc.text(destLines.slice(0, 2), destX + 5, yPos + 15);
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 100, 100);
-  doc.text(
-    `Planned Arr: ${timeWindow.destination.plannedArrival}`,
-    destX + 4,
-    yPos + 22,
-  );
-  doc.text(
-    `Planned Dep: ${timeWindow.destination.plannedDeparture}`,
-    destX + 4,
-    yPos + 28,
-  );
+  doc.setTextColor(...pdfColors.textMuted);
+  doc.text("Planned Arrival", destX + 5, yPos + 27);
+  doc.text("Planned Departure", destX + 5, yPos + 33);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...pdfColors.charcoal);
+  doc.text(timeWindow.destination.plannedArrival || "—", destX + cardW - 5, yPos + 27, { align: "right" });
+  doc.text(timeWindow.destination.plannedDeparture || "—", destX + cardW - 5, yPos + 33, { align: "right" });
 
-  // Arrow between origin and destination
+  // Connector circle + arrow between cards
+  const arrowCx = margin + cardW + 5;
+  const arrowCy = yPos + cardH / 2;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...pdfColors.navy);
+  doc.setLineWidth(0.6);
+  doc.circle(arrowCx, arrowCy, 4, "FD");
+  // Right-pointing chevron inside circle
   doc.setFillColor(...pdfColors.navy);
-  const arrowX = margin + (pageWidth - 2 * margin) / 2 - 3;
   doc.triangle(
-    arrowX,
-    yPos + 17,
-    arrowX + 6,
-    yPos + 17,
-    arrowX + 3,
-    yPos + 14,
+    arrowCx - 1.5, arrowCy - 2,
+    arrowCx + 2, arrowCy,
+    arrowCx - 1.5, arrowCy + 2,
     "F",
   );
-  doc.rect(arrowX + 1, yPos + 17, 4, 6, "F");
-
-  yPos += 42;
 
   // ========== ACTUAL TIMES (if any exist) ==========
   const hasActualTimes =
@@ -982,18 +1033,52 @@ export async function exportLoadToPdf(
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
+    const ph = doc.internal.pageSize.getHeight();
+    const footerY = ph - 14;
+    // Hairline rule above footer
+    doc.setDrawColor(...cardBorder);
+    doc.setLineWidth(0.3);
+    doc.line(margin, footerY, pageWidth - margin, footerY);
+    // Left: company line
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...pdfColors.navy);
+    doc.text(COMPANY_NAME, margin, footerY + 5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...pdfColors.textMuted);
+    doc.text(SYSTEM_NAME, margin, footerY + 9);
+    // Center: confidentiality note
+    doc.setFontSize(7);
+    doc.setTextColor(...pdfColors.textMuted);
     doc.text(
-      `Page ${i} of ${pageCount}`,
+      "This document is confidential and intended solely for the named recipient.",
       pageWidth / 2,
-      doc.internal.pageSize.getHeight() - 10,
+      footerY + 5,
       { align: "center" },
     );
     doc.text(
-      SYSTEM_NAME,
-      margin,
-      doc.internal.pageSize.getHeight() - 10,
+      `Reference: ${load.load_id}`,
+      pageWidth / 2,
+      footerY + 9,
+      { align: "center" },
+    );
+    // Right: page numbers
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...pdfColors.navy);
+    doc.text(
+      `Page ${i} of ${pageCount}`,
+      pageWidth - margin,
+      footerY + 5,
+      { align: "right" },
+    );
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...pdfColors.textMuted);
+    doc.text(
+      format(new Date(), "dd MMM yyyy HH:mm"),
+      pageWidth - margin,
+      footerY + 9,
+      { align: "right" },
     );
   }
 

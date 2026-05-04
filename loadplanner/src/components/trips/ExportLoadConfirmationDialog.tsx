@@ -75,14 +75,21 @@ function defaultEmailBody(load: Load): string {
     return [
         "Hi,",
         "",
-        `Please find attached the Load Confirmation for ${load.load_id}.`,
+        `Please find attached the Load Confirmation document for shipment ${load.load_id}.`,
         "",
-        `Route:      ${load.origin} → ${load.destination}`,
-        `Loading:    ${safeFormatDate(load.loading_date)}`,
-        `Offloading: ${safeFormatDate(load.offloading_date)}`,
+        `Route: ${load.origin} to ${load.destination}`,
+        `Scheduled Loading Date: ${safeFormatDate(load.loading_date)}`,
+        `Estimated Offloading Date: ${safeFormatDate(load.offloading_date)}`,
+        "",
+        "If you have any questions or need further details about this shipment, please let me know.",
         "",
         "Kind regards,",
-        "MATA Fleet",
+        "",
+        "Heinrich Nel",
+        "Heinrich@matanuska.co.za",
+        "General Manager, Transport",
+        "matanuska.co.zw",
+        "+27 66 273 1270",
     ].join("\n");
 }
 
