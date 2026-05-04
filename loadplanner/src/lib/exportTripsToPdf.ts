@@ -466,6 +466,8 @@ export async function exportLoadToPdf(
     "F",
   );
 
+  yPos += cardH + 6;
+
   // ========== ACTUAL TIMES (if any exist) ==========
   const hasActualTimes =
     timeWindow.origin.actualArrival !== "" ||
