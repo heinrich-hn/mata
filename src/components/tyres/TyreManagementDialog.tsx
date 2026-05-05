@@ -1,27 +1,27 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-Collapsible,
-CollapsibleContent,
-CollapsibleTrigger,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-Dialog,
-DialogContent,
-DialogDescription,
-DialogFooter,
-DialogHeader,
-DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-Select,
-SelectContent,
-SelectItem,
-SelectTrigger,
-SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -244,6 +244,74 @@ const TyreManagementDialog = ({
     }
   }, [mode, existingTyre, open, currentDotCode]);
 
+  /**
+   * Build a human-readable description of the duplicate-serial conflict,
+   * including which vehicle (and position) currently holds the serial so the
+   * user can resolve it without hunting through the inventory.
+   */
+  const describeDuplicateSerial = async (serial: string): Promise<string> => {
+    const trimmed = (serial || "").trim();
+    const base = `Serial number "${trimmed}" is already used by another tyre.`;
+    if (!trimmed) return `${base} Please enter a unique serial number.`;
+    try {
+      const excludeId = currentTyreId || "00000000-0000-0000-0000-000000000000";
+      const { data: existing } = await supabase
+        .from("tyres")
+        .select("id, brand, model, current_fleet_position")
+        .eq("serial_number", trimmed)
+        .neq("id", excludeId)
+        .limit(1)
+        .maybeSingle();
+
+      if (!existing) return `${base} Please enter a unique serial number.`;
+
+      const tyreLabel = [existing.brand, existing.model].filter(Boolean).join(" ").trim();
+
+      // Prefer live assignment from fleet_tyre_positions; fall back to the
+      // tyres.current_fleet_position string.
+      const { data: assignment } = await supabase
+        .from("fleet_tyre_positions")
+        .select("fleet_number, registration_no, position")
+        .eq("tyre_code", existing.id)
+        .limit(1)
+        .maybeSingle();
+
+      const dupePosition =
+        (assignment
+          ? `${assignment.fleet_number} ${assignment.registration_no}-${assignment.position}`
+          : existing.current_fleet_position) || null;
+
+      // If the duplicate is at the SAME fleet position as the tyre we're
+      // editing, this is a duplicate `tyres` record problem — renaming the
+      // serial here won't help. Surface a clearer message and a path forward.
+      const editingPosition = existingTyre?.current_fleet_position || null;
+      const sameSpot =
+        !!dupePosition && !!editingPosition && dupePosition === editingPosition;
+
+      if (sameSpot) {
+        return (
+          `${base} A second tyre record (${tyreLabel || "no brand"}, id ${existing.id.slice(0, 8)}…) ` +
+          `is already at the same position (${dupePosition}). This is a duplicate record — ` +
+          `delete the older record from the Inventory tab, or remove this position's tyre and re-install it.`
+        );
+      }
+
+      let location = "";
+      if (assignment) {
+        location = `currently fitted to fleet ${assignment.fleet_number} (${assignment.registration_no}) at position ${assignment.position}`;
+      } else if (existing.current_fleet_position) {
+        location = `currently fitted on ${existing.current_fleet_position}`;
+      } else {
+        location = "currently in stock (not fitted to a vehicle)";
+      }
+
+      return `${base} ${tyreLabel ? `That tyre (${tyreLabel}) is ` : "It is "}${location}. Please enter a unique serial number.`;
+    } catch (lookupErr) {
+      console.warn("Failed to look up duplicate serial owner", lookupErr);
+      return `${base} Please enter a unique serial number.`;
+    }
+  };
+
   const handleInstall = async () => {
     // Validate required fields
     if (!tyreForm.brand || !tyreForm.size) {
@@ -257,10 +325,61 @@ const TyreManagementDialog = ({
 
     setIsSubmitting(true);
     try {
-      const fleetPosition = `${fleetNumber} ${vehicleRegistration}-${position}`;
+      // Normalise the vehicle registration so duplicate-with-whitespace
+      // values (e.g. "AGZ1963" vs "AGZ 1963") don't create parallel
+      // fleet_tyre_positions rows for the same physical wheel.
+      const normalizedReg = (vehicleRegistration || "").replace(/\s+/g, " ").trim();
+      const fleetPosition = `${fleetNumber} ${normalizedReg}-${position}`;
 
       // Only include serial_number if it's non-empty and not just whitespace
       const serialNumber = tyreForm.serialNumber?.trim() || null;
+
+      // Sweep any pre-existing assignment at this vehicle+position. The
+      // unique key on fleet_tyre_positions is
+      // (fleet_number, registration_no, position) — but registration
+      // formatting can drift (extra space, different case), so a plain
+      // upsert may insert a duplicate row instead of replacing the old
+      // one. Match by vehicle_id + position when possible, and also by
+      // the whitespace-collapsed registration as a safety net.
+      const { data: stalePositions } = await supabase
+        .from("fleet_tyre_positions")
+        .select("id, vehicle_id, registration_no, tyre_code")
+        .eq("position", position)
+        .or(
+          [
+            vehicleId ? `vehicle_id.eq.${vehicleId}` : null,
+            fleetNumber ? `fleet_number.eq.${fleetNumber}` : null,
+          ]
+            .filter(Boolean)
+            .join(","),
+        );
+
+      const collapsedTarget = normalizedReg.replace(/\s+/g, "").toUpperCase();
+      const stale = (stalePositions || []).filter((row) => {
+        if (vehicleId && row.vehicle_id === vehicleId) return true;
+        const rowReg = (row.registration_no || "").replace(/\s+/g, "").toUpperCase();
+        return rowReg === collapsedTarget;
+      });
+
+      // Orphan the previous tyre records so they fall back to the holding
+      // bay rather than appearing twice in the Vehicle Store.
+      const previousTyreIds = stale
+        .map((row) => row.tyre_code)
+        .filter((id): id is string => !!id && !id.startsWith("NEW_CODE_"));
+      if (previousTyreIds.length > 0) {
+        await supabase
+          .from("tyres")
+          .update({
+            current_fleet_position: null,
+            position: "holding-bay",
+          })
+          .in("id", previousTyreIds);
+      }
+
+      const staleIds = stale.map((row) => row.id).filter(Boolean);
+      if (staleIds.length > 0) {
+        await supabase.from("fleet_tyre_positions").delete().in("id", staleIds);
+      }
 
       // Create new tyre record directly
       const { data: newTyre, error: createError } = await supabase
@@ -295,9 +414,10 @@ const TyreManagementDialog = ({
         .upsert(
           {
             fleet_number: fleetNumber || "",
-            registration_no: vehicleRegistration,
+            registration_no: normalizedReg,
             position: position,
             tyre_code: newTyre.id,
+            vehicle_id: vehicleId || null,
           },
           {
             onConflict: "fleet_number,registration_no,position",
@@ -347,9 +467,16 @@ const TyreManagementDialog = ({
       onOpenChange(false);
     } catch (error) {
       console.error("Error installing tyre:", error);
+      const pgError = error as { code?: string; message?: string } | null;
+      const isDuplicateSerial =
+        pgError?.code === "23505" &&
+        (pgError?.message?.includes("tyres_serial_number_key") ?? false);
+      const description = isDuplicateSerial
+        ? await describeDuplicateSerial(tyreForm.serialNumber)
+        : "Failed to install tyre";
       toast({
         title: "Error",
-        description: "Failed to install tyre",
+        description,
         variant: "destructive",
       });
     } finally {
@@ -415,9 +542,16 @@ const TyreManagementDialog = ({
       onOpenChange(false);
     } catch (error) {
       console.error("Error updating tyre:", error);
+      const pgError = error as { code?: string; message?: string } | null;
+      const isDuplicateSerial =
+        pgError?.code === "23505" &&
+        (pgError?.message?.includes("tyres_serial_number_key") ?? false);
+      const description = isDuplicateSerial
+        ? await describeDuplicateSerial(tyreForm.serialNumber)
+        : "Failed to update tyre";
       toast({
         title: "Error",
-        description: "Failed to update tyre",
+        description,
         variant: "destructive",
       });
     } finally {

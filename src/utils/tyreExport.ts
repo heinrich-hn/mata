@@ -1114,3 +1114,445 @@ export async function exportRubberAuditExcel(data: RubberAuditData, filename?: s
   const exportFilename = filename || `Rubber_Audit_Report_${data.reportMonth.replace(/\s+/g, "_")}.xlsx`;
   await saveWorkbook(wb, exportFilename);
 }
+
+// ==========================================
+// Full Tyre Inventory Export (Vehicle Store + All Bays)
+// ==========================================
+
+export type TyreLocationKey = "vehicle-store" | "holding-bay" | "retread-bay" | "scrap";
+
+export interface FullTyreInventoryBuckets {
+  vehicleStore: TyreExportData[];
+  holdingBay: TyreExportData[];
+  retreadBay: TyreExportData[];
+  scrap: TyreExportData[];
+}
+
+const LOCATION_LABELS: Record<TyreLocationKey, string> = {
+  "vehicle-store": "Vehicle Store",
+  "holding-bay": "Holding Bay",
+  "retread-bay": "Retread Bay",
+  "scrap": "Scrap & Sold",
+};
+
+interface FullExportSection {
+  key: TyreLocationKey;
+  label: string;
+  tyres: TyreExportData[];
+  showVehicleColumns: boolean;
+}
+
+// Position categories used to order vehicle-store tyres within each vehicle:
+// steering tyres first, then any other working positions, with spares last.
+// Position codes are parsed from the suffix of `current_fleet_position`
+// (e.g. "33H JFK963FS-V1" → "V1"). On Matanuska's fleet, V1/V2 are the
+// front steer-axle positions and SP* denotes spares.
+type PositionCategory = "steering" | "other" | "spare";
+const POSITION_RANK: Record<PositionCategory, number> = { steering: 0, other: 1, spare: 2 };
+
+const extractPositionCode = (fleetPosition?: string | null): string => {
+  if (!fleetPosition) return "";
+  const parts = fleetPosition.split("-");
+  return (parts[parts.length - 1] || "").trim().toUpperCase();
+};
+
+// Parse fleet number from a `current_fleet_position` string of the form
+// "<fleet> <registration>-<positionCode>" (e.g. "33H JFK963FS-V1" → "33H",
+// "1T ADZ9011/ADZ9010-T1" → "1T"). Used as a fallback when the joined
+// vehicle record is missing for an installed tyre. The fleet token always
+// matches `<digits><uppercase letters>` (e.g. 33H, 1T, 14L, 5F).
+const extractFleetNumberFromPosition = (fleetPosition?: string | null): string => {
+  if (!fleetPosition) return "";
+  const match = fleetPosition.match(/^(\d+[A-Z]+)\s+/);
+  return match ? match[1] : "";
+};
+
+const extractRegistrationFromPosition = (fleetPosition?: string | null): string => {
+  if (!fleetPosition) return "";
+  const match = fleetPosition.match(/^\d+[A-Z]+\s+(.+)-[A-Z0-9]+$/);
+  return match ? match[1].trim() : "";
+};
+
+const getVehicleFleetNumber = (t: TyreExportData): string =>
+  t.vehicles?.fleet_number || extractFleetNumberFromPosition(t.current_fleet_position) || "-";
+
+const getVehicleRegistration = (t: TyreExportData): string =>
+  t.vehicles?.registration_number || extractRegistrationFromPosition(t.current_fleet_position) || "-";
+
+// Derive a health rating from current tread depth when `tread_depth_health`
+// is not populated. Thresholds match the legend used elsewhere in this file:
+// >8 excellent, 5-8 good, 3-5 warning, <3 critical.
+const deriveHealth = (t: TyreExportData): string => {
+  if (t.tread_depth_health) return t.tread_depth_health;
+  const depth = typeof t.current_tread_depth === "number" ? t.current_tread_depth : null;
+  if (depth === null || Number.isNaN(depth)) return "";
+  if (depth > 8) return "excellent";
+  if (depth >= 5) return "good";
+  if (depth >= 3) return "warning";
+  return "critical";
+};
+
+const categorizePosition = (fleetPosition?: string | null): PositionCategory => {
+  const code = extractPositionCode(fleetPosition);
+  if (!code) return "other";
+  if (code.startsWith("SP")) return "spare";
+  if (code === "V1" || code === "V2") return "steering";
+  return "other";
+};
+
+/**
+ * Sort installed tyres so that, for each vehicle, tyres are listed in the
+ * order: steering → other → spare. Vehicles themselves are sorted by their
+ * fleet number (falling back to registration). Within a category, position
+ * codes are ordered naturally (V1, V2, V3 …).
+ */
+const sortVehicleStoreTyres = (tyres: TyreExportData[]): TyreExportData[] => {
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  return [...tyres].sort((a, b) => {
+    const aVeh = getVehicleFleetNumber(a) || getVehicleRegistration(a) || "~";
+    const bVeh = getVehicleFleetNumber(b) || getVehicleRegistration(b) || "~";
+    const vehicleCmp = collator.compare(aVeh, bVeh);
+    if (vehicleCmp !== 0) return vehicleCmp;
+
+    const aRank = POSITION_RANK[categorizePosition(a.current_fleet_position)];
+    const bRank = POSITION_RANK[categorizePosition(b.current_fleet_position)];
+    if (aRank !== bRank) return aRank - bRank;
+
+    return collator.compare(extractPositionCode(a.current_fleet_position), extractPositionCode(b.current_fleet_position));
+  });
+};
+
+const buildSections = (buckets: FullTyreInventoryBuckets): FullExportSection[] => [
+  { key: "vehicle-store", label: LOCATION_LABELS["vehicle-store"], tyres: sortVehicleStoreTyres(buckets.vehicleStore), showVehicleColumns: true },
+  { key: "holding-bay", label: LOCATION_LABELS["holding-bay"], tyres: buckets.holdingBay, showVehicleColumns: false },
+  { key: "retread-bay", label: LOCATION_LABELS["retread-bay"], tyres: buckets.retreadBay, showVehicleColumns: false },
+  { key: "scrap", label: LOCATION_LABELS["scrap"], tyres: buckets.scrap, showVehicleColumns: false },
+];
+
+const countByHealth = (tyres: TyreExportData[]) => {
+  const counts = { excellent: 0, good: 0, warning: 0, critical: 0 };
+  for (const t of tyres) {
+    const h = deriveHealth(t);
+    if (h === "excellent") counts.excellent++;
+    else if (h === "good") counts.good++;
+    else if (h === "warning") counts.warning++;
+    else if (h === "critical") counts.critical++;
+  }
+  return counts;
+};
+
+/**
+ * Export the full tyre inventory (vehicle store + every bay) to a single Excel workbook.
+ * Produces a Summary sheet, a per-location sheet, and a combined "All Tyres" sheet.
+ */
+export async function exportFullTyreInventoryToExcel(
+  buckets: FullTyreInventoryBuckets,
+  filename?: string
+): Promise<void> {
+  const sections = buildSections(buckets);
+  const grandTotal = sections.reduce((s, sec) => s + sec.tyres.length, 0);
+  const wb = createWorkbook();
+
+  // ── Summary sheet ──────────────────────────────────────────────────────
+  const totals = sections.map((sec) => {
+    const h = countByHealth(sec.tyres);
+    return [sec.label, sec.tyres.length, h.excellent, h.good, h.warning, h.critical];
+  });
+  const grandHealth = countByHealth([
+    ...buckets.vehicleStore,
+    ...buckets.holdingBay,
+    ...buckets.retreadBay,
+    ...buckets.scrap,
+  ]);
+  totals.push([
+    "GRAND TOTAL",
+    grandTotal,
+    grandHealth.excellent,
+    grandHealth.good,
+    grandHealth.warning,
+    grandHealth.critical,
+  ]);
+
+  const summaryWs = addStyledSheet(wb, "Summary", {
+    title: "FULL TYRE INVENTORY SUMMARY",
+    subtitle: generatedSubtitle(`${grandTotal} tyres across ${sections.length} locations`),
+    headers: ["Location", "Total Tyres", "Excellent", "Good", "Warning", "Critical"],
+    rows: totals,
+  });
+  // Bold the grand-total row
+  const totalRowNum = 4 + totals.length; // header row 4 (title=1, subtitle=2, blank=3, header=4)
+  const totalRow = summaryWs.getRow(totalRowNum);
+  totalRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 10, name: "Calibri" };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "E2E8F0" } };
+  });
+
+  // ── Per-location sheets ────────────────────────────────────────────────
+  for (const sec of sections) {
+    const headers = sec.showVehicleColumns
+      ? [
+        "Serial Number", "Brand", "Model", "Size", "Type", "DOT Code",
+        "Fleet Position", "Vehicle Fleet #", "Vehicle Reg", "Status",
+        "Initial Tread (mm)", "Current Tread (mm)", "Tread Health",
+        "Pressure Rating (PSI)", "Installation Date", "Purchase Date", "Notes",
+      ]
+      : [
+        "Serial Number", "Brand", "Model", "Size", "Type", "DOT Code",
+        "Status", "Initial Tread (mm)", "Current Tread (mm)", "Tread Health",
+        "Pressure Rating (PSI)", "Purchase Date", "Notes",
+      ];
+
+    const rows = sec.tyres.map((t) =>
+      sec.showVehicleColumns
+        ? [
+          t.serial_number || "-", t.brand || "-", t.model || "-", t.size || "-",
+          t.type || "-", t.dot_code || "-", t.current_fleet_position || "-",
+          getVehicleFleetNumber(t), getVehicleRegistration(t),
+          t.status || "-", t.initial_tread_depth ?? "", t.current_tread_depth ?? "",
+          deriveHealth(t) || "-", t.pressure_rating ?? "",
+          t.installation_date || "-", t.purchase_date || "-", t.notes || "-",
+        ]
+        : [
+          t.serial_number || "-", t.brand || "-", t.model || "-", t.size || "-",
+          t.type || "-", t.dot_code || "-", t.status || "-",
+          t.initial_tread_depth ?? "", t.current_tread_depth ?? "",
+          deriveHealth(t) || "-", t.pressure_rating ?? "",
+          t.purchase_date || "-", t.notes || "-",
+        ]
+    );
+
+    const healthColIdx = sec.showVehicleColumns ? 12 : 9;
+    addStyledSheet(wb, sec.label, {
+      title: `${sec.label.toUpperCase()} TYRES`,
+      subtitle: generatedSubtitle(`Total: ${sec.tyres.length}`),
+      headers,
+      rows,
+      cellStyler: (row, col) => {
+        if (col === healthColIdx + 1) return healthColours[String(row[healthColIdx]).toLowerCase()];
+        return undefined;
+      },
+    });
+  }
+
+  // ── Combined "All Tyres" sheet (with Location column) ──────────────────
+  const combinedHeaders = [
+    "Location", "Serial Number", "Brand", "Model", "Size", "Type", "DOT Code",
+    "Fleet Position", "Vehicle Fleet #", "Vehicle Reg", "Status",
+    "Initial Tread (mm)", "Current Tread (mm)", "Tread Health",
+    "Pressure Rating (PSI)", "Installation Date", "Purchase Date", "Notes",
+  ];
+  const combinedRows: (string | number)[][] = [];
+  for (const sec of sections) {
+    for (const t of sec.tyres) {
+      combinedRows.push([
+        sec.label,
+        t.serial_number || "-", t.brand || "-", t.model || "-", t.size || "-",
+        t.type || "-", t.dot_code || "-", t.current_fleet_position || "-",
+        getVehicleFleetNumber(t), getVehicleRegistration(t),
+        t.status || "-", t.initial_tread_depth ?? "", t.current_tread_depth ?? "",
+        deriveHealth(t) || "-", t.pressure_rating ?? "",
+        t.installation_date || "-", t.purchase_date || "-", t.notes || "-",
+      ]);
+    }
+  }
+  addStyledSheet(wb, "All Tyres", {
+    title: "ALL TYRES — COMBINED",
+    subtitle: generatedSubtitle(`${combinedRows.length} tyres`),
+    headers: combinedHeaders,
+    rows: combinedRows,
+    cellStyler: (row, col) => {
+      if (col === 14) return healthColours[String(row[13]).toLowerCase()];
+      return undefined;
+    },
+  });
+
+  const exportFilename =
+    filename || `Full_Tyre_Inventory_${new Date().toISOString().split("T")[0]}.xlsx`;
+  await saveWorkbook(wb, exportFilename);
+}
+
+/**
+ * Export the full tyre inventory (vehicle store + every bay) to a single PDF.
+ * Includes a cover summary plus a per-location section table, paginated.
+ */
+export function exportFullTyreInventoryToPDF(
+  buckets: FullTyreInventoryBuckets,
+  filename?: string
+): void {
+  const sections = buildSections(buckets);
+  const grandTotal = sections.reduce((s, sec) => s + sec.tyres.length, 0);
+  const grandHealth = countByHealth([
+    ...buckets.vehicleStore,
+    ...buckets.holdingBay,
+    ...buckets.retreadBay,
+    ...buckets.scrap,
+  ]);
+
+  const doc = new jsPDF("landscape", "mm", "a4");
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 12;
+
+  // ── Cover header ───────────────────────────────────────────────────────
+  doc.setFontSize(20);
+  doc.setFont("helvetica", "bold");
+  doc.text("Full Tyre Inventory Report", pageWidth / 2, 16, { align: "center" });
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(
+    `Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`,
+    pageWidth / 2,
+    23,
+    { align: "center" }
+  );
+
+  doc.setFontSize(9);
+  doc.text(
+    `Total Tyres: ${grandTotal}  |  Excellent: ${grandHealth.excellent}  |  Good: ${grandHealth.good}  |  Warning: ${grandHealth.warning}  |  Critical: ${grandHealth.critical}`,
+    pageWidth / 2,
+    29,
+    { align: "center" }
+  );
+
+  // Summary table
+  const summaryRows = sections.map((sec) => {
+    const h = countByHealth(sec.tyres);
+    return [sec.label, String(sec.tyres.length), String(h.excellent), String(h.good), String(h.warning), String(h.critical)];
+  });
+  summaryRows.push([
+    "GRAND TOTAL",
+    String(grandTotal),
+    String(grandHealth.excellent),
+    String(grandHealth.good),
+    String(grandHealth.warning),
+    String(grandHealth.critical),
+  ]);
+
+  autoTable(doc, {
+    head: [["Location", "Total", "Excellent", "Good", "Warning", "Critical"]],
+    body: summaryRows,
+    startY: 34,
+    styles: { fontSize: 9, cellPadding: 2.5 },
+    headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: "bold", fontSize: 10 },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: {
+      0: { cellWidth: 60, fontStyle: "bold" },
+      1: { halign: "center" },
+      2: { halign: "center" },
+      3: { halign: "center" },
+      4: { halign: "center" },
+      5: { halign: "center" },
+    },
+    margin: { left: margin, right: margin },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.row.index === summaryRows.length - 1) {
+        data.cell.styles.fillColor = [226, 232, 240];
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
+  });
+
+  // ── Per-location section pages ─────────────────────────────────────────
+  for (const sec of sections) {
+    doc.addPage();
+
+    // Section header
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${sec.label}`, margin, 15);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    const h = countByHealth(sec.tyres);
+    doc.text(
+      `Total: ${sec.tyres.length}  |  Excellent: ${h.excellent}  |  Good: ${h.good}  |  Warning: ${h.warning}  |  Critical: ${h.critical}`,
+      margin,
+      21
+    );
+
+    if (sec.tyres.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(120, 120, 120);
+      doc.text("No tyres in this location.", margin, 32);
+      doc.setTextColor(0, 0, 0);
+      continue;
+    }
+
+    const sectionHeaders = sec.showVehicleColumns
+      ? ["Serial #", "Brand", "Model", "Size", "Type", "Vehicle", "Position", "Status", "Tread (mm)", "Health"]
+      : ["Serial #", "Brand", "Model", "Size", "Type", "DOT Code", "Status", "Tread (mm)", "Health", "Purchase Date"];
+
+    const sectionRows = sec.tyres.map((t) =>
+      sec.showVehicleColumns
+        ? [
+          t.serial_number?.substring(0, 18) || "-",
+          t.brand || "-",
+          t.model || "-",
+          t.size || "-",
+          t.type || "-",
+          getVehicleFleetNumber(t),
+          t.current_fleet_position?.substring(0, 22) || "-",
+          t.status || "-",
+          t.current_tread_depth?.toString() || "-",
+          deriveHealth(t) || "-",
+        ]
+        : [
+          t.serial_number?.substring(0, 18) || "-",
+          t.brand || "-",
+          t.model || "-",
+          t.size || "-",
+          t.type || "-",
+          t.dot_code || "-",
+          t.status || "-",
+          t.current_tread_depth?.toString() || "-",
+          deriveHealth(t) || "-",
+          t.purchase_date || "-",
+        ]
+    );
+
+    const healthColIdx = sectionHeaders.indexOf("Health");
+
+    autoTable(doc, {
+      head: [sectionHeaders],
+      body: sectionRows,
+      startY: 26,
+      styles: { fontSize: 7.5, cellPadding: 1.8 },
+      headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: "bold", fontSize: 8 },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      margin: { left: margin, right: margin },
+      didParseCell: (data) => {
+        if (data.section === "body" && data.column.index === healthColIdx) {
+          const health = String(data.cell.raw || "").toLowerCase();
+          if (health === "excellent") data.cell.styles.textColor = [34, 197, 94];
+          else if (health === "good") data.cell.styles.textColor = [59, 130, 246];
+          else if (health === "warning") data.cell.styles.textColor = [234, 179, 8];
+          else if (health === "critical") {
+            data.cell.styles.textColor = [239, 68, 68];
+            data.cell.styles.fontStyle = "bold";
+          }
+        }
+      },
+    });
+  }
+
+  // ── Footer with page numbers ───────────────────────────────────────────
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `Full Tyre Inventory  |  Page ${i} of ${pageCount}`,
+      pageWidth / 2,
+      pageHeight - 8,
+      { align: "center" }
+    );
+  }
+  doc.setTextColor(0, 0, 0);
+
+  const exportFilename =
+    filename || `Full_Tyre_Inventory_${new Date().toISOString().split("T")[0]}.pdf`;
+  doc.save(exportFilename);
+}

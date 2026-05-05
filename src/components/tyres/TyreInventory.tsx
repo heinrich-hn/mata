@@ -15,10 +15,10 @@ import { requestGoogleSheetsSync } from "@/hooks/useGoogleSheetsSync";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
-  exportAllTyresToExcel,
-  exportAllTyresToPDF,
   exportBayTyresToExcel,
   exportBayTyresToPDF,
+  exportFullTyreInventoryToExcel,
+  exportFullTyreInventoryToPDF,
 } from "@/utils/tyreExport";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { ArrowRightLeft, Ban, Download, Eye, FileSpreadsheet, FileText, History, Package, Pencil, Plus, ShoppingCart, Trash2, Truck, Wrench, X } from "lucide-react";
@@ -207,6 +207,136 @@ const TyreInventory = () => {
           dot_code: dotCode,
         };
       });
+    },
+  });
+
+  // Fetch Vehicle Store tyres — the authoritative source used by the
+  // Vehicle Store tab (TyreInspection.tsx). This pulls every assigned
+  // position from `fleet_tyre_positions`, joins the `tyres` table for
+  // tyre details, and resolves the vehicle. Used by the "Export All
+  // Tyres" feature so the Vehicle Store section in the export matches
+  // exactly what is shown on the Vehicle Store screen.
+  const { data: vehicleStoreTyres = [] } = useQuery({
+    queryKey: ["vehicle_store_tyres_for_export"],
+    queryFn: async () => {
+      const { data: positions, error: posError } = await supabase
+        .from("fleet_tyre_positions")
+        .select("fleet_number, registration_no, position, tyre_code, vehicle_id, updated_at")
+        .not("tyre_code", "is", null);
+      if (posError) throw posError;
+
+      // De-duplicate positions. Historic data has rows where the
+      // registration was entered with different whitespace (e.g.
+      // "AGZ1963" vs "AGZ 1963"), which defeats the
+      // (fleet, registration_no, position) unique key and leaves stale
+      // rows for the same physical wheel. Collapse on
+      // vehicle_id+position (or fleet+normalised reg+position when
+      // vehicle_id is missing) and keep the most recently updated row.
+      const dedupedPositions = (() => {
+        const byKey = new Map<string, typeof positions[number]>();
+        for (const p of positions || []) {
+          const regKey = (p.registration_no || "").replace(/\s+/g, "").toUpperCase();
+          const key = `${p.vehicle_id || `${p.fleet_number}|${regKey}`}|${p.position}`;
+          const existing = byKey.get(key);
+          if (
+            !existing ||
+            new Date(p.updated_at || 0).getTime() >
+            new Date(existing.updated_at || 0).getTime()
+          ) {
+            byKey.set(key, p);
+          }
+        }
+        return Array.from(byKey.values());
+      })();
+
+      const tyreIds = dedupedPositions
+        .map(p => p.tyre_code)
+        .filter((c): c is string => !!c && !c.startsWith("NEW_CODE_"));
+
+      const tyresMap = new Map<string, TyreWithPosition & { dot_code?: string | null }>();
+      if (tyreIds.length > 0) {
+        const { data: tyresData, error: tyresErr } = await supabase
+          .from("tyres")
+          .select("*")
+          .in("id", tyreIds);
+        if (tyresErr) throw tyresErr;
+
+        const inventoryIds = (tyresData || [])
+          .map(t => t.inventory_id)
+          .filter((id): id is string => id !== null);
+        const dotMap = new Map<string, string | null>();
+        if (inventoryIds.length > 0) {
+          const { data: invData } = await supabase
+            .from("tyre_inventory")
+            .select("id, dot_code")
+            .in("id", inventoryIds);
+          (invData || []).forEach(inv => dotMap.set(inv.id, inv.dot_code));
+        }
+
+        (tyresData || []).forEach(t => {
+          tyresMap.set(t.id, {
+            ...(t as TyreWithPosition),
+            dot_code: t.dot_code || (t.inventory_id ? dotMap.get(t.inventory_id) || null : null),
+          });
+        });
+      }
+
+      const vehicleIds = Array.from(
+        new Set(dedupedPositions.map(p => p.vehicle_id).filter((id): id is string => !!id))
+      );
+      const registrations = Array.from(
+        new Set(dedupedPositions.map(p => p.registration_no).filter((r): r is string => !!r))
+      );
+      const vehiclesMap = new Map<string, { id: string; registration_number: string; fleet_number: string }>();
+      const vehiclesByReg = new Map<string, { id: string; registration_number: string; fleet_number: string }>();
+      if (vehicleIds.length > 0 || registrations.length > 0) {
+        const { data: vehData } = await supabase
+          .from("vehicles")
+          .select("id, registration_number, fleet_number")
+          .or(
+            [
+              vehicleIds.length > 0 ? `id.in.(${vehicleIds.join(",")})` : null,
+              registrations.length > 0 ? `registration_number.in.(${registrations.map(r => `"${r}"`).join(",")})` : null,
+            ].filter(Boolean).join(",")
+          );
+        (vehData || []).forEach(v => {
+          vehiclesMap.set(v.id, v);
+          if (v.registration_number) vehiclesByReg.set(v.registration_number, v);
+        });
+      }
+
+      // Map positions → TyreExportData rows. Skip positions whose tyre
+      // record is missing (NEW_CODE_ placeholders or deleted tyres).
+      return dedupedPositions
+        .map(p => {
+          const tyre = p.tyre_code ? tyresMap.get(p.tyre_code) : null;
+          if (!tyre) return null;
+          const vehicle =
+            (p.vehicle_id && vehiclesMap.get(p.vehicle_id)) ||
+            (p.registration_no && vehiclesByReg.get(p.registration_no)) ||
+            null;
+          const cleanReg = (p.registration_no || "").replace(/\s+/g, " ").trim();
+          return {
+            ...tyre,
+            // Always reflect the Vehicle Store assignment, not the (possibly
+            // stale) `current_fleet_position` column on the tyres row.
+            current_fleet_position: `${p.fleet_number} ${cleanReg}-${p.position}`,
+            vehicles: vehicle
+              ? {
+                id: vehicle.id,
+                registration_number: vehicle.registration_number,
+                fleet_number: vehicle.fleet_number,
+                current_odometer: null,
+              }
+              : {
+                id: p.vehicle_id || "",
+                registration_number: cleanReg,
+                fleet_number: p.fleet_number,
+                current_odometer: null,
+              },
+          } as InstalledTyreWithVehicle;
+        })
+        .filter((row): row is InstalledTyreWithVehicle => row !== null);
     },
   });
 
@@ -838,9 +968,19 @@ const TyreInventory = () => {
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               onClick={async () => {
-                const allTyres = [...holdingBayTyres, ...retreadBayTyres, ...scrapAndSoldTyres];
-                await exportAllTyresToExcel(allTyres);
-                toast({ title: "Exported", description: `${allTyres.length} tyres exported to Excel` });
+                const buckets = {
+                  vehicleStore: vehicleStoreTyres,
+                  holdingBay: holdingBayTyres,
+                  retreadBay: retreadBayTyres,
+                  scrap: scrapAndSoldTyres,
+                };
+                const total =
+                  buckets.vehicleStore.length +
+                  buckets.holdingBay.length +
+                  buckets.retreadBay.length +
+                  buckets.scrap.length;
+                await exportFullTyreInventoryToExcel(buckets);
+                toast({ title: "Exported", description: `${total} tyres exported to Excel` });
               }}
             >
               <FileSpreadsheet className="h-4 w-4 mr-2" />
@@ -848,9 +988,19 @@ const TyreInventory = () => {
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
-                const allTyres = [...holdingBayTyres, ...retreadBayTyres, ...scrapAndSoldTyres];
-                exportAllTyresToPDF(allTyres);
-                toast({ title: "Exported", description: `${allTyres.length} tyres exported to PDF` });
+                const buckets = {
+                  vehicleStore: vehicleStoreTyres,
+                  holdingBay: holdingBayTyres,
+                  retreadBay: retreadBayTyres,
+                  scrap: scrapAndSoldTyres,
+                };
+                const total =
+                  buckets.vehicleStore.length +
+                  buckets.holdingBay.length +
+                  buckets.retreadBay.length +
+                  buckets.scrap.length;
+                exportFullTyreInventoryToPDF(buckets);
+                toast({ title: "Exported", description: `${total} tyres exported to PDF` });
               }}
             >
               <FileText className="h-4 w-4 mr-2" />
