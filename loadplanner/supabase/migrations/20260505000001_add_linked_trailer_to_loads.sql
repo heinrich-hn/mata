@@ -1,0 +1,4 @@
+-- This migration is intentionally empty (superseded).
+-- Fleet-to-trailer linking is handled at the fleet_vehicles level
+-- via linked_reefer_id / linked_interlink_id columns (see
+-- 20260413000001_add_fleet_vehicle_linked_trailers.sql).

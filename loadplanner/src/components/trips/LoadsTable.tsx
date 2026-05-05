@@ -58,8 +58,9 @@ import {
   User,
   Users,
 } from "lucide-react";
+import { useFleetVehicles } from "@/hooks/useFleetVehicles";
 import { toast } from "sonner";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { AddBackloadDialog } from "./AddBackloadDialog";
 import { AddThirdPartyBackloadDialog } from "./AddThirdPartyBackloadDialog";
 import { AssignSubcontractorDialog } from "./AssignSubcontractorDialog";
@@ -149,6 +150,53 @@ function formatDateHeader(dateStr: string): {
   return { main, relative };
 }
 
+/**
+ * Displays the reefer and/or interlink trailers linked to the trip's
+ * horse vehicle.  A horse unit pulls one or both trailer types:
+ *   – **Reefer**: a refrigerated trailer for temperature-sensitive cargo.
+ *   – **Interlink**: a dual-axle trailer configuration for heavy loads.
+ * The links are maintained on the fleet vehicle (Edit Fleet dialog),
+ * NOT per-trip, so every trip using a given horse automatically shows
+ * the trailers that were configured for it.
+ */
+const LinkedTrailers = memo(function LinkedTrailers({
+  reeferId,
+  interlinkId,
+  vehicleMap,
+}: {
+  reeferId: string | null | undefined;
+  interlinkId: string | null | undefined;
+  vehicleMap: Map<string, { vehicle_id: string; type: string }>;
+}) {
+  const reefer = reeferId ? vehicleMap.get(reeferId) : null;
+  const interlink = interlinkId ? vehicleMap.get(interlinkId) : null;
+  if (!reefer && !interlink) return null;
+  return (
+    <div className="space-y-0">
+      {reefer && (
+        <div
+          className="flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 mt-0.5"
+          title={`Reefer: ${reefer.vehicle_id}`}
+        >
+          <Truck className="h-2.5 w-2.5" />
+          <span className="truncate max-w-[110px]">{reefer.vehicle_id}</span>
+          <span className="text-blue-400 dark:text-blue-500">({reefer.type})</span>
+        </div>
+      )}
+      {interlink && (
+        <div
+          className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5"
+          title={`Interlink: ${interlink.vehicle_id}`}
+        >
+          <Truck className="h-2.5 w-2.5" />
+          <span className="truncate max-w-[110px]">{interlink.vehicle_id}</span>
+          <span className="text-emerald-400 dark:text-emerald-500">({interlink.type})</span>
+        </div>
+      )}
+    </div>
+  );
+});
+
 export function LoadsTable({
   loads,
   onLoadClick,
@@ -182,7 +230,17 @@ export function LoadsTable({
   const [loadForExport, setLoadForExport] = useState<Load | null>(null);
 
   const deleteLoad = useDeleteLoad();
+  const { data: allFleetVehicles = [] } = useFleetVehicles();
 
+  // Build a quick lookup so we can resolve linked_reefer_id / linked_interlink_id
+  // from the fleet vehicle to display the linked trailer name on each trip row.
+  const fleetVehicleMap = useMemo(() => {
+    const map = new Map<string, { vehicle_id: string; type: string }>();
+    for (const v of allFleetVehicles) {
+      map.set(v.id, { vehicle_id: v.vehicle_id, type: v.type });
+    }
+    return map;
+  }, [allFleetVehicles]);
 
   function needsVerification(load: Load) {
     return (
@@ -456,6 +514,11 @@ export function LoadsTable({
                             <Truck className="h-3 w-3" />
                             {load.fleet_vehicle?.vehicle_id || "Unassigned"}
                           </div>
+                          <LinkedTrailers
+                            reeferId={load.fleet_vehicle?.linked_reefer_id}
+                            interlinkId={load.fleet_vehicle?.linked_interlink_id}
+                            vehicleMap={fleetVehicleMap}
+                          />
                         </div>
                       </TableCell>
                       <TableCell>

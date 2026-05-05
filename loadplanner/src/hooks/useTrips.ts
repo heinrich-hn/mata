@@ -79,7 +79,7 @@ export function useLoads() {
         .select(`
           *,
           driver:drivers!loads_driver_id_fkey(id, name, contact),
-          fleet_vehicle:fleet_vehicles(id, vehicle_id, type, telematics_asset_id)
+          fleet_vehicle:fleet_vehicles!loads_fleet_vehicle_id_fkey(id, vehicle_id, type, telematics_asset_id, linked_reefer_id, linked_interlink_id)
         `)
         .order('loading_date', { ascending: true });
 
@@ -134,7 +134,7 @@ export function usePaginatedLoads(page: number, pageSize: number) {
         .select(
           `*,
           driver:drivers!loads_driver_id_fkey(id, name, contact),
-          fleet_vehicle:fleet_vehicles(id, vehicle_id, type, telematics_asset_id)`,
+          fleet_vehicle:fleet_vehicles!loads_fleet_vehicle_id_fkey(id, vehicle_id, type, telematics_asset_id, linked_reefer_id, linked_interlink_id)`,
           { count: 'exact' },
         )
         .order('loading_date', { ascending: false })

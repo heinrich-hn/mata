@@ -102,7 +102,7 @@ export interface Load {
 
   // Joined data
   driver?: { id: string; name: string; contact: string } | null;
-  fleet_vehicle?: { id: string; vehicle_id: string; type: string; telematics_asset_id?: string | null } | null;
+  fleet_vehicle?: { id: string; vehicle_id: string; type: string; telematics_asset_id?: string | null; linked_reefer_id?: string | null; linked_interlink_id?: string | null } | null;
 }
 
 // Helper type for creating new loads
