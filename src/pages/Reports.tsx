@@ -756,13 +756,24 @@ const Reports = () => {
         return data || [];
     };
 
+    const attachVehicles = async (rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> => {
+        const vehicleIds = [...new Set(rows.map((r) => r.vehicle_id as string | null | undefined).filter(Boolean))] as string[];
+        if (vehicleIds.length === 0) return rows;
+        const { data: vehicles } = await supabase
+            .from("vehicles")
+            .select("id, fleet_number, registration_number, make, model")
+            .in("id", vehicleIds);
+        const vehicleMap = new Map((vehicles || []).map((v: Vehicle) => [v.id, v]));
+        return rows.map((r) => ({ ...r, vehicles: r.vehicle_id ? vehicleMap.get(r.vehicle_id as string) || null : null }));
+    };
+
     const fetchMaintenanceSchedules = async () => {
         const { data, error } = await supabase
             .from("maintenance_schedules")
-            .select("*, vehicles(fleet_number, registration_number, make, model)")
+            .select("*")
             .order("next_due_date") as { data: Record<string, unknown>[] | null; error: unknown };
         if (error) throw error;
-        return data || [];
+        return attachVehicles(data || []);
     };
 
     const fetchMaintenanceHistory = async () => {
@@ -780,12 +791,12 @@ const Reports = () => {
         const client = supabase as any;
         const { data, error } = await client
             .from("maintenance_schedules")
-            .select("*, vehicles(fleet_number, registration_number, make, model)")
+            .select("*")
             .lt("next_due_date", today)
             .neq("status", "completed")
             .order("next_due_date");
         if (error) throw error;
-        return (data || []) as Record<string, unknown>[];
+        return attachVehicles((data || []) as Record<string, unknown>[]);
     };
 
     const fetchFaults = async () => {
