@@ -942,23 +942,83 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
     }
   }
 
+  // Group header row for visual clarity (Origin / Destination sections)
   autoTable(doc, {
     startY: 28,
-    head: [[
-      "Load ID", "Vehicle", "Origin", "Destination", "Loading Date", "Offloading Date", "Status",
-      "O Plan Arr", "O Act Arr", "O Var (min)",
-      "O Plan Dep", "O Act Dep", "O Var (min)",
-      "D Plan Arr", "D Act Arr", "D Var (min)",
-      "D Plan Dep", "D Act Dep", "D Var (min)",
-    ]],
+    head: [
+      [
+        { content: "Load Details", colSpan: 7, styles: { fillColor: primary, textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
+        { content: "Origin", colSpan: 6, styles: { fillColor: [55, 90, 140], textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
+        { content: "Destination", colSpan: 6, styles: { fillColor: [55, 90, 140], textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
+      ],
+      [
+        "Load ID", "Vehicle", "Origin", "Destination", "Load Date", "Offload Date", "Status",
+        "Plan Arr", "Act Arr", "Var (m)",
+        "Plan Dep", "Act Dep", "Var (m)",
+        "Plan Arr", "Act Arr", "Var (m)",
+        "Plan Dep", "Act Dep", "Var (m)",
+      ],
+    ],
     body: rows,
     theme: "grid",
-    headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8.5 },
-    bodyStyles: { textColor: text, fontSize: 8, cellPadding: 2 },
-    styles: { overflow: "linebreak" },
+    headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.5, halign: "center", valign: "middle", cellPadding: 1.5 },
+    bodyStyles: { textColor: text, fontSize: 7.5, cellPadding: 1.5, valign: "middle" },
+    styles: { overflow: "linebreak", lineWidth: 0.1, lineColor: [200, 200, 200] },
     alternateRowStyles: { fillColor: [249, 250, 251] },
     margin: { left: 6, right: 6 },
     tableWidth: pageWidth - 12,
+    columnStyles: {
+      0: { cellWidth: 22, fontStyle: "bold" },                  // Load ID
+      1: { cellWidth: 12, halign: "center" },                   // Vehicle
+      2: { cellWidth: 22 },                                     // Origin
+      3: { cellWidth: 22 },                                     // Destination
+      4: { cellWidth: 18, halign: "center" },                   // Load Date
+      5: { cellWidth: 18, halign: "center" },                   // Offload Date
+      6: { cellWidth: 16, halign: "center" },                   // Status
+      7: { cellWidth: 13, halign: "center" },                   // O Plan Arr
+      8: { cellWidth: 13, halign: "center" },                   // O Act Arr
+      9: { cellWidth: 11, halign: "right" },                    // O Var Arr
+      10: { cellWidth: 13, halign: "center" },                  // O Plan Dep
+      11: { cellWidth: 13, halign: "center" },                  // O Act Dep
+      12: { cellWidth: 11, halign: "right" },                   // O Var Dep
+      13: { cellWidth: 13, halign: "center" },                  // D Plan Arr
+      14: { cellWidth: 13, halign: "center" },                  // D Act Arr
+      15: { cellWidth: 11, halign: "right" },                   // D Var Arr
+      16: { cellWidth: 13, halign: "center" },                  // D Plan Dep
+      17: { cellWidth: 13, halign: "center" },                  // D Act Dep
+      18: { cellWidth: 11, halign: "right" },                   // D Var Dep
+    },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      // Color-code variance columns (9, 12, 15, 18)
+      if ([9, 12, 15, 18].includes(data.column.index)) {
+        const raw = String(data.cell.raw ?? "").trim();
+        if (raw === "") return;
+        const v = Number(raw);
+        if (Number.isNaN(v)) return;
+        data.cell.styles.fontStyle = "bold";
+        if (v > 30) {
+          data.cell.styles.textColor = [185, 28, 28]; // red
+        } else if (v > 15) {
+          data.cell.styles.textColor = [180, 83, 9]; // amber
+        } else if (v < -5) {
+          data.cell.styles.textColor = [29, 78, 216]; // blue (early)
+        } else {
+          data.cell.styles.textColor = [21, 128, 61]; // green (on-time)
+        }
+      }
+      // Status badge styling
+      if (data.column.index === 6) {
+        const status = String(data.cell.raw ?? "").toLowerCase();
+        if (status === "delivered") {
+          data.cell.styles.textColor = [21, 128, 61];
+          data.cell.styles.fontStyle = "bold";
+        } else if (status === "pending") {
+          data.cell.styles.textColor = [180, 83, 9];
+          data.cell.styles.fontStyle = "bold";
+        }
+      }
+    },
   });
 
   const pageCount = doc.getNumberOfPages();

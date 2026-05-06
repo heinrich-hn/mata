@@ -10,6 +10,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureAlert } from '@/lib/alertUtils';
@@ -19,6 +21,7 @@ import { addDays, format, getISOWeek, parseISO, startOfWeek } from 'date-fns';
 import {
   AlertTriangle,
   Building,
+  Calendar,
   ChevronDown,
   ChevronRight,
   DollarSign,
@@ -214,6 +217,7 @@ const ActiveTrips = ({
   const [fleetFilter, setFleetFilter] = useState<string>('all');
   const [driverFilter, setDriverFilter] = useState<string>('all');
   const [clientFilter, setClientFilter] = useState<string>('all');
+  const [weekFilter, setWeekFilter] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grouped' | 'list'>('grouped');
   const [showMissingRevenueOnly, setShowMissingRevenueOnly] = useState<boolean>(false);
@@ -291,10 +295,12 @@ const ActiveTrips = ({
     const fleets = [...new Set(trips.map(t => t.fleet_number).filter(Boolean))] as string[];
     const drivers = [...new Set(trips.map(t => t.driver_name).filter(Boolean))] as string[];
     const clients = [...new Set(trips.map(t => t.client_name).filter(Boolean))] as string[];
+    const weeks = [...new Set(trips.map(t => t.departure_date ? getWeekKey(t.departure_date) : null).filter(Boolean))] as string[];
     return {
       fleets: fleets.sort(),
       drivers: drivers.sort(),
       clients: clients.sort(),
+      weeks: weeks.sort((a, b) => b.localeCompare(a)),
     };
   }, [trips]);
 
@@ -304,6 +310,10 @@ const ActiveTrips = ({
       if (fleetFilter !== 'all' && trip.fleet_number !== fleetFilter) return false;
       if (driverFilter !== 'all' && trip.driver_name !== driverFilter) return false;
       if (clientFilter !== 'all' && trip.client_name !== clientFilter) return false;
+      if (weekFilter.length > 0) {
+        const tripWeek = trip.departure_date ? getWeekKey(trip.departure_date) : null;
+        if (!tripWeek || !weekFilter.includes(tripWeek)) return false;
+      }
       if (showMissingRevenueOnly && trip.base_revenue && trip.base_revenue > 0) return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -317,7 +327,7 @@ const ActiveTrips = ({
       }
       return true;
     });
-  }, [trips, fleetFilter, driverFilter, clientFilter, searchQuery, showMissingRevenueOnly]);
+  }, [trips, fleetFilter, driverFilter, clientFilter, weekFilter, searchQuery, showMissingRevenueOnly]);
 
   // Group trips by week
   const tripsByWeek = useMemo(() => {
@@ -346,12 +356,13 @@ const ActiveTrips = ({
     return sorted;
   }, [filteredTrips]);
 
-  const hasActiveFilters = fleetFilter !== 'all' || driverFilter !== 'all' || clientFilter !== 'all' || searchQuery !== '' || showMissingRevenueOnly;
+  const hasActiveFilters = fleetFilter !== 'all' || driverFilter !== 'all' || clientFilter !== 'all' || weekFilter.length > 0 || searchQuery !== '' || showMissingRevenueOnly;
 
   const clearFilters = () => {
     setFleetFilter('all');
     setDriverFilter('all');
     setClientFilter('all');
+    setWeekFilter([]);
     setSearchQuery('');
     setShowMissingRevenueOnly(false);
   };
@@ -598,6 +609,57 @@ const ActiveTrips = ({
                   </SelectContent>
                 </Select>
 
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-[220px] h-10 justify-start font-normal">
+                      <Calendar className="h-3.5 w-3.5 mr-2" />
+                      {weekFilter.length === 0
+                        ? <span className="text-muted-foreground">All Weeks</span>
+                        : weekFilter.length === 1
+                          ? `Wk ${getWeekNumber(weekFilter[0])} · ${formatWeekRange(weekFilter[0])}`
+                          : `${weekFilter.length} weeks selected`}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[280px] p-0" align="start">
+                    <div className="flex items-center justify-between px-3 py-2 border-b">
+                      <span className="text-xs font-medium text-muted-foreground">Select Weeks</span>
+                      {weekFilter.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setWeekFilter([])}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-[280px] overflow-y-auto py-1">
+                      {filterOptions.weeks.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">No weeks available</div>
+                      )}
+                      {filterOptions.weeks.map(week => {
+                        const checked = weekFilter.includes(week);
+                        return (
+                          <label
+                            key={week}
+                            className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent cursor-pointer"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(value) => {
+                                setWeekFilter(prev =>
+                                  value ? [...prev, week] : prev.filter(w => w !== week)
+                                );
+                              }}
+                            />
+                            <span>Wk {getWeekNumber(week)} · {formatWeekRange(week)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
                 <Button
                   variant={showMissingRevenueOnly ? "default" : "outline"}
                   size="sm"
@@ -635,6 +697,20 @@ const ActiveTrips = ({
                         {clientFilter}
                       </Badge>
                     )}
+                    {weekFilter.length > 0 && weekFilter.map(week => (
+                      <Badge key={week} variant="secondary" className="text-xs gap-1">
+                        <Calendar className="h-2.5 w-2.5" />
+                        Wk {getWeekNumber(week)} · {formatWeekRange(week)}
+                        <button
+                          type="button"
+                          onClick={() => setWeekFilter(prev => prev.filter(w => w !== week))}
+                          className="ml-1 hover:text-foreground"
+                          aria-label={`Remove week ${getWeekNumber(week)}`}
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </Badge>
+                    ))}
                     {showMissingRevenueOnly && (
                       <Badge variant="secondary" className="text-xs gap-1 bg-amber-100 text-amber-700">
                         <DollarSign className="h-2.5 w-2.5" />

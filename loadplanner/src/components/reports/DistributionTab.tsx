@@ -43,6 +43,82 @@ interface DistributionTabProps {
   trendLabel?: "Weekly" | "Monthly";
 }
 
+// Constants for chart dimensions
+const CHART_HEIGHTS = {
+  pie: 320,
+  bar: 400,
+  area: 350,
+} as const;
+
+const CHART_MARGIN = { top: 10, right: 30, left: 20, bottom: 10 };
+const AREA_CHART_MARGIN = { top: 10, right: 30, left: 0, bottom: 10 };
+const ROUTE_Y_AXIS_WIDTH = 180;
+
+// Colors
+const COLORS = {
+  grid: "#e5e7eb",
+  tick: "#6b7280",
+  tickDark: "#374151",
+} as const;
+
+// Gradient configurations
+const AREA_GRADIENTS = [
+  { id: "scheduledGradient", color: "#3b82f6", label: "Scheduled" },
+  { id: "transitGradient", color: "#f59e0b", label: "In Transit" },
+  { id: "deliveredGradient", color: "#22c55e", label: "Delivered" },
+  { id: "pendingGradient", color: "#ef4444", label: "Pending" },
+] as const;
+
+// Reusable chart components
+function PieDistributionChart<T extends { fill: string; value: number }>({
+  data,
+}: {
+  data: T[];
+}) {
+  return (
+    <div className={`h-[${CHART_HEIGHTS.pie}px]`}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={100}
+            paddingAngle={3}
+            dataKey="value"
+            stroke="none"
+          >
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.fill} />
+            ))}
+          </Pie>
+          <Tooltip content={<PieTooltip />} />
+          <Legend
+            layout="horizontal"
+            verticalAlign="bottom"
+            align="center"
+            wrapperStyle={{ paddingTop: "20px" }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function GradientDefs() {
+  return (
+    <defs>
+      {AREA_GRADIENTS.map(({ id, color }) => (
+        <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor={color} stopOpacity={0.4} />
+          <stop offset="95%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      ))}
+    </defs>
+  );
+}
+
 export function DistributionTab({
   cargoDistribution,
   statusDistribution,
@@ -50,6 +126,8 @@ export function DistributionTab({
   weeklyTrend,
   trendLabel = "Weekly",
 }: DistributionTabProps) {
+  const trendKey = trendLabel.toLowerCase();
+
   return (
     <TabsContent value="distribution" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -65,33 +143,7 @@ export function DistributionTab({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={cargoDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={3}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {cargoDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<PieTooltip />} />
-                  <Legend
-                    layout="horizontal"
-                    verticalAlign="bottom"
-                    align="center"
-                    wrapperStyle={{ paddingTop: "20px" }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            <PieDistributionChart data={cargoDistribution} />
           </CardContent>
         </Card>
 
@@ -102,38 +154,10 @@ export function DistributionTab({
               <DocumentChartBarIcon className="h-5 w-5 text-emerald-500" />
               Status Distribution
             </CardTitle>
-            <CardDescription>
-              Current load status overview
-            </CardDescription>
+            <CardDescription>Current load status overview</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={3}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {statusDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<PieTooltip />} />
-                  <Legend
-                    layout="horizontal"
-                    verticalAlign="bottom"
-                    align="center"
-                    wrapperStyle={{ paddingTop: "20px" }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            <PieDistributionChart data={statusDistribution} />
           </CardContent>
         </Card>
       </div>
@@ -150,12 +174,12 @@ export function DistributionTab({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px]">
+          <div className={`h-[${CHART_HEIGHTS.bar}px]`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={topRoutes}
                 layout="vertical"
-                margin={{ top: 10, right: 30, left: 20, bottom: 10 }}
+                margin={CHART_MARGIN}
               >
                 <defs>
                   <linearGradient
@@ -171,7 +195,7 @@ export function DistributionTab({
                 </defs>
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  stroke="#e5e7eb"
+                  stroke={COLORS.grid}
                   opacity={0.4}
                   horizontal={true}
                   vertical={false}
@@ -180,15 +204,15 @@ export function DistributionTab({
                   type="number"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "#6b7280", fontSize: 12 }}
+                  tick={{ fill: COLORS.tick, fontSize: 12 }}
                 />
                 <YAxis
                   dataKey="route"
                   type="category"
-                  width={180}
+                  width={ROUTE_Y_AXIS_WIDTH}
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "#374151", fontSize: 11 }}
+                  tick={{ fill: COLORS.tickDark, fontSize: 11 }}
                 />
                 <Tooltip
                   content={<CustomTooltip />}
@@ -214,93 +238,20 @@ export function DistributionTab({
             {trendLabel} Load Trends
           </CardTitle>
           <CardDescription>
-            Load volumes and status breakdown over time ({trendLabel.toLowerCase()})
+            Load volumes and status breakdown over time ({trendKey})
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[350px]">
+          <div className={`h-[${CHART_HEIGHTS.area}px]`}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={weeklyTrend}
-                margin={{ top: 10, right: 30, left: 0, bottom: 10 }}
+                margin={AREA_CHART_MARGIN}
               >
-                <defs>
-                  <linearGradient
-                    id="scheduledGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="5%"
-                      stopColor="#3b82f6"
-                      stopOpacity={0.4}
-                    />
-                    <stop
-                      offset="95%"
-                      stopColor="#3b82f6"
-                      stopOpacity={0}
-                    />
-                  </linearGradient>
-                  <linearGradient
-                    id="transitGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="5%"
-                      stopColor="#f59e0b"
-                      stopOpacity={0.4}
-                    />
-                    <stop
-                      offset="95%"
-                      stopColor="#f59e0b"
-                      stopOpacity={0}
-                    />
-                  </linearGradient>
-                  <linearGradient
-                    id="deliveredGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="5%"
-                      stopColor="#22c55e"
-                      stopOpacity={0.4}
-                    />
-                    <stop
-                      offset="95%"
-                      stopColor="#22c55e"
-                      stopOpacity={0}
-                    />
-                  </linearGradient>
-                  <linearGradient
-                    id="pendingGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="5%"
-                      stopColor="#ef4444"
-                      stopOpacity={0.4}
-                    />
-                    <stop
-                      offset="95%"
-                      stopColor="#ef4444"
-                      stopOpacity={0}
-                    />
-                  </linearGradient>
-                </defs>
+                <GradientDefs />
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  stroke="#e5e7eb"
+                  stroke={COLORS.grid}
                   opacity={0.4}
                   vertical={false}
                 />
@@ -308,48 +259,27 @@ export function DistributionTab({
                   dataKey="week"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "#6b7280", fontSize: 11 }}
+                  tick={{ fill: COLORS.tick, fontSize: 11 }}
                   interval="preserveStartEnd"
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: "#6b7280", fontSize: 12 }}
+                  tick={{ fill: COLORS.tick, fontSize: 12 }}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ paddingTop: "10px" }} />
-                <Area
-                  type="monotone"
-                  dataKey="scheduled"
-                  name="Scheduled"
-                  stroke="#3b82f6"
-                  fill="url(#scheduledGradient)"
-                  strokeWidth={2}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="inTransit"
-                  name="In Transit"
-                  stroke="#f59e0b"
-                  fill="url(#transitGradient)"
-                  strokeWidth={2}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="delivered"
-                  name="Delivered"
-                  stroke="#22c55e"
-                  fill="url(#deliveredGradient)"
-                  strokeWidth={2}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="pending"
-                  name="Pending"
-                  stroke="#ef4444"
-                  fill="url(#pendingGradient)"
-                  strokeWidth={2}
-                />
+                {AREA_GRADIENTS.map(({ id, color, label }) => (
+                  <Area
+                    key={id}
+                    type="monotone"
+                    dataKey={label.toLowerCase().replace(/\s+/g, "")}
+                    name={label}
+                    stroke={color}
+                    fill={`url(#${id})`}
+                    strokeWidth={2}
+                  />
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           </div>
