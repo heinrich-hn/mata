@@ -106,6 +106,7 @@ interface Trip {
   starting_km?: number;
   ending_km?: number;
   departure_date?: string;
+  arrival_date?: string;
   costs?: CostEntry[];
   additional_costs?: AdditionalCost[];
   pod_verified?: boolean;
@@ -856,270 +857,276 @@ const ActiveTrips = ({
                                 </CollapsibleTrigger>
 
                                 <CollapsibleContent className="mt-1">
-                                  <div className="ml-10 border rounded-lg overflow-hidden bg-card">
-                                    <table className="w-full text-sm">
-                                      <thead>
-                                        <tr className="bg-muted/40 border-b">
-                                          <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[80px]">POD</th>
-                                          <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Route</th>
-                                          <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Driver</th>
-                                          <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Client</th>
-                                          <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[90px]">Date</th>
-                                          <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[80px]">Start KM</th>
-                                          <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[80px]">End KM</th>
-                                          <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[85px]">Distance</th>
-                                          <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[100px]">Revenue</th>
-                                          <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[100px]">Expenses</th>
-                                          <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[90px]">Profit</th>
-                                          <th className="text-center py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[60px]"></th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-border/50">
-                                        {fleetTrips.map((trip) => {
-                                          const profit = calculateProfit(trip);
-                                          const isDuplicate = duplicatePods.some(d => d.pod === trip.trip_number);
-                                          const needsAttention = trip.hasFlaggedCosts || trip.hasPendingCosts || trip.hasNoCosts;
-                                          const noRevenue = !trip.base_revenue || trip.base_revenue === 0;
-                                          const missingRevenue = noRevenue && !trip.zero_revenue_comment;
-                                          const hasZeroRevenueComment = noRevenue && !!trip.zero_revenue_comment;
-                                          const expenses = [...(trip.costs || []), ...(trip.additional_costs || [])].reduce((s, c) => s + (c.amount || 0), 0);
+                                  <div className="ml-4 border rounded-lg overflow-hidden bg-card">
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="bg-muted/40 border-b">
+                                            <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[80px]">POD</th>
+                                            <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Route</th>
+                                            <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Driver</th>
+                                            <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Client</th>
+                                            <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[90px]">Departure</th>
+                                            <th className="text-left py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[90px]">Arrival</th>
+                                            <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[80px]">Start KM</th>
+                                            <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[80px]">End KM</th>
+                                            <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[85px]">Distance</th>
+                                            <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[100px]">Revenue</th>
+                                            <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[100px]">Expenses</th>
+                                            <th className="text-right py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[90px]">Profit</th>
+                                            <th className="text-center py-2 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-[60px]"></th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border/50">
+                                          {fleetTrips.map((trip) => {
+                                            const profit = calculateProfit(trip);
+                                            const isDuplicate = duplicatePods.some(d => d.pod === trip.trip_number);
+                                            const needsAttention = trip.hasFlaggedCosts || trip.hasPendingCosts || trip.hasNoCosts;
+                                            const noRevenue = !trip.base_revenue || trip.base_revenue === 0;
+                                            const missingRevenue = noRevenue && !trip.zero_revenue_comment;
+                                            const hasZeroRevenueComment = noRevenue && !!trip.zero_revenue_comment;
+                                            const expenses = [...(trip.costs || []), ...(trip.additional_costs || [])].reduce((s, c) => s + (c.amount || 0), 0);
 
-                                          return (
-                                            <React.Fragment key={trip.id}>
-                                              <tr
-                                                className={`group transition-colors cursor-pointer ${isDuplicate ? 'bg-destructive/5 hover:bg-destructive/10' :
-                                                  missingRevenue ? 'bg-amber-50/40 hover:bg-amber-50/70' :
-                                                    needsAttention ? 'bg-amber-50/40 hover:bg-amber-50/70' :
-                                                      'hover:bg-muted/40'
-                                                  }`}
-                                                onClick={() => onView(trip)}
-                                              >
-                                                <td className="py-2.5 px-3">
-                                                  <div className="flex items-center gap-1.5">
-                                                    <span className="font-semibold text-primary tabular-nums">{trip.trip_number}</span>
-                                                    {isDuplicate && (
-                                                      <Tooltip>
-                                                        <TooltipTrigger><AlertTriangle className="h-3 w-3 text-destructive shrink-0" /></TooltipTrigger>
-                                                        <TooltipContent><p>Duplicate POD</p></TooltipContent>
-                                                      </Tooltip>
-                                                    )}
-                                                    {needsAttention && (
-                                                      <Tooltip>
-                                                        <TooltipTrigger>
-                                                          <span className="relative flex h-2.5 w-2.5 shrink-0">
-                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-                                                          </span>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                          <p>{trip.hasFlaggedCosts ? `${trip.flaggedCostCount} flagged expense${trip.flaggedCostCount === 1 ? '' : 's'}` : trip.hasPendingCosts ? `${trip.pendingCostCount} unverified expense${trip.pendingCostCount === 1 ? '' : 's'}` : 'No costs recorded'}</p>
-                                                        </TooltipContent>
-                                                      </Tooltip>
-                                                    )}
-                                                  </div>
-                                                </td>
-                                                <td className="py-2.5 px-3">
-                                                  <div className="flex items-center gap-1.5 min-w-0">
-                                                    <span className="font-medium truncate max-w-[180px]">{trip.route || '—'}</span>
-                                                    {missingRevenue && (
-                                                      <Tooltip>
-                                                        <TooltipTrigger>
-                                                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1 py-0.5 shrink-0">
-                                                            <DollarSign className="h-2.5 w-2.5" />No revenue
-                                                          </span>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>Base revenue not set</p></TooltipContent>
-                                                      </Tooltip>
-                                                    )}
-                                                    {hasZeroRevenueComment && (
-                                                      <Tooltip>
-                                                        <TooltipTrigger>
-                                                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-700 bg-blue-100 rounded px-1 py-0.5 shrink-0">
-                                                            <DollarSign className="h-2.5 w-2.5" />$0
-                                                          </span>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>Zero revenue: {trip.zero_revenue_comment}</p></TooltipContent>
-                                                      </Tooltip>
-                                                    )}
-                                                    {trip.hasFlaggedCosts && (
-                                                      <Tooltip>
-                                                        <TooltipTrigger>
-                                                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1 py-0.5 shrink-0">
-                                                            <AlertTriangle className="h-2.5 w-2.5" />{trip.flaggedCostCount}
-                                                          </span>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>{trip.flaggedCostCount} cost{trip.flaggedCostCount === 1 ? '' : 's'} flagged</p></TooltipContent>
-                                                      </Tooltip>
-                                                    )}
-                                                    {trip.hasPendingCosts && !trip.hasFlaggedCosts && (
-                                                      <Tooltip>
-                                                        <TooltipTrigger>
-                                                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-700 bg-blue-100 rounded px-1 py-0.5 shrink-0">
-                                                            <RefreshCw className="h-2.5 w-2.5" />{trip.pendingCostCount}
-                                                          </span>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>{trip.pendingCostCount} cost{trip.pendingCostCount === 1 ? '' : 's'} pending</p></TooltipContent>
-                                                      </Tooltip>
-                                                    )}
-                                                    {trip.hasNoCosts && !missingRevenue && (
-                                                      <Tooltip>
-                                                        <TooltipTrigger>
-                                                          <span className="inline-flex items-center text-[10px] font-medium text-rose-700 bg-rose-100 rounded px-1 py-0.5 shrink-0">!</span>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>No costs recorded</p></TooltipContent>
-                                                      </Tooltip>
-                                                    )}
-                                                  </div>
-                                                </td>
-                                                <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[120px]">{trip.driver_name || '—'}</td>
-                                                <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[120px]">
-                                                  <div className="flex items-center gap-1.5">
-                                                    <span className="truncate">{trip.client_name || '—'}</span>
-                                                    {trip.payment_status && (
-                                                      <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${trip.payment_status === 'paid' ? 'bg-emerald-500' :
-                                                        trip.payment_status === 'partial' ? 'bg-amber-500' :
-                                                          'bg-slate-400'
-                                                        }`} title={trip.payment_status === 'paid' ? 'Paid' : trip.payment_status === 'partial' ? 'Partial' : 'Unpaid'} />
-                                                    )}
-                                                  </div>
-                                                </td>
-                                                <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs">
-                                                  {trip.departure_date ? format(parseISO(trip.departure_date), 'dd MMM') : '—'}
-                                                  {trip.daysInProgress && trip.daysInProgress > 7 && (
-                                                    <span className={`ml-1 text-[10px] font-medium ${trip.daysInProgress > 14 ? 'text-amber-600' : 'text-blue-600'}`}>
-                                                      {trip.daysInProgress}d
-                                                    </span>
-                                                  )}
-                                                </td>
-                                                <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
-                                                  <div className="flex items-center justify-end gap-1">
-                                                    {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
-                                                    {kmMismatches.has(trip.id) && (
-                                                      <Tooltip>
-                                                        <TooltipTrigger>
-                                                          <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent side="left" className="max-w-xs">
-                                                          <p className="font-medium">KM Mismatch</p>
-                                                          <p className="text-xs">Previous trip {kmMismatches.get(trip.id)!.previousTripNumber} ended at {kmMismatches.get(trip.id)!.previousEndingKm.toLocaleString()} km. Gap: {kmMismatches.get(trip.id)!.gap > 0 ? '+' : ''}{kmMismatches.get(trip.id)!.gap.toLocaleString()} km</p>
-                                                        </TooltipContent>
-                                                      </Tooltip>
-                                                    )}
-                                                  </div>
-                                                </td>
-                                                <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
-                                                  {trip.ending_km ? trip.ending_km.toLocaleString() : '—'}
-                                                </td>
-                                                <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
-                                                  {(() => {
-                                                    const hasNegativeDist = (trip.distance_km !== undefined && trip.distance_km !== null && trip.distance_km < 0) || (trip.starting_km !== undefined && trip.starting_km !== null && trip.ending_km !== undefined && trip.ending_km !== null && trip.ending_km < trip.starting_km);
-                                                    return hasNegativeDist ? (
-                                                      <div className="flex items-center justify-end gap-1">
-                                                        <span className="text-destructive font-medium">{trip.distance_km !== undefined && trip.distance_km !== null ? trip.distance_km.toLocaleString() : '—'}</span>
+                                            return (
+                                              <React.Fragment key={trip.id}>
+                                                <tr
+                                                  className={`group transition-colors cursor-pointer ${isDuplicate ? 'bg-destructive/5 hover:bg-destructive/10' :
+                                                    missingRevenue ? 'bg-amber-50/40 hover:bg-amber-50/70' :
+                                                      needsAttention ? 'bg-amber-50/40 hover:bg-amber-50/70' :
+                                                        'hover:bg-muted/40'
+                                                    }`}
+                                                  onClick={() => onView(trip)}
+                                                >
+                                                  <td className="py-2.5 px-3">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className="font-semibold text-primary tabular-nums">{trip.trip_number}</span>
+                                                      {isDuplicate && (
+                                                        <Tooltip>
+                                                          <TooltipTrigger><AlertTriangle className="h-3 w-3 text-destructive shrink-0" /></TooltipTrigger>
+                                                          <TooltipContent><p>Duplicate POD</p></TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                      {needsAttention && (
                                                         <Tooltip>
                                                           <TooltipTrigger>
-                                                            <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                                                            <span className="relative flex h-2.5 w-2.5 shrink-0">
+                                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                                                            </span>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent>
+                                                            <p>{trip.hasFlaggedCosts ? `${trip.flaggedCostCount} flagged expense${trip.flaggedCostCount === 1 ? '' : 's'}` : trip.hasPendingCosts ? `${trip.pendingCostCount} unverified expense${trip.pendingCostCount === 1 ? '' : 's'}` : 'No costs recorded'}</p>
+                                                          </TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                  <td className="py-2.5 px-3">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                      <span className="font-medium truncate max-w-[180px]">{trip.route || '—'}</span>
+                                                      {missingRevenue && (
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1 py-0.5 shrink-0">
+                                                              <DollarSign className="h-2.5 w-2.5" />No revenue
+                                                            </span>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent><p>Base revenue not set</p></TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                      {hasZeroRevenueComment && (
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-700 bg-blue-100 rounded px-1 py-0.5 shrink-0">
+                                                              <DollarSign className="h-2.5 w-2.5" />$0
+                                                            </span>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent><p>Zero revenue: {trip.zero_revenue_comment}</p></TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                      {trip.hasFlaggedCosts && (
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1 py-0.5 shrink-0">
+                                                              <AlertTriangle className="h-2.5 w-2.5" />{trip.flaggedCostCount}
+                                                            </span>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent><p>{trip.flaggedCostCount} cost{trip.flaggedCostCount === 1 ? '' : 's'} flagged</p></TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                      {trip.hasPendingCosts && !trip.hasFlaggedCosts && (
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-700 bg-blue-100 rounded px-1 py-0.5 shrink-0">
+                                                              <RefreshCw className="h-2.5 w-2.5" />{trip.pendingCostCount}
+                                                            </span>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent><p>{trip.pendingCostCount} cost{trip.pendingCostCount === 1 ? '' : 's'} pending</p></TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                      {trip.hasNoCosts && !missingRevenue && (
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <span className="inline-flex items-center text-[10px] font-medium text-rose-700 bg-rose-100 rounded px-1 py-0.5 shrink-0">!</span>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent><p>No costs recorded</p></TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[120px]">{trip.driver_name || '—'}</td>
+                                                  <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[120px]">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className="truncate">{trip.client_name || '—'}</span>
+                                                      {trip.payment_status && (
+                                                        <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${trip.payment_status === 'paid' ? 'bg-emerald-500' :
+                                                          trip.payment_status === 'partial' ? 'bg-amber-500' :
+                                                            'bg-slate-400'
+                                                          }`} title={trip.payment_status === 'paid' ? 'Paid' : trip.payment_status === 'partial' ? 'Partial' : 'Unpaid'} />
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs whitespace-nowrap">
+                                                    {trip.departure_date ? format(parseISO(trip.departure_date), 'dd MMM yyyy') : '—'}
+                                                    {trip.daysInProgress && trip.daysInProgress > 7 && (
+                                                      <span className={`ml-1 text-[10px] font-medium ${trip.daysInProgress > 14 ? 'text-amber-600' : 'text-blue-600'}`}>
+                                                        {trip.daysInProgress}d
+                                                      </span>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs whitespace-nowrap">
+                                                    {trip.arrival_date ? format(parseISO(trip.arrival_date), 'dd MMM yyyy') : '—'}
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                      {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
+                                                      {kmMismatches.has(trip.id) && (
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
                                                           </TooltipTrigger>
                                                           <TooltipContent side="left" className="max-w-xs">
-                                                            <p className="font-medium">Negative Distance</p>
-                                                            <p className="text-xs">Ending KM is less than starting KM. Please correct the odometer readings.</p>
+                                                            <p className="font-medium">KM Mismatch</p>
+                                                            <p className="text-xs">Previous trip {kmMismatches.get(trip.id)!.previousTripNumber} ended at {kmMismatches.get(trip.id)!.previousEndingKm.toLocaleString()} km. Gap: {kmMismatches.get(trip.id)!.gap > 0 ? '+' : ''}{kmMismatches.get(trip.id)!.gap.toLocaleString()} km</p>
+                                                          </TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
+                                                    {trip.ending_km ? trip.ending_km.toLocaleString() : '—'}
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
+                                                    {(() => {
+                                                      const hasNegativeDist = (trip.distance_km !== undefined && trip.distance_km !== null && trip.distance_km < 0) || (trip.starting_km !== undefined && trip.starting_km !== null && trip.ending_km !== undefined && trip.ending_km !== null && trip.ending_km < trip.starting_km);
+                                                      return hasNegativeDist ? (
+                                                        <div className="flex items-center justify-end gap-1">
+                                                          <span className="text-destructive font-medium">{trip.distance_km !== undefined && trip.distance_km !== null ? trip.distance_km.toLocaleString() : '—'}</span>
+                                                          <Tooltip>
+                                                            <TooltipTrigger>
+                                                              <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="left" className="max-w-xs">
+                                                              <p className="font-medium">Negative Distance</p>
+                                                              <p className="text-xs">Ending KM is less than starting KM. Please correct the odometer readings.</p>
+                                                            </TooltipContent>
+                                                          </Tooltip>
+                                                        </div>
+                                                      ) : (trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '—');
+                                                    })()}
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-right tabular-nums font-medium">
+                                                    {missingRevenue ? (
+                                                      <div className="flex items-center justify-end gap-1">
+                                                        <span className="text-amber-600">—</span>
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <AlertTriangle className="h-3 w-3 text-amber-500" />
+                                                          </TooltipTrigger>
+                                                          <TooltipContent>
+                                                            <p>No base revenue set</p>
                                                           </TooltipContent>
                                                         </Tooltip>
                                                       </div>
-                                                    ) : (trip.distance_km ? `${trip.distance_km.toLocaleString()}` : '—');
-                                                  })()}
-                                                </td>
-                                                <td className="py-2.5 px-3 text-right tabular-nums font-medium">
-                                                  {missingRevenue ? (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                      <span className="text-amber-600">—</span>
+                                                    ) : hasZeroRevenueComment ? (
                                                       <Tooltip>
                                                         <TooltipTrigger>
-                                                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                                                          <span className="text-blue-600">$0</span>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
-                                                          <p>No base revenue set</p>
+                                                          <p className="font-medium">Zero revenue (acknowledged)</p>
+                                                          <p className="text-xs">{trip.zero_revenue_comment}</p>
                                                         </TooltipContent>
                                                       </Tooltip>
-                                                    </div>
-                                                  ) : hasZeroRevenueComment ? (
-                                                    <Tooltip>
-                                                      <TooltipTrigger>
-                                                        <span className="text-blue-600">$0</span>
-                                                      </TooltipTrigger>
-                                                      <TooltipContent>
-                                                        <p className="font-medium">Zero revenue (acknowledged)</p>
-                                                        <p className="text-xs">{trip.zero_revenue_comment}</p>
-                                                      </TooltipContent>
-                                                    </Tooltip>
-                                                  ) : (
-                                                    <span className="inline-flex flex-col items-end gap-0.5">
-                                                      <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
-                                                      <AdditionalRevenueBadge
-                                                        tripId={trip.id}
-                                                        amount={trip.additional_revenue || 0}
-                                                        currency={trip.revenue_currency}
-                                                        reason={trip.additional_revenue_reason}
-                                                        verified={trip.additional_revenue_verified}
-                                                        verifiedBy={trip.additional_revenue_verified_by}
-                                                        verifiedAt={trip.additional_revenue_verified_at}
-                                                        onChanged={onRefresh}
-                                                      />
-                                                    </span>
-                                                  )}
-                                                </td>
-                                                <td className="py-2.5 px-3 text-right tabular-nums font-medium text-rose-600 cursor-pointer hover:underline" onClick={(e) => toggleExpenseExpansion(trip.id, e)} title="Click to manage expenses">
-                                                  {expenses > 0 ? formatCurrency(expenses) : '—'}
-                                                </td>
-                                                <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${profit?.amount && profit.amount >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                                                  }`}>
-                                                  {profit ? formatCurrency(profit.amount, profit.currency) : '—'}
-                                                </td>
-                                                <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                                                  <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <MoreVertical className="h-3.5 w-3.5" />
-                                                      </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="w-48">
-                                                      <DropdownMenuItem onClick={() => onView(trip)} className="gap-2 text-xs">
-                                                        <Eye className="h-3.5 w-3.5" /> View Details
-                                                      </DropdownMenuItem>
-                                                      <DropdownMenuItem
-                                                        onClick={() => handleEdit(trip)}
-                                                        className="gap-2 text-xs"
-                                                        disabled={isResolvingAlert[trip.id]}
-                                                      >
-                                                        <Edit className="h-3.5 w-3.5" />
-                                                        {isResolvingAlert[trip.id] ? 'Resolving Alert...' : 'Edit Trip'}
-                                                      </DropdownMenuItem>
-                                                      <DropdownMenuItem onClick={(e) => toggleExpenseExpansion(trip.id, e)} className="gap-2 text-xs text-violet-600">
-                                                        <DollarSign className="h-3.5 w-3.5" /> {expandedExpenses.has(trip.id) ? 'Hide' : 'Manage'} Expenses
-                                                      </DropdownMenuItem>
-                                                      <DropdownMenuItem onClick={() => handleShareTrip(trip)} className="gap-2 text-xs text-green-700">
-                                                        <RouteIcon className="h-3.5 w-3.5" /> Share via WhatsApp
-                                                      </DropdownMenuItem>
-                                                      <DropdownMenuSeparator />
-                                                      <DropdownMenuItem onClick={() => handleDelete(trip.id)} className="gap-2 text-xs text-destructive">
-                                                        <Trash2 className="h-3.5 w-3.5" /> Delete
-                                                      </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                  </DropdownMenu>
-                                                </td>
-                                              </tr>
-                                              {expandedExpenses.has(trip.id) && (
-                                                <tr>
-                                                  <td colSpan={12} className="p-0">
-                                                    <TripExpenseInline tripId={trip.id} tripNumber={trip.trip_number} route={trip.route} />
+                                                    ) : (
+                                                      <span className="inline-flex flex-col items-end gap-0.5">
+                                                        <span className="text-emerald-600">{formatCurrency((trip.base_revenue || 0) + (trip.additional_revenue || 0), trip.revenue_currency)}</span>
+                                                        <AdditionalRevenueBadge
+                                                          tripId={trip.id}
+                                                          amount={trip.additional_revenue || 0}
+                                                          currency={trip.revenue_currency}
+                                                          reason={trip.additional_revenue_reason}
+                                                          verified={trip.additional_revenue_verified}
+                                                          verifiedBy={trip.additional_revenue_verified_by}
+                                                          verifiedAt={trip.additional_revenue_verified_at}
+                                                          onChanged={onRefresh}
+                                                        />
+                                                      </span>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-right tabular-nums font-medium text-rose-600 cursor-pointer hover:underline" onClick={(e) => toggleExpenseExpansion(trip.id, e)} title="Click to manage expenses">
+                                                    {expenses > 0 ? formatCurrency(expenses) : '—'}
+                                                  </td>
+                                                  <td className={`py-2.5 px-3 text-right tabular-nums font-semibold ${profit?.amount && profit.amount >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                                                    }`}>
+                                                    {profit ? formatCurrency(profit.amount, profit.currency) : '—'}
+                                                  </td>
+                                                  <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    <DropdownMenu>
+                                                      <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                          <MoreVertical className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                      </DropdownMenuTrigger>
+                                                      <DropdownMenuContent align="end" className="w-48">
+                                                        <DropdownMenuItem onClick={() => onView(trip)} className="gap-2 text-xs">
+                                                          <Eye className="h-3.5 w-3.5" /> View Details
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                          onClick={() => handleEdit(trip)}
+                                                          className="gap-2 text-xs"
+                                                          disabled={isResolvingAlert[trip.id]}
+                                                        >
+                                                          <Edit className="h-3.5 w-3.5" />
+                                                          {isResolvingAlert[trip.id] ? 'Resolving Alert...' : 'Edit Trip'}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={(e) => toggleExpenseExpansion(trip.id, e)} className="gap-2 text-xs text-violet-600">
+                                                          <DollarSign className="h-3.5 w-3.5" /> {expandedExpenses.has(trip.id) ? 'Hide' : 'Manage'} Expenses
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleShareTrip(trip)} className="gap-2 text-xs text-green-700">
+                                                          <RouteIcon className="h-3.5 w-3.5" /> Share via WhatsApp
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem onClick={() => handleDelete(trip.id)} className="gap-2 text-xs text-destructive">
+                                                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                                                        </DropdownMenuItem>
+                                                      </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                   </td>
                                                 </tr>
-                                              )}
-                                            </React.Fragment>
-                                          );
-                                        })}
-                                      </tbody>
-                                    </table>
+                                                {expandedExpenses.has(trip.id) && (
+                                                  <tr>
+                                                    <td colSpan={12} className="p-0">
+                                                      <TripExpenseInline tripId={trip.id} tripNumber={trip.trip_number} route={trip.route} />
+                                                    </td>
+                                                  </tr>
+                                                )}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
                                   </div>
                                 </CollapsibleContent>
                               </Collapsible>
@@ -1146,7 +1153,8 @@ const ActiveTrips = ({
                     <th className="text-left py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Driver</th>
                     <th className="text-left py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Client</th>
                     <th className="text-left py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Route</th>
-                    <th className="text-left py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                    <th className="text-left py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Departure</th>
+                    <th className="text-left py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Arrival</th>
                     <th className="text-right py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Start KM</th>
                     <th className="text-right py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">End KM</th>
                     <th className="text-right py-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Distance</th>
@@ -1241,8 +1249,11 @@ const ActiveTrips = ({
                               )}
                             </div>
                           </td>
-                          <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs">
-                            {trip.departure_date ? format(parseISO(trip.departure_date), 'dd MMM') : '—'}
+                          <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs whitespace-nowrap">
+                            {trip.departure_date ? format(parseISO(trip.departure_date), 'dd MMM yyyy') : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs whitespace-nowrap">
+                            {trip.arrival_date ? format(parseISO(trip.arrival_date), 'dd MMM yyyy') : '—'}
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
                             <div className="flex items-center justify-end gap-1">

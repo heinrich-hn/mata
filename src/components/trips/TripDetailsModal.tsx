@@ -30,6 +30,7 @@ import EditTripDialog from './EditTripDialog';
 import FlagResolutionModal from './FlagResolutionModal';
 import TripCostManager from './TripCostManager';
 import TripCycleTrackerView from './TripCycleTrackerView';
+import TripOrdersTab from './TripOrdersTab';
 import { evaluateKmSchedules, updateVehicleOdometer } from '@/lib/maintenanceKmTracking';
 import { useTripKmValidation } from '@/hooks/useTripKmValidation';
 import { usePreviousTripDetails } from '@/hooks/usePreviousTripDetails';
@@ -490,6 +491,7 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
                 ) : null}
               </TabsTrigger>
               <TabsTrigger value="system-costs">System Costs</TabsTrigger>
+              <TabsTrigger value="orders">Orders</TabsTrigger>
               <TabsTrigger value="cycle-tracker">
                 360° Tracker
               </TabsTrigger>
@@ -769,6 +771,10 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
 
             <TabsContent value="system-costs" className="space-y-4">
               <SystemCostsTab trip={trip} onGenerated={fetchCosts} />
+            </TabsContent>
+
+            <TabsContent value="orders" className="space-y-4">
+              <TripOrdersTab tripId={trip.id} />
             </TabsContent>
 
             <TabsContent value="cycle-tracker" className="space-y-4">

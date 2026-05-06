@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CycleTrackerForm } from "@/components/cycle-tracker-form";
+import { TripOrdersSection } from "@/components/trip-orders-section";
 
 import type { CostCategory } from "@/constants/cost-categories";
 import { COST_CATEGORIES, HIGH_RISK_CATEGORIES } from "@/constants/cost-categories";
@@ -717,6 +718,9 @@ export function TripDetailSheet({ trip, open, onOpenChange }: TripDetailSheetPro
                 {tripSaved ? "Saved!" : "Save Trip Info"}
               </Button>
             </div>
+
+            {/* ─── Orders & Documents Section ─────────────── */}
+            <TripOrdersSection tripId={trip.id} enabled={open} />
 
             {/* ─── Expenses Section ─────────────────────────── */}
             <div className="space-y-3">

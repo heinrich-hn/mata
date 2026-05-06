@@ -1,65 +1,59 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import
-  {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-    CommandSeparator,
-  } from '@/components/ui/command';
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-  } from '@/components/ui/dialog';
+import {
+Command,
+CommandEmpty,
+CommandGroup,
+CommandInput,
+CommandItem,
+CommandList,
+CommandSeparator,
+} from '@/components/ui/command';
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogFooter,
+DialogHeader,
+DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import
-  {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-  } from '@/components/ui/popover';
+import {
+Popover,
+PopoverContent,
+PopoverTrigger,
+} from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import
-  {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from '@/components/ui/select';
+import {
+Select,
+SelectContent,
+SelectItem,
+SelectTrigger,
+SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import
-  {
-    formatTotalCost,
-    getMainCategories,
-    getSubCategories,
-    RouteExpenseConfig,
-    RouteExpenseItem,
-    useAddRouteExpenseConfig,
-    useRoutePredefinedExpenses,
-    useUpdateRouteExpenseConfig
-  } from '@/hooks/useRoutePredefinedExpenses';
-import
-  {
-    DbRouteTollCost,
-    useAddRouteTollCost,
-    useRouteTollCosts,
-    useUpdateRouteTollCost,
-  } from '@/hooks/useRouteTollCosts';
+import {
+formatTotalCost,
+getMainCategories,
+getSubCategories,
+RouteExpenseConfig,
+RouteExpenseItem,
+useAddRouteExpenseConfig,
+useRoutePredefinedExpenses,
+useUpdateRouteExpenseConfig
+} from '@/hooks/useRoutePredefinedExpenses';
+import {
+DbRouteTollCost,
+useAddRouteTollCost,
+useRouteTollCosts,
+useUpdateRouteTollCost,
+} from '@/hooks/useRouteTollCosts';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Edit2, Loader2, Plus, Route, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // Empty expense item template
 const emptyExpenseItem: Omit<RouteExpenseItem, 'id' | 'route_config_id'> = {
@@ -170,7 +164,30 @@ export const RouteSelect = ({
     }
   }, [editingRoute, predefinedExpenses]);
 
-  const selectedRoute = routes.find((r) => r.route === value);
+  // Merge toll-cost routes with routes that only exist as predefined expense configs
+  // (created via the Operational tab "Predefined Routes" section). Without this, those
+  // routes would not be selectable in trip dialogs.
+  const mergedRoutes = useMemo<DbRouteTollCost[]>(() => {
+    const byName = new Map<string, DbRouteTollCost>();
+    routes.forEach((r) => byName.set(r.route, r));
+    predefinedExpenses.forEach((c) => {
+      if (!byName.has(c.route)) {
+        byName.set(c.route, {
+          id: c.id,
+          route: c.route,
+          toll_fee: 0,
+          currency: c.rate_currency || 'USD',
+          description: c.description ?? null,
+          is_active: c.is_active,
+          created_at: c.created_at ?? '',
+          updated_at: c.updated_at ?? '',
+        } as DbRouteTollCost);
+      }
+    });
+    return Array.from(byName.values()).sort((a, b) => a.route.localeCompare(b.route));
+  }, [routes, predefinedExpenses]);
+
+  const selectedRoute = mergedRoutes.find((r) => r.route === value);
 
   // Get predefined expenses for selected route (for future use)
   const _selectedRouteExpenses = predefinedExpenses.find(c => c.route === value)?.expenses || [];
@@ -409,7 +426,7 @@ export const RouteSelect = ({
                 </div>
               </CommandEmpty>
               <CommandGroup heading="Available Routes">
-                {routes.map((route) => (
+                {mergedRoutes.map((route) => (
                   <CommandItem
                     key={route.id}
                     value={route.route}
