@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,9 +41,11 @@ const MoveTyreToBayDialog = ({ open, onOpenChange, tyre, onMoved }: MoveTyreToBa
     const [loading, setLoading] = useState(false);
     const [destination, setDestination] = useState<BayPosition>("holding-bay");
     const [notes, setNotes] = useState("");
+    const [newTreadDepth, setNewTreadDepth] = useState<string>("");
 
     const currentPosition = tyre?.position || "holding-bay";
     const currentLabel = BAY_LABELS[currentPosition] || "Holding Bay";
+    const isFromRetreadBay = currentPosition === "retread-bay";
 
     // Filter out current position from destinations
     const availableDestinations = DESTINATIONS.filter(d => {
@@ -56,6 +59,7 @@ const MoveTyreToBayDialog = ({ open, onOpenChange, tyre, onMoved }: MoveTyreToBa
     useEffect(() => {
         if (tyre && open) {
             setNotes("");
+            setNewTreadDepth("");
             // Default to first available destination
             const current = tyre.position || "holding-bay";
             const first = DESTINATIONS.find(d => {
@@ -71,12 +75,39 @@ const MoveTyreToBayDialog = ({ open, onOpenChange, tyre, onMoved }: MoveTyreToBa
 
         setLoading(true);
         try {
+            const updatePayload: {
+                position: BayPosition;
+                updated_at: string;
+                current_tread_depth?: number;
+            } = {
+                position: destination,
+                updated_at: new Date().toISOString(),
+            };
+
+            // If moving out of the retread bay, allow updating the tread depth
+            // to reflect the newly retreaded tyre.
+            const treadDepthApplies =
+                isFromRetreadBay &&
+                destination !== "scrap" &&
+                destination !== "sold" &&
+                newTreadDepth.trim() !== "";
+            if (treadDepthApplies) {
+                const parsed = parseFloat(newTreadDepth);
+                if (!Number.isFinite(parsed) || parsed < 0) {
+                    toast({
+                        title: "Invalid tread depth",
+                        description: "Enter a valid tread depth in millimetres.",
+                        variant: "destructive",
+                    });
+                    setLoading(false);
+                    return;
+                }
+                updatePayload.current_tread_depth = parsed;
+            }
+
             const { error } = await supabase
                 .from("tyres")
-                .update({
-                    position: destination,
-                    updated_at: new Date().toISOString(),
-                })
+                .update(updatePayload)
                 .eq("id", tyre.id);
 
             if (error) throw error;
@@ -84,6 +115,11 @@ const MoveTyreToBayDialog = ({ open, onOpenChange, tyre, onMoved }: MoveTyreToBa
             // Create position history entry
             const action = destination === "scrap" ? "scrapped" :
                 destination === "sold" ? "sold" : "moved_to_bay";
+
+            const baseNote = notes.trim() || `Tyre moved from ${currentLabel} to ${BAY_LABELS[destination]}`;
+            const treadNote = treadDepthApplies
+                ? ` Tread depth updated to ${updatePayload.current_tread_depth}mm after retread.`
+                : "";
 
             await supabase.from("tyre_position_history").insert({
                 tyre_id: tyre.id,
@@ -94,7 +130,7 @@ const MoveTyreToBayDialog = ({ open, onOpenChange, tyre, onMoved }: MoveTyreToBa
                 to_position: destination,
                 km_reading: null,
                 performed_by: "System",
-                notes: notes.trim() || `Tyre moved from ${currentLabel} to ${BAY_LABELS[destination]}`,
+                notes: `${baseNote}${treadNote}`,
             });
 
             toast({
@@ -164,6 +200,24 @@ const MoveTyreToBayDialog = ({ open, onOpenChange, tyre, onMoved }: MoveTyreToBa
                             rows={2}
                         />
                     </div>
+
+                    {isFromRetreadBay && destination !== "scrap" && destination !== "sold" && (
+                        <div className="space-y-2">
+                            <Label htmlFor="new-tread-depth">New Tread Depth (mm)</Label>
+                            <Input
+                                id="new-tread-depth"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value={newTreadDepth}
+                                onChange={(e) => setNewTreadDepth(e.target.value)}
+                                placeholder={tyre.current_tread_depth != null ? `Current: ${tyre.current_tread_depth}mm` : "e.g. 18"}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Leave blank to keep the existing value. Update this to record the actual mm of tread after retreading.
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 <DialogFooter>

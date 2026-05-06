@@ -42,6 +42,7 @@ const InstallBayTyreToVehicleDialog = ({
         installationDate: new Date().toISOString().slice(0, 16),
         installerName: "",
         notes: "",
+        newTreadDepth: "",
     });
 
     const [availablePositions, setAvailablePositions] = useState<string[]>([]);
@@ -181,17 +182,41 @@ const InstallBayTyreToVehicleDialog = ({
             }
 
             // 1. Update the existing tyre record - reassign to vehicle
+            const tyreUpdate: {
+                current_fleet_position: string;
+                position: string;
+                installation_date: string;
+                installation_km: number;
+                installer_name: string;
+                notes: string | null;
+                updated_at: string;
+                current_tread_depth?: number;
+            } = {
+                current_fleet_position: fleetPosition,
+                position: formData.position,
+                installation_date: formData.installationDate,
+                installation_km: installationReading,
+                installer_name: formData.installerName,
+                notes: formData.notes || tyre.notes,
+                updated_at: new Date().toISOString(),
+            };
+
+            // If this tyre is coming from the retread bay, allow the installer
+            // to record the actual tread depth after retreading.
+            const isFromRetreadBay = tyre.position === "retread-bay";
+            let updatedTreadDepth: number | null = null;
+            if (isFromRetreadBay && formData.newTreadDepth.trim() !== "") {
+                const parsed = parseFloat(formData.newTreadDepth);
+                if (!Number.isFinite(parsed) || parsed < 0) {
+                    throw new Error("Enter a valid tread depth in millimetres.");
+                }
+                tyreUpdate.current_tread_depth = parsed;
+                updatedTreadDepth = parsed;
+            }
+
             const { error: tyreUpdateError } = await supabase
                 .from("tyres")
-                .update({
-                    current_fleet_position: fleetPosition,
-                    position: formData.position,
-                    installation_date: formData.installationDate,
-                    installation_km: installationReading,
-                    installer_name: formData.installerName,
-                    notes: formData.notes || tyre.notes,
-                    updated_at: new Date().toISOString(),
-                })
+                .update(tyreUpdate)
                 .eq("id", tyre.id);
 
             if (tyreUpdateError) throw tyreUpdateError;
@@ -248,7 +273,7 @@ const InstallBayTyreToVehicleDialog = ({
                 event_date: formData.installationDate,
                 fleet_position: fleetPosition,
                 km_reading: installationReading,
-                tread_depth_at_event: tyre.current_tread_depth,
+                tread_depth_at_event: updatedTreadDepth ?? tyre.current_tread_depth,
                 notes: `Reinstalled from ${previousLocation} to ${fleetPosition}. Installer: ${formData.installerName}`,
                 performed_by: formData.installerName,
             });
@@ -282,6 +307,7 @@ const InstallBayTyreToVehicleDialog = ({
             installationDate: new Date().toISOString().slice(0, 16),
             installerName: "",
             notes: "",
+            newTreadDepth: "",
         });
         setShowConfirmation(false);
     };
@@ -415,6 +441,24 @@ const InstallBayTyreToVehicleDialog = ({
                                 rows={2}
                             />
                         </div>
+
+                        {tyre.position === "retread-bay" && (
+                            <div className="space-y-2">
+                                <Label htmlFor="new-tread-depth">New Tread Depth (mm) — after retread</Label>
+                                <Input
+                                    id="new-tread-depth"
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    value={formData.newTreadDepth}
+                                    onChange={(e) => handleInputChange("newTreadDepth", e.target.value)}
+                                    placeholder={tyre.current_tread_depth != null ? `Current: ${tyre.current_tread_depth}mm` : "e.g. 18"}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Leave blank to keep the existing value. Update this to record the actual mm of tread after retreading.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <Card className="bg-green-50 dark:bg-green-950/20 border-green-200">
