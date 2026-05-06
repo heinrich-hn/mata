@@ -1356,129 +1356,149 @@ const JobCards = () => {
               </div>
             </div>
 
-            {/* Active Job Cards (Pending + In Progress) */}
-            <section className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
+            {/* Active vs Completed sub-tabs */}
+            <Tabs defaultValue="active" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="active" className="gap-2">
                   <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
-                  <h2 className="text-base font-semibold tracking-tight text-foreground">Active</h2>
-                  <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
-                    {allActiveCards.length}
-                  </span>
-                </div>
-                {allActiveCards.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                      onClick={() => setClosedActiveFleets(new Set())}
-                    >
-                      Expand all
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                      onClick={() => {
-                        const allFleets = new Set<string>();
-                        const grouped = groupCardsByCategory(allActiveCards);
-                        grouped.forEach((fleetMap) => {
-                          fleetMap.forEach((_, fleetKey) => {
-                            allFleets.add(fleetKey);
-                          });
-                        });
-                        setClosedActiveFleets(allFleets);
-                      }}
-                    >
-                      Collapse all
-                    </Button>
-                  </div>
-                )}
-              </div>
-              {allActiveCards.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <p className="text-sm font-medium">No active job cards</p>
-                  <p className="text-xs mt-1">No results match the current filter criteria.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {Object.keys(categories)
-                    .sort((a, b) => categories[a].order - categories[b].order)
-                    .map(category =>
-                      renderCategorySection(
-                        category,
-                        groupCardsByCategory(allActiveCards).get(category) || new Map(),
-                        true,
-                        closedActiveFleets,
-                        toggleActiveFleet
-                      )
-                    )}
-                </div>
-              )}
-            </section>
-
-            {/* Completed Job Cards */}
-            <section className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
+                  Active
+                  <Badge variant="secondary" className="ml-1">{allActiveCards.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="gap-2">
                   <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
-                  <h2 className="text-base font-semibold tracking-tight text-foreground">Completed</h2>
-                  <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
-                    {allCompletedCards.length}
-                  </span>
-                </div>
-                {allCompletedCards.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                      onClick={() => setClosedCompletedFleets(new Set())}
-                    >
-                      Expand all
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                      onClick={() => {
-                        const allFleets = new Set<string>();
-                        const grouped = groupCardsByCategory(allCompletedCards);
-                        grouped.forEach((fleetMap) => {
-                          fleetMap.forEach((_, fleetKey) => {
-                            allFleets.add(fleetKey);
-                          });
-                        });
-                        setClosedCompletedFleets(allFleets);
-                      }}
-                    >
-                      Collapse all
-                    </Button>
-                  </div>
-                )}
-              </div>
-              {allCompletedCards.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <p className="text-sm font-medium">No completed job cards</p>
-                  <p className="text-xs mt-1">No results match the current filter criteria.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {Object.keys(categories)
-                    .sort((a, b) => categories[a].order - categories[b].order)
-                    .map(category =>
-                      renderCategorySection(
-                        category,
-                        groupCardsByCategory(allCompletedCards).get(category) || new Map(),
-                        false,
-                        closedCompletedFleets,
-                        toggleCompletedFleet
-                      )
+                  Completed
+                  <Badge variant="secondary" className="ml-1">{allCompletedCards.length}</Badge>
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="active" className="space-y-4 mt-4">
+                {/* Active Job Cards (Pending + In Progress) */}
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                      <h2 className="text-base font-semibold tracking-tight text-foreground">Active</h2>
+                      <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                        {allActiveCards.length}
+                      </span>
+                    </div>
+                    {allActiveCards.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                          onClick={() => setClosedActiveFleets(new Set())}
+                        >
+                          Expand all
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                          onClick={() => {
+                            const allFleets = new Set<string>();
+                            const grouped = groupCardsByCategory(allActiveCards);
+                            grouped.forEach((fleetMap) => {
+                              fleetMap.forEach((_, fleetKey) => {
+                                allFleets.add(fleetKey);
+                              });
+                            });
+                            setClosedActiveFleets(allFleets);
+                          }}
+                        >
+                          Collapse all
+                        </Button>
+                      </div>
                     )}
-                </div>
-              )}
-            </section>
+                  </div>
+                  {allActiveCards.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <p className="text-sm font-medium">No active job cards</p>
+                      <p className="text-xs mt-1">No results match the current filter criteria.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {Object.keys(categories)
+                        .sort((a, b) => categories[a].order - categories[b].order)
+                        .map(category =>
+                          renderCategorySection(
+                            category,
+                            groupCardsByCategory(allActiveCards).get(category) || new Map(),
+                            true,
+                            closedActiveFleets,
+                            toggleActiveFleet
+                          )
+                        )}
+                    </div>
+                  )}
+                </section>
+              </TabsContent>
+
+              <TabsContent value="completed" className="space-y-4 mt-4">
+                {/* Completed Job Cards */}
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                      <h2 className="text-base font-semibold tracking-tight text-foreground">Completed</h2>
+                      <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                        {allCompletedCards.length}
+                      </span>
+                    </div>
+                    {allCompletedCards.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                          onClick={() => setClosedCompletedFleets(new Set())}
+                        >
+                          Expand all
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                          onClick={() => {
+                            const allFleets = new Set<string>();
+                            const grouped = groupCardsByCategory(allCompletedCards);
+                            grouped.forEach((fleetMap) => {
+                              fleetMap.forEach((_, fleetKey) => {
+                                allFleets.add(fleetKey);
+                              });
+                            });
+                            setClosedCompletedFleets(allFleets);
+                          }}
+                        >
+                          Collapse all
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {allCompletedCards.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <p className="text-sm font-medium">No completed job cards</p>
+                      <p className="text-xs mt-1">No results match the current filter criteria.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {Object.keys(categories)
+                        .sort((a, b) => categories[a].order - categories[b].order)
+                        .map(category =>
+                          renderCategorySection(
+                            category,
+                            groupCardsByCategory(allCompletedCards).get(category) || new Map(),
+                            false,
+                            closedCompletedFleets,
+                            toggleCompletedFleet
+                          )
+                        )}
+                    </div>
+                  )}
+                </section>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="cost-reports" className="mt-4">

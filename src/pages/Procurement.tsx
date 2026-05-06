@@ -191,6 +191,10 @@ const Procurement = () => {
   const [cashManagerSearch, setCashManagerSearch] = useState<string>("");
   const [cashManagerVendorFilter, setCashManagerVendorFilter] = useState<string>("all");
   const [cashManagerWorkflowFilter, setCashManagerWorkflowFilter] = useState<string>("all");
+  // Low Stock tab filters
+  const [lowStockSearch, setLowStockSearch] = useState<string>("");
+  const [lowStockCategoryFilter, setLowStockCategoryFilter] = useState<string>("all");
+  const [lowStockSeverityFilter, setLowStockSeverityFilter] = useState<string>("all");
 
   // Priority options
   type PriorityLevel = "urgent" | "2-weeks" | "4-weeks";
@@ -793,6 +797,44 @@ const Procurement = () => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [cashManagerRequests]);
 
+  // Low Stock derived options + filtered list
+  const lowStockCategoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of lowStockItems) {
+      if (item.category) set.add(item.category);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [lowStockItems]);
+
+  const filteredLowStockItems = useMemo(() => {
+    const q = lowStockSearch.trim().toLowerCase();
+    return lowStockItems.filter((item) => {
+      if (lowStockCategoryFilter !== "all" && item.category !== lowStockCategoryFilter) {
+        return false;
+      }
+      if (lowStockSeverityFilter !== "all") {
+        const min = item.min_quantity || 0;
+        const ratio = min > 0 ? item.shortage / min : 1;
+        if (lowStockSeverityFilter === "out" && item.quantity > 0) return false;
+        if (lowStockSeverityFilter === "critical" && !(item.quantity === 0 || ratio >= 0.5)) return false;
+        if (lowStockSeverityFilter === "low" && !(item.quantity > 0 && ratio < 0.5)) return false;
+      }
+      if (q) {
+        const haystack = [
+          item.name,
+          item.part_number,
+          item.category,
+          item.supplier,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [lowStockItems, lowStockSearch, lowStockCategoryFilter, lowStockSeverityFilter]);
+
   const irGroups = useMemo(() => {
     const groups = new Map<string, PartsRequest[]>();
     for (const req of filteredCashManager) {
@@ -866,14 +908,14 @@ const Procurement = () => {
     }
   };
 
-  const setRestockPriority = (itemId: string, priority: PriorityLevel) => {
+  const _setRestockPriority = (itemId: string, priority: PriorityLevel) => {
     setRestockPriorities((prev) => ({
       ...prev,
       [itemId]: priority,
     }));
   };
 
-  const getPriorityBadge = (priority?: string) => {
+  const _getPriorityBadge = (priority?: string) => {
     const option = PRIORITY_OPTIONS.find((p) => p.value === priority);
     if (!option) return null;
     return (
@@ -2389,9 +2431,56 @@ const Procurement = () => {
               <TabsContent value="low-stock">
                 <Card>
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div />
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative flex-1 min-w-[220px]">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Search name, part #, category, supplier..."
+                            value={lowStockSearch}
+                            onChange={(e) => setLowStockSearch(e.target.value)}
+                            className="h-8 pl-7 text-xs"
+                          />
+                        </div>
+                        <Select value={lowStockCategoryFilter} onValueChange={setLowStockCategoryFilter}>
+                          <SelectTrigger className="h-8 w-[160px] text-xs">
+                            <SelectValue placeholder="Category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            {lowStockCategoryOptions.map((cat) => (
+                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={lowStockSeverityFilter} onValueChange={setLowStockSeverityFilter}>
+                          <SelectTrigger className="h-8 w-[160px] text-xs">
+                            <SelectValue placeholder="Severity" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Severity</SelectItem>
+                            <SelectItem value="out">Out of Stock</SelectItem>
+                            <SelectItem value="critical">Critical (≥50% short)</SelectItem>
+                            <SelectItem value="low">Low (&lt;50% short)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {(lowStockSearch || lowStockCategoryFilter !== "all" || lowStockSeverityFilter !== "all") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => {
+                              setLowStockSearch("");
+                              setLowStockCategoryFilter("all");
+                              setLowStockSeverityFilter("all");
+                            }}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {filteredLowStockItems.length} of {lowStockItems.length}
+                        </span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" disabled={lowStockItems.length === 0}>
@@ -2418,7 +2507,7 @@ const Procurement = () => {
                       <div className="flex justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin" />
                       </div>
-                    ) : lowStockItems.length > 0 ? (
+                    ) : filteredLowStockItems.length > 0 ? (
                       <ScrollArea className="h-[600px]">
                         <div className="overflow-x-auto">
                           <Table className="min-w-[800px]">
@@ -2429,13 +2518,11 @@ const Procurement = () => {
                                 <TableHead className="py-1.5 text-xs text-right">Stock</TableHead>
                                 <TableHead className="py-1.5 text-xs text-right">Min</TableHead>
                                 <TableHead className="py-1.5 text-xs text-right">Short</TableHead>
-                                <TableHead className="py-1.5 text-xs">Priority</TableHead>
-                                <TableHead className="py-1.5 text-xs">Supplier</TableHead>
                                 <TableHead className="py-1.5 text-xs">Actions</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {lowStockItems.map((item) => (
+                              {filteredLowStockItems.map((item) => (
                                 <TableRow
                                   key={item.id}
                                   className="h-9"
@@ -2459,37 +2546,6 @@ const Procurement = () => {
                                     -{item.shortage}
                                   </TableCell>
                                   <TableCell className="py-1">
-                                    <Select
-                                      value={restockPriorities[item.id] || ""}
-                                      onValueChange={(value) =>
-                                        setRestockPriority(item.id, value as PriorityLevel)
-                                      }
-                                    >
-                                      <SelectTrigger className="w-[130px] h-7 text-xs">
-                                        <SelectValue placeholder="Set priority">
-                                          {restockPriorities[item.id] ? (
-                                            getPriorityBadge(restockPriorities[item.id])
-                                          ) : (
-                                            "Set priority"
-                                          )}
-                                        </SelectValue>
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {PRIORITY_OPTIONS.map((option) => (
-                                          <SelectItem key={option.value} value={option.value}>
-                                            <div className="flex items-center gap-2">
-                                              <div
-                                                className={`w-2 h-2 rounded-full ${option.color}`}
-                                              />
-                                              {option.label}
-                                            </div>
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </TableCell>
-                                  <TableCell className="py-1 text-sm">{item.supplier || "—"}</TableCell>
-                                  <TableCell className="py-1">
                                     <Button
                                       size="sm"
                                       className="h-7 text-xs"
@@ -2505,6 +2561,12 @@ const Procurement = () => {
                           </Table>
                         </div>
                       </ScrollArea>
+                    ) : lowStockItems.length > 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12">
+                        <Search className="h-12 w-12 text-muted-foreground mb-4" />
+                        <p className="text-lg font-medium">No matching items</p>
+                        <p className="text-muted-foreground">Try adjusting your filters or search</p>
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12">
                         <CheckCircle className="h-12 w-12 text-green-500 mb-4" />

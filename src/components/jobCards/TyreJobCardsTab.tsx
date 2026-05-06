@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -789,63 +790,83 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
                 </div>
             </div>
 
-            {/* Active Tyre Job Cards */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2.5">
-                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
-                    <h2 className="text-base font-semibold tracking-tight text-foreground">Active Tyre Job Cards</h2>
-                    <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
-                        {activeCards.length}
-                    </span>
-                </div>
-                {activeCards.length === 0 ? (
-                    <div className="text-center py-10 text-muted-foreground">
-                        <p className="text-sm font-medium">No active tyre job cards</p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {Array.from(groupByFleet(activeCards).entries()).map(([fleetKey, cards]) => (
-                            <FleetAccordionSection
-                                key={`active-${fleetKey}`}
-                                fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
-                                cards={cards}
-                                isOpen={!closedActiveFleets.has(fleetKey)}
-                                onToggle={() => toggleActiveFleet(fleetKey)}
-                                statusVariant="active"
-                            />
-                        ))}
-                    </div>
-                )}
-            </section>
+            {/* Active vs Completed sub-tabs */}
+            <Tabs defaultValue="active" className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="active" className="gap-2">
+                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                        Active
+                        <Badge variant="secondary" className="ml-1">{activeCards.length}</Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="completed" className="gap-2">
+                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                        Completed
+                        <Badge variant="secondary" className="ml-1">{completedCards.length}</Badge>
+                    </TabsTrigger>
+                </TabsList>
 
-            {/* Completed Tyre Job Cards */}
-            <section className="space-y-4">
-                <div className="flex items-center gap-2.5">
-                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
-                    <h2 className="text-base font-semibold tracking-tight text-foreground">Completed Tyre Job Cards</h2>
-                    <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
-                        {completedCards.length}
-                    </span>
-                </div>
-                {completedCards.length === 0 ? (
-                    <div className="text-center py-10 text-muted-foreground">
-                        <p className="text-sm font-medium">No completed tyre job cards</p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {Array.from(groupByFleet(completedCards).entries()).map(([fleetKey, cards]) => (
-                            <FleetAccordionSection
-                                key={`completed-${fleetKey}`}
-                                fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
-                                cards={cards}
-                                isOpen={!closedCompletedFleets.has(fleetKey)}
-                                onToggle={() => toggleCompletedFleet(fleetKey)}
-                                statusVariant="completed"
-                            />
-                        ))}
-                    </div>
-                )}
-            </section>
+                <TabsContent value="active" className="space-y-4 mt-4">
+                    {/* Active Tyre Job Cards */}
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-2.5">
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                            <h2 className="text-base font-semibold tracking-tight text-foreground">Active Tyre Job Cards</h2>
+                            <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                                {activeCards.length}
+                            </span>
+                        </div>
+                        {activeCards.length === 0 ? (
+                            <div className="text-center py-10 text-muted-foreground">
+                                <p className="text-sm font-medium">No active tyre job cards</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {Array.from(groupByFleet(activeCards).entries()).map(([fleetKey, cards]) => (
+                                    <FleetAccordionSection
+                                        key={`active-${fleetKey}`}
+                                        fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
+                                        cards={cards}
+                                        isOpen={!closedActiveFleets.has(fleetKey)}
+                                        onToggle={() => toggleActiveFleet(fleetKey)}
+                                        statusVariant="active"
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </TabsContent>
+
+                <TabsContent value="completed" className="space-y-4 mt-4">
+                    {/* Completed Tyre Job Cards */}
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-2.5">
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                            <h2 className="text-base font-semibold tracking-tight text-foreground">Completed Tyre Job Cards</h2>
+                            <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                                {completedCards.length}
+                            </span>
+                        </div>
+                        {completedCards.length === 0 ? (
+                            <div className="text-center py-10 text-muted-foreground">
+                                <p className="text-sm font-medium">No completed tyre job cards</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {Array.from(groupByFleet(completedCards).entries()).map(([fleetKey, cards]) => (
+                                    <FleetAccordionSection
+                                        key={`completed-${fleetKey}`}
+                                        fleetLabel={fleetKey === "__no_fleet__" ? "Unassigned — No Fleet" : `Fleet ${fleetKey}`}
+                                        cards={cards}
+                                        isOpen={!closedCompletedFleets.has(fleetKey)}
+                                        onToggle={() => toggleCompletedFleet(fleetKey)}
+                                        statusVariant="completed"
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </TabsContent>
+            </Tabs>
 
             {/* Archived Tyre Job Cards */}
             {archivedCards.length > 0 && (
