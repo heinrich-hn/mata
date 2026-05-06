@@ -23,7 +23,7 @@ import { ensureAlert } from '@/lib/alertUtils';
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from 'date-fns';
 import { Eye, Loader2, Pencil, Plus, Search, Trash2, Truck } from "lucide-react";
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 // Update the Vehicle interface to match the actual Supabase table structure
 interface Vehicle {
@@ -51,6 +51,20 @@ interface Vehicle {
   vin?: string | null;
 }
 
+// Define the type hierarchy and ordering
+const VEHICLE_TYPE_ORDER: Record<string, number> = {
+  'horse_truck': 1,
+  'rigid_truck': 2,
+  'truck': 3,
+  'tanker': 4,
+  'refrigerated_truck': 5,
+  'pickup': 6,
+  'van': 7,
+  'reefer': 8,
+  'interlink': 9,
+  'trailer': 10,
+};
+
 const Vehicles = () => {
   const [searchTerm, setSearchTerm] = useState("");
   // Defer the search term so the query doesn't refetch on every keystroke
@@ -63,13 +77,12 @@ const Vehicles = () => {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
-  const { data: vehicles = [], isLoading } = useQuery<Vehicle[]>({
+  const { data: rawVehicles = [], isLoading } = useQuery<Vehicle[]>({
     queryKey: ["vehicles", deferredSearchTerm, statusFilter, typeFilter],
     queryFn: async (): Promise<Vehicle[]> => {
       let query = supabase
         .from("vehicles")
-        .select("*")
-        .order("fleet_number", { ascending: true });
+        .select("*");
 
       if (deferredSearchTerm) {
         query = query.or(
@@ -94,6 +107,31 @@ const Vehicles = () => {
     },
     staleTime: 60 * 1000,
   });
+
+  // Sort vehicles: first by type (big to small), then by fleet number (smallest to largest)
+  const vehicles = useMemo(() => {
+    return [...rawVehicles].sort((a, b) => {
+      // First, sort by vehicle type (big to small)
+      const typeOrderA = VEHICLE_TYPE_ORDER[a.vehicle_type] || 999;
+      const typeOrderB = VEHICLE_TYPE_ORDER[b.vehicle_type] || 999;
+      
+      if (typeOrderA !== typeOrderB) {
+        return typeOrderA - typeOrderB;
+      }
+      
+      // Within same type, sort by fleet number (smallest to largest)
+      const numA = a.fleet_number ? parseInt(a.fleet_number, 10) : null;
+      const numB = b.fleet_number ? parseInt(b.fleet_number, 10) : null;
+      
+      // Handle null values - push them to the end within the type group
+      if (numA === null && numB === null) return 0;
+      if (numA === null) return 1;
+      if (numB === null) return -1;
+      
+      // Sort numerically (smallest to largest)
+      return numA - numB;
+    });
+  }, [rawVehicles]);
 
   // Generate alerts for expired license disks
   useEffect(() => {

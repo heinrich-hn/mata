@@ -14,7 +14,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
@@ -133,7 +132,7 @@ const Procurement = () => {
   const { data: cashManagerRequests = [] } = useCashManagerRequests();
   const { data: lowStockItems = [], isLoading: loadingLowStock } = useLowStockItems();
   const { data: vendors = [] } = useVendors();
-  const { data: stats } = useProcurementStats();
+  const { data: _stats } = useProcurementStats();
   const { data: vehicles = [] } = useVehicles();
 
   // Build vehicle_id → fleet_number lookup
@@ -188,6 +187,10 @@ const Procurement = () => {
   const [urgencyFilter, setUrgencyFilter] = useState<string>("all");
   // Search / text filter for All Requests tab
   const [requestSearch, setRequestSearch] = useState<string>("");
+  // Cash Manager tab filters
+  const [cashManagerSearch, setCashManagerSearch] = useState<string>("");
+  const [cashManagerVendorFilter, setCashManagerVendorFilter] = useState<string>("all");
+  const [cashManagerWorkflowFilter, setCashManagerWorkflowFilter] = useState<string>("all");
 
   // Priority options
   type PriorityLevel = "urgent" | "2-weeks" | "4-weeks";
@@ -578,7 +581,7 @@ const Procurement = () => {
   };
 
   // Handler for bulk move to All Requests
-  const handleBulkMoveToAllRequests = async () => {
+  const _handleBulkMoveToAllRequests = async () => {
     const requestsToMove = cashManagerRequests.filter(r => selectedRequestIds.has(r.id));
     for (const request of requestsToMove) {
       await updateRequest.mutateAsync({
@@ -591,7 +594,7 @@ const Procurement = () => {
   };
 
   // Handler for bulk allocate to job cards
-  const handleBulkAllocate = async () => {
+  const _handleBulkAllocate = async () => {
     const requestsToAllocate = cashManagerRequests.filter(r => selectedRequestIds.has(r.id) && !r.allocated_to_job_card);
     for (const request of requestsToAllocate) {
       await allocateToJobCard.mutateAsync(request.id);
@@ -696,14 +699,14 @@ const Procurement = () => {
   };
 
   // Multi-select helpers
-  const toggleRequestSelection = (id: string) => {
+  const _toggleRequestSelection = (id: string) => {
     setSelectedRequestIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
-  const toggleAllInSection = (sectionRequests: PartsRequest[]) => {
+  const _toggleAllInSection = (sectionRequests: PartsRequest[]) => {
     const allSelected = sectionRequests.every(r => selectedRequestIds.has(r.id));
     setSelectedRequestIds(prev => {
       const next = new Set(prev);
@@ -712,7 +715,7 @@ const Procurement = () => {
     });
   };
   const selectedRequests = openRequests.filter(r => selectedRequestIds.has(r.id));
-  const openBulkProcurementDialog = () => {
+  const _openBulkProcurementDialog = () => {
     setSelectedRequest(null);
     setStartProcurementDialogOpen(true);
   };
@@ -731,8 +734,64 @@ const Procurement = () => {
       filtered = filtered.filter(r => r.urgency_level === urgencyFilter);
     }
 
+    // Apply vendor filter
+    if (cashManagerVendorFilter !== "all") {
+      filtered = filtered.filter(r => (r.vendor_id || "") === cashManagerVendorFilter);
+    }
+
+    // Apply workflow stage filter
+    if (cashManagerWorkflowFilter !== "all") {
+      filtered = filtered.filter(r => {
+        switch (cashManagerWorkflowFilter) {
+          case "awaiting-approval":
+            return !r.cash_manager_approval_date && !r.ordered_at && !r.received_date && !r.allocated_to_job_card;
+          case "approved":
+            return !!r.cash_manager_approval_date && !r.ordered_at;
+          case "ordered":
+            return !!r.ordered_at && !r.received_date;
+          case "received":
+            return !!r.received_date && !r.allocated_to_job_card;
+          case "allocated":
+            return !!r.allocated_to_job_card;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply free-text search
+    if (cashManagerSearch.trim()) {
+      const q = cashManagerSearch.toLowerCase();
+      filtered = filtered.filter(r =>
+        r.part_name?.toLowerCase().includes(q) ||
+        r.part_number?.toLowerCase().includes(q) ||
+        r.ir_number?.toLowerCase().includes(q) ||
+        r.sage_requisition_number?.toLowerCase().includes(q) ||
+        r.cash_manager_reference?.toLowerCase().includes(q) ||
+        r.job_card?.job_number?.toLowerCase().includes(q) ||
+        r.job_card?.title?.toLowerCase().includes(q) ||
+        (r.job_card?.vehicle_id && vehicleFleetMap.get(r.job_card.vehicle_id)?.toLowerCase().includes(q)) ||
+        r.vendor?.vendor_name?.toLowerCase().includes(q) ||
+        r.notes?.toLowerCase().includes(q) ||
+        r.requested_by?.toLowerCase().includes(q)
+      );
+    }
+
     return filtered;
-  }, [cashManagerRequests, statusFilter, urgencyFilter]);
+  }, [cashManagerRequests, statusFilter, urgencyFilter, cashManagerVendorFilter, cashManagerWorkflowFilter, cashManagerSearch, vehicleFleetMap]);
+
+  // Distinct vendor options derived from current Cash Manager rows
+  const cashManagerVendorOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of cashManagerRequests) {
+      if (r.vendor_id && r.vendor?.vendor_name) {
+        map.set(r.vendor_id, r.vendor.vendor_name);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [cashManagerRequests]);
 
   const irGroups = useMemo(() => {
     const groups = new Map<string, PartsRequest[]>();
@@ -787,7 +846,7 @@ const Procurement = () => {
   }, [openRequests, statusFilter, requestSearch, vehicleFleetMap]);
 
   // Restock item selection handlers
-  const toggleRestockItem = (itemId: string) => {
+  const _toggleRestockItem = (itemId: string) => {
     setSelectedRestockItems((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) {
@@ -799,7 +858,7 @@ const Procurement = () => {
     });
   };
 
-  const toggleAllRestockItems = () => {
+  const _toggleAllRestockItems = () => {
     if (selectedRestockItems.size === lowStockItems.length) {
       setSelectedRestockItems(new Set());
     } else {
@@ -843,7 +902,7 @@ const Procurement = () => {
   };
 
   // Export selected restock items to Excel
-  const exportRestockToExcel = async () => {
+  const _exportRestockToExcel = async () => {
     const selectedItems = lowStockItems.filter((item) =>
       selectedRestockItems.has(item.id)
     );
@@ -1117,7 +1176,7 @@ const Procurement = () => {
   };
 
   // Export Restock Items to PDF
-  const exportRestockToPDF = () => {
+  const _exportRestockToPDF = () => {
     const selectedItems = lowStockItems.filter((item) => selectedRestockItems.has(item.id));
     if (selectedItems.length === 0) return;
 
@@ -1388,44 +1447,7 @@ const Procurement = () => {
 
         <TabsContent value="procurement" className="mt-0">
           <div className="space-y-4">
-            {/* Inline stats toolbar */}
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-              <div className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-semibold">{stats?.pending || 0}</span>
-                <span className="text-xs text-muted-foreground">pending</span>
-              </div>
-              <div className="h-4 w-px bg-border" />
-              <div className="flex items-center gap-1.5">
-                <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-semibold">{stats?.sage_pending || 0}</span>
-                <span className="text-xs text-muted-foreground">IR pending</span>
-              </div>
-              <div className="h-4 w-px bg-border" />
-              <div className="flex items-center gap-1.5">
-                <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-semibold">{stats?.cash_manager_pending || 0}</span>
-                <span className="text-xs text-muted-foreground">CM pending</span>
-              </div>
-              <div className="h-4 w-px bg-border" />
-              <div className="flex items-center gap-1.5">
-                <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-semibold">{stats?.ordered || 0}</span>
-                <span className="text-xs text-muted-foreground">ordered</span>
-              </div>
-              <div className="h-4 w-px bg-border" />
-              <div className="flex items-center gap-1.5">
-                <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                <span className="font-semibold">{stats?.received || 0}</span>
-                <span className="text-xs text-muted-foreground">received</span>
-              </div>
-              <div className="h-4 w-px bg-border" />
-              <div className="flex items-center gap-1.5">
-                <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-semibold">${(stats?.pendingValue || 0).toLocaleString()}</span>
-                <span className="text-xs text-muted-foreground">value</span>
-              </div>
-              <div className="flex-1" />
+            <div className="flex justify-end">
               <Button size="sm" className="h-8 text-xs px-2.5" onClick={() => setCreateDialogOpen(true)}>
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 New Request
@@ -1657,22 +1679,6 @@ const Procurement = () => {
                       </Card>
                     )}
 
-                  {/* Selection Bar */}
-                  {selectedRequestIds.size > 0 && (
-                    <div className="flex items-center gap-3 p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <Badge variant="secondary" className="text-xs">
-                        {selectedRequestIds.size} selected
-                      </Badge>
-                      <Button size="sm" className="h-7 text-xs" onClick={openBulkProcurementDialog}>
-                        <ShoppingBag className="h-3 w-3 mr-1" />
-                        Start Procurement for Selected
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedRequestIds(new Set())}>
-                        Clear
-                      </Button>
-                    </div>
-                  )}
-
                   {/* All Requests - Flat Table */}
                   {filteredRequests.length > 0 && (
                     <Card>
@@ -1681,12 +1687,6 @@ const Procurement = () => {
                           <Table className="min-w-[800px]">
                             <TableHeader>
                               <TableRow className="h-8">
-                                <TableHead className="w-10 py-1.5">
-                                  <Checkbox
-                                    checked={filteredRequests.length > 0 && filteredRequests.every(r => selectedRequestIds.has(r.id))}
-                                    onCheckedChange={() => toggleAllInSection(filteredRequests)}
-                                  />
-                                </TableHead>
                                 <TableHead className="py-1.5 text-xs">Part / Item</TableHead>
                                 <TableHead className="py-1.5 text-xs">Type</TableHead>
                                 <TableHead className="py-1.5 text-xs w-[60px]">Qty</TableHead>
@@ -1700,14 +1700,8 @@ const Procurement = () => {
                               {filteredRequests.map((request) => (
                                 <TableRow
                                   key={request.id}
-                                  className={cn("h-9", selectedRequestIds.has(request.id) && "bg-blue-50/50 dark:bg-blue-950/10")}
+                                  className="h-9"
                                 >
-                                  <TableCell className="py-1.5">
-                                    <Checkbox
-                                      checked={selectedRequestIds.has(request.id)}
-                                      onCheckedChange={() => toggleRequestSelection(request.id)}
-                                    />
-                                  </TableCell>
                                   <TableCell className="py-1.5">
                                     <div className="flex items-center gap-1.5">
                                       <span className="font-medium text-sm">{request.part_name}</span>
@@ -1846,38 +1840,100 @@ const Procurement = () => {
               <TabsContent value="cash-manager">
                 <Card>
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div />
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={statusFilter}
-                          onValueChange={setStatusFilter}
-                        >
-                          <SelectTrigger className="w-[140px] h-9">
-                            <SelectValue placeholder="Filter status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="pending">Pending IR</SelectItem>
-                            <SelectItem value="approved">Approved</SelectItem>
-                            <SelectItem value="ordered">Ordered</SelectItem>
-                            <SelectItem value="received">Received</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={urgencyFilter}
-                          onValueChange={setUrgencyFilter}
-                        >
-                          <SelectTrigger className="w-[140px] h-9">
-                            <SelectValue placeholder="Filter urgency" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Urgencies</SelectItem>
-                            <SelectItem value="urgent">Urgent</SelectItem>
-                            <SelectItem value="1-week">1 Week</SelectItem>
-                            <SelectItem value="2-weeks">2 Weeks</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative flex-1 min-w-[220px] max-w-sm">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search IR, part, vendor, job card, fleet..."
+                          value={cashManagerSearch}
+                          onChange={(e) => setCashManagerSearch(e.target.value)}
+                          className="pl-9 h-9"
+                        />
+                      </div>
+                      <Select
+                        value={statusFilter}
+                        onValueChange={setStatusFilter}
+                      >
+                        <SelectTrigger className="w-[140px] h-9">
+                          <SelectValue placeholder="Filter status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Statuses</SelectItem>
+                          <SelectItem value="pending">Pending IR</SelectItem>
+                          <SelectItem value="approved">Approved</SelectItem>
+                          <SelectItem value="ordered">Ordered</SelectItem>
+                          <SelectItem value="received">Received</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={urgencyFilter}
+                        onValueChange={setUrgencyFilter}
+                      >
+                        <SelectTrigger className="w-[140px] h-9">
+                          <SelectValue placeholder="Filter urgency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Urgencies</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                          <SelectItem value="1-week">1 Week</SelectItem>
+                          <SelectItem value="2-weeks">2 Weeks</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={cashManagerWorkflowFilter}
+                        onValueChange={setCashManagerWorkflowFilter}
+                      >
+                        <SelectTrigger className="w-[160px] h-9">
+                          <SelectValue placeholder="Workflow stage" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Stages</SelectItem>
+                          <SelectItem value="awaiting-approval">Awaiting Approval</SelectItem>
+                          <SelectItem value="approved">Approved (not ordered)</SelectItem>
+                          <SelectItem value="ordered">Ordered (not received)</SelectItem>
+                          <SelectItem value="received">Received (not allocated)</SelectItem>
+                          <SelectItem value="allocated">Allocated</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={cashManagerVendorFilter}
+                        onValueChange={setCashManagerVendorFilter}
+                      >
+                        <SelectTrigger className="w-[180px] h-9">
+                          <SelectValue placeholder="Vendor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Vendors</SelectItem>
+                          {cashManagerVendorOptions.map(v => (
+                            <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(cashManagerSearch ||
+                        statusFilter !== "all" ||
+                        urgencyFilter !== "all" ||
+                        cashManagerWorkflowFilter !== "all" ||
+                        cashManagerVendorFilter !== "all") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9"
+                            onClick={() => {
+                              setCashManagerSearch("");
+                              setStatusFilter("all");
+                              setUrgencyFilter("all");
+                              setCashManagerWorkflowFilter("all");
+                              setCashManagerVendorFilter("all");
+                            }}
+                          >
+                            <X className="h-4 w-4 mr-1" />
+                            Clear
+                          </Button>
+                        )}
+                      <div className="ml-auto flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {filteredCashManager.length} of {cashManagerRequests.length}
+                        </span>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" disabled={filteredCashManager.length === 0}>
@@ -1908,51 +1964,19 @@ const Procurement = () => {
                       </div>
                     </div>
                   </CardHeader>
-                  {/* Bulk Selection Bar */}
-                  {selectedRequestIds.size > 0 && (
-                    <div className="flex items-center gap-3 mx-6 mb-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <Badge variant="secondary" className="text-sm">
-                        {selectedRequestIds.size} selected
-                      </Badge>
-                      <Button size="sm" onClick={handleBulkAllocate} disabled={allocateToJobCard.isPending}>
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Allocate Selected
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={handleBulkMoveToAllRequests} disabled={updateRequest.isPending}>
-                        <BookOpen className="h-4 w-4 mr-1" />
-                        Move to All Requests
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setSelectedRequestIds(new Set())}>
-                        Clear Selection
-                      </Button>
-                    </div>
-                  )}
                   <CardContent>
                     <ScrollArea className="h-[600px]">
-                      <Table className="min-w-[900px]">
+                      <Table className="min-w-[900px] text-xs">
                         <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-10 py-1.5 text-xs">
-                              <Checkbox
-                                checked={filteredCashManager.length > 0 && filteredCashManager.every(r => selectedRequestIds.has(r.id))}
-                                onCheckedChange={() => {
-                                  const allSelected = filteredCashManager.every(r => selectedRequestIds.has(r.id));
-                                  if (allSelected) {
-                                    setSelectedRequestIds(new Set());
-                                  } else {
-                                    setSelectedRequestIds(new Set(filteredCashManager.map(r => r.id)));
-                                  }
-                                }}
-                              />
-                            </TableHead>
-                            <TableHead className="py-1.5 text-xs">Part</TableHead>
-                            <TableHead className="py-1.5 text-xs">IR #</TableHead>
-                            <TableHead className="py-1.5 text-xs">Qty</TableHead>
-                            <TableHead className="py-1.5 text-xs">Source</TableHead>
-                            <TableHead className="py-1.5 text-xs">Workflow Progress</TableHead>
-                            <TableHead className="py-1.5 text-xs">Lead Time</TableHead>
-                            <TableHead className="py-1.5 text-xs">Status</TableHead>
-                            <TableHead className="py-1.5 text-xs w-[180px]">Actions</TableHead>
+                          <TableRow className="h-7">
+                            <TableHead className="py-1 text-[11px]">IR #</TableHead>
+                            <TableHead className="py-1 text-[11px]">Part</TableHead>
+                            <TableHead className="py-1 text-[11px]">Qty</TableHead>
+                            <TableHead className="py-1 text-[11px]">Source</TableHead>
+                            <TableHead className="py-1 text-[11px]">Workflow Progress</TableHead>
+                            <TableHead className="py-1 text-[11px]">Lead Time</TableHead>
+                            <TableHead className="py-1 text-[11px]">Status</TableHead>
+                            <TableHead className="py-1 text-[11px] w-[180px]">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1966,19 +1990,19 @@ const Procurement = () => {
                               // Single-item IR – render as a normal row
                               const request = items[0];
                               return (
-                                <TableRow key={request.id} className={`h-9 ${selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : "cursor-pointer hover:bg-muted/50"}`}>
-                                  <TableCell className="py-1.5" onClick={(e) => { e.stopPropagation(); setSelectedRequestIds(prev => { const newSet = new Set(prev); if (newSet.has(request.id)) newSet.delete(request.id); else newSet.add(request.id); return newSet; }); }}>
-                                    <Checkbox checked={selectedRequestIds.has(request.id)} />
+                                <TableRow key={request.id} className="h-8 cursor-pointer hover:bg-muted/50">
+                                  <TableCell className="py-1" onClick={() => openDetailDialog(request)}>
+                                    <span className="font-mono text-xs">{request.ir_number || request.sage_requisition_number || "—"}</span>
                                   </TableCell>
-                                  <TableCell className="py-1.5" onClick={() => openDetailDialog(request)}>
+                                  <TableCell className="py-1" onClick={() => openDetailDialog(request)}>
                                     <div>
-                                      <div className="font-medium text-sm">{request.part_name}</div>
+                                      <div className="font-medium text-xs leading-tight">{request.part_name}</div>
                                       {request.part_number && (
-                                        <div className="text-[11px] text-muted-foreground font-mono">{request.part_number}</div>
+                                        <div className="text-[10px] text-muted-foreground font-mono leading-tight">{request.part_number}</div>
                                       )}
                                       {request.vendor?.vendor_name && (
-                                        <div className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                          <Store className="h-3 w-3" />
+                                        <div className="text-[10px] text-muted-foreground flex items-center gap-1 leading-tight">
+                                          <Store className="h-2.5 w-2.5" />
                                           {request.vendor.vendor_name}
                                         </div>
                                       )}
@@ -1986,49 +2010,46 @@ const Procurement = () => {
                                         <div className="mt-0.5">
                                           <Badge
                                             variant="outline"
-                                            className="text-[10px] border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                            className="text-[9px] px-1 py-0 h-4 border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/20"
                                             onClick={(e) => { e.stopPropagation(); setSelectedRequest(request); setCashManagerDetailsDialogOpen(true); }}
                                           >
-                                            <AlertTriangle className="h-3 w-3 mr-1" />
+                                            <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
                                             {!request.vendor_id && !request.unit_price ? "Needs vendor & price" : !request.vendor_id ? "Needs vendor" : "Needs price"}
                                           </Badge>
                                         </div>
                                       )}
                                       {request.urgency_level && (
-                                        <div className="mt-1">
+                                        <div className="mt-0.5">
                                           {getUrgencyBadge(request.urgency_level)}
                                         </div>
                                       )}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="py-1.5">
-                                    <span className="font-mono text-sm">{request.ir_number || request.sage_requisition_number || "—"}</span>
-                                  </TableCell>
-                                  <TableCell className="py-1.5 font-mono text-sm">{request.quantity}</TableCell>
-                                  <TableCell className="py-1.5">
+                                  <TableCell className="py-1 font-mono text-xs">{request.quantity}</TableCell>
+                                  <TableCell className="py-1">
                                     {request.job_card_id ? (
                                       <div className="flex items-center gap-1">
-                                        <Badge variant="outline" className="text-xs">
-                                          <FileText className="h-3 w-3 mr-1" />
+                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                          <FileText className="h-2.5 w-2.5 mr-0.5" />
                                           {request.job_card?.job_number || "Job Card"}
                                         </Badge>
                                         {request.job_card?.vehicle_id && vehicleFleetMap.get(request.job_card.vehicle_id) && (
-                                          <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                                             <Truck className="h-2.5 w-2.5 mr-0.5" />
                                             {vehicleFleetMap.get(request.job_card.vehicle_id)}
                                           </Badge>
                                         )}
                                       </div>
                                     ) : request.inventory_id ? (
-                                      <Badge variant="outline" className="text-xs">
-                                        <Package className="h-3 w-3 mr-1" />
+                                      <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                        <Package className="h-2.5 w-2.5 mr-0.5" />
                                         Restock
                                       </Badge>
                                     ) : (
-                                      <Badge variant="secondary" className="text-xs">Manual</Badge>
+                                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">Manual</Badge>
                                     )}
                                   </TableCell>
-                                  <TableCell className="py-1.5">
+                                  <TableCell className="py-1">
                                     <div className="flex items-center gap-1">
                                       <Tooltip>
                                         <TooltipTrigger>
@@ -2087,30 +2108,30 @@ const Procurement = () => {
                                       <span className="text-xs text-muted-foreground">—</span>
                                     )}
                                   </TableCell>
-                                  <TableCell className="py-1.5">{getStatusBadge(request.status)}</TableCell>
-                                  <TableCell className="py-1.5">
+                                  <TableCell className="py-1">{getStatusBadge(request.status)}</TableCell>
+                                  <TableCell className="py-1">
                                     <div className="flex gap-1 flex-wrap">
                                       {(request.ir_number || request.sage_requisition_date) && !request.cash_manager_approval_date && (
-                                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openCashManagerDialog(request)}><CreditCard className="h-3 w-3 mr-1" />Approve</Button>
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openCashManagerDialog(request)}><CreditCard className="h-2.5 w-2.5 mr-1" />Approve</Button>
                                       )}
                                       {request.cash_manager_approval_date && !request.ordered_at && (
-                                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openOrderDialog(request)}><ShoppingCart className="h-3 w-3 mr-1" />Order</Button>
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openOrderDialog(request)}><ShoppingCart className="h-2.5 w-2.5 mr-1" />Order</Button>
                                       )}
                                       {request.ordered_at && !request.received_date && (
-                                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openReceiveDialog(request)}><Truck className="h-3 w-3 mr-1" />Receive</Button>
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openReceiveDialog(request)}><Truck className="h-2.5 w-2.5 mr-1" />Receive</Button>
                                       )}
                                       {/* Show Allocate button when: received OR (approved and has inventory with sufficient stock) */}
                                       {(request.received_date || (request.cash_manager_approval_date && request.inventory_id)) && request.job_card_id && !request.allocated_to_job_card && (
-                                        <Button size="sm" className={isTyreRequest(request) ? "bg-purple-600 hover:bg-purple-700" : "bg-green-600 hover:bg-green-700"} onClick={() => handleAllocateToJobCard(request)} disabled={allocateToJobCard.isPending}>
-                                          {isTyreRequest(request) ? <><Package className="h-3 w-3 mr-1" />To Holding Bay</> : <><CheckCircle className="h-3 w-3 mr-1" />Allocate</>}
+                                        <Button size="sm" className={cn("h-6 px-2 text-[10px]", isTyreRequest(request) ? "bg-purple-600 hover:bg-purple-700" : "bg-green-600 hover:bg-green-700")} onClick={() => handleAllocateToJobCard(request)} disabled={allocateToJobCard.isPending}>
+                                          {isTyreRequest(request) ? <><Package className="h-2.5 w-2.5 mr-1" />To Holding Bay</> : <><CheckCircle className="h-2.5 w-2.5 mr-1" />Allocate</>}
                                         </Button>
                                       )}
                                       {request.allocated_to_job_card && (
-                                        <Badge className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />Fulfilled</Badge>
+                                        <Badge className="bg-green-600 text-[10px] px-1 py-0 h-4"><CheckCircle className="h-2.5 w-2.5 mr-0.5" />Fulfilled</Badge>
                                       )}
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
                                           <DropdownMenuItem onClick={() => openDetailDialog(request)}><FileText className="h-4 w-4 mr-2" />View Details</DropdownMenuItem>
@@ -2134,63 +2155,46 @@ const Procurement = () => {
                               <React.Fragment key={irKey}>
                                 {/* Group Header Row */}
                                 <TableRow
-                                  className="cursor-pointer bg-muted/30 hover:bg-muted/50 border-b-0"
+                                  className="h-8 cursor-pointer bg-muted/30 hover:bg-muted/50 border-b-0"
                                   onClick={() => toggleIR(irKey)}
                                 >
-                                  <TableCell>
-                                    <Checkbox
-                                      checked={items.every(r => selectedRequestIds.has(r.id))}
-                                      onCheckedChange={() => {
-                                        const allSelected = items.every(r => selectedRequestIds.has(r.id));
-                                        setSelectedRequestIds(prev => {
-                                          const newSet = new Set(prev);
-                                          items.forEach(r => {
-                                            if (allSelected) newSet.delete(r.id);
-                                            else newSet.add(r.id);
-                                          });
-                                          return newSet;
-                                        });
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
+                                  <TableCell className="py-1">
+                                    <div className="flex items-center gap-1.5">
+                                      {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                                      <span className="font-mono text-xs font-semibold">{irKey.startsWith("ungrouped-") ? "—" : irKey}</span>
+                                    </div>
                                   </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                                      <div>
-                                        <div className="font-semibold">{items.length} items</div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {items.map(r => r.part_name).join(", ").substring(0, 60)}
-                                          {items.map(r => r.part_name).join(", ").length > 60 ? "…" : ""}
-                                        </div>
+                                  <TableCell className="py-1">
+                                    <div>
+                                      <div className="font-semibold text-xs leading-tight">{items.length} items</div>
+                                      <div className="text-[10px] text-muted-foreground leading-tight">
+                                        {items.map(r => r.part_name).join(", ").substring(0, 60)}
+                                        {items.map(r => r.part_name).join(", ").length > 60 ? "…" : ""}
                                       </div>
                                     </div>
                                   </TableCell>
-                                  <TableCell>
-                                    <span className="font-mono text-sm font-semibold">{irKey.startsWith("ungrouped-") ? "—" : irKey}</span>
-                                  </TableCell>
-                                  <TableCell className="font-mono font-semibold">{totalQty}</TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline" className="text-xs">
-                                      <Package className="h-3 w-3 mr-1" />
+                                  <TableCell className="py-1 font-mono text-xs font-semibold">{totalQty}</TableCell>
+                                  <TableCell className="py-1">
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                      <Package className="h-2.5 w-2.5 mr-0.5" />
                                       {items.length} items
                                     </Badge>
                                   </TableCell>
-                                  <TableCell>
-                                    <Badge variant={groupStep!.variant}>{groupStep!.label}</Badge>
+                                  <TableCell className="py-1">
+                                    <Badge variant={groupStep!.variant} className="text-[10px] px-1 py-0 h-4">{groupStep!.label}</Badge>
                                   </TableCell>
-                                  <TableCell>—</TableCell>
-                                  <TableCell>
-                                    <Badge variant={groupStep!.variant}>{groupStep!.label}</Badge>
+                                  <TableCell className="py-1 text-xs">—</TableCell>
+                                  <TableCell className="py-1">
+                                    <Badge variant={groupStep!.variant} className="text-[10px] px-1 py-0 h-4">{groupStep!.label}</Badge>
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="py-1">
                                     <div className="flex gap-1 flex-wrap">
                                       {/* Group-level actions: show if ANY item needs the step */}
                                       {items.some(r => (r.ir_number || r.sage_requisition_date) && !r.cash_manager_approval_date) && (
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); toggleIR(irKey); }}>
-                                              <CreditCard className="h-3 w-3 mr-1" />Approve
+                                            <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={(e) => { e.stopPropagation(); toggleIR(irKey); }}>
+                                              <CreditCard className="h-2.5 w-2.5 mr-1" />Approve
                                             </Button>
                                           </TooltipTrigger>
                                           <TooltipContent>Expand to approve individual items</TooltipContent>
@@ -2199,15 +2203,15 @@ const Procurement = () => {
                                       {items.some(r => r.cash_manager_approval_date && !r.ordered_at) && (
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); toggleIR(irKey); }}>
-                                              <ShoppingCart className="h-3 w-3 mr-1" />Order
+                                            <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={(e) => { e.stopPropagation(); toggleIR(irKey); }}>
+                                              <ShoppingCart className="h-2.5 w-2.5 mr-1" />Order
                                             </Button>
                                           </TooltipTrigger>
                                           <TooltipContent>Expand to place orders</TooltipContent>
                                         </Tooltip>
                                       )}
                                       {items.every(r => r.allocated_to_job_card) && (
-                                        <Badge className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />All Fulfilled</Badge>
+                                        <Badge className="bg-green-600 text-[10px] px-1 py-0 h-4"><CheckCircle className="h-2.5 w-2.5 mr-0.5" />All Fulfilled</Badge>
                                       )}
                                     </div>
                                   </TableCell>
@@ -2215,146 +2219,143 @@ const Procurement = () => {
 
                                 {/* Expanded child rows */}
                                 {isExpanded && items.map((request) => (
-                                  <TableRow key={request.id} className={`h-9 bg-muted/10 hover:bg-muted/20 ${selectedRequestIds.has(request.id) ? "bg-blue-50/50 dark:bg-blue-950/10" : ""}`}>
-                                    <TableCell className="py-1.5" onClick={(e) => { e.stopPropagation(); setSelectedRequestIds(prev => { const newSet = new Set(prev); if (newSet.has(request.id)) newSet.delete(request.id); else newSet.add(request.id); return newSet; }); }}>
-                                      <Checkbox checked={selectedRequestIds.has(request.id)} />
+                                  <TableRow key={request.id} className="h-8 bg-muted/10 hover:bg-muted/20">
+                                    <TableCell className="py-1">
+                                      <span className="text-[10px] text-muted-foreground pl-5">—</span>
                                     </TableCell>
-                                    <TableCell className="cursor-pointer py-1.5" onClick={() => openDetailDialog(request)}>
-                                      <div className="pl-6">
-                                        <div className="font-medium text-sm">{request.part_name}</div>
+                                    <TableCell className="cursor-pointer py-1" onClick={() => openDetailDialog(request)}>
+                                      <div>
+                                        <div className="font-medium text-xs leading-tight">{request.part_name}</div>
                                         {request.part_number && (
-                                          <div className="text-[11px] text-muted-foreground font-mono">{request.part_number}</div>
+                                          <div className="text-[10px] text-muted-foreground font-mono leading-tight">{request.part_number}</div>
                                         )}
                                         {request.vendor?.vendor_name && (
-                                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                            <Store className="h-3 w-3" />
+                                          <div className="text-[10px] text-muted-foreground flex items-center gap-1 leading-tight">
+                                            <Store className="h-2.5 w-2.5" />
                                             {request.vendor.vendor_name}
                                           </div>
                                         )}
                                         {(!request.vendor_id || !request.unit_price) && !request.cash_manager_approval_date && (
-                                          <div className="mt-1">
+                                          <div className="mt-0.5">
                                             <Badge
                                               variant="outline"
-                                              className="text-[10px] border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                              className="text-[9px] px-1 py-0 h-4 border-orange-300 text-orange-600 dark:border-orange-700 dark:text-orange-400 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/20"
                                               onClick={(e) => { e.stopPropagation(); setSelectedRequest(request); setCashManagerDetailsDialogOpen(true); }}
                                             >
-                                              <AlertTriangle className="h-3 w-3 mr-1" />
+                                              <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
                                               {!request.vendor_id && !request.unit_price ? "Needs vendor & price" : !request.vendor_id ? "Needs vendor" : "Needs price"}
                                             </Badge>
                                           </div>
                                         )}
                                         {request.urgency_level && (
-                                          <div className="mt-1">
+                                          <div className="mt-0.5">
                                             {getUrgencyBadge(request.urgency_level)}
                                           </div>
                                         )}
                                       </div>
                                     </TableCell>
-                                    <TableCell>
-                                      <span className="text-xs text-muted-foreground">—</span>
-                                    </TableCell>
-                                    <TableCell className="font-mono">{request.quantity}</TableCell>
-                                    <TableCell>
+                                    <TableCell className="py-1 font-mono text-xs">{request.quantity}</TableCell>
+                                    <TableCell className="py-1">
                                       {request.job_card_id ? (
                                         <div className="flex items-center gap-1">
-                                          <Badge variant="outline" className="text-xs">
-                                            <FileText className="h-3 w-3 mr-1" />
+                                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                            <FileText className="h-2.5 w-2.5 mr-0.5" />
                                             {request.job_card?.job_number || "Job Card"}
                                           </Badge>
                                           {request.job_card?.vehicle_id && vehicleFleetMap.get(request.job_card.vehicle_id) && (
-                                            <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                                               <Truck className="h-2.5 w-2.5 mr-0.5" />
                                               {vehicleFleetMap.get(request.job_card.vehicle_id)}
                                             </Badge>
                                           )}
                                         </div>
                                       ) : request.inventory_id ? (
-                                        <Badge variant="outline" className="text-xs">
-                                          <Package className="h-3 w-3 mr-1" />
+                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                          <Package className="h-2.5 w-2.5 mr-0.5" />
                                           Restock
                                         </Badge>
                                       ) : (
-                                        <Badge variant="secondary" className="text-xs">Manual</Badge>
+                                        <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">Manual</Badge>
                                       )}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell className="py-1">
                                       <div className="flex items-center gap-1">
                                         <Tooltip>
                                           <TooltipTrigger>
-                                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium", (request.ir_number || request.sage_requisition_date) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
-                                              {(request.ir_number || request.sage_requisition_date) ? <Check className="h-3 w-3" /> : "1"}
+                                            <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium", (request.ir_number || request.sage_requisition_date) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                                              {(request.ir_number || request.sage_requisition_date) ? <Check className="h-2.5 w-2.5" /> : "1"}
                                             </div>
                                           </TooltipTrigger>
                                           <TooltipContent><p className="font-semibold">IR Created</p></TooltipContent>
                                         </Tooltip>
-                                        <div className="w-4 h-0.5 bg-gray-200" />
+                                        <div className="w-3 h-0.5 bg-gray-200" />
                                         <Tooltip>
                                           <TooltipTrigger>
-                                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium", request.cash_manager_approval_date ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
-                                              {request.cash_manager_approval_date ? <Check className="h-3 w-3" /> : "2"}
+                                            <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium", request.cash_manager_approval_date ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                                              {request.cash_manager_approval_date ? <Check className="h-2.5 w-2.5" /> : "2"}
                                             </div>
                                           </TooltipTrigger>
                                           <TooltipContent><p className="font-semibold">Cash Manager</p></TooltipContent>
                                         </Tooltip>
-                                        <div className="w-4 h-0.5 bg-gray-200" />
+                                        <div className="w-3 h-0.5 bg-gray-200" />
                                         <Tooltip>
                                           <TooltipTrigger>
-                                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium", request.ordered_at ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
-                                              {request.ordered_at ? <Check className="h-3 w-3" /> : "3"}
+                                            <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium", request.ordered_at ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                                              {request.ordered_at ? <Check className="h-2.5 w-2.5" /> : "3"}
                                             </div>
                                           </TooltipTrigger>
                                           <TooltipContent><p className="font-semibold">Ordered</p></TooltipContent>
                                         </Tooltip>
-                                        <div className="w-4 h-0.5 bg-gray-200" />
+                                        <div className="w-3 h-0.5 bg-gray-200" />
                                         <Tooltip>
                                           <TooltipTrigger>
-                                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium", request.received_date ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
-                                              {request.received_date ? <Check className="h-3 w-3" /> : "4"}
+                                            <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium", request.received_date ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400")}>
+                                              {request.received_date ? <Check className="h-2.5 w-2.5" /> : "4"}
                                             </div>
                                           </TooltipTrigger>
                                           <TooltipContent><p className="font-semibold">Received</p></TooltipContent>
                                         </Tooltip>
                                       </div>
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell className="py-1">
                                       {request.received_date ? (
-                                        <Badge variant="outline" className={cn("text-xs", (getLeadTime(request)?.days ?? 0) <= 3 && "border-green-500 text-green-600", (getLeadTime(request)?.days ?? 0) > 7 && "border-red-500 text-red-600")}>
-                                          <Clock className="h-3 w-3 mr-1" />
+                                        <Badge variant="outline" className={cn("text-[10px] px-1 py-0 h-4", (getLeadTime(request)?.days ?? 0) <= 3 && "border-green-500 text-green-600", (getLeadTime(request)?.days ?? 0) > 7 && "border-red-500 text-red-600")}>
+                                          <Clock className="h-2.5 w-2.5 mr-0.5" />
                                           {getLeadTime(request)?.formatted}
                                         </Badge>
                                       ) : request.ordered_at ? (
-                                        <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">
-                                          <Clock className="h-3 w-3 mr-1 animate-pulse" />
+                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-blue-500 text-blue-600">
+                                          <Clock className="h-2.5 w-2.5 mr-0.5 animate-pulse" />
                                           {calculateLeadTime(request.ordered_at, new Date().toISOString())?.formatted || 'Pending'}
                                         </Badge>
                                       ) : (
-                                        <span className="text-xs text-muted-foreground">—</span>
+                                        <span className="text-[10px] text-muted-foreground">—</span>
                                       )}
                                     </TableCell>
-                                    <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                    <TableCell>
+                                    <TableCell className="py-1">{getStatusBadge(request.status)}</TableCell>
+                                    <TableCell className="py-1">
                                       <div className="flex gap-1 flex-wrap">
                                         {(request.ir_number || request.sage_requisition_date) && !request.cash_manager_approval_date && (
-                                          <Button size="sm" variant="outline" onClick={() => openCashManagerDialog(request)}><CreditCard className="h-3 w-3 mr-1" />Approve</Button>
+                                          <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openCashManagerDialog(request)}><CreditCard className="h-2.5 w-2.5 mr-1" />Approve</Button>
                                         )}
                                         {request.cash_manager_approval_date && !request.ordered_at && (
-                                          <Button size="sm" variant="outline" onClick={() => openOrderDialog(request)}><ShoppingCart className="h-3 w-3 mr-1" />Order</Button>
+                                          <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openOrderDialog(request)}><ShoppingCart className="h-2.5 w-2.5 mr-1" />Order</Button>
                                         )}
                                         {request.ordered_at && !request.received_date && (
-                                          <Button size="sm" variant="outline" onClick={() => openReceiveDialog(request)}><Truck className="h-3 w-3 mr-1" />Receive</Button>
+                                          <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => openReceiveDialog(request)}><Truck className="h-2.5 w-2.5 mr-1" />Receive</Button>
                                         )}
                                         {/* Show Allocate button when: received OR (approved and has inventory with sufficient stock) */}
                                         {(request.received_date || (request.cash_manager_approval_date && request.inventory_id)) && request.job_card_id && !request.allocated_to_job_card && (
-                                          <Button size="sm" className={isTyreRequest(request) ? "bg-purple-600 hover:bg-purple-700" : "bg-green-600 hover:bg-green-700"} onClick={() => handleAllocateToJobCard(request)} disabled={allocateToJobCard.isPending}>
-                                            {isTyreRequest(request) ? <><Package className="h-3 w-3 mr-1" />To Holding Bay</> : <><CheckCircle className="h-3 w-3 mr-1" />Allocate</>}
+                                          <Button size="sm" className={cn("h-6 px-2 text-[10px]", isTyreRequest(request) ? "bg-purple-600 hover:bg-purple-700" : "bg-green-600 hover:bg-green-700")} onClick={() => handleAllocateToJobCard(request)} disabled={allocateToJobCard.isPending}>
+                                            {isTyreRequest(request) ? <><Package className="h-2.5 w-2.5 mr-1" />To Holding Bay</> : <><CheckCircle className="h-2.5 w-2.5 mr-1" />Allocate</>}
                                           </Button>
                                         )}
                                         {request.allocated_to_job_card && (
-                                          <Badge className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />Fulfilled</Badge>
+                                          <Badge className="bg-green-600 text-[10px] px-1 py-0 h-4"><CheckCircle className="h-2.5 w-2.5 mr-0.5" />Fulfilled</Badge>
                                         )}
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end">
                                             <DropdownMenuItem onClick={() => openDetailDialog(request)}><FileText className="h-4 w-4 mr-2" />View Details</DropdownMenuItem>
@@ -2391,14 +2392,9 @@ const Procurement = () => {
                     <div className="flex items-center justify-between">
                       <div />
                       <div className="flex items-center gap-2">
-                        {selectedRestockItems.size > 0 && (
-                          <span className="text-sm text-muted-foreground">
-                            {selectedRestockItems.size} item{selectedRestockItems.size !== 1 ? "s" : ""} selected
-                          </span>
-                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" disabled={lowStockItems.length === 0 && selectedRestockItems.size === 0}>
+                            <Button variant="outline" size="sm" disabled={lowStockItems.length === 0}>
                               <Download className="h-4 w-4 mr-2" />
                               Export
                             </Button>
@@ -2412,15 +2408,6 @@ const Procurement = () => {
                               <FileDown className="h-4 w-4 mr-2" />
                               Export All (PDF)
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={exportRestockToExcel} disabled={selectedRestockItems.size === 0}>
-                              <FileText className="h-4 w-4 mr-2" />
-                              Export Selected (Excel)
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={exportRestockToPDF} disabled={selectedRestockItems.size === 0}>
-                              <FileDown className="h-4 w-4 mr-2" />
-                              Export Selected (PDF)
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -2432,110 +2419,92 @@ const Procurement = () => {
                         <Loader2 className="h-6 w-6 animate-spin" />
                       </div>
                     ) : lowStockItems.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <Table className="min-w-[800px]">
-                          <TableHeader>
-                            <TableRow className="h-8">
-                              <TableHead className="w-[40px] py-1.5">
-                                <Checkbox
-                                  checked={
-                                    lowStockItems.length > 0 &&
-                                    selectedRestockItems.size === lowStockItems.length
-                                  }
-                                  onCheckedChange={toggleAllRestockItems}
-                                  aria-label="Select all items"
-                                />
-                              </TableHead>
-                              <TableHead className="py-1.5 text-xs">Item</TableHead>
-                              <TableHead className="py-1.5 text-xs">Category</TableHead>
-                              <TableHead className="py-1.5 text-xs text-right">Stock</TableHead>
-                              <TableHead className="py-1.5 text-xs text-right">Min</TableHead>
-                              <TableHead className="py-1.5 text-xs text-right">Short</TableHead>
-                              <TableHead className="py-1.5 text-xs">Priority</TableHead>
-                              <TableHead className="py-1.5 text-xs">Supplier</TableHead>
-                              <TableHead className="py-1.5 text-xs">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {lowStockItems.map((item) => (
-                              <TableRow
-                                key={item.id}
-                                className={cn(
-                                  "h-9",
-                                  selectedRestockItems.has(item.id) && "bg-muted/50"
-                                )}
-                              >
-                                <TableCell className="py-1">
-                                  <Checkbox
-                                    checked={selectedRestockItems.has(item.id)}
-                                    onCheckedChange={() => toggleRestockItem(item.id)}
-                                    aria-label={`Select ${item.name}`}
-                                  />
-                                </TableCell>
-                                <TableCell className="py-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-medium text-sm">{item.name}</span>
-                                    <span className="text-[11px] text-muted-foreground font-mono">{item.part_number}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-1">
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">{item.category}</Badge>
-                                </TableCell>
-                                <TableCell className="py-1 text-right font-mono text-sm text-red-600">
-                                  {item.quantity}
-                                </TableCell>
-                                <TableCell className="py-1 text-right font-mono text-sm">
-                                  {item.min_quantity}
-                                </TableCell>
-                                <TableCell className="py-1 text-right font-mono text-sm font-bold text-red-600">
-                                  -{item.shortage}
-                                </TableCell>
-                                <TableCell className="py-1">
-                                  <Select
-                                    value={restockPriorities[item.id] || ""}
-                                    onValueChange={(value) =>
-                                      setRestockPriority(item.id, value as PriorityLevel)
-                                    }
-                                  >
-                                    <SelectTrigger className="w-[130px] h-7 text-xs">
-                                      <SelectValue placeholder="Set priority">
-                                        {restockPriorities[item.id] ? (
-                                          getPriorityBadge(restockPriorities[item.id])
-                                        ) : (
-                                          "Set priority"
-                                        )}
-                                      </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {PRIORITY_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          <div className="flex items-center gap-2">
-                                            <div
-                                              className={`w-2 h-2 rounded-full ${option.color}`}
-                                            />
-                                            {option.label}
-                                          </div>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </TableCell>
-                                <TableCell className="py-1 text-sm">{item.supplier || "—"}</TableCell>
-                                <TableCell className="py-1">
-                                  <Button
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={() => openReplenishDialog(item)}
-                                  >
-                                    <PackagePlus className="h-3 w-3 mr-1" />
-                                    Replenish
-                                  </Button>
-                                </TableCell>
+                      <ScrollArea className="h-[600px]">
+                        <div className="overflow-x-auto">
+                          <Table className="min-w-[800px]">
+                            <TableHeader>
+                              <TableRow className="h-8">
+                                <TableHead className="py-1.5 text-xs">Item</TableHead>
+                                <TableHead className="py-1.5 text-xs">Category</TableHead>
+                                <TableHead className="py-1.5 text-xs text-right">Stock</TableHead>
+                                <TableHead className="py-1.5 text-xs text-right">Min</TableHead>
+                                <TableHead className="py-1.5 text-xs text-right">Short</TableHead>
+                                <TableHead className="py-1.5 text-xs">Priority</TableHead>
+                                <TableHead className="py-1.5 text-xs">Supplier</TableHead>
+                                <TableHead className="py-1.5 text-xs">Actions</TableHead>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                            </TableHeader>
+                            <TableBody>
+                              {lowStockItems.map((item) => (
+                                <TableRow
+                                  key={item.id}
+                                  className="h-9"
+                                >
+                                  <TableCell className="py-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-medium text-sm">{item.name}</span>
+                                      <span className="text-[11px] text-muted-foreground font-mono">{item.part_number}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-1">
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">{item.category}</Badge>
+                                  </TableCell>
+                                  <TableCell className="py-1 text-right font-mono text-sm text-red-600">
+                                    {item.quantity}
+                                  </TableCell>
+                                  <TableCell className="py-1 text-right font-mono text-sm">
+                                    {item.min_quantity}
+                                  </TableCell>
+                                  <TableCell className="py-1 text-right font-mono text-sm font-bold text-red-600">
+                                    -{item.shortage}
+                                  </TableCell>
+                                  <TableCell className="py-1">
+                                    <Select
+                                      value={restockPriorities[item.id] || ""}
+                                      onValueChange={(value) =>
+                                        setRestockPriority(item.id, value as PriorityLevel)
+                                      }
+                                    >
+                                      <SelectTrigger className="w-[130px] h-7 text-xs">
+                                        <SelectValue placeholder="Set priority">
+                                          {restockPriorities[item.id] ? (
+                                            getPriorityBadge(restockPriorities[item.id])
+                                          ) : (
+                                            "Set priority"
+                                          )}
+                                        </SelectValue>
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {PRIORITY_OPTIONS.map((option) => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                            <div className="flex items-center gap-2">
+                                              <div
+                                                className={`w-2 h-2 rounded-full ${option.color}`}
+                                              />
+                                              {option.label}
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell className="py-1 text-sm">{item.supplier || "—"}</TableCell>
+                                  <TableCell className="py-1">
+                                    <Button
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      onClick={() => openReplenishDialog(item)}
+                                    >
+                                      <PackagePlus className="h-3 w-3 mr-1" />
+                                      Replenish
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </ScrollArea>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12">
                         <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
