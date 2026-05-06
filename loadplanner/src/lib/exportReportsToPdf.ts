@@ -14,6 +14,14 @@ import {
 } from "date-fns";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  bucketPunctuality,
+  computeTotals,
+  fmtMin,
+  viewLabel,
+  viewSlug,
+  type PunctualityView,
+} from "@/lib/punctualityPeriods";
 
 // Type extension for jspdf-autotable
 interface jsPDFWithAutoTable extends jsPDF {
@@ -860,7 +868,11 @@ export function exportVarianceToPdf(loads: Load[], timeRange: ReportOptions["tim
 }
 
 // Punctuality details PDF (per-load planned vs actual with variances)
-export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["timeRange"] = "3months"): void {
+export function exportPunctualityToPdf(
+  loads: Load[],
+  timeRange: ReportOptions["timeRange"] = "3months",
+  view: PunctualityView = "total",
+): void {
   const filteredLoads = getFilteredLoads(loads, timeRange);
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -868,6 +880,8 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
   const primary: [number, number, number] = pdfColors.navy;
   const text: [number, number, number] = pdfColors.textPrimary;
   const reportDate = format(new Date(), "MMMM d, yyyy");
+  const totals = computeTotals(filteredLoads);
+  const buckets = bucketPunctuality(filteredLoads, view);
 
   // Header — corporate banner
   doc.setFillColor(...pdfColors.navy);
@@ -886,7 +900,7 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
   doc.setTextColor(...pdfColors.navy);
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.text("PUNCTUALITY DETAILS", pageWidth - 12, 14, { align: "right" });
+  doc.text(`PUNCTUALITY — ${viewLabel(view).toUpperCase()}`, pageWidth - 12, 14, { align: "right" });
 
   doc.setTextColor(...pdfColors.textMuted);
   doc.setFontSize(9);
@@ -896,6 +910,105 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
   doc.setDrawColor(...pdfColors.navy);
   doc.setLineWidth(0.5);
   doc.line(6, 23, pageWidth - 6, 23);
+
+  // KPI summary block (always shown)
+  autoTable(doc, {
+    startY: 28,
+    head: [[
+      { content: "Loads", styles: { halign: "center" as const } },
+      { content: "Avg Origin Arr (m)", styles: { halign: "center" as const } },
+      { content: "Avg Origin Dep (m)", styles: { halign: "center" as const } },
+      { content: "Avg Dest Arr (m)", styles: { halign: "center" as const } },
+      { content: "Avg Dest Dep (m)", styles: { halign: "center" as const } },
+      { content: "On-Time", styles: { halign: "center" as const } },
+      { content: "Late (>15m)", styles: { halign: "center" as const } },
+      { content: "Early (<-5m)", styles: { halign: "center" as const } },
+    ]],
+    body: [[
+      String(totals.count),
+      fmtMin(totals.avgOriginArr),
+      fmtMin(totals.avgOriginDep),
+      fmtMin(totals.avgDestArr),
+      fmtMin(totals.avgDestDep),
+      String(totals.onTime),
+      String(totals.late),
+      String(totals.early),
+    ]],
+    theme: "grid",
+    headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8, halign: "center", cellPadding: 2 },
+    bodyStyles: { textColor: text, fontSize: 9, halign: "center", fontStyle: "bold", cellPadding: 2.5 },
+    margin: { left: 6, right: 6 },
+    tableWidth: pageWidth - 12,
+  });
+
+  let detailsStartY = ((doc as jsPDFWithAutoTable).lastAutoTable?.finalY ?? 28) + 4;
+
+  // Period breakdown (Weekly / Monthly)
+  if (view !== "total" && buckets.length > 0) {
+    const periodHead = [[
+      { content: viewLabel(view), styles: { halign: "left" as const } },
+      { content: "Loads", styles: { halign: "center" as const } },
+      { content: "Avg O-Arr", styles: { halign: "center" as const } },
+      { content: "Avg O-Dep", styles: { halign: "center" as const } },
+      { content: "Avg D-Arr", styles: { halign: "center" as const } },
+      { content: "Avg D-Dep", styles: { halign: "center" as const } },
+      { content: "On-Time", styles: { halign: "center" as const } },
+      { content: "Late", styles: { halign: "center" as const } },
+      { content: "Early", styles: { halign: "center" as const } },
+    ]];
+    const periodBody: (string | number)[][] = buckets.map((b) => [
+      b.label,
+      b.count,
+      fmtMin(b.avgOriginArr),
+      fmtMin(b.avgOriginDep),
+      fmtMin(b.avgDestArr),
+      fmtMin(b.avgDestDep),
+      b.onTime,
+      b.late,
+      b.early,
+    ]);
+    periodBody.push([
+      "TOTAL",
+      totals.count,
+      fmtMin(totals.avgOriginArr),
+      fmtMin(totals.avgOriginDep),
+      fmtMin(totals.avgDestArr),
+      fmtMin(totals.avgDestDep),
+      totals.onTime,
+      totals.late,
+      totals.early,
+    ]);
+
+    autoTable(doc, {
+      startY: detailsStartY,
+      head: periodHead,
+      body: periodBody,
+      theme: "grid",
+      headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8, halign: "center", cellPadding: 2 },
+      bodyStyles: { textColor: text, fontSize: 8, cellPadding: 1.8 },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { cellWidth: 70, fontStyle: "bold" },
+        1: { halign: "center" },
+        2: { halign: "right" },
+        3: { halign: "right" },
+        4: { halign: "right" },
+        5: { halign: "right" },
+        6: { halign: "center", textColor: [21, 128, 61], fontStyle: "bold" },
+        7: { halign: "center", textColor: [185, 28, 28], fontStyle: "bold" },
+        8: { halign: "center", textColor: [29, 78, 216], fontStyle: "bold" },
+      },
+      didParseCell: (data) => {
+        if (data.section === "body" && data.row.index === periodBody.length - 1) {
+          data.cell.styles.fillColor = [229, 231, 235];
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+      margin: { left: 6, right: 6 },
+      tableWidth: pageWidth - 12,
+    });
+    detailsStartY = ((doc as jsPDFWithAutoTable).lastAutoTable?.finalY ?? detailsStartY) + 4;
+  }
 
   // Use the shared parser
   const getTimeWindow = (load: Load): timeWindowLib.TimeWindowDataFull | null => {
@@ -944,7 +1057,7 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
 
   // Group header row for visual clarity (Origin / Destination sections)
   autoTable(doc, {
-    startY: 28,
+    startY: detailsStartY,
     head: [
       [
         { content: "Load Details", colSpan: 7, styles: { fillColor: primary, textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
@@ -1029,7 +1142,7 @@ export function exportPunctualityToPdf(loads: Load[], timeRange: ReportOptions["
     doc.text(`Page ${i} of ${pageCount} | ${SYSTEM_NAME}`, pageWidth / 2, pageHeight - 6, { align: "center" });
   }
 
-  doc.save(`Matanuska_Punctuality_Details_${format(new Date(), "yyyy-MM-dd")}.pdf`);
+  doc.save(`Matanuska_Punctuality_${viewSlug(view)}_${format(new Date(), "yyyy-MM-dd")}.pdf`);
 }
 
 export type { ReportOptions };

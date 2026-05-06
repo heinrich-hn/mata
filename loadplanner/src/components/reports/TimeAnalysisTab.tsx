@@ -8,6 +8,14 @@ import type {
 } from "@/components/reports/types";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -18,7 +26,9 @@ import { TabsContent } from "@/components/ui/tabs";
 import type { Load } from "@/hooks/useTrips";
 import { exportPunctualityToExcel } from "@/lib/exportPunctualityToExcel";
 import { exportPunctualityToPdf } from "@/lib/exportReportsToPdf";
+import type { PunctualityView } from "@/lib/punctualityPeriods";
 import {
+  ArrowDownTrayIcon,
   ChartBarIcon,
   ClockIcon,
   MapIcon,
@@ -581,20 +591,48 @@ export function TimeAnalysisTab({
 
       {/* Export Buttons & Delay Charts */}
       <div className="flex gap-2 justify-end">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => exportPunctualityToExcel(filteredLoads, timeRange)}
-        >
-          Export Excel (Punctuality)
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => exportPunctualityToPdf(filteredLoads, timeRange)}
-        >
-          Export PDF (Punctuality)
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="gap-1">
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              Export PDF
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>Punctuality Report</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => exportPunctualityToPdf(filteredLoads, timeRange, "total" as PunctualityView)}>
+              Total Summary
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportPunctualityToPdf(filteredLoads, timeRange, "week" as PunctualityView)}>
+              By Week
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportPunctualityToPdf(filteredLoads, timeRange, "month" as PunctualityView)}>
+              By Month
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="gap-1">
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              Export Excel
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>Punctuality Report</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => exportPunctualityToExcel(filteredLoads, timeRange, "total" as PunctualityView)}>
+              Total Summary
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportPunctualityToExcel(filteredLoads, timeRange, "week" as PunctualityView)}>
+              By Week
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => exportPunctualityToExcel(filteredLoads, timeRange, "month" as PunctualityView)}>
+              By Month
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

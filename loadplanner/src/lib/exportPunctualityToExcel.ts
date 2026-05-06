@@ -6,8 +6,16 @@ import XLSX from "xlsx-js-style";
 import {
   COMPANY_NAME,
   xlGoodVariance, xlBadVariance, xlNeutralVariance,
+  xlTotalRow,
   applyHeaderStyle, applyTitleRows,
 } from "@/lib/exportStyles";
+import {
+  bucketPunctuality,
+  computeTotals,
+  viewLabel,
+  viewSlug,
+  type PunctualityView,
+} from "@/lib/punctualityPeriods";
 
 /** Compute variance in minutes using SAST-aware conversion */
 function minutesVariance(planned?: string, actual?: string): number | null {
@@ -30,7 +38,100 @@ function varianceStyle(v: number | null) {
   return v > 0 ? xlBadVariance : xlGoodVariance;
 }
 
-export function exportPunctualityToExcel(loads: Load[], timeRange: "3months" | "6months" | "12months") {
+function fmt(v: number | null): string | number {
+  return v === null ? "" : Number(v.toFixed(1));
+}
+
+export function exportPunctualityToExcel(
+  loads: Load[],
+  timeRange: "3months" | "6months" | "12months",
+  view: PunctualityView = "total",
+) {
+  const wb = XLSX.utils.book_new();
+  const totals = computeTotals(loads);
+
+  // -- Summary sheet --
+  const summaryAoa: (string | number)[][] = [
+    [`${COMPANY_NAME} — Punctuality ${viewLabel(view)} (${timeRange})`],
+    [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`],
+    [],
+    ["Metric", "Value"],
+    ["Total Loads", totals.count],
+    ["Avg Origin Arrival Variance (min)", fmt(totals.avgOriginArr)],
+    ["Avg Origin Departure Variance (min)", fmt(totals.avgOriginDep)],
+    ["Avg Destination Arrival Variance (min)", fmt(totals.avgDestArr)],
+    ["Avg Destination Departure Variance (min)", fmt(totals.avgDestDep)],
+    ["On-Time Loads (|var| ≤ 15m)", totals.onTime],
+    ["Late Loads (>15m)", totals.late],
+    ["Early Loads (<-5m)", totals.early],
+  ];
+  const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
+  applyTitleRows(summaryWs, 2, []);
+  applyHeaderStyle(summaryWs, 3, 2);
+  summaryWs["!cols"] = [{ wch: 42 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
+
+  // -- Periods sheet (Weekly / Monthly) --
+  if (view !== "total") {
+    const buckets = bucketPunctuality(loads, view);
+    const headerRow = [
+      viewLabel(view),
+      "Loads",
+      "Avg O-Arr (m)",
+      "Avg O-Dep (m)",
+      "Avg D-Arr (m)",
+      "Avg D-Dep (m)",
+      "On-Time",
+      "Late",
+      "Early",
+    ];
+    const periodAoa: (string | number)[][] = [
+      [`${COMPANY_NAME} — Punctuality ${viewLabel(view)} Breakdown`],
+      [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`],
+      [],
+      headerRow,
+    ];
+    for (const b of buckets) {
+      periodAoa.push([
+        b.label,
+        b.count,
+        fmt(b.avgOriginArr),
+        fmt(b.avgOriginDep),
+        fmt(b.avgDestArr),
+        fmt(b.avgDestDep),
+        b.onTime,
+        b.late,
+        b.early,
+      ]);
+    }
+    periodAoa.push([
+      "TOTAL",
+      totals.count,
+      fmt(totals.avgOriginArr),
+      fmt(totals.avgOriginDep),
+      fmt(totals.avgDestArr),
+      fmt(totals.avgDestDep),
+      totals.onTime,
+      totals.late,
+      totals.early,
+    ]);
+    const periodWs = XLSX.utils.aoa_to_sheet(periodAoa);
+    applyTitleRows(periodWs, headerRow.length, []);
+    applyHeaderStyle(periodWs, 3, headerRow.length);
+    const totalRowIdx = periodAoa.length - 1;
+    for (let c = 0; c < headerRow.length; c++) {
+      const ref = encodeCell(totalRowIdx, c);
+      const cell = periodWs[ref];
+      if (cell) cell.s = xlTotalRow;
+    }
+    periodWs["!cols"] = [
+      { wch: 38 },
+      { wch: 8 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+      { wch: 10 }, { wch: 10 }, { wch: 10 },
+    ];
+    XLSX.utils.book_append_sheet(wb, periodWs, viewLabel(view));
+  }
   const detailsRows = loads.map((l) => {
     const t = timeWindowLib.parseTimeWindowOrNull(l.time_window);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,10 +168,9 @@ export function exportPunctualityToExcel(loads: Load[], timeRange: "3months" | "
     };
   });
 
-  const titleRow = [`${COMPANY_NAME} — Punctuality Report (${timeRange})`];
+  const titleRow = [`${COMPANY_NAME} — Punctuality Details (${timeRange})`];
   const genRow = [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`];
 
-  const wb = XLSX.utils.book_new();
   const detailsWs = XLSX.utils.aoa_to_sheet([titleRow, genRow, []]);
   XLSX.utils.sheet_add_json(detailsWs, detailsRows.map(d => d.row), { origin: "A4" });
 
@@ -108,5 +208,5 @@ export function exportPunctualityToExcel(loads: Load[], timeRange: "3months" | "
   XLSX.utils.book_append_sheet(wb, detailsWs, "Details");
 
   const nowLabel = format(new Date(), "yyyyMMdd-HHmm");
-  XLSX.writeFile(wb, `Punctuality-${timeRange}-${nowLabel}.xlsx`);
+  XLSX.writeFile(wb, `Punctuality-${viewSlug(view)}-${timeRange}-${nowLabel}.xlsx`);
 }

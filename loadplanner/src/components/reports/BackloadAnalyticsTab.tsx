@@ -6,6 +6,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  exportBackloadToExcel,
+  exportBackloadToPdf,
+  type BackloadExportData,
+  type BackloadExportView,
+} from "@/lib/exportBackload";
+import { ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 import { CustomTooltip, PieTooltip } from "@/components/reports/ChartTooltips";
 import type {
   BackloadCargoTypeData,
@@ -187,7 +203,7 @@ function PieDistributionChart({
   data: BackloadDistribution[];
 }) {
   return (
-    <div className={`h-[${CHART_HEIGHTS.pie}px]`}>
+    <div style={{ height: CHART_HEIGHTS.pie }}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -319,6 +335,54 @@ export function BackloadAnalyticsTab({
   const hasRouteAnalysis = backloadRouteAnalysis.length > 0;
   const hasCargoTypes = backloadCargoTypeDistribution.length > 0;
 
+  const exportData: BackloadExportData = {
+    summary: backloadSummaryStats,
+    movements: backloadMovements,
+    packagingDistribution: backloadPackagingDistribution,
+    statusDistribution: backloadStatusDistribution,
+    destinationDistribution: backloadDestinationDistribution,
+    routeAnalysis: backloadRouteAnalysis,
+    cargoTypeDistribution: backloadCargoTypeDistribution,
+  };
+
+  const handleExportPdf = (view: BackloadExportView) => exportBackloadToPdf(exportData, view);
+  const handleExportExcel = (view: BackloadExportView) => exportBackloadToExcel(exportData, view);
+
+  const ExportControls = () => (
+    <div className="flex justify-end gap-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2">
+            <ArrowDownTrayIcon className="h-4 w-4" />
+            Export PDF
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel>Backload Report</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleExportPdf("total")}>Total Summary</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleExportPdf("week")}>By Week</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleExportPdf("month")}>By Month</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2">
+            <ArrowDownTrayIcon className="h-4 w-4" />
+            Export Excel
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel>Backload Workbook</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleExportExcel("total")}>Total Summary</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleExportExcel("week")}>By Week</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleExportExcel("month")}>By Month</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
   const summaryCards = useMemo<SummaryCardConfig[]>(
     () => [
       {
@@ -413,6 +477,7 @@ export function BackloadAnalyticsTab({
   if (!hasMovements) {
     return (
       <TabsContent value="backload" className="space-y-6">
+        <ExportControls />
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {summaryCards.map((config) => (
@@ -434,6 +499,7 @@ export function BackloadAnalyticsTab({
 
   return (
     <TabsContent value="backload" className="space-y-6">
+      <ExportControls />
       {/* Backload Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {summaryCards.map((config) => (
@@ -495,7 +561,7 @@ export function BackloadAnalyticsTab({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className={`h-[${CHART_HEIGHTS.bar}px]`}>
+          <div style={{ height: CHART_HEIGHTS.bar }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={backloadDestinationDistribution}
@@ -551,7 +617,7 @@ export function BackloadAnalyticsTab({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className={`h-[${CHART_HEIGHTS.area}px]`}>
+          <div style={{ height: CHART_HEIGHTS.area }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={backloadWeeklyTrend}
@@ -609,7 +675,7 @@ export function BackloadAnalyticsTab({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className={`h-[${CHART_HEIGHTS.barLarge}px]`}>
+            <div style={{ height: CHART_HEIGHTS.barLarge }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={backloadRouteAnalysis}
@@ -712,7 +778,7 @@ export function BackloadAnalyticsTab({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className={`h-[${CHART_HEIGHTS.barSmall}px]`}>
+            <div style={{ height: CHART_HEIGHTS.barSmall }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={backloadCargoTypeDistribution}
