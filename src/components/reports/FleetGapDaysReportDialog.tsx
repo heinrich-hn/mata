@@ -14,13 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import ExcelJS from "exceljs";
@@ -48,19 +41,17 @@ type Trip = {
     status?: string | null;
     departure_date?: string | null;
     planned_departure_date?: string | null;
+    actual_departure_date?: string | null;
     arrival_date?: string | null;
     planned_arrival_date?: string | null;
+    actual_arrival_date?: string | null;
+    offloading_completed_at?: string | null;
+    completed_at?: string | null;
     distance_km?: number | null;
     base_revenue?: number | null;
     additional_revenue?: number | null;
     final_invoice_amount?: number | null;
     vehicle_type?: string | null;
-};
-
-type GapRow = {
-    fleet: string;
-    nextDeparture: Date;
-    gapDays: number;
 };
 
 type FilterState = {
@@ -84,6 +75,20 @@ const monthsAgoISO = (n: number) => {
     return d.toISOString().split("T")[0];
 };
 
+// Convert any date-like value into a stable UTC-midnight day key. Strings that
+// look like "yyyy-mm-dd[Thh:mm:ss...]" are parsed positionally so timezone
+// drift can't shift the day by ±1.
+const toDayKey = (raw: string | number | Date | null | undefined): number | null => {
+    if (raw == null || raw === "") return null;
+    if (typeof raw === "string") {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+        if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
+    const d = raw instanceof Date ? raw : new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+};
+
 // ISO 8601 week number (Monday-start, week containing Thursday belongs to that year).
 const isoWeekKey = (d: Date): string => {
     const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -92,6 +97,35 @@ const isoWeekKey = (d: Date): string => {
     const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
     const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
     return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+};
+
+// Convert an HTML <input type="week"> value (e.g. "2026-W18") to the Monday
+// (start) and Sunday (end) ISO date strings (yyyy-mm-dd) for that ISO week.
+const isoWeekToDateRange = (weekStr: string): { from: string; to: string } | null => {
+    const m = /^(\d{4})-W(\d{2})$/.exec(weekStr);
+    if (!m) return null;
+    const year = Number(m[1]);
+    const week = Number(m[2]);
+    // Per ISO 8601: week 1 contains the year's first Thursday. Find Jan 4 (always in week 1)
+    // and walk back to its Monday, then add (week-1)*7 days.
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    const jan4Day = jan4.getUTCDay() || 7; // 1..7 (Mon..Sun)
+    const week1Monday = new Date(jan4);
+    week1Monday.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+    const monday = new Date(week1Monday);
+    monday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    const toISO = (d: Date) => d.toISOString().split("T")[0];
+    return { from: toISO(monday), to: toISO(sunday) };
+};
+
+// Convert a yyyy-mm-dd string to its ISO week key (yyyy-Www) for the <input type="week"> control.
+const dateToIsoWeekInput = (iso: string): string => {
+    if (!iso) return "";
+    const [y, m, d] = iso.split("-").map(Number);
+    if (!y || !m || !d) return "";
+    return isoWeekKey(new Date(y, m - 1, d));
 };
 
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
@@ -103,6 +137,23 @@ const fmtDateLong = (d: Date) =>
 const fmt2 = (n: number) =>
     n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Fleets included in the Gap Days report. Anything outside this list is
+// excluded from both the dropdown and the report output.
+const REPORT_FLEETS = new Set([
+    "21H",
+    "22H",
+    "23H",
+    "24H",
+    "26H",
+    "28H",
+    "29H",
+    "30H",
+    "31H",
+    "32H",
+    "33H",
+    "34H",
+]);
+
 // ── Component ───────────────────────────────────────────────────────────────
 export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
     const { toast } = useToast();
@@ -110,6 +161,10 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
     const [exporting, setExporting] = useState(false);
     const [exportingPdf, setExportingPdf] = useState(false);
     const [allTrips, setAllTrips] = useState<Trip[]>([]);
+    const [allVehicles, setAllVehicles] = useState<
+        { fleet_number: string; vehicle_type: string | null }[]
+    >([]);
+    const [periodMode, setPeriodMode] = useState<"date" | "week">("date");
     const [filters, setFilters] = useState<FilterState>({
         from: monthsAgoISO(3),
         to: todayISO(),
@@ -126,20 +181,62 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         (async () => {
             setLoading(true);
             try {
-                const { data, error } = await supabase
-                    .from("trips")
-                    .select("*, vehicles:fleet_vehicle_id(fleet_number, vehicle_type)")
-                    .order("departure_date", { ascending: true });
-                if (error) throw error;
-                const trips: Trip[] = (data || []).map((t: Record<string, unknown>) => {
+                // Page through trips to bypass PostgREST's default 1000-row cap.
+                const PAGE_SIZE = 1000;
+                const fetchTripsPage = (from: number, to: number) =>
+                    supabase
+                        .from("trips")
+                        .select(
+                            "*, vehicles:fleet_vehicle_id(fleet_number, vehicle_type), wialon_vehicles:vehicle_id(fleet_number, name)"
+                        )
+                        .order("departure_date", { ascending: true })
+                        .range(from, to);
+                const tripsAll: Record<string, unknown>[] = [];
+                for (let page = 0; page < 50; page++) {
+                    const from = page * PAGE_SIZE;
+                    const to = from + PAGE_SIZE - 1;
+                    const { data, error } = await fetchTripsPage(from, to);
+                    if (error) throw error;
+                    const rows = (data || []) as Record<string, unknown>[];
+                    tripsAll.push(...rows);
+                    if (rows.length < PAGE_SIZE) break;
+                }
+                const vehiclesRes = await supabase
+                    .from("vehicles")
+                    .select("fleet_number, vehicle_type, active")
+                    .eq("active", true);
+                if (vehiclesRes.error) throw vehiclesRes.error;
+                const tripsRes = { data: tripsAll, error: null as null };
+                const extractFleetFromName = (name: string | null | undefined): string | null => {
+                    if (!name) return null;
+                    const first = name.split(" - ")[0]?.trim();
+                    if (first && /^[\d]+[A-Z]+$|^[A-Z]+$/.test(first)) return first;
+                    return null;
+                };
+                const trips: Trip[] = (tripsRes.data || []).map((t: Record<string, unknown>) => {
                     const v = t.vehicles as { fleet_number?: string; vehicle_type?: string } | null;
+                    const w = t.wialon_vehicles as { fleet_number?: string; name?: string } | null;
+                    const fleetNumber =
+                        v?.fleet_number ||
+                        w?.fleet_number ||
+                        extractFleetFromName(w?.name) ||
+                        null;
                     return {
                         ...(t as Trip),
-                        fleet_number: v?.fleet_number || null,
+                        fleet_number: fleetNumber,
                         vehicle_type: v?.vehicle_type || null,
                     };
                 });
-                if (!cancelled) setAllTrips(trips);
+                const vehicles = (vehiclesRes.data || [])
+                    .filter((v) => v.fleet_number)
+                    .map((v) => ({
+                        fleet_number: v.fleet_number as string,
+                        vehicle_type: (v.vehicle_type as string | null) ?? null,
+                    }));
+                if (!cancelled) {
+                    setAllTrips(trips);
+                    setAllVehicles(vehicles);
+                }
             } catch (err) {
                 console.error(err);
                 if (!cancelled)
@@ -157,16 +254,20 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         };
     }, [open, toast]);
 
-    // ── Derive option lists from loaded trips ───────────────────────────────
+    // ── Derive option lists from loaded trips + vehicles ────────────────────
     const options = useMemo(() => {
         const vts = new Set<string>();
         const drs = new Set<string>();
         const fls = new Set<string>();
         const rts = new Set<string>();
+        for (const v of allVehicles) {
+            if (v.vehicle_type) vts.add(v.vehicle_type);
+            if (v.fleet_number && REPORT_FLEETS.has(v.fleet_number)) fls.add(v.fleet_number);
+        }
         for (const t of allTrips) {
             if (t.vehicle_type) vts.add(t.vehicle_type);
             if (t.driver_name) drs.add(t.driver_name);
-            if (t.fleet_number) fls.add(t.fleet_number);
+            if (t.fleet_number && REPORT_FLEETS.has(t.fleet_number)) fls.add(t.fleet_number);
             if (t.origin && t.destination) rts.add(`${t.origin} → ${t.destination}`);
         }
         return {
@@ -175,79 +276,7 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
             fleets: [...fls].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
             routes: [...rts].sort(),
         };
-    }, [allTrips]);
-
-    // ── Build filtered gap rows + total fleets in scope ─────────────────────
-    const { gapRows, totalFleetsInScope } = useMemo(() => {
-        const fromDate = filters.from ? new Date(filters.from) : null;
-        const toDate = filters.to ? new Date(`${filters.to}T23:59:59`) : null;
-
-        const trips = allTrips.filter((t) => {
-            if (!t.fleet_number) return false;
-            if (filters.vehicleTypes.size && !filters.vehicleTypes.has(t.vehicle_type || ""))
-                return false;
-            if (filters.drivers.size && !filters.drivers.has(t.driver_name || "")) return false;
-            if (filters.fleets.size && !filters.fleets.has(t.fleet_number || "")) return false;
-            if (filters.routes.size) {
-                const r = `${t.origin || ""} → ${t.destination || ""}`;
-                if (!filters.routes.has(r)) return false;
-            }
-            const dep = t.departure_date || t.planned_departure_date;
-            if (!dep) return false;
-            const depD = new Date(dep);
-            if (fromDate && depD < fromDate) return false;
-            if (toDate && depD > toDate) return false;
-            return true;
-        });
-
-        const fleetSet = new Set<string>();
-        const byFleet = new Map<string, Trip[]>();
-        for (const t of trips) {
-            const fn = t.fleet_number!;
-            fleetSet.add(fn);
-            if (!byFleet.has(fn)) byFleet.set(fn, []);
-            byFleet.get(fn)!.push(t);
-        }
-        const rows: GapRow[] = [];
-        for (const [fleet, list] of byFleet.entries()) {
-            list.sort((a, b) => {
-                const da = new Date(a.departure_date || a.planned_departure_date || 0).getTime();
-                const db = new Date(b.departure_date || b.planned_departure_date || 0).getTime();
-                return da - db;
-            });
-            for (let i = 1; i < list.length; i++) {
-                const prev = list[i - 1];
-                const curr = list[i];
-                const prevEnd = new Date(prev.arrival_date || prev.planned_arrival_date || 0);
-                const currStart = new Date(
-                    curr.departure_date || curr.planned_departure_date || 0,
-                );
-                if (Number.isNaN(prevEnd.getTime()) || Number.isNaN(currStart.getTime()))
-                    continue;
-                // Count calendar days strictly between prevEnd and currStart.
-                // Example: prevEnd = 26/04, currStart = 28/04 → 1 gap day (27/04).
-                // Same-day or next-day continuation → 0 gap days.
-                const prevEndDay = Date.UTC(
-                    prevEnd.getFullYear(),
-                    prevEnd.getMonth(),
-                    prevEnd.getDate(),
-                );
-                const currStartDay = Date.UTC(
-                    currStart.getFullYear(),
-                    currStart.getMonth(),
-                    currStart.getDate(),
-                );
-                const dayDiff = Math.round((currStartDay - prevEndDay) / 86400000);
-                const gap = Math.max(0, dayDiff - 1);
-                rows.push({
-                    fleet,
-                    nextDeparture: currStart,
-                    gapDays: gap,
-                });
-            }
-        }
-        return { gapRows: rows, totalFleetsInScope: fleetSet.size };
-    }, [allTrips, filters]);
+    }, [allTrips, allVehicles]);
 
     // ── Aggregate gap rows by week × fleet ─────────────────────────────────
     type FleetWeekRow = {
@@ -266,22 +295,142 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         pctMinus5: number;
     };
 
-    const weekBlocks = useMemo<WeekBlock[]>(() => {
-        const buckets = new Map<string, Map<string, { gaps: number; total: number }>>();
-        for (const r of gapRows) {
-            const wk = isoWeekKey(r.nextDeparture);
-            if (!buckets.has(wk)) buckets.set(wk, new Map());
-            const fleetMap = buckets.get(wk)!;
-            const e = fleetMap.get(r.fleet) || { gaps: 0, total: 0 };
-            e.gaps += 1;
-            e.total += r.gapDays;
-            fleetMap.set(r.fleet, e);
+    // Build the fleet universe + per-fleet on-trip-day set, plus the week
+    // blocks. A "gap day" is any day in the selected window where a fleet
+    // has no trip activity (between departure_date and arrival_date,
+    // inclusive). Every ISO week that overlaps the window is reported,
+    // even if it contains zero gap days, and trucks with no trips at all
+    // contribute 7 gap days per week.
+    const { weekBlocks, totalFleetsInScope } = useMemo(() => {
+        const fromDate = filters.from ? new Date(filters.from) : null;
+        const toDate = filters.to ? new Date(`${filters.to}T23:59:59`) : null;
+        if (!fromDate || !toDate) {
+            return { weekBlocks: [] as WeekBlock[], totalFleetsInScope: 0 };
         }
-        const sortedWeeks = [...buckets.keys()].sort().reverse(); // most recent first
-        const totalWorkingDaysPerWeek = totalFleetsInScope * 7;
-        return sortedWeeks.map((wk) => {
-            const fleetMap = buckets.get(wk)!;
-            const rows: FleetWeekRow[] = [...fleetMap.entries()]
+
+        // Fleet universe: only the report's allow-listed fleets, further
+        // narrowed by the user's non-date filters.
+        const fleetUniverse = new Set<string>();
+        for (const v of allVehicles) {
+            if (!v.fleet_number) continue;
+            if (!REPORT_FLEETS.has(v.fleet_number)) continue;
+            if (filters.vehicleTypes.size && !filters.vehicleTypes.has(v.vehicle_type || ""))
+                continue;
+            if (filters.fleets.size && !filters.fleets.has(v.fleet_number)) continue;
+            fleetUniverse.add(v.fleet_number);
+        }
+        // Also include any allow-listed fleet that has trips but is missing
+        // from the vehicles table.
+        for (const t of allTrips) {
+            if (!t.fleet_number) continue;
+            if (!REPORT_FLEETS.has(t.fleet_number)) continue;
+            if (filters.vehicleTypes.size && !filters.vehicleTypes.has(t.vehicle_type || ""))
+                continue;
+            if (filters.fleets.size && !filters.fleets.has(t.fleet_number)) continue;
+            if (filters.drivers.size && !filters.drivers.has(t.driver_name || "")) continue;
+            if (filters.routes.size) {
+                const r = `${t.origin || ""} → ${t.destination || ""}`;
+                if (!filters.routes.has(r)) continue;
+            }
+            fleetUniverse.add(t.fleet_number);
+        }
+
+        // Per-fleet set of UTC midnights when the fleet was on a trip. The
+        // load day = first available of actual/planned/declared departure.
+        // The offload day = first available of offloading_completed_at,
+        // actual_arrival_date, arrival_date, planned_arrival_date — falling
+        // back to the load day when none is set (single-day trip).
+        const onTripDays = new Map<string, Set<number>>();
+        for (const t of allTrips) {
+            if (!t.fleet_number || !fleetUniverse.has(t.fleet_number)) continue;
+            // A trip counts as completed when it has a completed_at timestamp
+            // OR a status that represents a finished trip in this codebase.
+            const status = (t.status || "").toLowerCase();
+            const isCompleted =
+                !!t.completed_at ||
+                status === "completed" ||
+                status === "paid" ||
+                status === "invoiced";
+            if (!isCompleted) continue;
+            if (filters.drivers.size && !filters.drivers.has(t.driver_name || "")) continue;
+            if (filters.routes.size) {
+                const r = `${t.origin || ""} → ${t.destination || ""}`;
+                if (!filters.routes.has(r)) continue;
+            }
+            const depDay = toDayKey(
+                t.actual_departure_date ||
+                t.departure_date ||
+                t.planned_departure_date ||
+                null,
+            );
+            if (depDay == null) continue;
+            const arrDay =
+                toDayKey(
+                    t.offloading_completed_at ||
+                    t.actual_arrival_date ||
+                    t.arrival_date ||
+                    t.planned_arrival_date ||
+                    null,
+                ) ?? depDay;
+            const startDay = Math.min(depDay, arrDay);
+            const endDay = Math.max(depDay, arrDay);
+            let set = onTripDays.get(t.fleet_number);
+            if (!set) {
+                set = new Set();
+                onTripDays.set(t.fleet_number, set);
+            }
+            for (let d = startDay; d <= endDay; d += 86400000) set.add(d);
+        }
+
+        // Walk every day in the window for every fleet in the universe.
+        const startUTC = Date.UTC(
+            fromDate.getFullYear(),
+            fromDate.getMonth(),
+            fromDate.getDate(),
+        );
+        const endUTC = Date.UTC(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
+        // Buckets: week → fleet → { gaps (distinct intervals within the week), total }
+        const buckets = new Map<string, Map<string, { gaps: number; total: number }>>();
+        // Always create an entry for every ISO week that overlaps the window.
+        const allWeeks = new Set<string>();
+        for (let d = startUTC; d <= endUTC; d += 86400000) {
+            const dt = new Date(d);
+            const local = new Date(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+            allWeeks.add(isoWeekKey(local));
+        }
+        for (const wk of allWeeks) buckets.set(wk, new Map());
+
+        for (const fleet of fleetUniverse) {
+            const onSet = onTripDays.get(fleet) || new Set<number>();
+            let prevWasGap = false;
+            let prevWeek = "";
+            for (let d = startUTC; d <= endUTC; d += 86400000) {
+                if (onSet.has(d)) {
+                    prevWasGap = false;
+                    continue;
+                }
+                const dt = new Date(d);
+                const local = new Date(
+                    dt.getUTCFullYear(),
+                    dt.getUTCMonth(),
+                    dt.getUTCDate(),
+                );
+                const wk = isoWeekKey(local);
+                const fmap = buckets.get(wk)!;
+                const e = fmap.get(fleet) || { gaps: 0, total: 0 };
+                if (!prevWasGap || prevWeek !== wk) e.gaps += 1;
+                e.total += 1;
+                fmap.set(fleet, e);
+                prevWasGap = true;
+                prevWeek = wk;
+            }
+        }
+
+        const sortedWeeks = [...allWeeks].sort().reverse(); // most recent first
+        const totalWorkingDaysPerWeek = fleetUniverse.size * 7; // Mon–Sun
+        const blocks: WeekBlock[] = sortedWeeks.map((wk) => {
+            const fmap = buckets.get(wk)!;
+            const rows: FleetWeekRow[] = [...fmap.entries()]
                 .map(([fleet, v]) => ({
                     fleet,
                     week: wk,
@@ -306,18 +455,23 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 pctMinus5: Math.max(0, Math.round(pctStanding) - 5),
             };
         });
-    }, [gapRows, totalFleetsInScope]);
+        return { weekBlocks: blocks, totalFleetsInScope: fleetUniverse.size };
+    }, [allTrips, allVehicles, filters]);
 
     // ── Live preview KPIs ───────────────────────────────────────────────────
     const kpi = useMemo(() => {
-        const totalGapDays = gapRows.reduce((s, r) => s + r.gapDays, 0);
+        const totalGapDays = weekBlocks.reduce((s, b) => s + b.totalDaysStanding, 0);
+        const measured = weekBlocks.reduce(
+            (s, b) => s + b.rows.reduce((ss, r) => ss + r.gaps, 0),
+            0,
+        );
         return {
-            measured: gapRows.length,
+            measured,
             fleets: totalFleetsInScope,
             weeks: weekBlocks.length,
             totalGapDays,
         };
-    }, [gapRows, totalFleetsInScope, weekBlocks]);
+    }, [weekBlocks, totalFleetsInScope]);
 
     const toggleSet = (key: keyof FilterState, value: string) => {
         setFilters((prev) => {
@@ -837,60 +991,115 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                         <div className="space-y-6">
                             {/* Date Range */}
                             <section>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400 mb-2">
-                                    Reporting Period
-                                </p>
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                                        Reporting Period
+                                    </p>
+                                    <div className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPeriodMode("date")}
+                                            className={`px-3 py-1 text-xs font-medium ${periodMode === "date"
+                                                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                                                : "bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                                }`}
+                                        >
+                                            Date
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                // Snap current from/to to ISO-week boundaries so
+                                                // the week pickers show valid weeks immediately —
+                                                // no need to click a Quick Range first.
+                                                const fromWk = isoWeekToDateRange(
+                                                    dateToIsoWeekInput(filters.from),
+                                                );
+                                                const toWk = isoWeekToDateRange(
+                                                    dateToIsoWeekInput(filters.to),
+                                                );
+                                                if (fromWk && toWk) {
+                                                    setFilters((p) => ({
+                                                        ...p,
+                                                        from: fromWk.from,
+                                                        to: toWk.to,
+                                                    }));
+                                                }
+                                                setPeriodMode("week");
+                                            }}
+                                            className={`px-3 py-1 text-xs font-medium ${periodMode === "week"
+                                                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                                                : "bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                                }`}
+                                        >
+                                            Week
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="flex flex-wrap items-end gap-3">
-                                    <div className="flex flex-col">
-                                        <Label className="text-xs text-slate-600 dark:text-slate-300 mb-1">
-                                            From
-                                        </Label>
-                                        <Input
-                                            type="date"
-                                            value={filters.from}
-                                            max={filters.to || undefined}
-                                            onChange={(e) =>
-                                                setFilters((p) => ({ ...p, from: e.target.value }))
-                                            }
-                                            className="h-9 w-[160px]"
-                                        />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <Label className="text-xs text-slate-600 dark:text-slate-300 mb-1">
-                                            To
-                                        </Label>
-                                        <Input
-                                            type="date"
-                                            value={filters.to}
-                                            min={filters.from || undefined}
-                                            onChange={(e) =>
-                                                setFilters((p) => ({ ...p, to: e.target.value }))
-                                            }
-                                            className="h-9 w-[160px]"
-                                        />
-                                    </div>
-                                    <Select
-                                        value=""
-                                        onValueChange={(v) => {
-                                            const months =
-                                                v === "1m" ? 1 : v === "3m" ? 3 : v === "6m" ? 6 : 12;
-                                            setFilters((p) => ({
-                                                ...p,
-                                                from: monthsAgoISO(months),
-                                                to: todayISO(),
-                                            }));
-                                        }}
-                                    >
-                                        <SelectTrigger className="h-9 w-[160px]">
-                                            <SelectValue placeholder="Quick range…" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="1m">Last Month</SelectItem>
-                                            <SelectItem value="3m">Last 3 Months</SelectItem>
-                                            <SelectItem value="6m">Last 6 Months</SelectItem>
-                                            <SelectItem value="12m">Last 12 Months</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    {periodMode === "date" ? (
+                                        <>
+                                            <div className="flex flex-col">
+                                                <Label className="text-xs text-slate-600 dark:text-slate-300 mb-1">
+                                                    From
+                                                </Label>
+                                                <Input
+                                                    type="date"
+                                                    value={filters.from}
+                                                    max={filters.to || undefined}
+                                                    onChange={(e) =>
+                                                        setFilters((p) => ({
+                                                            ...p,
+                                                            from: e.target.value,
+                                                        }))
+                                                    }
+                                                    className="h-9 w-[160px]"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <Label className="text-xs text-slate-600 dark:text-slate-300 mb-1">
+                                                    To
+                                                </Label>
+                                                <Input
+                                                    type="date"
+                                                    value={filters.to}
+                                                    min={filters.from || undefined}
+                                                    onChange={(e) =>
+                                                        setFilters((p) => ({
+                                                            ...p,
+                                                            to: e.target.value,
+                                                        }))
+                                                    }
+                                                    className="h-9 w-[160px]"
+                                                />
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col">
+                                            <Label className="text-xs text-slate-600 dark:text-slate-300 mb-1">
+                                                Week
+                                            </Label>
+                                            <Input
+                                                type="week"
+                                                value={dateToIsoWeekInput(filters.from)}
+                                                onChange={(e) => {
+                                                    const r = isoWeekToDateRange(e.target.value);
+                                                    if (r)
+                                                        setFilters((p) => ({
+                                                            ...p,
+                                                            from: r.from,
+                                                            to: r.to,
+                                                        }));
+                                                }}
+                                                className="h-9 w-[180px]"
+                                            />
+                                            {filters.from && filters.to && (
+                                                <span className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                                    {filters.from} → {filters.to}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </section>
 
