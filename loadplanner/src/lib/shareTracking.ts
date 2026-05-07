@@ -374,19 +374,21 @@ export function formatShareMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
   shareUrl?: string,
-  style: ShareMessageStyle = 'professional'
+  style: ShareMessageStyle = 'professional',
+  customNote?: string
 ): string {
+  const note = customNote?.trim() || undefined;
   switch (style) {
     case 'professional':
-      return formatProfessionalMessage(load, vehicleInfo, shareUrl);
+      return formatProfessionalMessage(load, vehicleInfo, shareUrl, note);
     case 'detailed':
-      return formatDetailedMessage(load, vehicleInfo, shareUrl);
+      return formatDetailedMessage(load, vehicleInfo, shareUrl, note);
     case 'compact':
-      return formatCompactMessage(load, vehicleInfo, shareUrl);
+      return formatCompactMessage(load, vehicleInfo, shareUrl, note);
     case 'minimal':
-      return formatMinimalMessage(load, vehicleInfo, shareUrl);
+      return formatMinimalMessage(load, vehicleInfo, shareUrl, note);
     default:
-      return formatProfessionalMessage(load, vehicleInfo, shareUrl);
+      return formatProfessionalMessage(load, vehicleInfo, shareUrl, note);
   }
 }
 
@@ -396,7 +398,8 @@ export function formatShareMessage(
 function formatProfessionalMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
-  shareUrl?: string
+  shareUrl?: string,
+  customNote?: string
 ): string {
   const status = getStatusDisplay(load.status, vehicleInfo.inTrip);
   const progress = calculateProgress(load.status, vehicleInfo.inTrip, load.loading_date, load.offloading_date, load.time_window);
@@ -409,12 +412,22 @@ function formatProfessionalMessage(
     '',
     `Status      : ${status}`,
     '',
+  ];
+
+  if (customNote) {
+    lines.push('NOTES');
+    lines.push('──────────────────────────────');
+    customNote.split('\n').forEach((l) => lines.push(l));
+    lines.push('');
+  }
+
+  lines.push(
     'SHIPMENT DETAILS',
     '──────────────────────────────',
     `Load ID     : ${load.load_id}`,
     `Route       : ${load.origin} → ${load.destination}`,
     '',
-  ];
+  );
 
   if (loadedDate) {
     lines.push(`Loading     : ${loadedDate}`);
@@ -494,7 +507,8 @@ function formatProfessionalMessage(
 function formatDetailedMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
-  shareUrl?: string
+  shareUrl?: string,
+  customNote?: string
 ): string {
   const status = getStatusDisplay(load.status, vehicleInfo.inTrip);
   const progress = calculateProgress(load.status, vehicleInfo.inTrip, load.loading_date, load.offloading_date, load.time_window);
@@ -505,11 +519,21 @@ function formatDetailedMessage(
     '',
     `Status      : ${status}`,
     '',
+  ];
+
+  if (customNote) {
+    lines.push('NOTES');
+    lines.push('──────────────────────────────');
+    customNote.split('\n').forEach((l) => lines.push(l));
+    lines.push('');
+  }
+
+  lines.push(
     'SHIPMENT INFORMATION',
     '──────────────────────────────',
     `Load ID     : ${load.load_id}`,
     `Route       : ${load.origin} → ${load.destination}`,
-  ];
+  );
 
   if (isValidDate(load.loading_date)) {
     lines.push(`Loading     : ${new Date(load.loading_date).toLocaleDateString('en-GB')}`);
@@ -592,7 +616,8 @@ function formatDetailedMessage(
 function formatCompactMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
-  shareUrl?: string
+  shareUrl?: string,
+  customNote?: string
 ): string {
   const status = getStatusDisplay(load.status, vehicleInfo.inTrip);
   const etaDate = formatETA(load.offloading_date, load.time_window);
@@ -601,6 +626,11 @@ function formatCompactMessage(
     `${status} • ${load.load_id}`,
     `${load.origin} → ${load.destination}`,
   ];
+
+  if (customNote) {
+    lines.push('');
+    lines.push(`Note: ${customNote}`);
+  }
 
   if (etaDate) {
     lines.push(`ETA: ${etaDate}`);
@@ -629,12 +659,17 @@ function formatCompactMessage(
 function formatMinimalMessage(
   load: ShareableLoadInfo,
   vehicleInfo: ShareableVehicleInfo,
-  shareUrl?: string
+  shareUrl?: string,
+  customNote?: string
 ): string {
   const lines = [
     `Load ${load.load_id}`,
     `${load.origin} → ${load.destination}`,
   ];
+
+  if (customNote) {
+    lines.push(`Note: ${customNote}`);
+  }
 
   if (isValidDate(load.offloading_date)) {
     const eta = formatETA(load.offloading_date, load.time_window);

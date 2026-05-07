@@ -16,6 +16,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import type { Load } from '@/hooks/useTrips';
 import { createShareableTrackingLink, formatShareMessage, type ShareMessageStyle } from '@/lib/shareTracking';
 import {
@@ -128,6 +130,7 @@ export function VehicleTrackingDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [shareNote, setShareNote] = useState('');
 
   const fetchVehiclePosition = useCallback(async () => {
     if (!telematicsAssetId) {
@@ -176,6 +179,7 @@ export function VehicleTrackingDialog({
       setAsset(null);
       setError(null);
       setLastUpdate(null);
+      setShareNote('');
     }
   }, [open]);
 
@@ -291,11 +295,12 @@ export function VehicleTrackingDialog({
         longitude: asset.lastLongitude,
       },
       shareUrl,
-      style
+      style,
+      shareNote
     );
 
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-  }, [asset, load, telematicsAssetId]);
+  }, [asset, load, telematicsAssetId, shareNote]);
 
   // Copy detailed message to clipboard with style options
   const copyDetailedMessage = useCallback(async (
@@ -340,7 +345,8 @@ export function VehicleTrackingDialog({
         longitude: asset.lastLongitude,
       },
       shareUrl,
-      style
+      style,
+      shareNote
     );
 
     try {
@@ -351,7 +357,7 @@ export function VehicleTrackingDialog({
     } catch {
       toast.error('Failed to copy message');
     }
-  }, [asset, load, telematicsAssetId]);
+  }, [asset, load, telematicsAssetId, shareNote]);
 
   const defaultCenter: [number, number] = [-19.0, 31.0]; // Zimbabwe
 
