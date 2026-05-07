@@ -6,6 +6,41 @@ import { useEffect } from 'react';
  */
 export function ClientPWARegistration() {
   useEffect(() => {
+    const [, , clientId] = window.location.pathname.split('/');
+    const portalPath = clientId ? `/portal/${clientId}` : '/portal/';
+
+    const manifest = {
+      name: 'Matanuska - Client Portal',
+      short_name: 'Matanuska',
+      description: 'Track your deliveries, view loads, and monitor fleet in real-time',
+      start_url: portalPath,
+      scope: '/portal/',
+      display: 'standalone',
+      orientation: 'any',
+      background_color: '#ffffff',
+      theme_color: '#1e40af',
+      categories: ['business', 'logistics', 'transportation'],
+      icons: [
+        { src: '/pwa-icons/icon-72x72.png', sizes: '72x72', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-icons/icon-96x96.png', sizes: '96x96', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-icons/icon-128x128.png', sizes: '128x128', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-icons/icon-144x144.png', sizes: '144x144', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-icons/icon-152x152.png', sizes: '152x152', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-icons/icon-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-icons/icon-384x384.png', sizes: '384x384', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-icons/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-icons/icon-maskable-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+        { src: '/pwa-icons/icon-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      ],
+      screenshots: [],
+      shortcuts: [
+        { name: 'Live Map', short_name: 'Map', url: `${portalPath}/live-map`, icons: [] },
+      ],
+    };
+    const manifestUrl = URL.createObjectURL(
+      new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' })
+    );
+
     // --- Inject manifest link ---
     let manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (!manifestLink) {
@@ -13,7 +48,7 @@ export function ClientPWARegistration() {
       manifestLink.rel = 'manifest';
       document.head.appendChild(manifestLink);
     }
-    manifestLink.href = '/client-manifest.json';
+    manifestLink.href = manifestUrl;
 
     // --- Inject PWA meta tags ---
     const metaTags: Record<string, string> = {
@@ -60,6 +95,7 @@ export function ClientPWARegistration() {
     // Cleanup: remove injected tags when leaving portal
     return () => {
       manifestLink?.remove();
+      URL.revokeObjectURL(manifestUrl);
       appleIcon?.remove();
       addedMeta.forEach((el) => el.remove());
     };

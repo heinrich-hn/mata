@@ -103,6 +103,30 @@ export default function ClientsPage() {
     setDeleteDialogOpen(true);
   };
 
+  const writeTextToClipboard = async (text: string) => {
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      const copied = document.execCommand('copy');
+      if (!copied) throw new Error('Copy command failed');
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  };
+
   const confirmDelete = () => {
     if (!selectedClient) return;
 
@@ -127,8 +151,7 @@ export default function ClientsPage() {
 
   const copyPortalLink = (clientId: string, clientName: string) => {
     const portalUrl = `${window.location.origin}/portal/${clientId}`;
-    navigator.clipboard
-      .writeText(portalUrl)
+    writeTextToClipboard(portalUrl)
       .then(() => {
         toast({
           title: 'Portal link copied!',
