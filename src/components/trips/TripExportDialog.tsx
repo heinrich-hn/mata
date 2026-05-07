@@ -1,13 +1,12 @@
 import { Button } from '@/components/ui/button';
-import
-  {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-  } from '@/components/ui/dialog';
+import {
+Dialog,
+DialogContent,
+DialogDescription,
+DialogFooter,
+DialogHeader,
+DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -15,7 +14,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Building, Calendar, CalendarRange, Download, FileSpreadsheet, Truck, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
+import {
+  addStyledSheet,
+  addSummarySheet,
+  createWorkbook,
+  generatedSubtitle,
+  saveWorkbook,
+} from '@/utils/excelStyles';
 
 export interface ExportableTrip {
   id: string;
@@ -177,12 +182,13 @@ const TripExportDialog = ({ isOpen, onClose, trips, tripType }: TripExportDialog
     setIsExporting(true);
 
     try {
-      // Create workbook
-      const wb = XLSX.utils.book_new();
+      // Create workbook with professional metadata
+      const wb = createWorkbook();
 
       // Prepare data for export based on format
-      let exportData;
-      let colWidths;
+      let headers: string[];
+      let rows: (string | number | null | undefined)[][];
+      let colWidths: number[];
 
       // Helper to calculate total expenses for a trip, filtered by currency
       // so that Revenue - Expenses = Profit is meaningful (same currency)
@@ -194,128 +200,114 @@ const TripExportDialog = ({ isOpen, onClose, trips, tripType }: TripExportDialog
       };
 
       if (exportFormat === 'marketing') {
-        // Marketing format with specific headers
-        exportData = tripsToExport.map(trip => {
-          const loadSpan = trip.distance_km ||
+        headers = [
+          'Delivery Book', 'Load Comment', 'Registration', 'Driver', 'Client Name',
+          'Load Date', 'Offload Date', 'From City', 'To City', 'Open Odo',
+          'Closing Odo', 'Load Span', 'Unit Type', 'Currency', 'Tariff',
+          'Expenses', 'Profit',
+        ];
+        rows = tripsToExport.map(trip => {
+          const loadSpan = trip.distance_km ??
             (trip.ending_km && trip.starting_km ? trip.ending_km - trip.starting_km : '');
           const tripCurrency = trip.revenue_currency || 'USD';
           const expenses = calcExpenses(trip, tripCurrency);
           const revenue = trip.base_revenue || 0;
 
-          return {
-            'Delivery Book': trip.trip_number || '',
-            'Load Comment': trip.route || '',
-            'Registration': trip.fleet_number || '',
-            'Driver': trip.driver_name || '',
-            'Client Name': trip.client_name || '',
-            'Load Date': formatDate(trip.departure_date),
-            'Offload Date': formatDate(trip.arrival_date),
-            'From City': trip.origin || '',
-            'To City': trip.destination || '',
-            'Open Odo': trip.starting_km || '',
-            'Closing Odo': trip.ending_km || '',
-            'Load Span': loadSpan,
-            'Unit Type': trip.load_type || '',
-            'Currency': tripCurrency,
-            'Tariff': revenue,
-            'Expenses': expenses,
-            'Profit': revenue - expenses,
-          };
+          return [
+            trip.trip_number || '',
+            trip.route || '',
+            trip.fleet_number || '',
+            trip.driver_name || '',
+            trip.client_name || '',
+            formatDate(trip.departure_date),
+            formatDate(trip.arrival_date),
+            trip.origin || '',
+            trip.destination || '',
+            trip.starting_km ?? '',
+            trip.ending_km ?? '',
+            loadSpan,
+            trip.load_type || '',
+            tripCurrency,
+            revenue,
+            expenses,
+            revenue - expenses,
+          ];
         });
-
-        colWidths = [
-          { wch: 15 }, // Delivery Book
-          { wch: 25 }, // Load Comment
-          { wch: 12 }, // Registration
-          { wch: 20 }, // Driver
-          { wch: 20 }, // Client Name
-          { wch: 12 }, // Load Date
-          { wch: 12 }, // Offload Date
-          { wch: 15 }, // From City
-          { wch: 15 }, // To City
-          { wch: 12 }, // Open Odo
-          { wch: 12 }, // Closing Odo
-          { wch: 12 }, // Load Span
-          { wch: 12 }, // Unit Type
-          { wch: 8 },  // Currency
-          { wch: 12 }, // Tariff
-          { wch: 12 }, // Expenses
-          { wch: 12 }, // Profit
-        ];
+        colWidths = [15, 25, 12, 20, 20, 12, 12, 15, 15, 12, 12, 12, 12, 8, 14, 14, 14];
       } else {
-        // Standard format
-        exportData = tripsToExport.map(trip => {
+        const includeArrival = tripType === 'completed';
+        headers = [
+          'POD Number', 'Fleet Number', 'Driver', 'Client', 'Route',
+          'Origin', 'Destination', 'Departure Date',
+          ...(includeArrival ? ['Arrival Date', 'Completed Date'] : []),
+          'Revenue', 'Expenses', 'Profit', 'Currency',
+          'Starting KM', 'Ending KM', 'Distance (km)', 'Empty KM', 'Status',
+        ];
+        rows = tripsToExport.map(trip => {
           const tripCurrency = trip.revenue_currency || 'USD';
           const expenses = calcExpenses(trip, tripCurrency);
           const revenue = trip.base_revenue || 0;
-          return {
-            'POD Number': trip.trip_number,
-            'Fleet Number': trip.fleet_number || '',
-            'Driver': trip.driver_name || '',
-            'Client': trip.client_name || '',
-            'Route': trip.route || '',
-            'Origin': trip.origin || '',
-            'Destination': trip.destination || '',
-            'Departure Date': formatDate(trip.departure_date),
-            ...(tripType === 'completed' ? { 'Arrival Date': formatDate(trip.arrival_date) } : {}),
-            ...(tripType === 'completed' ? { 'Completed Date': formatDate(trip.completed_at) } : {}),
-            'Revenue': revenue,
-            'Expenses': expenses,
-            'Profit': revenue - expenses,
-            'Currency': tripCurrency,
-            'Starting KM': trip.starting_km || '',
-            'Ending KM': trip.ending_km || '',
-            'Distance (km)': trip.distance_km || '',
-            'Empty KM': trip.empty_km || '',
-            'Status': trip.status || (tripType === 'active' ? 'Active' : 'Completed'),
-          };
+          return [
+            trip.trip_number,
+            trip.fleet_number || '',
+            trip.driver_name || '',
+            trip.client_name || '',
+            trip.route || '',
+            trip.origin || '',
+            trip.destination || '',
+            formatDate(trip.departure_date),
+            ...(includeArrival ? [formatDate(trip.arrival_date), formatDate(trip.completed_at)] : []),
+            revenue,
+            expenses,
+            revenue - expenses,
+            tripCurrency,
+            trip.starting_km ?? '',
+            trip.ending_km ?? '',
+            trip.distance_km ?? '',
+            trip.empty_km ?? '',
+            trip.status || (tripType === 'active' ? 'Active' : 'Completed'),
+          ];
         });
-
         colWidths = [
-          { wch: 15 }, // POD Number
-          { wch: 12 }, // Fleet Number
-          { wch: 20 }, // Driver
-          { wch: 20 }, // Client
-          { wch: 25 }, // Route
-          { wch: 20 }, // Origin
-          { wch: 20 }, // Destination
-          { wch: 12 }, // Departure Date
-          ...(tripType === 'completed' ? [{ wch: 12 }, { wch: 12 }] : []), // Arrival/Completed dates
-          { wch: 12 }, // Revenue
-          { wch: 12 }, // Expenses
-          { wch: 12 }, // Profit
-          { wch: 8 },  // Currency
-          { wch: 12 }, // Starting KM
-          { wch: 12 }, // Ending KM
-          { wch: 12 }, // Distance
-          { wch: 10 }, // Empty KM
-          { wch: 10 }, // Status
+          15, 12, 20, 20, 25, 20, 20, 12,
+          ...(includeArrival ? [12, 12] : []),
+          14, 14, 14, 8, 12, 12, 14, 10, 12,
         ];
       }
 
-      // Create worksheet from data
-      const ws = XLSX.utils.json_to_sheet(exportData);
-
-      // Set column widths
-      ws['!cols'] = colWidths;
-
-      // Add worksheet to workbook
       const sheetName = exportFormat === 'marketing'
         ? 'Marketing Export'
         : `${tripType === 'active' ? 'Active' : 'Completed'} Trips`;
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-      // Add summary sheet
-      const summaryData = [
-        ['Export Summary'],
-        [''],
+      // Build styled data sheet (title, subtitle, header, zebra rows, autofilter, frozen pane)
+      const ws = addStyledSheet(wb, sheetName, {
+        title: exportFormat === 'marketing'
+          ? 'Marketing Trip Export'
+          : `${tripType === 'active' ? 'Active' : 'Completed'} Trips Export`,
+        subtitle: generatedSubtitle(getFilterDescription()),
+        headers,
+        rows,
+      });
+
+      // Number formatting + explicit column widths
+      const moneyCols = exportFormat === 'marketing'
+        ? [15, 16, 17] // Tariff / Expenses / Profit
+        : (tripType === 'completed' ? [11, 12, 13] : [9, 10, 11]); // Revenue / Expenses / Profit
+      const headerRowNum = 4;
+      const lastRowNum = headerRowNum + rows.length;
+      moneyCols.forEach((c) => {
+        for (let r = headerRowNum + 1; r <= lastRowNum; r++) {
+          ws.getCell(r, c).numFmt = '#,##0.00';
+        }
+      });
+      colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+      // Build summary sheet (Metric | Value)
+      const summaryRows: [string, string | number][] = [
         ['Export Date', new Date().toLocaleDateString('en-ZA')],
         ['Trip Type', tripType === 'active' ? 'Active Trips' : 'Completed Trips'],
         ['Total Trips', tripsToExport.length],
-        [''],
         ['Filter Applied', getFilterDescription()],
-        [''],
-        ['Revenue Summary'],
       ];
 
       // Group revenue by currency
@@ -324,27 +316,24 @@ const TripExportDialog = ({ isOpen, onClose, trips, tripType }: TripExportDialog
         acc[currency] = (acc[currency] || 0) + (trip.base_revenue || 0);
         return acc;
       }, {} as Record<string, number>);
-
       Object.entries(revenueByCurrency).forEach(([currency, total]) => {
-        summaryData.push(['Total Revenue (' + currency + ')', formatCurrency(total, currency)]);
+        summaryRows.push([`Total Revenue (${currency})`, formatCurrency(total, currency)]);
       });
 
-      // Total distance
       const totalDistance = tripsToExport.reduce((sum, t) => sum + (t.distance_km || 0), 0);
       const totalEmptyKm = tripsToExport.reduce((sum, t) => sum + (t.empty_km || 0), 0);
-
-      summaryData.push(['']);
-      summaryData.push(['Total Distance (km)', totalDistance.toLocaleString()]);
-      summaryData.push(['Total Empty KM', totalEmptyKm.toLocaleString()]);
-
+      summaryRows.push(['Total Distance (km)', totalDistance.toLocaleString()]);
+      summaryRows.push(['Total Empty KM', totalEmptyKm.toLocaleString()]);
       if (totalDistance > 0) {
         const efficiency = ((totalDistance - totalEmptyKm) / totalDistance * 100).toFixed(1);
-        summaryData.push(['Overall Efficiency', `${efficiency}%`]);
+        summaryRows.push(['Overall Efficiency', `${efficiency}%`]);
       }
 
-      const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-      summaryWs['!cols'] = [{ wch: 25 }, { wch: 20 }];
-      XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+      addSummarySheet(wb, 'Summary', {
+        title: 'Export Summary',
+        subtitle: generatedSubtitle(getFilterDescription()),
+        rows: summaryRows,
+      });
 
       // Generate filename
       const dateStr = new Date().toISOString().split('T')[0];
@@ -353,7 +342,7 @@ const TripExportDialog = ({ isOpen, onClose, trips, tripType }: TripExportDialog
       const filename = `${tripType === 'active' ? 'Active' : 'Completed'}_Trips${formatSuffix}${filterSuffix}_${dateStr}.xlsx`;
 
       // Download file
-      XLSX.writeFile(wb, filename);
+      await saveWorkbook(wb, filename);
 
       toast({
         title: 'Export successful',

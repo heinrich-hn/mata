@@ -15,9 +15,15 @@ import { useQuery } from '@tanstack/react-query';
 import { addDays, format, getISOWeek, parseISO, startOfWeek } from 'date-fns';
 import { Download, FileText, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+    addStyledSheet,
+    addSummarySheet,
+    createWorkbook,
+    generatedSubtitle,
+    saveWorkbook,
+} from '@/utils/excelStyles';
 
 interface JsPDFWithAutoTable extends jsPDF {
     lastAutoTable?: { finalY: number };
@@ -183,7 +189,7 @@ const TripExpenseExportDialog = ({ isOpen, onClose, trips }: TripExpenseExportDi
         setIsExporting(true);
         try {
             if (exportFormat === 'excel') {
-                exportToExcel();
+                await exportToExcel();
             } else {
                 exportToPDF();
             }
@@ -197,87 +203,119 @@ const TripExpenseExportDialog = ({ isOpen, onClose, trips }: TripExpenseExportDi
         }
     };
 
-    const exportToExcel = () => {
-        const wb = XLSX.utils.book_new();
+    const exportToExcel = async () => {
+        const wb = createWorkbook();
         const dateStr = format(new Date(), 'yyyy-MM-dd');
         const groupLabel = groupBy.charAt(0).toUpperCase() + groupBy.slice(1);
 
-        // Summary sheet
-        const summaryRows: (string | number)[][] = [
-            ['Trip Expense Report'],
-            [''],
+        // ── Summary sheet ────────────────────────────────────────────────────
+        const summaryRows: [string, string | number][] = [
             ['Export Date', format(new Date(), 'dd MMM yyyy')],
             ['Grouped By', groupLabel],
             ['Total Trips', trips.length],
             ['Total Expenses', totalExpenses],
             ['Total Flagged', totalFlagged],
-            [''],
-            ['Group', 'Entries', 'Total Amount', 'Flagged'],
         ];
-
-        groupedData.forEach(g => {
-            summaryRows.push([g.group, g.entries.length, g.totalAmount, g.flaggedCount]);
+        addSummarySheet(wb, 'Summary', {
+            title: 'Trip Expense Report',
+            subtitle: generatedSubtitle(`Grouped by ${groupLabel}`),
+            rows: summaryRows,
         });
 
-        const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
-        summaryWs['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 15 }, { wch: 10 }];
-        XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+        // Group breakdown sheet
+        const groupHeaders = ['Group', 'Entries', 'Total Amount', 'Flagged'];
+        const groupRows = groupedData.map((g) => [
+            g.group,
+            g.entries.length,
+            g.totalAmount,
+            g.flaggedCount,
+        ]);
+        const groupWs = addStyledSheet(wb, 'Group Breakdown', {
+            title: `Expense Group Breakdown — ${groupLabel}`,
+            subtitle: generatedSubtitle(`${groupedData.length} group${groupedData.length === 1 ? '' : 's'}`),
+            headers: groupHeaders,
+            rows: groupRows,
+        });
+        groupWs.getColumn(1).width = 35;
+        groupWs.getColumn(2).width = 12;
+        groupWs.getColumn(3).width = 18;
+        groupWs.getColumn(4).width = 12;
+        // Number format on Total Amount column
+        for (let r = 5; r <= 4 + groupRows.length; r++) {
+            groupWs.getCell(r, 3).numFmt = '#,##0.00';
+        }
 
-        // Detail sheet with all entries
-        const detailData = costEntries.map(ce => {
+        // ── All Expenses detail sheet ────────────────────────────────────────
+        const detailHeaders = [
+            'POD Number', 'Fleet', 'Driver', 'Route', 'Date',
+            'Category', 'Sub-Category', 'Amount', 'Currency', 'Flagged',
+            'Status', 'Flag Reason', 'Reference', 'Notes',
+        ];
+        const detailRows = costEntries.map((ce) => {
             const trip = ce.trip_id ? tripMap.get(ce.trip_id) : undefined;
-            return {
-                'POD Number': trip?.trip_number || '',
-                'Fleet': trip?.fleet_number || '',
-                'Driver': trip?.driver_name || '',
-                'Route': trip?.route || '',
-                'Date': ce.date ? format(parseISO(ce.date), 'dd MMM yyyy') : '',
-                'Category': ce.category || '',
-                'Sub-Category': ce.sub_category || '',
-                'Amount': ce.amount,
-                'Currency': ce.currency || 'USD',
-                'Flagged': ce.is_flagged ? 'Yes' : 'No',
-                'Status': ce.investigation_status === 'resolved' ? 'Resolved' : ce.is_flagged ? 'Flagged' : 'OK',
-                'Flag Reason': ce.flag_reason || '',
-                'Reference': ce.reference_number || '',
-                'Notes': ce.notes || '',
-            };
-        });
-
-        const detailWs = XLSX.utils.json_to_sheet(detailData);
-        detailWs['!cols'] = [
-            { wch: 12 }, { wch: 10 }, { wch: 18 }, { wch: 20 }, { wch: 12 },
-            { wch: 18 }, { wch: 22 }, { wch: 12 }, { wch: 8 }, { wch: 8 },
-            { wch: 10 }, { wch: 20 }, { wch: 14 }, { wch: 20 },
-        ];
-        XLSX.utils.book_append_sheet(wb, detailWs, 'All Expenses');
-
-        // Per-group sheets
-        groupedData.forEach(g => {
-            const sheetName = g.group.substring(0, 31).replace(/[\\/*?[\]:]/g, '_');
-            const rows = g.entries.map(ce => ({
-                'POD Number': ce.tripInfo?.trip_number || '',
-                'Fleet': ce.tripInfo?.fleet_number || '',
-                'Driver': ce.tripInfo?.driver_name || '',
-                'Date': ce.date ? format(parseISO(ce.date), 'dd MMM yyyy') : '',
-                'Category': ce.category || '',
-                'Sub-Category': ce.sub_category || '',
-                'Amount': ce.amount,
-                'Currency': ce.currency || 'USD',
-                'Flagged': ce.is_flagged ? 'Yes' : 'No',
-                'Status': ce.investigation_status === 'resolved' ? 'Resolved' : ce.is_flagged ? 'Flagged' : 'OK',
-            }));
-
-            const ws = XLSX.utils.json_to_sheet(rows);
-            ws['!cols'] = [
-                { wch: 12 }, { wch: 10 }, { wch: 18 }, { wch: 12 },
-                { wch: 18 }, { wch: 22 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 10 },
+            return [
+                trip?.trip_number || '',
+                trip?.fleet_number || '',
+                trip?.driver_name || '',
+                trip?.route || '',
+                ce.date ? format(parseISO(ce.date), 'dd MMM yyyy') : '',
+                ce.category || '',
+                ce.sub_category || '',
+                ce.amount,
+                ce.currency || 'USD',
+                ce.is_flagged ? 'Yes' : 'No',
+                ce.investigation_status === 'resolved' ? 'Resolved' : ce.is_flagged ? 'Flagged' : 'OK',
+                ce.flag_reason || '',
+                ce.reference_number || '',
+                ce.notes || '',
             ];
-            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        });
+        const detailWs = addStyledSheet(wb, 'All Expenses', {
+            title: 'All Trip Expenses',
+            subtitle: generatedSubtitle(`${costEntries.length} entries`),
+            headers: detailHeaders,
+            rows: detailRows,
+        });
+        const detailWidths = [14, 10, 18, 22, 12, 18, 22, 14, 10, 10, 12, 22, 14, 22];
+        detailWidths.forEach((w, i) => { detailWs.getColumn(i + 1).width = w; });
+        for (let r = 5; r <= 4 + detailRows.length; r++) {
+            detailWs.getCell(r, 8).numFmt = '#,##0.00'; // Amount column
+        }
+
+        // ── Per-group sheets ─────────────────────────────────────────────────
+        const perGroupHeaders = [
+            'POD Number', 'Fleet', 'Driver', 'Date', 'Category',
+            'Sub-Category', 'Amount', 'Currency', 'Flagged', 'Status',
+        ];
+        groupedData.forEach((g) => {
+            const sheetName = g.group.substring(0, 31).replace(/[\\/*?[\]:]/g, '_');
+            const rows = g.entries.map((ce) => [
+                ce.tripInfo?.trip_number || '',
+                ce.tripInfo?.fleet_number || '',
+                ce.tripInfo?.driver_name || '',
+                ce.date ? format(parseISO(ce.date), 'dd MMM yyyy') : '',
+                ce.category || '',
+                ce.sub_category || '',
+                ce.amount,
+                ce.currency || 'USD',
+                ce.is_flagged ? 'Yes' : 'No',
+                ce.investigation_status === 'resolved' ? 'Resolved' : ce.is_flagged ? 'Flagged' : 'OK',
+            ]);
+            const ws = addStyledSheet(wb, sheetName, {
+                title: `Expenses — ${g.group}`,
+                subtitle: generatedSubtitle(`${g.entries.length} entries • Total ${formatCurrency(g.totalAmount)}`),
+                headers: perGroupHeaders,
+                rows,
+            });
+            const widths = [14, 10, 18, 12, 18, 22, 14, 10, 10, 12];
+            widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+            for (let r = 5; r <= 4 + rows.length; r++) {
+                ws.getCell(r, 7).numFmt = '#,##0.00'; // Amount column
+            }
         });
 
         const filename = `Trip_Expenses_by_${groupLabel}_${dateStr}.xlsx`;
-        XLSX.writeFile(wb, filename);
+        await saveWorkbook(wb, filename);
     };
 
     const exportToPDF = () => {
