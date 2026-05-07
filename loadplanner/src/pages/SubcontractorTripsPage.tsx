@@ -442,6 +442,7 @@ export default function SubcontractorTripsPage() {
                     onLoadClick={handleLoadClick}
                     onEditLoad={handleEditLoad}
                     onConfirmDelivery={handleConfirmDelivery}
+                    exportMode="order"
                 />
             </div>
 
@@ -808,6 +809,7 @@ export default function SubcontractorTripsPage() {
                 open={editDialogOpen}
                 onOpenChange={setEditDialogOpen}
                 load={selectedLoad}
+                variant="subcontractor"
             />
 
             {/* Delivery Confirmation Dialog */}

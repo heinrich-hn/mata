@@ -82,7 +82,7 @@ const formSchema = z.object({
   priority: z.enum(["high", "medium", "low"]),
   loadingDate: z.date({ required_error: "Loading date is required" }),
   offloadingDate: z.date({ required_error: "Offloading date is required" }),
-  customerId: z.string().min(1, "Customer is required"),
+  customerId: z.string().optional(),
   loadingPlaceName: z.string().min(1, "Loading depot is required"),
   loadingAddress: z.string().optional(),
   offloadingPlaceName: z.string().min(1, "Offloading depot is required"),
@@ -98,7 +98,7 @@ const formSchema = z.object({
     .string()
     .min(1, "Planned departure time is required"),
   cargoDescription: z.string().min(1, "Cargo description is required"),
-  fleetVehicleId: z.string().min(1, "Vehicle is required"),
+  fleetVehicleId: z.string().optional(),
   driverId: z.string().optional(),
   notes: z.string(),
   status: z.enum(["pending", "scheduled", "in-transit", "delivered"]),
@@ -110,6 +110,16 @@ interface EditThirdPartyLoadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   load: Load | null;
+  /**
+   * Controls which fields are shown/required.
+   * - 'third-party' (default): customer, vehicle and driver fields are
+   *   shown and customer + vehicle are required.
+   * - 'subcontractor': customer, vehicle and driver are hidden and not
+   *   required — the load is fulfilled by an external subcontractor and
+   *   no fleet/driver/client allocation should be persisted from this
+   *   dialog.
+   */
+  variant?: "third-party" | "subcontractor";
 }
 
 // === DEPOT COMBOBOX COMPONENT (includes custom locations) ===
@@ -203,7 +213,9 @@ export function EditThirdPartyLoadDialog({
   open,
   onOpenChange,
   load,
+  variant = "third-party",
 }: EditThirdPartyLoadDialogProps) {
+  const isSubcontractor = variant === "subcontractor";
   const [createClientDialogOpen, setCreateClientDialogOpen] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const updateLoad = useUpdateLoad();
@@ -265,13 +277,36 @@ export function EditThirdPartyLoadDialog({
   const handleSubmit = (data: FormData) => {
     if (!load) return;
 
-    const customer = clients.find((c) => c.id === data.customerId);
-    if (!customer) {
-      toast.error("Customer not found");
-      return;
+    // Subcontractor variant: customer/vehicle/driver fields are hidden and
+    // not required. We preserve any existing client/fleet/driver values on the
+    // load row rather than overwriting them.
+    let customer: { id: string; name: string } | null = null;
+    if (!isSubcontractor) {
+      const found = clients.find((c) => c.id === data.customerId);
+      if (!found) {
+        toast.error("Customer not found");
+        return;
+      }
+      customer = { id: found.id, name: found.name };
     }
 
     const existingTimeData = parseTimeWindow(load.time_window);
+    // parseTimeWindow strips unknown keys; pull `subcontractor` directly from
+    // the raw JSON so we can preserve it for subcontractor-variant edits.
+    let existingSubcontractor:
+      | { supplierId?: string; supplierName?: string; cargoDescription?: string }
+      | undefined;
+    try {
+      const raw =
+        typeof load.time_window === "string"
+          ? JSON.parse(load.time_window || "{}")
+          : (load.time_window ?? {});
+      if (raw && typeof raw === "object" && raw.subcontractor) {
+        existingSubcontractor = raw.subcontractor;
+      }
+    } catch {
+      /* ignore */
+    }
 
     const timeData = {
       origin: {
@@ -286,20 +321,37 @@ export function EditThirdPartyLoadDialog({
         placeName: data.offloadingPlaceName,
         address: data.offloadingAddress,
       },
-      thirdParty: {
-        customerId: customer.id,
-        customerName: customer.name,
-        cargoDescription: data.cargoDescription,
-        linkedLoadNumber: existingTimeData.thirdParty?.linkedLoadNumber || null,
-        referenceNumber: existingTimeData.thirdParty?.referenceNumber || null,
-      },
+      thirdParty: isSubcontractor
+        ? existingTimeData.thirdParty
+        : {
+          customerId: customer!.id,
+          customerName: customer!.name,
+          cargoDescription: data.cargoDescription,
+          linkedLoadNumber: existingTimeData.thirdParty?.linkedLoadNumber || null,
+          referenceNumber: existingTimeData.thirdParty?.referenceNumber || null,
+        },
+      // Preserve existing subcontractor block (and any cargo description it carries)
+      subcontractor: existingSubcontractor
+        ? {
+          ...existingSubcontractor,
+          cargoDescription: isSubcontractor
+            ? data.cargoDescription
+            : existingSubcontractor.cargoDescription,
+        }
+        : existingSubcontractor,
       backload: existingTimeData.backload,
       waypoints: waypoints.filter((wp) => wp.placeName),
     };
 
     // Determine status: if both fleet and driver are provided and current status is pending, auto-upgrade to scheduled
-    const newFleetId = data.fleetVehicleId || null;
-    const newDriverId = data.driverId === "none" ? null : data.driverId || null;
+    const newFleetId = isSubcontractor
+      ? load.fleet_vehicle_id ?? null
+      : data.fleetVehicleId || null;
+    const newDriverId = isSubcontractor
+      ? load.driver_id ?? null
+      : data.driverId === "none"
+        ? null
+        : data.driverId || null;
     const hasFleetAndDriver = newFleetId && newDriverId;
     const currentStatus = load.status;
     const newStatus = hasFleetAndDriver && currentStatus === 'pending' ? 'scheduled' : data.status;
@@ -317,11 +369,15 @@ export function EditThirdPartyLoadDialog({
         driver_id: newDriverId,
         time_window: JSON.stringify(timeData) as unknown as Json,
         notes: data.notes,
-        client_id: customer.id,
+        ...(isSubcontractor ? {} : { client_id: customer!.id }),
       },
       {
         onSuccess: () => {
-          toast.success("Third-party load updated successfully");
+          toast.success(
+            isSubcontractor
+              ? "Subcontractor load updated successfully"
+              : "Third-party load updated successfully"
+          );
           onOpenChange(false);
         },
         onError: () => {
@@ -343,7 +399,7 @@ export function EditThirdPartyLoadDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5 text-purple-600" />
-              Edit Third-Party Load
+              {isSubcontractor ? "Edit Subcontractor Trip" : "Edit Third-Party Load"}
             </DialogTitle>
             <DialogDescription>
               Update details for load{" "}
@@ -405,50 +461,52 @@ export function EditThirdPartyLoadDialog({
               </div>
 
               {/* Customer Selection */}
-              <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <UserPlus className="h-4 w-4 text-purple-600" />
-                    Customer
-                  </h4>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCreateClientDialogOpen(true)}
-                    className="gap-1.5"
-                  >
-                    <UserPlus className="h-3.5 w-3.5" />
-                    New Customer
-                  </Button>
+              {!isSubcontractor && (
+                <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <UserPlus className="h-4 w-4 text-purple-600" />
+                      Customer
+                    </h4>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCreateClientDialogOpen(true)}
+                      className="gap-1.5"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      New Customer
+                    </Button>
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="customerId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a customer" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {clients.map((client) => (
+                              <SelectItem key={client.id} value={client.id}>
+                                {client.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
-                <FormField
-                  control={form.control}
-                  name="customerId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a customer" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {clients.map((client) => (
-                            <SelectItem key={client.id} value={client.id}>
-                              {client.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              )}
 
               {/* Dates */}
               <div className="grid grid-cols-2 gap-4">
@@ -679,7 +737,7 @@ export function EditThirdPartyLoadDialog({
               <div className="space-y-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
                 <h4 className="font-medium flex items-center gap-2 text-amber-700 dark:text-amber-400">
                   <Truck className="h-4 w-4" />
-                  Cargo & Assignment
+                  {isSubcontractor ? "Cargo" : "Cargo & Assignment"}
                 </h4>
                 <FormField
                   control={form.control}
@@ -700,64 +758,68 @@ export function EditThirdPartyLoadDialog({
                   )}
                 />
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="fleetVehicleId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Vehicle</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="bg-white dark:bg-gray-900">
-                              <SelectValue placeholder="Select vehicle" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {fleetVehicles.map((vehicle) => (
-                              <SelectItem key={vehicle.id} value={vehicle.id}>
-                                {vehicle.vehicle_id} -{" "}
-                                {vehicle.type ?? "Unknown Type"}
+                  {!isSubcontractor && (
+                    <FormField
+                      control={form.control}
+                      name="fleetVehicleId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Vehicle</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-white dark:bg-gray-900">
+                                <SelectValue placeholder="Select vehicle" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {fleetVehicles.map((vehicle) => (
+                                <SelectItem key={vehicle.id} value={vehicle.id}>
+                                  {vehicle.vehicle_id} -{" "}
+                                  {vehicle.type ?? "Unknown Type"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {!isSubcontractor && (
+                    <FormField
+                      control={form.control}
+                      name="driverId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Driver (Optional)</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-white dark:bg-gray-900">
+                                <SelectValue placeholder="Select driver" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">
+                                No driver assigned
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="driverId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Driver (Optional)</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="bg-white dark:bg-gray-900">
-                              <SelectValue placeholder="Select driver" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">
-                              No driver assigned
-                            </SelectItem>
-                            {drivers.map((driver) => (
-                              <SelectItem key={driver.id} value={driver.id}>
-                                {driver.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                              {drivers.map((driver) => (
+                                <SelectItem key={driver.id} value={driver.id}>
+                                  {driver.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
               </div>
 

@@ -67,6 +67,7 @@ import { AssignSubcontractorDialog } from "./AssignSubcontractorDialog";
 import { AlterLoadTimesDialog } from "./AlterTripTimesDialog";
 import { DeliveryConfirmationDialog } from "./DeliveryConfirmationDialog";
 import { ExportLoadConfirmationDialog } from "./ExportLoadConfirmationDialog";
+import { ExportLoadOrderDialog } from "./ExportLoadOrderDialog";
 import { StatusStepper } from "./StatusToggle";
 import { VehicleTrackingDialog } from "./VehicleTrackingDialog";
 
@@ -76,6 +77,15 @@ interface LoadsTableProps {
   onEditLoad?: (load: Load) => void;
   onConfirmDelivery?: (load: Load) => void;
   isLoading?: boolean;
+  /**
+   * Controls which export document is offered from the row's action menu.
+   * - 'confirmation' (default): standard "Export Load Confirmation" used
+   *   across the app.
+   * - 'order': subcontractor "Export Load Order" used on the Subcontractor
+   *   Trips page — minimal payload (supplier, rate, loading/offloading
+   *   points + legal terms).
+   */
+  exportMode?: "confirmation" | "order";
 }
 
 const cargoColors: Record<string, string> = {
@@ -203,6 +213,7 @@ export function LoadsTable({
   onEditLoad,
   onConfirmDelivery, // eslint-disable-line @typescript-eslint/no-unused-vars
   isLoading,
+  exportMode = "confirmation",
 }: LoadsTableProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [loadToDelete, setLoadToDelete] = useState<Load | null>(null);
@@ -867,7 +878,9 @@ export function LoadsTable({
                               }
                             >
                               <FileDown className="h-4 w-4 mr-2" />
-                              Export Load Confirmation
+                              {exportMode === "order"
+                                ? "Export Load Order"
+                                : "Export Load Confirmation"}
                             </DropdownMenuItem>
 
                             <DropdownMenuItem
@@ -1033,13 +1046,21 @@ export function LoadsTable({
         load={loadForSubcontractor}
       />
       <ExportLoadConfirmationDialog
-        open={exportDialogOpen}
+        open={exportDialogOpen && exportMode !== "order"}
         onOpenChange={(open) => {
           setExportDialogOpen(open);
           if (!open) setLoadForExport(null);
         }}
         load={loadForExport}
         allLoads={loads}
+      />
+      <ExportLoadOrderDialog
+        open={exportDialogOpen && exportMode === "order"}
+        onOpenChange={(open) => {
+          setExportDialogOpen(open);
+          if (!open) setLoadForExport(null);
+        }}
+        load={loadForExport}
       />    </div>
   );
 }

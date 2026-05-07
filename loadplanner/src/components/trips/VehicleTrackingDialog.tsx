@@ -242,15 +242,23 @@ export function VehicleTrackingDialog({
         expiryHours,
       });
 
-      await navigator.clipboard.writeText(result.shareUrl);
-      toast.success(`Live tracking link created! Valid for ${expiryHours} hours. Link copied to clipboard.`);
+      const note = shareNote.trim();
+      const clipboardText = note
+        ? `${note}\n\nLive tracking link (valid ${expiryHours}h):\n${result.shareUrl}`
+        : result.shareUrl;
+      await navigator.clipboard.writeText(clipboardText);
+      toast.success(
+        note
+          ? `Live tracking link with note copied! Valid for ${expiryHours} hours.`
+          : `Live tracking link created! Valid for ${expiryHours} hours. Link copied to clipboard.`
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create live link';
       toast.error(message);
     } finally {
       setCreatingLiveLink(false);
     }
-  }, [load, telematicsAssetId]);
+  }, [load, telematicsAssetId, shareNote]);
 
   // Share via WhatsApp with full details and style options
   const shareViaWhatsApp = useCallback(async (
@@ -557,6 +565,27 @@ export function VehicleTrackingDialog({
               {error}
             </div>
           )}
+
+          {/* Optional note included in share/copy messages */}
+          <div className="space-y-1">
+            <Label htmlFor="share-note" className="text-xs text-muted-foreground">
+              Add a note (optional) — included in WhatsApp, copied messages and link shares
+            </Label>
+            <Textarea
+              id="share-note"
+              value={shareNote}
+              onChange={(e) => setShareNote(e.target.value)}
+              placeholder="e.g. Please confirm receipt on arrival. Contact dispatch for any delays."
+              rows={2}
+              maxLength={500}
+              className="resize-none text-sm"
+            />
+            {shareNote.length > 0 && (
+              <div className="text-[10px] text-muted-foreground text-right">
+                {shareNote.length}/500
+              </div>
+            )}
+          </div>
 
           {/* Map */}
           <div className="flex-1 rounded-lg overflow-hidden border">

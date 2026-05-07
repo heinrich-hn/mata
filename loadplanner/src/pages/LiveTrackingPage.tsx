@@ -772,47 +772,14 @@ export default function LiveTrackingPage() {
   return (
     <>
       <div className="p-6 space-y-6">
-        {/* Header Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Live Fleet Tracking</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Real-time vehicle positions and route monitoring
-            </p>
+        {/* Connect prompt when not authenticated */}
+        {!authenticated && (
+          <div className="flex items-center justify-end">
+            <Button onClick={() => setShowAuthDialog(true)}>
+              Connect to Telematics
+            </Button>
           </div>
-          <div className="flex items-center gap-2">
-            {authenticated ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={fetchAssets}
-                  disabled={loading}
-                  size="sm"
-                >
-                  <svg className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowSettingsDialog(true)}
-                  className="h-8 w-8"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </Button>
-              </>
-            ) : (
-              <Button onClick={() => setShowAuthDialog(true)}>
-                Connect to Telematics
-              </Button>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* ETA Calculator Card - Professional Design */}
         {authenticated && !maximizeMap && (
@@ -825,14 +792,40 @@ export default function LiveTrackingPage() {
                     Calculate estimated arrival time for vehicles to destinations
                   </CardDescription>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowRouteCalculator(!showRouteCalculator)}
-                  className="h-8 px-3 text-xs"
-                >
-                  {showRouteCalculator ? "Hide" : "Show"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={fetchAssets}
+                    disabled={loading}
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                  >
+                    <svg className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowSettingsDialog(true)}
+                    className="h-8 w-8"
+                    title="Settings"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowRouteCalculator(!showRouteCalculator)}
+                    className="h-8 px-3 text-xs"
+                  >
+                    {showRouteCalculator ? "Hide" : "Show"}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             {showRouteCalculator && (
