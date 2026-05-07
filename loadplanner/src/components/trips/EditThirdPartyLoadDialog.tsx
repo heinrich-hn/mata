@@ -321,6 +321,13 @@ export function EditThirdPartyLoadDialog({
         placeName: data.offloadingPlaceName,
         address: data.offloadingAddress,
       },
+      // Cargo description ownership:
+      // - Third-party variant: cargo lives in `thirdParty.cargoDescription`.
+      //   We rebuild the block from form data + customer.
+      // - Subcontractor variant: cargo lives in `subcontractor.cargoDescription`.
+      //   The `thirdParty` block (if any was previously stored, e.g. on a
+      //   hybrid/legacy record) is preserved verbatim and NOT updated from the
+      //   form, since this dialog hides the customer field for subcontractors.
       thirdParty: isSubcontractor
         ? existingTimeData.thirdParty
         : {
@@ -330,7 +337,8 @@ export function EditThirdPartyLoadDialog({
           linkedLoadNumber: existingTimeData.thirdParty?.linkedLoadNumber || null,
           referenceNumber: existingTimeData.thirdParty?.referenceNumber || null,
         },
-      // Preserve existing subcontractor block (and any cargo description it carries)
+      // Subcontractor block: only updated when editing as a subcontractor trip.
+      // For third-party edits we leave the stored cargoDescription untouched.
       subcontractor: existingSubcontractor
         ? {
           ...existingSubcontractor,
