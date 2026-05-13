@@ -19,6 +19,15 @@ export interface LoadOrderSubcontractor {
     taxId?: string | null;
 }
 
+export interface LoadOrderImageAttachment {
+    /** Image bytes as a data URL (e.g. "data:image/jpeg;base64,...") */
+    dataUrl: string;
+    /** jsPDF image format hint, derived from MIME type. */
+    format: "JPEG" | "PNG" | "WEBP" | "GIF";
+    /** Optional caption shown above the image (e.g. original filename). */
+    caption?: string;
+}
+
 export interface ExportLoadOrderOptions {
     /** Trip rate to print on the order. Required for a Load Order. */
     rate?: { amount: number; currency: string };
@@ -27,6 +36,13 @@ export interface ExportLoadOrderOptions {
      * Blob and filename in the return value. Defaults to true.
      */
     download?: boolean;
+    /**
+     * Optional supporting image to embed as a final page in the PDF
+     * (e.g. a scanned proof-of-delivery, signed manifest, or weighbridge slip).
+     * PDF attachments are NOT merged here — callers should attach them
+     * separately (e.g. as a second download or email attachment).
+     */
+    imageAttachment?: LoadOrderImageAttachment;
 }
 
 export interface ExportLoadOrderResult {
@@ -123,7 +139,7 @@ export async function exportLoadOrderToPdf(
     load: Load,
     options: ExportLoadOrderOptions = {},
 ): Promise<ExportLoadOrderResult> {
-    const { rate, download = true } = options;
+    const { rate, download = true, imageAttachment } = options;
 
     const subcontractor = await fetchSupplierFromTimeWindow(load);
     const tw = parseTimeWindow(load.time_window);
@@ -301,6 +317,47 @@ export async function exportLoadOrderToPdf(
 
     renderLegalSection(RESTRAINT_OF_TRADE_TITLE, RESTRAINT_OF_TRADE_PARAGRAPHS);
     renderLegalSection(NON_SOLICITATION_TITLE, NON_SOLICITATION_PARAGRAPHS);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Optional supporting image (proof-of-delivery, signed manifest, etc.)
+    // Always rendered on its own page so it doesn't disrupt the layout.
+    // ─────────────────────────────────────────────────────────────────────
+    if (imageAttachment) {
+        try {
+            doc.addPage();
+            yPos = 20;
+            addSectionHeader("Supporting Document");
+            if (imageAttachment.caption) {
+                doc.setFontSize(8.5);
+                doc.setFont("helvetica", "italic");
+                doc.setTextColor(...pdfColors.textMuted);
+                doc.text(imageAttachment.caption, margin, yPos);
+                yPos += 5;
+            }
+            // Probe natural dimensions so we can preserve aspect ratio.
+            const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+                img.onerror = () => resolve({ w: 1, h: 1 });
+                img.src = imageAttachment.dataUrl;
+            });
+            const maxW = pageWidth - margin * 2;
+            const maxH = pageHeight - yPos - 15;
+            const ratio = Math.min(maxW / dims.w, maxH / dims.h);
+            const drawW = Math.max(10, dims.w * ratio);
+            const drawH = Math.max(10, dims.h * ratio);
+            doc.addImage(
+                imageAttachment.dataUrl,
+                imageAttachment.format,
+                margin + (maxW - drawW) / 2,
+                yPos,
+                drawW,
+                drawH,
+            );
+        } catch (err) {
+            console.warn("[exportLoadOrderToPdf] failed to embed image attachment", err);
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────
     // Footer on every page

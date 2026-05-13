@@ -19,11 +19,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useActiveSuppliers } from "@/hooks/useSuppliers";
 import type { Load } from "@/hooks/useTrips";
-import { downloadEmlWithAttachment } from "@/lib/emlExport";
-import { exportLoadOrderToPdf } from "@/lib/exportLoadOrderToPdf";
+import { downloadEmlWithAttachment, type EmlAttachment } from "@/lib/emlExport";
+import {
+    exportLoadOrderToPdf,
+    type LoadOrderImageAttachment,
+} from "@/lib/exportLoadOrderToPdf";
 import { format, parseISO } from "date-fns";
-import { FileDown, Loader2, Mail } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { FileDown, Loader2, Mail, Paperclip, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface ExportLoadOrderDialogProps {
@@ -118,6 +121,40 @@ async function blobToBase64(blob: Blob): Promise<string> {
     });
 }
 
+async function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error || new Error("Read failed"));
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+    });
+}
+
+const ACCEPTED_ATTACHMENT_MIME = "application/pdf,image/png,image/jpeg,image/webp,image/gif";
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB — keeps generated .eml files manageable.
+
+function imageFormatFromMime(mime: string): LoadOrderImageAttachment["format"] | null {
+    switch (mime) {
+        case "image/jpeg":
+        case "image/jpg":
+            return "JPEG";
+        case "image/png":
+            return "PNG";
+        case "image/webp":
+            return "WEBP";
+        case "image/gif":
+            return "GIF";
+        default:
+            return null;
+    }
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 /**
  * Dialog used on the Subcontractor Trips page in place of the standard Load
  * Confirmation export. Captures the trip rate (printed on the PDF) and the
@@ -136,6 +173,8 @@ export function ExportLoadOrderDialog({
     const [currency, setCurrency] = useState<Currency>("USD");
     const [exporting, setExporting] = useState(false);
     const [emailing, setEmailing] = useState(false);
+    const [attachment, setAttachment] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const [toEmail, setToEmail] = useState("");
     const [ccEmails, setCcEmails] = useState(DEFAULT_CC_EMAILS.join(", "));
@@ -164,6 +203,8 @@ export function ExportLoadOrderDialog({
         setCurrency("USD");
         setExporting(false);
         setEmailing(false);
+        setAttachment(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
         setToEmail(supplierEmail);
         setCcEmails(DEFAULT_CC_EMAILS.join(", "));
         setEmailSubject(`Load Order — ${load.load_id}`);
@@ -178,11 +219,69 @@ export function ExportLoadOrderDialog({
         return { amount: parsed, currency };
     };
 
+    const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] ?? null;
+        if (!file) {
+            setAttachment(null);
+            return;
+        }
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+            toast.error(`File too large — keep it under ${formatBytes(MAX_ATTACHMENT_BYTES)}.`);
+            e.target.value = "";
+            return;
+        }
+        const isPdf = file.type === "application/pdf";
+        const isImage = file.type.startsWith("image/") && !!imageFormatFromMime(file.type);
+        if (!isPdf && !isImage) {
+            toast.error("Only PDF or image files (JPEG, PNG, WebP, GIF) are supported.");
+            e.target.value = "";
+            return;
+        }
+        setAttachment(file);
+    };
+
+    const clearAttachment = () => {
+        setAttachment(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    /**
+     * Build the optional image-attachment payload for embedding in the
+     * generated PDF. PDFs cannot be merged with jsPDF alone, so they are
+     * never embedded — they are still attached to the email separately.
+     */
+    const buildImageAttachment = async (): Promise<LoadOrderImageAttachment | undefined> => {
+        if (!attachment) return undefined;
+        const fmt = imageFormatFromMime(attachment.type);
+        if (!fmt) return undefined;
+        const dataUrl = await fileToDataUrl(attachment);
+        return { dataUrl, format: fmt, caption: attachment.name };
+    };
+
     const handleDownload = async () => {
         if (!load) return;
         setExporting(true);
         try {
-            await exportLoadOrderToPdf(load, { rate: buildRate() });
+            const imageAttachment = await buildImageAttachment();
+            await exportLoadOrderToPdf(load, {
+                rate: buildRate(),
+                imageAttachment,
+            });
+            // PDF uploads can't be merged into jsPDF output — download the
+            // original separately so the user still has both files locally.
+            if (attachment && attachment.type === "application/pdf") {
+                const url = URL.createObjectURL(attachment);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = attachment.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                toast.info(
+                    "PDF attachment downloaded separately — it can't be merged into the load order PDF.",
+                );
+            }
             onOpenChange(false);
         } catch (err) {
             console.error("[ExportLoadOrder] export failed", err);
@@ -209,11 +308,24 @@ export function ExportLoadOrderDialog({
 
         setEmailing(true);
         try {
+            const imageAttachment = await buildImageAttachment();
             const { blob, filename } = await exportLoadOrderToPdf(load, {
                 rate: buildRate(),
                 download: false,
+                imageAttachment,
             });
             const pdfBase64 = await blobToBase64(blob);
+
+            // The uploaded file is always sent as a separate email attachment
+            // (in addition to being embedded in the PDF if it was an image).
+            const extraAttachments: EmlAttachment[] = [];
+            if (attachment) {
+                extraAttachments.push({
+                    base64: await blobToBase64(attachment),
+                    filename: attachment.name,
+                    mimeType: attachment.type || "application/octet-stream",
+                });
+            }
 
             const toFinal = splitAddresses(toEmail).join(", ");
             const ccFinal = splitAddresses(ccEmails).join(", ");
@@ -229,6 +341,7 @@ export function ExportLoadOrderDialog({
                 body: bodyFinal,
                 pdfBase64,
                 pdfFileName: filename,
+                extraAttachments: extraAttachments.length > 0 ? extraAttachments : undefined,
                 fileName: `LoadOrder-${load.load_id}`,
             });
 
@@ -302,6 +415,50 @@ export function ExportLoadOrderDialog({
                     <p className="text-xs text-muted-foreground">
                         Leave the rate blank to print “To be confirmed” on the order.
                     </p>
+
+                    <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                            <span className="font-medium">Supporting document</span>
+                            <span className="ml-1 truncate">
+                                · optional PDF or image
+                            </span>
+                        </div>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept={ACCEPTED_ATTACHMENT_MIME}
+                            onChange={handleAttachmentChange}
+                            disabled={busy}
+                            className="block w-full text-xs file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-accent hover:file:text-accent-foreground disabled:opacity-50"
+                        />
+                        {attachment && (
+                            <div className="flex items-center justify-between gap-2 rounded-md border bg-background px-2 py-1.5 text-xs">
+                                <div className="min-w-0 flex-1 truncate">
+                                    <span className="font-medium">{attachment.name}</span>
+                                    <span className="ml-1 text-muted-foreground">
+                                        ({formatBytes(attachment.size)})
+                                    </span>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={clearAttachment}
+                                    disabled={busy}
+                                    aria-label="Remove attachment"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        )}
+                        <p className="text-[11px] leading-snug text-muted-foreground">
+                            Images appear as a final page in the PDF and are also
+                            attached to the email. PDF uploads are sent only as an
+                            email attachment (or downloaded separately).
+                        </p>
+                    </div>
 
                     <div className="space-y-3 rounded-md border bg-muted/30 p-3">
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

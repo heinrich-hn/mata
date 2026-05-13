@@ -341,18 +341,42 @@ export default function SubcontractorTripsPage() {
         const supplier = suppliers.find((s) => s.id === data.supplierId);
         if (!supplier) return;
 
+        // Build ISO timestamps from date + HH:MM string
+        const toIso = (date: Date, hhmm: string): string => {
+            const [h, m] = hhmm.split(":").map(Number);
+            const d = new Date(date);
+            d.setHours(h || 0, m || 0, 0, 0);
+            return d.toISOString();
+        };
+
+        const loadingArrivalIso = toIso(data.loadingDate, data.loadingPlannedArrival);
+        const loadingDepartureIso = toIso(data.loadingDate, data.loadingPlannedDeparture);
+        const offloadingArrivalIso = toIso(data.offloadingDate, data.offloadingPlannedArrival);
+        const offloadingDepartureIso = toIso(data.offloadingDate, data.offloadingPlannedDeparture);
+
+        // Subcontractor trips are recorded after the fact and considered
+        // delivered immediately — copy planned times into actuals so reports
+        // and exports have data without requiring a separate confirmation step.
         const timeData = {
             origin: {
                 plannedArrival: data.loadingPlannedArrival,
                 plannedDeparture: data.loadingPlannedDeparture,
+                actualArrival: loadingArrivalIso,
+                actualDeparture: loadingDepartureIso,
                 placeName: data.loadingPlaceName,
                 address: data.loadingAddress,
+                verified: true,
+                source: "manual",
             },
             destination: {
                 plannedArrival: data.offloadingPlannedArrival,
                 plannedDeparture: data.offloadingPlannedDeparture,
+                actualArrival: offloadingArrivalIso,
+                actualDeparture: offloadingDepartureIso,
                 placeName: data.offloadingPlaceName,
                 address: data.offloadingAddress,
+                verified: true,
+                source: "manual",
             },
             subcontractor: {
                 supplierId: supplier.id,
@@ -370,7 +394,8 @@ export default function SubcontractorTripsPage() {
                 destination: data.offloadingPlaceName,
                 cargo_type: "Retail",
                 priority: data.priority,
-                status: "scheduled",
+                // Subcontractor trips are logged after delivery — mark complete immediately.
+                status: "delivered",
                 fleet_vehicle_id: data.fleetVehicleId || null,
                 driver_id: data.driverId || null,
                 time_window: JSON.stringify(timeData),
@@ -757,8 +782,6 @@ export default function SubcontractorTripsPage() {
                                     )}
                                 />
                             </div>
-
-
 
                             <FormField
                                 control={form.control}

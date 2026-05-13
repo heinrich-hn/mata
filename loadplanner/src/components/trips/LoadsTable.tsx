@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useDeleteLoad, type Load } from "@/hooks/useTrips";
+import { useDeleteLoad, useUpdateLoad, type Load } from "@/hooks/useTrips";
 import { shareTripViaWhatsApp, shareWeeklyScheduleViaWhatsApp } from "@/lib/exportTripWhatsApp";
 import { exportRoutePdf } from "@/lib/exportRoutePdf";
 import { parseTimeWindow as parseTimeWindowData } from "@/lib/timeWindow";
@@ -56,6 +56,7 @@ import {
   Trash2,
   Truck,
   User,
+  UserMinus,
   Users,
 } from "lucide-react";
 import { useFleetVehicles } from "@/hooks/useFleetVehicles";
@@ -241,6 +242,7 @@ export function LoadsTable({
   const [loadForExport, setLoadForExport] = useState<Load | null>(null);
 
   const deleteLoad = useDeleteLoad();
+  const updateLoad = useUpdateLoad();
   const { data: allFleetVehicles = [] } = useFleetVehicles();
 
   // Build a quick lookup so we can resolve linked_reefer_id / linked_interlink_id
@@ -253,7 +255,23 @@ export function LoadsTable({
     return map;
   }, [allFleetVehicles]);
 
+  function hasSubcontractorAssigned(load: Load): boolean {
+    try {
+      const tw = typeof load.time_window === "string"
+        ? JSON.parse(load.time_window || "{}")
+        : (load.time_window ?? {});
+      return !!(tw as { subcontractor?: { supplierId?: string } })?.subcontractor?.supplierId;
+    } catch {
+      return false;
+    }
+  }
+
   function needsVerification(load: Load) {
+    // Subcontractor trips are recorded after the fact and don't require
+    // separate time verification — this applies to both SC-prefixed loads
+    // and any other load that has been assigned to a subcontractor.
+    if (load.load_id?.startsWith("SC-")) return false;
+    if (hasSubcontractorAssigned(load)) return false;
     return (
       load.status === "delivered" &&
       (!load.actual_loading_arrival ||
@@ -753,14 +771,16 @@ export function LoadsTable({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <StatusStepper
-                          load={load}
-                          onRequestDelivered={(l) => {
-                            setLoadForDelivery(l);
-                            setVerificationOnly(false);
-                            setDeliveryDialogOpen(true);
-                          }}
-                        />
+                        {load.load_id?.startsWith("SC-") ? null : (
+                          <StatusStepper
+                            load={load}
+                            onRequestDelivered={(l) => {
+                              setLoadForDelivery(l);
+                              setVerificationOnly(false);
+                              setDeliveryDialogOpen(true);
+                            }}
+                          />
+                        )}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -783,6 +803,31 @@ export function LoadsTable({
                               <Pencil className="h-4 w-4 mr-2" />
                               Edit Load
                             </DropdownMenuItem>
+
+                            {(load.fleet_vehicle_id || load.driver_id) && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateLoad.mutate(
+                                    {
+                                      id: load.id,
+                                      fleet_vehicle_id: null,
+                                      driver_id: null,
+                                    },
+                                    {
+                                      onSuccess: () =>
+                                        toast.success(
+                                          `Unassigned vehicle and driver from ${load.load_id}`,
+                                        ),
+                                    },
+                                  );
+                                }}
+                                disabled={updateLoad.isPending}
+                              >
+                                <UserMinus className="h-4 w-4 mr-2" />
+                                Unassign Vehicle & Driver
+                              </DropdownMenuItem>
+                            )}
 
                             {load.status !== "delivered" && (() => {
                               const times = parseTimeWindowData(load.time_window);
@@ -818,7 +863,11 @@ export function LoadsTable({
                               </DropdownMenuItem>
                             )}
 
-                            {load.status !== "delivered" && (() => {
+                            {(() => {
+                              // Subcontractor assignment is allowed regardless of
+                              // delivery status — a load may be marked delivered
+                              // (e.g. a subcontractor trip created on the SC page)
+                              // and still need a subcontractor attached afterwards.
                               // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               const rawTw: any = (() => { try { return typeof load.time_window === "string" ? JSON.parse(load.time_window || "{}") : (load.time_window ?? {}); } catch { return {}; } })();
                               const hasSubcontractor = !!rawTw.subcontractor?.supplierId;

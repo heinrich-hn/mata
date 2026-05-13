@@ -1,16 +1,22 @@
 import { cn } from '@/lib/utils';
 import type { LoadStatus } from '@/types/Trips';
 import { AlertCircle, CheckCircle2, Clock, Truck } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { memo } from 'react';
 
 interface StatusBadgeProps {
   status: LoadStatus;
   size?: 'sm' | 'md';
-  distanceRemaining?: number;
   hasArrivalTime?: boolean;
-  hasDepartureTime?: boolean;
 }
 
-const statusConfig = {
+interface StatusConfig {
+  label: string;
+  icon: LucideIcon;
+  dataStatus: string;
+}
+
+const statusConfig: Record<string, StatusConfig> = {
   scheduled: {
     label: 'Scheduled',
     icon: Clock,
@@ -31,39 +37,45 @@ const statusConfig = {
     icon: CheckCircle2,
     dataStatus: 'delivered',
   },
+  arrived: {
+    label: 'Arrived',
+    icon: Truck,
+    dataStatus: 'arrived',
+  },
 };
 
-export function StatusBadge({ status, size = 'md', distanceRemaining: _distanceRemaining, hasArrivalTime, hasDepartureTime: _hasDepartureTime }: StatusBadgeProps) {
-  // Special case: if in-transit and has arrival time (truck has been stationary at destination for 5+ minutes), show as "Arrived"
+const sizeClasses = {
+  sm: 'text-[10px] px-2 py-0.5',
+  md: '',
+} as const;
+
+const iconSizes = {
+  sm: 'h-3 w-3',
+  md: 'h-3.5 w-3.5',
+} as const;
+
+function getStatusConfig(status: LoadStatus, hasArrivalTime?: boolean): StatusConfig {
   if (status === 'in-transit' && hasArrivalTime) {
-    const config = {
-      label: 'Arrived',
-      icon: Truck,
-      dataStatus: 'arrived',
-    };
-    const Icon = config.icon;
-
-    return (
-      <span className={cn(
-        'status-badge',
-        size === 'sm' && 'text-[10px] px-2 py-0.5'
-      )} data-status={config.dataStatus}>
-        <Icon className={cn('shrink-0', size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
-        {config.label}
-      </span>
-    );
+    return statusConfig.arrived;
   }
+  return statusConfig[status];
+}
 
-  const config = statusConfig[status];
+export const StatusBadge = memo(function StatusBadge({
+  status,
+  size = 'md',
+  hasArrivalTime
+}: StatusBadgeProps) {
+  const config = getStatusConfig(status, hasArrivalTime);
   const Icon = config.icon;
 
   return (
-    <span className={cn(
-      'status-badge',
-      size === 'sm' && 'text-[10px] px-2 py-0.5'
-    )} data-status={config.dataStatus}>
-      <Icon className={cn('shrink-0', size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
+    <span
+      className={cn('status-badge', sizeClasses[size])}
+      data-status={config.dataStatus}
+    >
+      <Icon className={cn('shrink-0', iconSizes[size])} />
       {config.label}
     </span>
   );
-}
+});

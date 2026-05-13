@@ -9,15 +9,26 @@
  * Outlook builds also strip the body from `mailto:` links above a few hundred bytes.
  */
 
+export interface EmlAttachment {
+    /** File bytes encoded as base64 (no data: prefix) */
+    base64: string;
+    /** Filename to show in the recipient's mail client */
+    filename: string;
+    /** MIME type, e.g. "application/pdf", "image/jpeg" */
+    mimeType: string;
+}
+
 interface BuildEmlOptions {
     to: string;
     /** Optional comma-separated CC list */
     cc?: string;
     subject: string;
     body: string;
-    /** PDF bytes encoded as base64 (no data: prefix) */
+    /** Primary PDF bytes encoded as base64 (no data: prefix) */
     pdfBase64: string;
     pdfFileName: string;
+    /** Additional files to attach (e.g. user-uploaded supporting documents) */
+    extraAttachments?: EmlAttachment[];
     /** Optional From header (purely cosmetic — the user's mail client controls the actual sender) */
     from?: string;
 }
@@ -63,6 +74,7 @@ export function buildEmlMessage({
     body,
     pdfBase64,
     pdfFileName,
+    extraAttachments,
     from,
 }: BuildEmlOptions): string {
     const boundary = `----=_Mata_${Date.now().toString(16)}_${Math.random().toString(16).slice(2, 10)}`;
@@ -81,7 +93,7 @@ export function buildEmlMessage({
 
     const safeBody = body.replace(/\r?\n/g, "\r\n");
 
-    const parts = [
+    const parts: string[] = [
         // Text body
         `--${boundary}`,
         `Content-Type: text/plain; charset=UTF-8`,
@@ -89,7 +101,7 @@ export function buildEmlMessage({
         ``,
         safeBody,
         ``,
-        // PDF attachment
+        // Primary PDF attachment
         `--${boundary}`,
         `Content-Type: application/pdf; name="${pdfFileName}"`,
         `Content-Transfer-Encoding: base64`,
@@ -97,9 +109,21 @@ export function buildEmlMessage({
         ``,
         wrapBase64(pdfBase64),
         ``,
-        `--${boundary}--`,
-        ``,
     ];
+
+    for (const att of extraAttachments ?? []) {
+        parts.push(
+            `--${boundary}`,
+            `Content-Type: ${att.mimeType}; name="${att.filename}"`,
+            `Content-Transfer-Encoding: base64`,
+            `Content-Disposition: attachment; filename="${att.filename}"`,
+            ``,
+            wrapBase64(att.base64),
+            ``,
+        );
+    }
+
+    parts.push(`--${boundary}--`, ``);
 
     return headers.join("\r\n") + "\r\n\r\n" + parts.join("\r\n");
 }

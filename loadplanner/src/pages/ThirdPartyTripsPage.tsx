@@ -10,6 +10,7 @@ import {
   ChevronsUpDown,
   Clock,
   FileSpreadsheet,
+  FileText,
   Link2,
   Loader2,
   MapPin,
@@ -86,6 +87,10 @@ import {
   type Load,
 } from "@/hooks/useTrips";
 import { DEPOTS } from "@/lib/depots";
+import {
+  exportLoadsByVehicleExcel,
+  exportLoadsByVehiclePdf,
+} from "@/lib/exportLoadsByVehicle";
 import {
   exportLoadsToExcel,
   exportLoadsToExcelSimplified,
@@ -572,6 +577,25 @@ export default function ThirdPartyLoadsPage() {
     exportFn(filteredLoads);
   }, [filteredLoads]);
 
+  const assignedLoads = useMemo(
+    () => filteredLoads.filter((l) => !!l.fleet_vehicle_id),
+    [filteredLoads],
+  );
+
+  const handleExportByVehicleExcel = useCallback(() => {
+    exportLoadsByVehicleExcel(assignedLoads, {
+      title: "Third-Party Loads by Vehicle",
+      filename: `third-party-loads-by-vehicle-${format(new Date(), "yyyy-MM-dd")}`,
+    });
+  }, [assignedLoads]);
+
+  const handleExportByVehiclePdf = useCallback(() => {
+    exportLoadsByVehiclePdf(assignedLoads, {
+      title: "Third-Party Loads by Vehicle",
+      filename: `third-party-loads-by-vehicle-${format(new Date(), "yyyy-MM-dd")}`,
+    });
+  }, [assignedLoads]);
+
   const handleSubmit = useCallback((data: FormData) => {
     const customer = clients.find((c) => c.id === data.customerId);
     if (!customer) return;
@@ -629,10 +653,27 @@ export default function ThirdPartyLoadsPage() {
     );
   }, [clients, linkableLoads, createLoad, updateDialog, form, waypoints]);
 
-  const exportMenuItems = [
-    { label: "Full Export (All Columns)", onClick: () => handleExportExcel(false) },
-    { label: "Simplified Export", onClick: () => handleExportExcel(true) },
-  ];
+  const exportMenuItems: Array<{
+    label: string;
+    onClick: () => void;
+    icon?: typeof Truck;
+    disabled?: boolean;
+  }> = [
+      { label: "Full Export (All Columns)", onClick: () => handleExportExcel(false) },
+      { label: "Simplified Export", onClick: () => handleExportExcel(true) },
+      {
+        label: "By Vehicle — Excel (one sheet per vehicle)",
+        onClick: handleExportByVehicleExcel,
+        icon: Truck,
+        disabled: assignedLoads.length === 0,
+      },
+      {
+        label: "By Vehicle — PDF (one section per vehicle)",
+        onClick: handleExportByVehiclePdf,
+        icon: FileText,
+        disabled: assignedLoads.length === 0,
+      },
+    ];
 
   return (
     <>
@@ -662,7 +703,12 @@ export default function ThirdPartyLoadsPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {exportMenuItems.map((item) => (
-                  <DropdownMenuItem key={item.label} onClick={item.onClick}>
+                  <DropdownMenuItem
+                    key={item.label}
+                    onClick={item.onClick}
+                    disabled={item.disabled}
+                  >
+                    {item.icon && <item.icon className="h-4 w-4 mr-2" />}
                     {item.label}
                   </DropdownMenuItem>
                 ))}

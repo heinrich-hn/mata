@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { ChevronDown, Clock, FileSpreadsheet, Plus } from "lucide-react";
+import { ChevronDown, Clock, FileSpreadsheet, FileText, Plus, Truck } from "lucide-react";
 import {
   startOfWeek,
   endOfWeek,
@@ -25,6 +25,10 @@ import {
 import type { Load } from "@/hooks/useTrips";
 import { useLoads } from "@/hooks/useTrips";
 import { exportTimeComparisonToExcel } from "@/lib/exportTimeComparisonToExcel";
+import {
+  exportLoadsByVehicleExcel,
+  exportLoadsByVehiclePdf,
+} from "@/lib/exportLoadsByVehicle";
 import {
   exportLoadsToExcel,
   exportLoadsToExcelSimplified,
@@ -98,7 +102,11 @@ const useFilteredLoads = (loads: Load[], filters: FilterState, weekFilter: WeekF
   return useMemo(() => {
     return loads.filter((load) => {
       if (isThirdPartyLoad(load.load_id)) return false;
-      if (isSubcontractorLoad(load.load_id)) return false;
+      // Subcontractor loads are normally managed on the Subcontractor page,
+      // but unassigned ones (no fleet vehicle yet) are surfaced here so the
+      // user can assign a vehicle/driver — even if the load was already
+      // marked delivered when it was created.
+      if (isSubcontractorLoad(load.load_id) && load.fleet_vehicle_id) return false;
 
       const searchMatch = matchesSearchQuery(load, filters.search);
       const statusMatch = filters.status === "all" || load.status === filters.status;
@@ -165,16 +173,57 @@ export default function LoadsPage() {
     exportTimeComparisonToExcel(filteredLoads, getWeekInfo());
   }, [filteredLoads, getWeekInfo]);
 
+  const assignedLoads = useMemo(
+    () => filteredLoads.filter((l) => !!l.fleet_vehicle_id),
+    [filteredLoads],
+  );
+
+  const handleExportByVehicleExcel = useCallback(() => {
+    const info = getWeekInfo();
+    exportLoadsByVehicleExcel(assignedLoads, {
+      ...info,
+      title: "Load Planning by Vehicle",
+      filename: `load-planning-by-vehicle-week-${info.weekNumber}-${info.year}`,
+    });
+  }, [assignedLoads, getWeekInfo]);
+
+  const handleExportByVehiclePdf = useCallback(() => {
+    const info = getWeekInfo();
+    exportLoadsByVehiclePdf(assignedLoads, {
+      ...info,
+      title: "Load Planning by Vehicle",
+      filename: `load-planning-by-vehicle-week-${info.weekNumber}-${info.year}`,
+    });
+  }, [assignedLoads, getWeekInfo]);
+
   // Render helpers
-  const exportMenuItems = [
-    { label: "Full Export (All Columns)", onClick: () => handleExportExcel(false) },
-    { label: "Simplified Export", onClick: () => handleExportExcel(true) },
-    {
-      label: "Time Comparison (Planned vs Actual)",
-      onClick: handleExportTimeComparison,
-      icon: Clock,
-    },
-  ];
+  const noAssignedVehicles = assignedLoads.length === 0;
+  const exportMenuItems: Array<{
+    label: string;
+    onClick: () => void;
+    icon?: typeof Clock;
+    disabled?: boolean;
+  }> = [
+      { label: "Full Export (All Columns)", onClick: () => handleExportExcel(false) },
+      { label: "Simplified Export", onClick: () => handleExportExcel(true) },
+      {
+        label: "Time Comparison (Planned vs Actual)",
+        onClick: handleExportTimeComparison,
+        icon: Clock,
+      },
+      {
+        label: "By Vehicle — Excel (one sheet per vehicle)",
+        onClick: handleExportByVehicleExcel,
+        icon: Truck,
+        disabled: noAssignedVehicles,
+      },
+      {
+        label: "By Vehicle — PDF (one section per vehicle)",
+        onClick: handleExportByVehiclePdf,
+        icon: FileText,
+        disabled: noAssignedVehicles,
+      },
+    ];
 
   return (
     <>
@@ -196,7 +245,11 @@ export default function LoadsPage() {
 
               <DropdownMenuContent align="end">
                 {exportMenuItems.map((item) => (
-                  <DropdownMenuItem key={item.label} onClick={item.onClick}>
+                  <DropdownMenuItem
+                    key={item.label}
+                    onClick={item.onClick}
+                    disabled={item.disabled}
+                  >
                     {item.icon && <item.icon className="h-4 w-4 mr-2" />}
                     {item.label}
                   </DropdownMenuItem>
