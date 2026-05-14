@@ -983,9 +983,7 @@ function LoadCard({
                 <div className="mt-0.5">
                   <StatusBadge
                     status={load.status}
-                    distanceRemaining={load.progressData?.distanceRemaining}
                     hasArrivalTime={!!load.actual_offloading_arrival}
-                    hasDepartureTime={!!load.actual_offloading_departure}
                   />
                 </div>
               </div>

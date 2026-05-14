@@ -223,6 +223,44 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
       (l) => l.status === "pending" || l.status === "scheduled" || l.status === "in-transit"
     );
 
+    // === DIAGNOSTIC SUMMARY ===
+    // Per polling tick, log a single grouped summary of every active load and
+    // why it will / will not be processed. Helps users (and us) debug stuck
+    // status indicators (e.g. BV-origin trips not advancing) without having
+    // to attach a debugger.
+    if (activeLoads.length > 0) {
+      console.groupCollapsed(`[Geofence] tick — ${activeLoads.length} active load(s)`);
+      for (const l of activeLoads) {
+        const a = l.telematicsAsset;
+        const od = findDepotByName(l.origin, extraDepots);
+        const dd = findDepotByName(l.destination, extraDepots);
+        const inOrigin = od && a?.lastLatitude && a?.lastLongitude
+          ? isWithinDepot(a.lastLatitude, a.lastLongitude, od) : null;
+        const inDest = dd && a?.lastLatitude && a?.lastLongitude
+          ? isWithinDepot(a.lastLatitude, a.lastLongitude, dd) : null;
+        console.log(`[Geofence] ${l.load_id}`, {
+          status: l.status,
+          vehicle: l.fleet_vehicle?.vehicle_id ?? '(none)',
+          driver_id: l.driver_id ?? '(none)',
+          origin_text: l.origin,
+          dest_text: l.destination,
+          origin_resolved: od ? `${od.name} (r=${od.radius}m)` : 'NOT RESOLVED',
+          dest_resolved: dd ? `${dd.name} (r=${dd.radius}m)` : 'NOT RESOLVED',
+          asset_pos: a?.lastLatitude && a?.lastLongitude
+            ? `${a.lastLatitude.toFixed(5)}, ${a.lastLongitude.toFixed(5)}`
+            : 'NO POSITION',
+          asset_last: a?.lastConnectedUtc ?? '(no asset)',
+          in_origin: inOrigin,
+          in_dest: inDest,
+          actual_loading_arrival: l.actual_loading_arrival,
+          actual_loading_departure: l.actual_loading_departure,
+          actual_offloading_arrival: l.actual_offloading_arrival,
+          actual_offloading_departure: l.actual_offloading_departure,
+        });
+      }
+      console.groupEnd();
+    }
+
     // Track which vehicles we have updated in this tick to prevent loop state contamination
     const updatedVehiclesInTick = new Set<string>();
 
@@ -235,9 +273,33 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
       const gateVehicleId = load.fleet_vehicle?.vehicle_id || "unassigned";
       if (gateVehicleId !== "unassigned") {
         const statusPriority: Record<string, number> = { 'in-transit': 0, 'scheduled': 1, 'pending': 2 };
+        const assetForGate = load.telematicsAsset;
+        const gateLat = assetForGate?.lastLatitude;
+        const gateLon = assetForGate?.lastLongitude;
+
+        // Compute, for each candidate load on this vehicle, whether the truck
+        // is physically inside its origin or destination geofence right now.
+        // A load whose geofence currently contains the truck takes absolute
+        // priority over the date-based ordering — otherwise a "next" load
+        // scheduled out of the same depot blocks the active load from
+        // advancing while the truck is sitting at the origin.
+        const isInsideAnyGeofence = (l: LoadWithAsset): boolean => {
+          if (gateLat == null || gateLon == null) return false;
+          const od = findDepotByName(l.origin, extraDepots);
+          const dd = findDepotByName(l.destination, extraDepots);
+          if (od && isWithinDepot(gateLat, gateLon, od)) return true;
+          if (dd && isWithinDepot(gateLat, gateLon, dd)) return true;
+          return false;
+        };
+
         const notDeliveredForVehicle = loadsWithAssets
           .filter((l) => (l.fleet_vehicle?.vehicle_id || "unassigned") === gateVehicleId && l.status !== "delivered")
           .sort((a, b) => {
+            // 0. A load whose origin/destination currently contains the truck
+            //    wins outright. If both or neither are inside, fall through.
+            const aInside = isInsideAnyGeofence(a);
+            const bInside = isInsideAnyGeofence(b);
+            if (aInside !== bInside) return aInside ? -1 : 1;
             // 1. Prefer in-transit over scheduled/pending
             const sPri = (statusPriority[a.status] ?? 3) - (statusPriority[b.status] ?? 3);
             if (sPri !== 0) return sPri;
@@ -249,12 +311,16 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
           });
         const currentLoadForVehicle = notDeliveredForVehicle[0];
         if (currentLoadForVehicle && currentLoadForVehicle.id !== load.id) {
+          console.log(`[Geofence] ${load.load_id}: SKIPPED — vehicle ${gateVehicleId} is currently bound to load ${currentLoadForVehicle.load_id} (status=${currentLoadForVehicle.status}, inside_geofence=${isInsideAnyGeofence(currentLoadForVehicle)})`);
           continue;
         }
       }
 
       const asset = load.telematicsAsset;
-      if (!asset?.lastLatitude || !asset?.lastLongitude) continue;
+      if (!asset?.lastLatitude || !asset?.lastLongitude) {
+        console.log(`[Geofence] ${load.load_id}: SKIPPED — no telematics asset/position (vehicle=${load.fleet_vehicle?.vehicle_id ?? 'none'}, telematics_asset_id=${load.fleet_vehicle?.telematics_asset_id ?? 'none'})`);
+        continue;
+      }
 
       const vehicleKey = asset.id?.toString() || asset.registrationNumber || "";
       if (!vehicleKey) continue;
@@ -265,12 +331,26 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
       const originDepot = findDepotByName(load.origin, extraDepots);
       const destinationDepot = findDepotByName(load.destination, extraDepots);
 
-      if (originDepot && destinationDepot) {
-        const originInsideRaw = isWithinDepot(currentPos.lat, currentPos.lon, originDepot);
-        const destInsideRaw = isWithinDepot(currentPos.lat, currentPos.lon, destinationDepot);
+      // Process origin and destination geofences INDEPENDENTLY so that an
+      // unresolved destination (e.g. a custom location whose name doesn't
+      // match exactly) does not silently disable origin arrival detection
+      // — and vice versa. Previously the gate was `originDepot && destinationDepot`,
+      // which caused trips with origin = "BV" and a custom-location destination
+      // to be stuck on "Scheduled" forever because the whole geofence block
+      // was skipped.
+      if (originDepot || destinationDepot) {
+        if (!originDepot && load.origin) {
+          console.warn(`[Geofence] Load ${load.load_id}: origin "${load.origin}" did not resolve to a known depot or custom location — origin geofence checks skipped for this load.`);
+        }
+        if (!destinationDepot && load.destination) {
+          console.warn(`[Geofence] Load ${load.load_id}: destination "${load.destination}" did not resolve to a known depot or custom location — destination geofence checks skipped for this load.`);
+        }
 
-        const originKeyForHyst = `${vehicleKey}-${originDepot.name}-origin`;
-        const destKeyForHyst = `${vehicleKey}-${destinationDepot.name}-dest`;
+        const originInsideRaw = originDepot ? isWithinDepot(currentPos.lat, currentPos.lon, originDepot) : false;
+        const destInsideRaw = destinationDepot ? isWithinDepot(currentPos.lat, currentPos.lon, destinationDepot) : false;
+
+        const originKeyForHyst = originDepot ? `${vehicleKey}-${originDepot.name}-origin` : '';
+        const destKeyForHyst = destinationDepot ? `${vehicleKey}-${destinationDepot.name}-dest` : '';
 
         const requiresHysteresis = (depotName: string, depotType: string) => {
           const isCBC = depotName.toLowerCase() === 'cbc';
@@ -279,7 +359,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
         };
 
         const applyHysteresis = (key: string, rawInside: boolean, enabled: boolean) => {
-          if (!enabled) return rawInside;
+          if (!enabled || !key) return rawInside;
           const current = insideCountRef.current.get(key) || 0;
           if (rawInside) {
             const next = current + 1;
@@ -291,9 +371,13 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
           }
         };
 
-        // Always run hysteresis to keep counters in sync
-        const isAtOriginHyst = applyHysteresis(originKeyForHyst, originInsideRaw, requiresHysteresis(originDepot.name, originDepot.type));
-        const isAtDestHyst = applyHysteresis(destKeyForHyst, destInsideRaw, requiresHysteresis(destinationDepot.name, destinationDepot.type));
+        // Always run hysteresis to keep counters in sync (when depot resolved)
+        const isAtOriginHyst = originDepot
+          ? applyHysteresis(originKeyForHyst, originInsideRaw, requiresHysteresis(originDepot.name, originDepot.type))
+          : false;
+        const isAtDestHyst = destinationDepot
+          ? applyHysteresis(destKeyForHyst, destInsideRaw, requiresHysteresis(destinationDepot.name, destinationDepot.type))
+          : false;
 
         // On first observation (no previous position), bypass hysteresis and use raw
         // geofence check so vehicles already inside a geofence are detected immediately
@@ -301,10 +385,10 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
         const isAtOrigin = previousPos ? isAtOriginHyst : originInsideRaw;
         const isAtDestination = previousPos ? isAtDestHyst : destInsideRaw;
 
-        const wasAtOrigin = previousPos
+        const wasAtOrigin = previousPos && originDepot
           ? isWithinDepot(previousPos.lat, previousPos.lon, originDepot)
           : null;
-        const wasAtDestination = previousPos
+        const wasAtDestination = previousPos && destinationDepot
           ? isWithinDepot(previousPos.lat, previousPos.lon, destinationDepot)
           : null;
 
@@ -323,7 +407,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
 
         // === ORIGIN GEOFENCE ===
         // Handle pending loads: transition to scheduled when vehicle enters origin with fleet+driver
-        if (load.status === "pending") {
+        if (originDepot && load.status === "pending") {
           const hasFleetAndDriver = load.fleet_vehicle_id && load.driver_id;
           const justEnteredOrigin =
             (wasAtOrigin === false && isAtOrigin === true) ||
@@ -381,7 +465,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
           continue; // Skip further processing for pending loads
         }
 
-        if (load.status === "scheduled") {
+        if (originDepot && load.status === "scheduled") {
           const justEnteredOrigin =
             (wasAtOrigin === false && isAtOrigin === true) ||
             (wasAtOrigin === null && isAtOrigin === true);
@@ -410,7 +494,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
 
         // === ORIGIN DWELL-TIME FALLBACK (scheduled) ===
         // If vehicle is inside origin for 10+ min without transition entry, auto-fire loading_arrival
-        if (load.status === "scheduled" && originInsideRaw && !load.actual_loading_arrival) {
+        if (originDepot && load.status === "scheduled" && originInsideRaw && !load.actual_loading_arrival) {
           const originDwellKey = `${load.id}-origin-dwell`;
           const arrivalEventKey = `${load.id}-loading_arrival-${dateKey}`;
           if (!processedEventsRef.current.has(arrivalEventKey)) {
@@ -436,11 +520,11 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
               }
             }
           }
-        } else if (load.status === "scheduled" && !originInsideRaw) {
+        } else if (originDepot && load.status === "scheduled" && !originInsideRaw) {
           dwellTrackingRef.current.delete(`${load.id}-origin-dwell`);
         }
 
-        if (load.status === "scheduled" && wasAtOrigin === true && isAtOrigin === false) {
+        if (originDepot && load.status === "scheduled" && wasAtOrigin === true && isAtOrigin === false) {
           const entryTime = geofenceEntryRef.current.get(originEntryKey);
           if (entryTime) {
             if (!load.actual_loading_arrival) {
@@ -475,7 +559,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
         // === ORIGIN EXIT-DWELL FALLBACK (scheduled → in-transit) ===
         // If loading_arrival was recorded and vehicle is now OUTSIDE origin for 10+ min,
         // auto-fire loading_departure so load progresses to in-transit.
-        if (load.status === "scheduled" && load.actual_loading_arrival && !load.actual_loading_departure) {
+        if (originDepot && load.status === "scheduled" && load.actual_loading_arrival && !load.actual_loading_departure) {
           const originExitDwellKey = `${load.id}-origin-exit-dwell`;
           if (!originInsideRaw) {
             const depEventKey = `${load.id}-loading_departure-${dateKey}`;
@@ -507,7 +591,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
         }
 
         // === DESTINATION GEOFENCE ===
-        if (load.status === "in-transit") {
+        if (destinationDepot && load.status === "in-transit") {
           const justEnteredDest =
             (wasAtDestination === false && isAtDestination === true) ||
             (wasAtDestination === null && isAtDestination === true);
@@ -537,7 +621,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
 
         // === DESTINATION DWELL-TIME FALLBACK (in-transit) ===
         // If vehicle is inside destination for 10+ min without transition entry, auto-fire offloading_arrival
-        if (load.status === "in-transit" && destInsideRaw && !load.actual_offloading_arrival) {
+        if (destinationDepot && load.status === "in-transit" && destInsideRaw && !load.actual_offloading_arrival) {
           const destDwellKey = `${load.id}-dest-dwell`;
           const destArrivalEventKey = `${load.id}-offloading_arrival-${dateKey}`;
           if (!processedEventsRef.current.has(destArrivalEventKey)) {
@@ -564,11 +648,11 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
               }
             }
           }
-        } else if (load.status === "in-transit" && !destInsideRaw) {
+        } else if (destinationDepot && load.status === "in-transit" && !destInsideRaw) {
           dwellTrackingRef.current.delete(`${load.id}-dest-dwell`);
         }
 
-        if (load.status === "in-transit" && isAtDestination) {
+        if (destinationDepot && load.status === "in-transit" && isAtDestination) {
           const tracking = stationaryTrackingRef.current.get(destEntryKey);
           if (tracking) {
             const isStationary = (asset.speedKmH ?? 0) < 1;
@@ -599,7 +683,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        if (load.status === "in-transit" && wasAtDestination === true && isAtDestination === false) {
+        if (destinationDepot && load.status === "in-transit" && wasAtDestination === true && isAtDestination === false) {
           const entryTime = geofenceEntryRef.current.get(destEntryKey);
           if (entryTime) {
             if (!load.actual_offloading_arrival) {
@@ -656,7 +740,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
         // === DESTINATION EXIT-DWELL FALLBACK (in-transit → delivered) ===
         // If offloading_arrival was recorded and vehicle is now OUTSIDE destination for 10+ min,
         // auto-fire offloading_departure so load progresses to delivered.
-        if (load.status === "in-transit" && load.actual_offloading_arrival && !load.actual_offloading_departure) {
+        if (destinationDepot && load.status === "in-transit" && load.actual_offloading_arrival && !load.actual_offloading_departure) {
           const destExitDwellKey = `${load.id}-dest-exit-dwell`;
           if (!destInsideRaw) {
             const depEventKey = `${load.id}-offloading_departure-${dateKey}`;
