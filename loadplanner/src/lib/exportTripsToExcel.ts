@@ -9,6 +9,7 @@ import {
   xlHeader,
   xlMetricLabel, xlMetricValue,
   xlGoodVariance, xlBadVariance, xlNeutralVariance,
+  xlSectionHeader,
   applyHeaderStyle, applyTitleRows,
 } from "@/lib/exportStyles";
 
@@ -18,7 +19,28 @@ const statusLabels: Record<string, string> = {
   "in-transit": "In Transit",
   pending: "Pending",
   delivered: "Delivered",
+  "at-loading": "At Loading Point",
+  "at-offloading": "At Offloading Point",
 };
+
+/**
+ * Derive a more accurate display status from the load's actual geofence
+ * timestamps. A load with an Origin actual arrival time can no longer be
+ * "Scheduled" — it is at least at the loading point. Likewise, once the
+ * truck has departed loading we treat it as in-transit even if the DB
+ * status hasn't been promoted yet.
+ */
+function getEffectiveStatus(load: Load): string {
+  if (load.status === "delivered" || load.actual_offloading_departure) {
+    return "delivered";
+  }
+  if (load.actual_offloading_arrival) return "at-offloading";
+  if (load.status === "in-transit" || load.actual_loading_departure) {
+    return "in-transit";
+  }
+  if (load.actual_loading_arrival) return "at-loading";
+  return load.status;
+}
 
 // Cargo type labels
 const cargoLabels: Record<string, string> = {
@@ -62,6 +84,59 @@ function varianceStyle(diffMin: number | null) {
   return diffMin > 0 ? redFill : greenFill;
 }
 
+// Row-level highlight fills based on load status.
+//   Delivered          → soft green
+//   In Transit         → soft yellow
+//   At Loading Point   → soft orange
+//   At Offloading Point→ soft purple/violet
+const deliveredRowFill = {
+  fill: { fgColor: { rgb: BRAND.successBg } },
+};
+const inTransitRowFill = {
+  fill: { fgColor: { rgb: "FFEB9C" } }, // soft yellow (Excel "neutral" tone)
+};
+const atLoadingRowFill = {
+  fill: { fgColor: { rgb: "FCD9B6" } }, // soft orange
+};
+const atOffloadingRowFill = {
+  fill: { fgColor: { rgb: "E2D0F8" } }, // soft violet
+};
+
+function rowFillForStatus(status: string) {
+  if (status === "delivered") return deliveredRowFill;
+  if (status === "in-transit" || status === "in_transit") return inTransitRowFill;
+  if (status === "at-loading") return atLoadingRowFill;
+  if (status === "at-offloading") return atOffloadingRowFill;
+  return undefined;
+}
+
+// Override the title row (row 1) with a more prominent style: larger font,
+// centered, taller row height. The base navy fill from `applyTitleRows`
+// remains via the same color palette.
+const xlTitleProminent = {
+  font: { bold: true, sz: 22, name: "Calibri", color: { rgb: BRAND.white } },
+  fill: { fgColor: { rgb: BRAND.navy } },
+  alignment: {
+    horizontal: "center" as const,
+    vertical: "center" as const,
+  },
+  border: {
+    bottom: { style: "medium" as const, color: { rgb: BRAND.accent } },
+  },
+};
+
+function emphasizeTitleRow(ws: XLSX.WorkSheet, colCount: number) {
+  for (let c = 0; c < colCount - 1; c++) {
+    const ref = XLSX.utils.encode_cell({ r: 1, c });
+    if (!ws[ref]) ws[ref] = { v: "", t: "s" };
+    ws[ref].s = xlTitleProminent;
+  }
+  // Increase the title row height for visual prominence
+  const rows = (ws["!rows"] as XLSX.RowInfo[] | undefined) ?? [];
+  rows[1] = { hpt: 36 };
+  ws["!rows"] = rows;
+}
+
 export function exportLoadsToExcel(
   loads: Load[],
   options: ExportOptions = {},
@@ -73,10 +148,10 @@ export function exportLoadsToExcel(
     sheetName = `Week ${weekNum}`,
   } = options;
 
-  // Transform loads data for Excel
+  // Transform loads data for Excel — keep the source load so we can sort
+  // and group by loading date when writing the sheet below.
   const excelData = loads.map((load) => {
     const timeWindow = timeWindowLib.parseTimeWindow(load.time_window);
-    const isBackload = load.load_id.startsWith("BL-");
     const subcontractor = getSubcontractorInfo(load);
 
     // Build backload quantities string
@@ -97,15 +172,15 @@ export function exportLoadsToExcel(
     const dDepVar = computeVariance(timeWindow.destination.plannedDeparture, timeWindow.destination.actualDeparture);
 
     return {
+      load,
+      effectiveStatus: getEffectiveStatus(load),
       row: {
         "Load ID": load.load_id,
-        Type: isBackload ? "Backload" : "Primary",
-        Status: statusLabels[load.status] || load.status,
+        Status: statusLabels[getEffectiveStatus(load)] || load.status,
         Origin: load.origin,
         Destination: load.destination,
+        Vehicle: load.fleet_vehicle?.vehicle_id || "",
         "Cargo Type": cargoLabels[load.cargo_type] || load.cargo_type,
-        Quantity: load.quantity,
-        "Weight (T)": load.weight,
         "Loading Date": format(parseISO(load.loading_date), "dd/MM/yyyy"),
         "Offloading Date": format(parseISO(load.offloading_date), "dd/MM/yyyy"),
         // Origin times: planned → actual → variance
@@ -123,21 +198,9 @@ export function exportLoadsToExcel(
         "Dest Actual Departure": timeWindow.destination.actualDeparture,
         "Dest Departure Variance": dDepVar.label,
         // Other columns
-        Vehicle: load.fleet_vehicle?.vehicle_id || "",
-        "Vehicle Type": load.fleet_vehicle?.type || "",
-        Driver: load.driver?.name || "",
-        "Driver Contact": load.driver?.contact || "",
-        "Special Handling": load.special_handling?.join(", ") || "",
-        Notes: load.notes || "",
-        "Has Planned Backload": timeWindow.backload?.enabled ? "Yes" : "No",
         "Backload Destination": timeWindow.backload?.destination || "",
-        "Backload Cargo Type": timeWindow.backload?.cargoType
-          ? cargoLabels[timeWindow.backload.cargoType] ||
-          timeWindow.backload.cargoType
-          : "",
         "Backload Offloading Date": timeWindow.backload?.offloadingDate || "",
         "Backload Quantities": backloadQuantities,
-        "Backload Notes": timeWindow.backload?.notes || "",
         "Variance Reason": timeWindow.varianceReason || "",
         "Subcontracted": subcontractor ? "Yes" : "No",
         "Subcontractor": subcontractor?.name || "",
@@ -148,60 +211,114 @@ export function exportLoadsToExcel(
   });
 
   // Variance column indices (0-based within the data columns)
-  // Columns: 0-Load ID ... 12-Origin Arrival Variance, 15-Origin Departure Variance,
-  //          18-Dest Arrival Variance, 21-Dest Departure Variance
-  const varianceCols = [12, 15, 18, 21];
+  // Columns: 0-Load ID, 1-Status, 2-Origin, 3-Destination, 4-Vehicle,
+  //          5-Cargo Type, 6-Loading Date, 7-Offloading Date,
+  //          10-Origin Arrival Variance, 13-Origin Departure Variance,
+  //          16-Dest Arrival Variance, 19-Dest Departure Variance
+  const varianceCols = [10, 13, 16, 19];
   const varianceKeys = ["oArrVar", "oDepVar", "dArrVar", "dDepVar"] as const;
 
   // Week info for title
   const titleRow = [
     `${COMPANY_NAME} — Load Planning — Week ${weekNum}, ${yr}`,
   ];
-  const genRow = [
-    `Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`,
-  ];
 
   // Create workbook and worksheet with title row
   const workbook = XLSX.utils.book_new();
 
-  // Create worksheet with title + generated date rows
-  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, genRow, []]);
+  // Create worksheet with title row only (Generated timestamp removed)
+  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, [], []]);
 
-  // Add the data starting from row 4 (after title, generated, and blank row)
-  XLSX.utils.sheet_add_json(worksheet, excelData.map(d => d.row), { origin: "A4" });
+  // Sort by loading date so date-grouped sections appear chronologically
+  excelData.sort((a, b) => a.load.loading_date.localeCompare(b.load.loading_date));
+
+  // Write column headers at row index 3 (0-based)
+  const columnKeys = Object.keys(excelData[0]?.row ?? {}) as (keyof typeof excelData[0]["row"])[];
+  XLSX.utils.sheet_add_aoa(worksheet, [columnKeys as string[]], { origin: { r: 3, c: 0 } });
 
   // Apply professional title/subtitle/header styles
-  const colCount = Object.keys(excelData[0]?.row ?? {}).length || 35;
+  const colCount = columnKeys.length || 32;
   const mergeRanges: XLSX.Range[] = [];
   applyTitleRows(worksheet, colCount, mergeRanges);
-  worksheet["!merges"] = mergeRanges;
+  // Make the main title row more prominent: larger font, centered, taller row
+  emphasizeTitleRow(worksheet, colCount);
   applyHeaderStyle(worksheet, 3, colCount);
 
-  // Apply conditional fill to variance cells
-  // Data starts at row index 4 (0-based: row 0=title, 1=generated, 2=blank, 3=headers, 4+=data)
-  excelData.forEach((item, rowIdx) => {
-    const excelRow = rowIdx + 4; // 0-based sheet row
+  // Write data rows, inserting a date separator row at the start of each new
+  // loading-date group. The separator is merged across all columns and styled
+  // with the section-header style for clear visual grouping.
+  let currentRow = 4; // 0-based; row 3 is the column header row
+  let prevDateKey: string | null = null;
+  excelData.forEach((item) => {
+    const dateKey = item.load.loading_date; // ISO yyyy-MM-dd
+    if (dateKey !== prevDateKey) {
+      let label = dateKey;
+      try {
+        label = format(parseISO(dateKey), "EEEE dd/MM/yyyy");
+      } catch {
+        // Fall back to raw key if it isn't a valid ISO date
+      }
+      XLSX.utils.sheet_add_aoa(worksheet, [[label]], {
+        origin: { r: currentRow, c: 0 },
+      });
+      const headerCellRef = XLSX.utils.encode_cell({ r: currentRow, c: 0 });
+      if (worksheet[headerCellRef]) {
+        worksheet[headerCellRef].s = xlSectionHeader;
+      }
+      mergeRanges.push({
+        s: { r: currentRow, c: 0 },
+        e: { r: currentRow, c: colCount - 1 },
+      });
+      currentRow += 1;
+      prevDateKey = dateKey;
+    }
+
+    // Write the load row
+    const values = columnKeys.map((k) => (item.row as Record<string, string | number | undefined>)[k as string]);
+    XLSX.utils.sheet_add_aoa(worksheet, [values], {
+      origin: { r: currentRow, c: 0 },
+    });
+
+    // Apply status-based row fill (delivered → green, in-transit → yellow)
+    const rowFill = rowFillForStatus(item.effectiveStatus);
+    if (rowFill) {
+      for (let c = 0; c < colCount; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: currentRow, c });
+        if (!worksheet[cellRef]) worksheet[cellRef] = { v: "", t: "s" };
+        worksheet[cellRef].s = { ...rowFill };
+      }
+    }
+
+    // Apply conditional fill to variance cells on this exact row
     varianceKeys.forEach((key, ki) => {
       const col = varianceCols[ki];
-      const cellRef = XLSX.utils.encode_cell({ r: excelRow, c: col });
+      const cellRef = XLSX.utils.encode_cell({ r: currentRow, c: col });
       const cell = worksheet[cellRef];
       if (cell) {
         const style = varianceStyle(item.variances[key].diffMin);
         if (style) cell.s = style;
       }
     });
+
+    currentRow += 1;
+  });
+
+  worksheet["!merges"] = mergeRanges;
+
+  // Extend the worksheet range to cover everything we wrote
+  worksheet["!ref"] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: Math.max(currentRow - 1, 3), c: colCount - 1 },
   });
 
   // Set column widths
   const columnWidths = [
     { wch: 15 }, // Load ID
-    { wch: 10 }, // Type
     { wch: 12 }, // Status
     { wch: 20 }, // Origin
     { wch: 20 }, // Destination
+    { wch: 12 }, // Vehicle
     { wch: 18 }, // Cargo Type
-    { wch: 10 }, // Quantity
-    { wch: 10 }, // Weight
     { wch: 12 }, // Loading Date
     { wch: 14 }, // Offloading Date
     { wch: 14 }, // Origin Planned Arr
@@ -216,18 +333,9 @@ export function exportLoadsToExcel(
     { wch: 14 }, // Dest Planned Dep
     { wch: 14 }, // Dest Actual Dep
     { wch: 18 }, // Dest Dep Variance
-    { wch: 12 }, // Vehicle
-    { wch: 12 }, // Vehicle Type
-    { wch: 20 }, // Driver
-    { wch: 15 }, // Driver Contact
-    { wch: 25 }, // Special Handling
-    { wch: 40 }, // Notes
-    { wch: 18 }, // Has Planned Backload
     { wch: 20 }, // Backload Destination
-    { wch: 18 }, // Backload Cargo Type
     { wch: 18 }, // Backload Offloading Date
     { wch: 25 }, // Backload Quantities
-    { wch: 40 }, // Backload Notes
     { wch: 40 }, // Variance Reason
     { wch: 14 }, // Subcontracted
     { wch: 24 }, // Subcontractor
@@ -381,23 +489,20 @@ export function exportLoadsToExcelSimplified(
     }
 
     return {
-      "Load ID": load.load_id,
-      Origin: load.origin,
-      Destination: load.destination,
-      "Cargo Type": cargoLabels[load.cargo_type] || load.cargo_type,
-      "Loading Date": format(parseISO(load.loading_date), "dd/MM/yyyy"),
-      "Offloading Date": format(parseISO(load.offloading_date), "dd/MM/yyyy"),
-      Vehicle: load.fleet_vehicle?.vehicle_id || "",
-      "Vehicle Type": load.fleet_vehicle?.type || "",
-      Driver: load.driver?.name || "",
-      Subcontractor: subcontractor?.name || "",
-      "Backload Destination": timeWindow.backload?.destination || "",
-      "Backload Cargo Type": timeWindow.backload?.cargoType
-        ? cargoLabels[timeWindow.backload.cargoType] ||
-        timeWindow.backload.cargoType
-        : "",
-      "Backload Offloading Date": timeWindow.backload?.offloadingDate || "",
-      "Backload Quantities": backloadQuantities,
+      load,
+      row: {
+        "Load ID": load.load_id,
+        Origin: load.origin,
+        Destination: load.destination,
+        Vehicle: load.fleet_vehicle?.vehicle_id || "",
+        "Cargo Type": cargoLabels[load.cargo_type] || load.cargo_type,
+        "Loading Date": format(parseISO(load.loading_date), "dd/MM/yyyy"),
+        "Offloading Date": format(parseISO(load.offloading_date), "dd/MM/yyyy"),
+        Subcontractor: subcontractor?.name || "",
+        "Backload Destination": timeWindow.backload?.destination || "",
+        "Backload Offloading Date": timeWindow.backload?.offloadingDate || "",
+        "Backload Quantities": backloadQuantities,
+      },
     };
   });
 
@@ -405,40 +510,90 @@ export function exportLoadsToExcelSimplified(
   const titleRow = [
     `${COMPANY_NAME} — Load Planning (Simplified) — Week ${weekNum}, ${yr}`,
   ];
-  const genRow = [
-    `Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`,
-  ];
 
   // Create workbook and worksheet with title row
   const workbook = XLSX.utils.book_new();
 
-  // Create worksheet with title + generated date rows
-  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, genRow, []]);
+  // Create worksheet with title row only (Generated timestamp removed)
+  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, [], []]);
 
-  // Add the data starting from row 4 (after title, generated, and blank row)
-  XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A4" });
+  // Sort by loading date so date-grouped sections appear chronologically
+  excelData.sort((a, b) => a.load.loading_date.localeCompare(b.load.loading_date));
+
+  // Write column headers at row index 3 (0-based)
+  const simpColumnKeys = Object.keys(excelData[0]?.row ?? {}) as string[];
+  XLSX.utils.sheet_add_aoa(worksheet, [simpColumnKeys], { origin: { r: 3, c: 0 } });
 
   // Apply professional title/subtitle/header styles
-  const simpColCount = 14;
+  const simpColCount = simpColumnKeys.length || 14;
   const simpMerges: XLSX.Range[] = [];
   applyTitleRows(worksheet, simpColCount, simpMerges);
-  worksheet["!merges"] = simpMerges;
+  emphasizeTitleRow(worksheet, simpColCount);
   applyHeaderStyle(worksheet, 3, simpColCount);
+
+  // Write data rows, inserting a date separator row at the start of each new
+  // loading-date group.
+  let simpRow = 4;
+  let simpPrevDateKey: string | null = null;
+  excelData.forEach((item) => {
+    const dateKey = item.load.loading_date;
+    if (dateKey !== simpPrevDateKey) {
+      let label = dateKey;
+      try {
+        label = format(parseISO(dateKey), "EEEE dd/MM/yyyy");
+      } catch {
+        // Fall back to raw key if it isn't a valid ISO date
+      }
+      XLSX.utils.sheet_add_aoa(worksheet, [[label]], {
+        origin: { r: simpRow, c: 0 },
+      });
+      const headerCellRef = XLSX.utils.encode_cell({ r: simpRow, c: 0 });
+      if (worksheet[headerCellRef]) {
+        worksheet[headerCellRef].s = xlSectionHeader;
+      }
+      simpMerges.push({
+        s: { r: simpRow, c: 0 },
+        e: { r: simpRow, c: simpColCount - 1 },
+      });
+      simpRow += 1;
+      simpPrevDateKey = dateKey;
+    }
+
+    const values = simpColumnKeys.map((k) => (item.row as Record<string, string | number>)[k]);
+    XLSX.utils.sheet_add_aoa(worksheet, [values], {
+      origin: { r: simpRow, c: 0 },
+    });
+
+    // Apply status-based row fill (delivered → green, in-transit → yellow)
+    const rowFill = rowFillForStatus(getEffectiveStatus(item.load));
+    if (rowFill) {
+      for (let c = 0; c < simpColCount; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: simpRow, c });
+        if (!worksheet[cellRef]) worksheet[cellRef] = { v: "", t: "s" };
+        worksheet[cellRef].s = { ...rowFill };
+      }
+    }
+
+    simpRow += 1;
+  });
+
+  worksheet["!merges"] = simpMerges;
+  worksheet["!ref"] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: Math.max(simpRow - 1, 3), c: simpColCount - 1 },
+  });
 
   // Set column widths for simplified version
   const columnWidths = [
     { wch: 15 }, // Load ID
     { wch: 20 }, // Origin
     { wch: 20 }, // Destination
+    { wch: 12 }, // Vehicle
     { wch: 18 }, // Cargo Type
     { wch: 12 }, // Loading Date
     { wch: 14 }, // Offloading Date
-    { wch: 12 }, // Vehicle
-    { wch: 12 }, // Vehicle Type
-    { wch: 20 }, // Driver
     { wch: 24 }, // Subcontractor
     { wch: 20 }, // Backload Destination
-    { wch: 18 }, // Backload Cargo Type
     { wch: 18 }, // Backload Offloading Date
     { wch: 25 }, // Backload Quantities
   ];

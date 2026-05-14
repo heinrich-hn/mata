@@ -263,8 +263,6 @@ export function exportLoadsByVehiclePdf(
             "Origin",
             "Destination",
             "Cargo",
-            "Qty",
-            "Wt (T)",
             "Notes",
         ]];
 
@@ -286,8 +284,6 @@ export function exportLoadsByVehiclePdf(
                 load.origin,
                 load.destination,
                 cargoLabels[load.cargo_type] || load.cargo_type,
-                String(load.quantity ?? ""),
-                load.weight != null ? load.weight.toFixed(1) : "",
                 load.notes || "",
             ];
         });
@@ -317,14 +313,12 @@ export function exportLoadsByVehiclePdf(
             columnStyles: {
                 0: { cellWidth: 20, fontStyle: "bold" },
                 1: { cellWidth: 18 },
-                2: { cellWidth: 22 },
-                3: { cellWidth: 22 },
-                4: { cellWidth: 24 },
-                5: { cellWidth: 24 },
-                6: { cellWidth: 20 },
-                7: { cellWidth: 10, halign: "right" },
-                8: { cellWidth: 12, halign: "right" },
-                9: { cellWidth: "auto" },
+                2: { cellWidth: 24 },
+                3: { cellWidth: 24 },
+                4: { cellWidth: 28 },
+                5: { cellWidth: 28 },
+                6: { cellWidth: 22 },
+                7: { cellWidth: "auto" },
             },
             didDrawPage: () => {
                 // Re-draw header on every page break inside autoTable
@@ -376,9 +370,6 @@ function buildVehicleSheet(
             "Offloading Planned": tw.destination?.plannedArrival || "",
             "Offloading Actual": tw.destination?.actualArrival || "",
             "Cargo Type": cargoLabels[load.cargo_type] || load.cargo_type,
-            Quantity: load.quantity ?? "",
-            "Weight (T)": load.weight ?? "",
-            "Special Handling": (load.special_handling ?? []).join(", "),
             Notes: load.notes || "",
         };
     });
@@ -407,7 +398,7 @@ function buildVehicleSheet(
         origin: { r: dataStartRow, c: 0 },
     });
 
-    const colCount = 15;
+    const colCount = 12;
     const merges: XLSX.Range[] = [];
     applyTitleRows(worksheet, colCount, merges);
 
@@ -449,9 +440,6 @@ function buildVehicleSheet(
         { wch: 14 }, // Offloading Planned
         { wch: 14 }, // Offloading Actual
         { wch: 16 }, // Cargo Type
-        { wch: 9 },  // Quantity
-        { wch: 11 }, // Weight
-        { wch: 22 }, // Special Handling
         { wch: 36 }, // Notes
     ];
 
