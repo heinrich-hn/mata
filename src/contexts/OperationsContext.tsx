@@ -260,8 +260,19 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
 
   // Trip operations
   const addTrip = async (tripData: Omit<Trip, 'id' | 'created_at' | 'updated_at'>) => {
-    const insertData = mapTripToDb(tripData as Trip);
-    const { data, error } = await supabase.from('trips').insert([insertData]).select().single();
+    const insertData = mapTripToDb(tripData as Trip) as Record<string, unknown>;
+    if (!insertData.created_by) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const meta = user?.user_metadata as { full_name?: string; name?: string } | undefined;
+        const stamp =
+          user?.email || meta?.full_name || meta?.name || user?.id;
+        if (stamp) insertData.created_by = stamp;
+      } catch {
+        // best effort
+      }
+    }
+    const { data, error } = await supabase.from('trips').insert([insertData as never]).select().single();
     if (error) throw error;
     toast.success('Trip added successfully');
     requestGoogleSheetsSync('trips');
@@ -270,6 +281,51 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
 
   const updateTrip = async (trip: Trip) => {
     const updateData = mapTripToDb(trip);
+
+    // Build an audit entry so generic edits show up in the Trip Audit Trail.
+    try {
+      const { data: existing } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('id', trip.id)
+        .single();
+      if (existing) {
+        const ignored = new Set([
+          'updated_at', 'created_at', 'edit_history', 'follow_up_history',
+        ]);
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        for (const [key, newVal] of Object.entries(updateData)) {
+          if (ignored.has(key)) continue;
+          const oldVal = (existing as Record<string, unknown>)[key];
+          const a = JSON.stringify(oldVal ?? null);
+          const b = JSON.stringify(newVal ?? null);
+          if (a !== b) changes[key] = { old: oldVal ?? null, new: newVal ?? null };
+        }
+        if (Object.keys(changes).length > 0) {
+          const { data: { user } } = await supabase.auth.getUser();
+          const editedBy =
+            user?.email ||
+            (user?.user_metadata as { full_name?: string; name?: string } | undefined)?.full_name ||
+            (user?.user_metadata as { full_name?: string; name?: string } | undefined)?.name ||
+            user?.id ||
+            'Unknown User';
+          const existingHistory = Array.isArray((existing as { edit_history?: unknown }).edit_history)
+            ? ((existing as { edit_history: unknown[] }).edit_history)
+            : [];
+          const newEntry = {
+            editedBy,
+            editedAt: new Date().toISOString(),
+            reason: 'Trip update',
+            changes,
+          };
+          (updateData as { edit_history?: Json }).edit_history =
+            JSON.parse(JSON.stringify([...existingHistory, newEntry])) as Json;
+        }
+      }
+    } catch {
+      // Audit capture is best-effort; do not block the update.
+    }
+
     const { error } = await supabase.from('trips').update(updateData).eq('id', trip.id);
     if (error) throw error;
     toast.success('Trip updated successfully');

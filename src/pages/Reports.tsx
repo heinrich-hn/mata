@@ -1440,13 +1440,72 @@ const Reports = () => {
                     description: "Chronological log of who added, edited, completed, or deleted each trip (uses trip created_by, edit history, completion and deletion records).",
                     formats: ["excel", "pdf"],
                     onExport: async (fmt) => {
-                        const trips = await fetchTripsWithFleet();
-                        const { data: deletionsData, error: delErr } = await supabase
-                            .from("trip_deletions")
-                            .select("id, trip_id, trip_number, deleted_by, deleted_at, deletion_reason")
-                            .order("deleted_at", { ascending: false });
-                        if (delErr) throw delErr;
-                        const deletions = (deletionsData || []) as TripDeletion[];
+                        // Paginate trips so we are not silently capped at Supabase's 1000-row limit.
+                        // Only select the columns needed for the audit trail to keep payload small.
+                        const PAGE = 1000;
+                        const trips: Trip[] = [];
+                        for (let from = 0; ; from += PAGE) {
+                            const { data, error } = await supabase
+                                .from("trips")
+                                .select("*, vehicles:fleet_vehicle_id(fleet_number)")
+                                .order("created_at", { ascending: false })
+                                .range(from, from + PAGE - 1);
+                            if (error) throw error;
+                            const batch = (data || []) as Record<string, unknown>[];
+                            for (const t of batch) {
+                                trips.push({
+                                    ...t,
+                                    fleet_number:
+                                        (t.vehicles as { fleet_number?: string } | null)?.fleet_number || null,
+                                } as Trip);
+                            }
+                            if (batch.length < PAGE) break;
+                        }
+
+                        // Paginate deletions for the same reason.
+                        const deletions: TripDeletion[] = [];
+                        for (let from = 0; ; from += PAGE) {
+                            const { data, error } = await supabase
+                                .from("trip_deletions")
+                                .select("id, trip_id, trip_number, deleted_by, deleted_at, deletion_reason")
+                                .order("deleted_at", { ascending: false })
+                                .range(from, from + PAGE - 1);
+                            if (error) throw error;
+                            const batch = (data || []) as TripDeletion[];
+                            deletions.push(...batch);
+                            if (batch.length < PAGE) break;
+                        }
+
+                        // Build a UUID → display-name lookup so users don't show as "Unknown".
+                        const userIds = new Set<string>();
+                        const collect = (v: unknown) => {
+                            if (typeof v === "string" && v.length >= 32) userIds.add(v);
+                        };
+                        for (const t of trips) {
+                            collect(t.created_by);
+                            collect(t.completed_by);
+                            const history = Array.isArray(t.edit_history) ? t.edit_history : [];
+                            for (const h of history) collect(h?.editedBy);
+                        }
+                        for (const d of deletions) collect(d.deleted_by);
+
+                        const userMap = new Map<string, string>();
+                        if (userIds.size > 0) {
+                            const ids = Array.from(userIds);
+                            const { data: profiles } = await supabase
+                                .from("inspector_profiles")
+                                .select("user_id, name, email")
+                                .in("user_id", ids);
+                            for (const p of (profiles || []) as { user_id: string; name?: string | null; email?: string | null }[]) {
+                                userMap.set(p.user_id, p.name || p.email || p.user_id);
+                            }
+                        }
+                        const resolveUser = (raw?: string | null): string => {
+                            if (!raw) return "Unknown";
+                            // Already a display name / email — leave as-is.
+                            if (raw.length < 32 || raw.includes(" ") || raw.includes("@")) return raw;
+                            return userMap.get(raw) || raw;
+                        };
 
                         const fmtChanges = (changes?: Record<string, { old: unknown; new: unknown }>): string => {
                             if (!changes) return "";
@@ -1467,7 +1526,7 @@ const Reports = () => {
                                     trip_number: tripNum,
                                     fleet_number: fleet,
                                     event: "Added",
-                                    user: t.created_by || "Unknown",
+                                    user: resolveUser(t.created_by),
                                     timestamp: t.created_at,
                                     details: `${t.origin || "-"} → ${t.destination || "-"}`,
                                 });
@@ -1481,7 +1540,7 @@ const Reports = () => {
                                     trip_number: tripNum,
                                     fleet_number: fleet,
                                     event: "Edited",
-                                    user: h.editedBy || "Unknown",
+                                    user: resolveUser(h.editedBy),
                                     timestamp: h.editedAt || t.created_at || "",
                                     details: [h.reason, fmtChanges(h.changes)].filter(Boolean).join(" — "),
                                 });
@@ -1493,7 +1552,7 @@ const Reports = () => {
                                     trip_number: tripNum,
                                     fleet_number: fleet,
                                     event: "Completed",
-                                    user: t.completed_by || "Unknown",
+                                    user: resolveUser(t.completed_by),
                                     timestamp: t.completed_at,
                                     details: "Trip marked completed",
                                 });
@@ -1506,7 +1565,7 @@ const Reports = () => {
                                 trip_number: d.trip_number || "-",
                                 fleet_number: "-",
                                 event: "Deleted",
-                                user: d.deleted_by || "Unknown",
+                                user: resolveUser(d.deleted_by),
                                 timestamp: d.deleted_at,
                                 details: d.deletion_reason || "",
                             });

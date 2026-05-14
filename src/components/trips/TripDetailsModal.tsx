@@ -377,11 +377,16 @@ const TripDetailsModal = ({ trip, isOpen, onClose, onRefresh }: TripDetailsModal
     const flaggedCosts = costs.filter(c => c.is_flagged);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const meta = user?.user_metadata as { full_name?: string; name?: string } | undefined;
+      const completedBy =
+        user?.email || meta?.full_name || meta?.name || user?.id || null;
       const { error } = await supabase
         .from('trips')
         .update({
           status: 'completed',
           completed_at: new Date().toISOString(),
+          completed_by: completedBy,
           completion_validation: {
             flags_checked_at: new Date().toISOString(),
             flags_resolved_count: flaggedCosts.length,
