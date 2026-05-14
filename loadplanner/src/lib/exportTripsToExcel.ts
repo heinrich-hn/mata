@@ -1,6 +1,6 @@
 import type { Load } from "@/hooks/useTrips";
 import * as timeWindowLib from "@/lib/timeWindow";
-import { computeTimeVariance } from "@/lib/timeWindow";
+import { computeTimeVariance, getSubcontractorInfo } from "@/lib/timeWindow";
 import { getLocationDisplayName } from "@/lib/utils";
 import { addDays, differenceInDays, format, getWeek, isSameDay, parseISO, startOfWeek } from "date-fns";
 import XLSX from "xlsx-js-style";
@@ -77,6 +77,7 @@ export function exportLoadsToExcel(
   const excelData = loads.map((load) => {
     const timeWindow = timeWindowLib.parseTimeWindow(load.time_window);
     const isBackload = load.load_id.startsWith("BL-");
+    const subcontractor = getSubcontractorInfo(load);
 
     // Build backload quantities string
     let backloadQuantities = "";
@@ -138,6 +139,9 @@ export function exportLoadsToExcel(
         "Backload Quantities": backloadQuantities,
         "Backload Notes": timeWindow.backload?.notes || "",
         "Variance Reason": timeWindow.varianceReason || "",
+        "Subcontracted": subcontractor ? "Yes" : "No",
+        "Subcontractor": subcontractor?.name || "",
+        "Subcontractor Cargo": timeWindow.subcontractor?.cargoDescription || "",
       },
       variances: { oArrVar, oDepVar, dArrVar, dDepVar },
     };
@@ -225,6 +229,9 @@ export function exportLoadsToExcel(
     { wch: 25 }, // Backload Quantities
     { wch: 40 }, // Backload Notes
     { wch: 40 }, // Variance Reason
+    { wch: 14 }, // Subcontracted
+    { wch: 24 }, // Subcontractor
+    { wch: 28 }, // Subcontractor Cargo
   ];
   worksheet["!cols"] = columnWidths;
 
@@ -237,6 +244,9 @@ export function exportLoadsToExcel(
     const tw = timeWindowLib.parseTimeWindow(l.time_window);  // FIXED: Added timeWindowLib.
     return tw.backload?.enabled;
   }).length;
+
+  // Count subcontracted loads
+  const subcontractedLoads = loads.filter((l) => getSubcontractorInfo(l) !== null).length;
 
   const summaryData = [
     { Metric: "Total Loads", Value: loads.length },
@@ -281,6 +291,10 @@ export function exportLoadsToExcel(
     {
       Metric: "Loads with Planned Backload",
       Value: loadsWithPlannedBackloads,
+    },
+    {
+      Metric: "Subcontracted Loads",
+      Value: subcontractedLoads,
     },
     { Metric: "", Value: "" },
     {
@@ -354,7 +368,7 @@ export function exportLoadsToExcelSimplified(
   // Transform loads data for simplified Excel export
   const excelData = loads.map((load) => {
     const timeWindow = timeWindowLib.parseTimeWindow(load.time_window);  // FIXED: Added timeWindowLib.
-
+    const subcontractor = getSubcontractorInfo(load);
     // Build backload quantities string
     let backloadQuantities = "";
     if (timeWindow.backload?.quantities) {
@@ -376,6 +390,7 @@ export function exportLoadsToExcelSimplified(
       Vehicle: load.fleet_vehicle?.vehicle_id || "",
       "Vehicle Type": load.fleet_vehicle?.type || "",
       Driver: load.driver?.name || "",
+      Subcontractor: subcontractor?.name || "",
       "Backload Destination": timeWindow.backload?.destination || "",
       "Backload Cargo Type": timeWindow.backload?.cargoType
         ? cargoLabels[timeWindow.backload.cargoType] ||
@@ -404,7 +419,7 @@ export function exportLoadsToExcelSimplified(
   XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A4" });
 
   // Apply professional title/subtitle/header styles
-  const simpColCount = 13;
+  const simpColCount = 14;
   const simpMerges: XLSX.Range[] = [];
   applyTitleRows(worksheet, simpColCount, simpMerges);
   worksheet["!merges"] = simpMerges;
@@ -421,6 +436,7 @@ export function exportLoadsToExcelSimplified(
     { wch: 12 }, // Vehicle
     { wch: 12 }, // Vehicle Type
     { wch: 20 }, // Driver
+    { wch: 24 }, // Subcontractor
     { wch: 20 }, // Backload Destination
     { wch: 18 }, // Backload Cargo Type
     { wch: 18 }, // Backload Offloading Date

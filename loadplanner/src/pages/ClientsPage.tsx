@@ -104,11 +104,34 @@ export default function ClientsPage() {
   };
 
   const writeTextToClipboard = async (text: string) => {
+    // Primary path: async Clipboard API (only available in secure contexts and
+    // when the document is focused — Edge is stricter than Chrome about both).
     if (navigator.clipboard?.writeText && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return;
+      try {
+        await navigator.clipboard.writeText(text);
+
+        // Verification round-trip: if readText permission is granted, confirm
+        // the value actually landed on the clipboard. Some browsers (notably
+        // Edge with strict tracking prevention or when the tab loses focus
+        // mid-write) silently swallow writeText.
+        if (navigator.clipboard.readText) {
+          try {
+            const readBack = await navigator.clipboard.readText();
+            if (readBack === text) return;
+            // Mismatch — fall through to the legacy path.
+          } catch {
+            // readText denied/blocked — assume write succeeded.
+            return;
+          }
+        } else {
+          return;
+        }
+      } catch {
+        // writeText threw (permission, focus, tracking prevention) — fall back.
+      }
     }
 
+    // Legacy fallback: hidden textarea + execCommand('copy').
     const textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.setAttribute('readonly', '');
@@ -160,8 +183,8 @@ export default function ClientsPage() {
       })
       .catch(() => {
         toast({
-          title: 'Failed to copy',
-          description: 'Please try again or copy manually.',
+          title: 'Failed to copy — copy manually',
+          description: portalUrl,
           variant: 'destructive',
         });
       });

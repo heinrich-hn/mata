@@ -4,6 +4,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useClient, useClientActiveLoads, useClientLoads } from '@/hooks/useClientLoads';
 import type { Load } from '@/hooks/useTrips';
+import { getSubcontractorInfo } from '@/lib/timeWindow';
+import { getEffectiveLoadStatus } from '@/lib/loadStatus';
 import { cn, getLocationDisplayName, safeFormatDate } from '@/lib/utils';
 import {
   endOfMonth,
@@ -13,7 +15,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from 'date-fns';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   ArrowRight,
   Box,
@@ -117,51 +119,27 @@ export default function ClientOverviewPage() {
     <div className="flex flex-col gap-6 min-h-[calc(100vh-12rem)]">
       {/* Welcome Section */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+        transition={{ duration: 0.25 }}
       >
         {isLoading ? (
-          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
         ) : (
-          <Card className="relative overflow-hidden border-subtle shadow-lg bg-gradient-to-br from-white via-white to-slate-50/50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800/50">
-            {/* Decorative background elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <CardContent className="p-6 relative">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <motion.h2
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent"
-                  >
+          <Card className="border-border/60 shadow-sm">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                     Welcome back{client?.contact_person ? `, ${client.contact_person.split(' ')[0]}` : ''}
-                  </motion.h2>
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="text-sm text-muted-foreground"
-                  >
-                    Here's an overview of your shipment activity with <span className="font-semibold text-primary">{client?.name || 'your account'}</span>
-                  </motion.p>
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Shipment activity for <span className="font-medium text-foreground">{client?.name || 'your account'}</span>
+                  </p>
                 </div>
-                <motion.div
-                  initial={{ scale: 0, rotate: -10 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-                  className="hidden md:block"
-                >
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-xl animate-pulse" />
-                    <div className="relative rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-4 backdrop-blur-sm">
-                      <Package className="h-10 w-10 text-primary" />
-                    </div>
-                  </div>
-                </motion.div>
+                <div className="hidden md:flex h-12 w-12 items-center justify-center rounded-xl bg-muted border border-border/60 text-foreground shrink-0">
+                  <Package className="h-6 w-6" />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -205,287 +183,222 @@ export default function ClientOverviewPage() {
       </div>
 
       {/* Next Loading Origins — Marketing only */}
-      <AnimatePresence>
-        {isMarketingClient && nextLoadingOrigins.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card className="border-subtle shadow-lg overflow-hidden">
-              <CardHeader className="border-b border-subtle bg-gradient-to-r from-primary/5 via-transparent to-transparent py-4">
-                <div className="flex items-center gap-3">
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    className="p-2 rounded-lg bg-primary/10 text-primary shadow-sm"
-                  >
-                    <MapPin className="h-5 w-5" />
-                  </motion.div>
-                  <div>
-                    <CardTitle className="text-sm sm:text-base font-semibold tracking-tight">
-                      Next Loading Origins
-                    </CardTitle>
-                    <CardDescription>Where each vehicle will be loading from next</CardDescription>
+      {isMarketingClient && nextLoadingOrigins.length > 0 && (
+        <Card className="border-border/60 shadow-sm overflow-hidden">
+          <CardHeader className="px-6 py-4 border-b border-border/40 bg-muted/10">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-muted text-foreground border border-border/50">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold tracking-tight">Next Loading Origins</CardTitle>
+                <CardDescription className="text-xs">Where each vehicle will be loading from next</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border/40">
+              {nextLoadingOrigins.map((item) => (
+                <div
+                  key={item.vehicleId}
+                  className="flex items-center justify-between px-6 py-3 hover:bg-muted/20 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted border border-border/50 flex-shrink-0">
+                      <Truck className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">{item.vehicleId}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {item.loadId} &middot; {item.origin} → {item.destination}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-3">
+                    <p className="text-sm font-medium text-foreground">{item.origin}</p>
+                    <p className="text-xs text-muted-foreground">{safeFormatDate(item.loadingDate, 'dd MMM yyyy')}</p>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-border/40">
-                  {nextLoadingOrigins.map((item, index) => (
-                    <motion.div
-                      key={item.vehicleId}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      whileHover={{ backgroundColor: "hsl(var(--subtle) / 0.7)" }}
-                      className="flex items-center justify-between px-5 py-3 transition-all duration-200"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-subtle border border-subtle flex-shrink-0 shadow-sm">
-                          <Truck className="h-4 w-4 text-primary" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold">{item.vehicleId}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {item.loadId} &middot; {item.origin} → {item.destination}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right flex-shrink-0 ml-3">
-                        <p className="text-sm font-medium text-primary">{item.origin}</p>
-                        <p className="text-xs text-muted-foreground">{safeFormatDate(item.loadingDate, 'dd MMM yyyy')}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1">
         {/* Active Deliveries */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-        >
-          <Card className="border-subtle shadow-lg hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="border-b border-subtle bg-gradient-to-r from-blue-500/5 via-transparent to-transparent">
-              <div className="flex items-center justify-between">
+        <Card className="border-border/60 shadow-sm">
+          <CardHeader className="px-6 py-4 border-b border-border/40 bg-muted/10">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-lg bg-muted text-foreground border border-border/50">
+                  <Navigation className="h-5 w-5" />
+                </div>
                 <div>
-                  <CardTitle className="text-sm sm:text-base font-semibold tracking-tight flex items-center gap-2">
-                    <motion.div
-                      animate={{ x: [0, 5, 0] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                    >
-                      <Navigation className="h-5 w-5 text-primary" />
-                    </motion.div>
-                    Active Deliveries
-                  </CardTitle>
-                  <CardDescription>Shipments currently in progress</CardDescription>
+                  <CardTitle className="text-base font-semibold tracking-tight">Active Deliveries</CardTitle>
+                  <CardDescription className="text-xs">Shipments currently in progress</CardDescription>
                 </div>
-                <Link to={`${basePath}/${clientId}/deliveries`}>
-                  <Badge
-                    variant="outline"
-                    className="cursor-pointer hover:bg-accent hover:scale-105 transition-all duration-200"
-                  >
-                    View All
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Badge>
-                </Link>
               </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16" />
-                  ))}
-                </div>
-              ) : activeLoads.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-8 text-muted-foreground"
-                >
-                  <Truck className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No active deliveries right now</p>
-                </motion.div>
-              ) : (
-                <div className="divide-y">
-                  {activeLoads.slice(0, 4).map((load, index) => (
-                    <ActiveLoadItem key={load.id} load={load} index={index} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+              <Link to={`${basePath}/${clientId}/deliveries`}>
+                <Badge variant="outline" className="cursor-pointer hover:bg-muted transition-colors">
+                  View All
+                  <ArrowRight className="h-3 w-3 ml-1" />
+                </Badge>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-14" />
+                ))}
+              </div>
+            ) : activeLoads.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <Truck className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No active deliveries right now</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/40">
+                {activeLoads.slice(0, 4).map((load) => (
+                  <ActiveLoadItem key={load.id} load={load} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Upcoming Scheduled */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-        >
-          <Card className="border-subtle shadow-lg hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="border-b border-subtle bg-gradient-to-r from-amber-500/5 via-transparent to-transparent">
-              <div className="flex items-center justify-between">
+        <Card className="border-border/60 shadow-sm">
+          <CardHeader className="px-6 py-4 border-b border-border/40 bg-muted/10">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-lg bg-muted text-foreground border border-border/50">
+                  <Calendar className="h-5 w-5" />
+                </div>
                 <div>
-                  <CardTitle className="text-sm sm:text-base font-semibold tracking-tight flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    Upcoming Shipments
-                  </CardTitle>
-                  <CardDescription>Next scheduled deliveries</CardDescription>
+                  <CardTitle className="text-base font-semibold tracking-tight">Upcoming Shipments</CardTitle>
+                  <CardDescription className="text-xs">Next scheduled deliveries</CardDescription>
                 </div>
-                <Link to={`${basePath}/${clientId}/loads`}>
-                  <Badge
-                    variant="outline"
-                    className="cursor-pointer hover:bg-accent hover:scale-105 transition-all duration-200"
-                  >
-                    View All
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Badge>
-                </Link>
               </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16" />
-                  ))}
-                </div>
-              ) : upcomingLoads.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-8 text-muted-foreground"
-                >
-                  <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No upcoming shipments scheduled</p>
-                </motion.div>
-              ) : (
-                <div className="divide-y">
-                  {upcomingLoads.map((load, index) => (
-                    <UpcomingLoadItem key={load.id} load={load} index={index} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+              <Link to={`${basePath}/${clientId}/loads`}>
+                <Badge variant="outline" className="cursor-pointer hover:bg-muted transition-colors">
+                  View All
+                  <ArrowRight className="h-3 w-3 ml-1" />
+                </Badge>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-14" />
+                ))}
+              </div>
+            ) : upcomingLoads.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <Calendar className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No upcoming shipments scheduled</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/40">
+                {upcomingLoads.map((load) => (
+                  <UpcomingLoadItem key={load.id} load={load} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Performance & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Delivery Performance */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-        >
-          <Card className="border-subtle shadow-lg hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="border-b border-subtle bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent">
-              <CardTitle className="text-sm sm:text-base font-semibold tracking-tight flex items-center gap-2">
-                <motion.div
-                  animate={{ rotate: [0, 5, -5, 0] }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                >
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                </motion.div>
-                Delivery Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isLoading ? (
-                <Skeleton className="h-32" />
-              ) : (
-                <>
-                  <div className="text-center">
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.2, type: "spring" }}
-                      className="text-5xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 dark:from-emerald-400 dark:to-emerald-300 bg-clip-text text-transparent"
-                    >
-                      {deliveryRate}%
-                    </motion.div>
-                    <p className="text-sm text-muted-foreground mt-1 font-medium">Completion Rate</p>
+        <Card className="border-border/60 shadow-sm">
+          <CardHeader className="px-6 py-4 border-b border-border/40 bg-muted/10">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-muted text-foreground border border-border/50">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold tracking-tight">Delivery Performance</CardTitle>
+                <CardDescription className="text-xs">Completion rate and recent volume</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 space-y-5">
+            {isLoading ? (
+              <Skeleton className="h-32" />
+            ) : (
+              <>
+                <div className="text-center">
+                  <div className="text-5xl font-bold tracking-tight text-foreground">
+                    {deliveryRate}<span className="text-2xl text-muted-foreground font-semibold">%</span>
                   </div>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-muted-foreground">This Week</span>
-                        <span className="font-semibold">{stats.thisWeek} loads</span>
-                      </div>
-                      <Progress value={stats.thisWeek > 0 ? 100 : 0} className="h-2.5" />
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground mt-2 font-semibold">Completion Rate</p>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-muted-foreground">This Week</span>
+                      <span className="font-semibold">{stats.thisWeek} loads</span>
                     </div>
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-muted-foreground">This Month</span>
-                        <span className="font-semibold">{stats.thisMonth} loads</span>
-                      </div>
-                      <Progress value={stats.thisMonth > 0 ? 100 : 0} className="h-2.5" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-muted-foreground">Delivered This Month</span>
-                        <span className="font-semibold">{stats.deliveredThisMonth}</span>
-                      </div>
-                    </div>
+                    <Progress value={stats.thisWeek > 0 ? 100 : 0} className="h-2" />
                   </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+                  <div>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-muted-foreground">This Month</span>
+                      <span className="font-semibold">{stats.thisMonth} loads</span>
+                    </div>
+                    <Progress value={stats.thisMonth > 0 ? 100 : 0} className="h-2" />
+                  </div>
+                  <div className="flex justify-between text-sm pt-1">
+                    <span className="text-muted-foreground">Delivered This Month</span>
+                    <span className="font-semibold">{stats.deliveredThisMonth}</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Recent Activity */}
-        <motion.div
-          className="lg:col-span-2"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.4 }}
-        >
-          <Card className="border-subtle shadow-lg hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="border-b border-subtle bg-gradient-to-r from-slate-500/5 via-transparent to-transparent">
-              <CardTitle className="text-sm sm:text-base font-semibold tracking-tight flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                Recent Activity
-              </CardTitle>
-              <CardDescription>Latest updates on your shipments</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Skeleton key={i} className="h-12" />
-                  ))}
-                </div>
-              ) : recentActivity.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-8 text-muted-foreground"
-                >
-                  <Box className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No activity yet</p>
-                </motion.div>
-              ) : (
-                <div className="divide-y">
-                  {recentActivity.map((load, index) => (
-                    <RecentActivityItem key={load.id} load={load} index={index} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+        <Card className="border-border/60 shadow-sm lg:col-span-2">
+          <CardHeader className="px-6 py-4 border-b border-border/40 bg-muted/10">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-muted text-foreground border border-border/50">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold tracking-tight">Recent Activity</CardTitle>
+                <CardDescription className="text-xs">Latest updates on your shipments</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-12" />
+                ))}
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <Box className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No activity yet</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/40">
+                {recentActivity.map((load) => (
+                  <RecentActivityItem key={load.id} load={load} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -506,18 +419,18 @@ function StatsCard({
   loading?: boolean;
   delay?: number;
 }) {
-  const colorClasses = {
-    purple: 'bg-gradient-to-br from-purple-500/10 to-purple-500/5 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800',
-    blue: 'bg-gradient-to-br from-blue-500/10 to-blue-500/5 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
-    green: 'bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
-    amber: 'bg-gradient-to-br from-amber-500/10 to-amber-500/5 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  const accentClasses = {
+    purple: 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20',
+    blue: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20',
+    green: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    amber: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
   };
 
   if (loading) {
     return (
-      <Card className="shadow-md">
-        <CardContent className="p-4">
-          <Skeleton className="h-16" />
+      <Card className="border-border/60 shadow-sm">
+        <CardContent className="p-5">
+          <Skeleton className="h-14" />
         </CardContent>
       </Card>
     );
@@ -525,30 +438,19 @@ function StatsCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.4 }}
-      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+      transition={{ delay, duration: 0.25 }}
     >
-      <Card className="kpi-card shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden">
-        <CardContent className="p-0">
-          <div className="flex items-center gap-3 p-4">
-            <motion.div
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              className={cn('flex h-12 w-12 items-center justify-center rounded-xl border shadow-sm', colorClasses[color])}
-            >
+      <Card className="border-border/60 shadow-sm transition-colors hover:bg-muted/20">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
+              <p className="text-3xl font-bold tracking-tight text-foreground">{value}</p>
+            </div>
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl border', accentClasses[color])}>
               <Icon className="h-5 w-5" />
-            </motion.div>
-            <div>
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: delay + 0.1 }}
-                className="text-2xl font-bold tracking-tight"
-              >
-                {value}
-              </motion.p>
-              <p className="text-xs text-muted-foreground font-medium">{title}</p>
             </div>
           </div>
         </CardContent>
@@ -557,81 +459,70 @@ function StatsCard({
   );
 }
 
-function ActiveLoadItem({ load, index }: { load: Load; index: number }) {
+function ActiveLoadItem({ load }: { load: Load }) {
   const origin = getLocationDisplayName(load.origin);
   const destination = getLocationDisplayName(load.destination);
+  const subcontractor = getSubcontractorInfo(load);
+  const displayStatus = getEffectiveLoadStatus(load);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.1 }}
-      whileHover={{ backgroundColor: "hsl(var(--subtle) / 0.7)", scale: 1.01 }}
-      className="py-3.5 flex items-center justify-between px-1.5 rounded-lg transition-all duration-200"
-    >
-      <div className="flex items-center gap-3">
-        <motion.div
-          whileHover={{ rotate: 5 }}
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-200 dark:border-blue-800 shadow-sm"
-        >
-          <Truck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-        </motion.div>
-        <div>
-          <p className="font-semibold text-sm">{load.load_id}</p>
-          <p className="text-xs text-muted-foreground">
+    <div className="flex items-center justify-between gap-3 px-6 py-3 hover:bg-muted/20 transition-colors">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex-shrink-0">
+          <Truck className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="font-semibold text-sm">{load.load_id}</p>
+            {subcontractor && <SubcontractorPill name={subcontractor.name} />}
+          </div>
+          <p className="text-xs text-muted-foreground truncate">
             {origin} → {destination}
           </p>
         </div>
       </div>
-      <Badge
-        variant={load.status === 'in-transit' ? 'default' : 'outline'}
-        className="animate-pulse"
-      >
-        {load.status}
+      <Badge variant={displayStatus === 'in-transit' ? 'default' : 'outline'} className="flex-shrink-0">
+        {displayStatus}
       </Badge>
-    </motion.div>
+    </div>
   );
 }
 
-function UpcomingLoadItem({ load, index }: { load: Load; index: number }) {
+function UpcomingLoadItem({ load }: { load: Load }) {
   const origin = getLocationDisplayName(load.origin);
   const destination = getLocationDisplayName(load.destination);
+  const subcontractor = getSubcontractorInfo(load);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.1 }}
-      whileHover={{ backgroundColor: "hsl(var(--subtle) / 0.7)", scale: 1.01 }}
-      className="py-3.5 flex items-center justify-between px-1.5 rounded-lg transition-all duration-200"
-    >
-      <div className="flex items-center gap-3">
-        <motion.div
-          whileHover={{ rotate: 5 }}
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-200 dark:border-amber-800 shadow-sm"
-        >
-          <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-        </motion.div>
-        <div>
-          <p className="font-semibold text-sm">{load.load_id}</p>
-          <p className="text-xs text-muted-foreground">
+    <div className="flex items-center justify-between gap-3 px-6 py-3 hover:bg-muted/20 transition-colors">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex-shrink-0">
+          <Calendar className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="font-semibold text-sm">{load.load_id}</p>
+            {subcontractor && <SubcontractorPill name={subcontractor.name} />}
+          </div>
+          <p className="text-xs text-muted-foreground truncate">
             {origin} → {destination}
           </p>
         </div>
       </div>
-      <div className="text-right">
+      <div className="text-right flex-shrink-0">
         <p className="text-sm font-semibold">{safeFormatDate(load.loading_date, 'dd MMM')}</p>
         <p className="text-xs text-muted-foreground">
           {(() => { try { return formatDistanceToNow(parseISO(load.loading_date), { addSuffix: true }); } catch { return '—'; } })()}
         </p>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-function RecentActivityItem({ load, index }: { load: Load; index: number }) {
+function RecentActivityItem({ load }: { load: Load }) {
+  const displayStatus = getEffectiveLoadStatus(load);
   const getStatusIcon = () => {
-    switch (load.status) {
+    switch (displayStatus) {
       case 'delivered':
         return <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
       case 'in-transit':
@@ -644,49 +535,52 @@ function RecentActivityItem({ load, index }: { load: Load; index: number }) {
   };
 
   const getStatusColor = () => {
-    switch (load.status) {
+    switch (displayStatus) {
       case 'delivered':
-        return 'bg-emerald-500/10 border-emerald-200 dark:border-emerald-800';
+        return 'bg-emerald-500/10 border-emerald-500/20';
       case 'in-transit':
-        return 'bg-blue-500/10 border-blue-200 dark:border-blue-800';
+        return 'bg-blue-500/10 border-blue-500/20';
       case 'scheduled':
-        return 'bg-amber-500/10 border-amber-200 dark:border-amber-800';
+        return 'bg-amber-500/10 border-amber-500/20';
       default:
-        return 'bg-slate-500/10 border-slate-200 dark:border-slate-800';
+        return 'bg-slate-500/10 border-slate-500/20';
     }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.1 }}
-      whileHover={{ backgroundColor: "hsl(var(--subtle) / 0.7)", scale: 1.01 }}
-      className="py-3 flex items-center justify-between px-1.5 rounded-lg transition-all duration-200"
-    >
-      <div className="flex items-center gap-3">
-        <motion.div
-          whileHover={{ scale: 1.1 }}
-          className={cn('flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm', getStatusColor())}
-        >
+    <div className="flex items-center justify-between gap-3 px-6 py-3 hover:bg-muted/20 transition-colors">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg border flex-shrink-0', getStatusColor())}>
           {getStatusIcon()}
-        </motion.div>
-        <div>
-          <div className="text-sm flex items-center gap-1.5">
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm flex items-center gap-1.5 flex-wrap">
             <span className="font-semibold">{load.load_id}</span>
-            <span className="text-muted-foreground">•</span>
-            <Badge variant="outline" className="text-xs px-1.5 py-0">
-              {load.status}
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+              {displayStatus}
             </Badge>
+            {getSubcontractorInfo(load) && <SubcontractorPill name={getSubcontractorInfo(load)!.name} />}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground truncate">
             {getLocationDisplayName(load.origin)} → {getLocationDisplayName(load.destination)}
           </p>
         </div>
       </div>
-      <span className="text-xs text-muted-foreground font-medium">
-        {formatDistanceToNow(parseISO(load.updated_at), { addSuffix: true })}
+      <span className="text-xs text-muted-foreground font-medium flex-shrink-0">
+        {(() => { try { return formatDistanceToNow(parseISO(load.updated_at), { addSuffix: true }); } catch { return '—'; } })()}
       </span>
-    </motion.div>
+    </div>
+  );
+}
+
+function SubcontractorPill({ name }: { name: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className="text-[10px] font-semibold uppercase tracking-wider border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-1.5 py-0 h-4"
+      title={`Carried by subcontractor: ${name}`}
+    >
+      Subcontractor · {name}
+    </Badge>
   );
 }

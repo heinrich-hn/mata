@@ -1,11 +1,13 @@
 import { useMemo, useState, useCallback } from "react";
-import { ChevronDown, Clock, FileSpreadsheet, FileText, Plus, Truck } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, FileSpreadsheet, FileText, Plus, Truck } from "lucide-react";
 import {
   startOfWeek,
   endOfWeek,
   startOfDay,
   parseISO,
+  isSameDay,
   isWithinInterval,
+  format,
   getWeek,
 } from "date-fns";
 
@@ -16,11 +18,21 @@ import { LoadsTable } from "@/components/trips/LoadsTable";
 import { QuickFilters } from "@/components/trips/QuickFilters";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 import type { Load } from "@/hooks/useTrips";
 import { useLoads } from "@/hooks/useTrips";
@@ -29,6 +41,7 @@ import {
   exportLoadsByVehicleExcel,
   exportLoadsByVehiclePdf,
 } from "@/lib/exportLoadsByVehicle";
+import { exportLoadsForDayPdf } from "@/lib/exportLoadsForDayPdf";
 import {
   exportLoadsToExcel,
   exportLoadsToExcelSimplified,
@@ -129,6 +142,10 @@ export default function LoadsPage() {
   const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [weekFilter, setWeekFilter] = useState<WeekFilter>(getInitialWeekFilter);
+  const [dayExportOpen, setDayExportOpen] = useState(false);
+  const [dayExportDate, setDayExportDate] = useState<string>(() =>
+    format(new Date(), "yyyy-MM-dd"),
+  );
 
   // Data
   const { data: loads = [], isLoading } = useLoads();
@@ -196,6 +213,33 @@ export default function LoadsPage() {
     });
   }, [assignedLoads, getWeekInfo]);
 
+  const dayExportLoads = useMemo(() => {
+    if (!dayExportDate) return [] as Load[];
+    let target: Date;
+    try {
+      target = parseISO(dayExportDate);
+    } catch {
+      return [] as Load[];
+    }
+    return loads.filter((load) => {
+      // Exclude third-party loads (consistent with the rest of this page)
+      if (isThirdPartyLoad(load.load_id)) return false;
+      try {
+        return isSameDay(parseISO(load.loading_date), target);
+      } catch {
+        return false;
+      }
+    });
+  }, [loads, dayExportDate]);
+
+  const handleConfirmDayExport = useCallback(() => {
+    if (!dayExportDate || dayExportLoads.length === 0) return;
+    exportLoadsForDayPdf(dayExportLoads, dayExportDate, {
+      filename: `daily-load-plan-${dayExportDate}`,
+    });
+    setDayExportOpen(false);
+  }, [dayExportDate, dayExportLoads]);
+
   // Render helpers
   const noAssignedVehicles = assignedLoads.length === 0;
   const exportMenuItems: Array<{
@@ -222,6 +266,11 @@ export default function LoadsPage() {
         onClick: handleExportByVehiclePdf,
         icon: FileText,
         disabled: noAssignedVehicles,
+      },
+      {
+        label: "Day Plan — PDF (pick a day)",
+        onClick: () => setDayExportOpen(true),
+        icon: CalendarDays,
       },
     ];
 
@@ -299,6 +348,50 @@ export default function LoadsPage() {
         onOpenChange={(open) => updateDialog("delivery", open)}
         load={selectedLoadFresh}
       />
+
+      <Dialog open={dayExportOpen} onOpenChange={setDayExportOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Export Day Plan to PDF
+            </DialogTitle>
+            <DialogDescription>
+              Pick a loading date. The PDF will include every load scheduled to
+              load on that day, grouped by vehicle.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            <Label htmlFor="day-export-date">Loading date</Label>
+            <Input
+              id="day-export-date"
+              type="date"
+              value={dayExportDate}
+              onChange={(e) => setDayExportDate(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {dayExportLoads.length === 0
+                ? "No loads scheduled to load on this date."
+                : `${dayExportLoads.length} load${dayExportLoads.length === 1 ? "" : "s"} will be included.`}
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDayExportOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmDayExport}
+              disabled={!dayExportDate || dayExportLoads.length === 0}
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Export PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -21,9 +21,11 @@ import {
 import { useClientLoads } from '@/hooks/useClientLoads';
 import type { Load } from '@/hooks/useTrips';
 import { cn, getLocationDisplayName, safeFormatDate } from '@/lib/utils';
-import { parseTimeWindow } from '@/lib/timeWindow';
+import { getSubcontractorInfo, parseTimeWindow } from '@/lib/timeWindow';
+import { getEffectiveLoadStatus } from '@/lib/loadStatus';
+import { Badge } from '@/components/ui/badge';
 import { parseISO } from 'date-fns';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Calendar,
   CheckCircle2,
@@ -157,50 +159,39 @@ export default function ClientLoadsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="border-subtle shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden">
-        <CardHeader className="border-b border-subtle bg-gradient-to-r from-primary/5 via-transparent to-transparent">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-sm sm:text-base font-semibold tracking-tight flex items-center gap-2">
-                <motion.div
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-                >
-                  <Filter className="h-5 w-5 text-primary" />
-                </motion.div>
-                Filter Loads
-              </CardTitle>
-              <CardDescription>Search and filter your shipments</CardDescription>
+      <Card className="border-border/60 shadow-sm overflow-hidden">
+        <CardHeader className="px-6 py-4 border-b border-border/40 bg-muted/10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-muted text-foreground border border-border/50">
+                <Filter className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold tracking-tight">Filter Loads</CardTitle>
+                <CardDescription className="text-xs">Search and filter your shipments</CardDescription>
+              </div>
             </div>
-            <AnimatePresence>
-              {hasActiveFilters && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearFilters}
-                    className="hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Clear Filters
-                  </Button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="hover:bg-destructive/10 hover:text-destructive"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear Filters
+              </Button>
+            )}
           </div>
         </CardHeader>
-        <CardContent className="pt-4">
+        <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
             <div className="flex-1 min-w-0 sm:min-w-[200px]">
-              <div className="relative group">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by load ID, origin, destination..."
-                  className="pl-9 border-subtle focus:border-primary transition-all duration-200"
+                  className="pl-9"
                   value={searchQuery}
                   onChange={(e) => updateParam('q', e.target.value)}
                 />
@@ -210,7 +201,7 @@ export default function ClientLoadsPage() {
               value={statusFilter}
               onValueChange={(value) => updateParam('status', value)}
             >
-              <SelectTrigger className="w-full sm:w-[160px] border-subtle hover:border-primary/50 transition-colors duration-200">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -225,7 +216,7 @@ export default function ClientLoadsPage() {
               value={dateFilter}
               onValueChange={(value) => updateParam('date', value)}
             >
-              <SelectTrigger className="w-full sm:w-[160px] border-subtle hover:border-primary/50 transition-colors duration-200">
+              <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder="Date Range" />
               </SelectTrigger>
               <SelectContent>
@@ -240,22 +231,18 @@ export default function ClientLoadsPage() {
       </Card>
 
       {/* Loads Table */}
-      <Card className="border-subtle shadow-lg hover:shadow-xl transition-shadow duration-300">
-        <CardHeader className="border-b border-subtle bg-gradient-to-r from-slate-500/5 via-transparent to-transparent">
-          <CardTitle className="text-sm sm:text-base font-semibold tracking-tight">
+      <Card className="border-border/60 shadow-sm">
+        <CardHeader className="px-6 py-4 border-b border-border/40 bg-muted/10">
+          <CardTitle className="text-base font-semibold tracking-tight">
             {filteredLoads.length} {filteredLoads.length === 1 ? 'Load' : 'Loads'}
             {hasActiveFilters && (
-              <motion.span
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="ml-2 text-xs font-normal text-muted-foreground"
-              >
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
                 (filtered)
-              </motion.span>
+              </span>
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -263,31 +250,15 @@ export default function ClientLoadsPage() {
               ))}
             </div>
           ) : filteredLoads.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-12 text-muted-foreground"
-            >
-              <motion.div
-                animate={{
-                  y: [0, -10, 0],
-                  rotate: [0, -5, 5, 0]
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              >
-                <Package className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              </motion.div>
+            <div className="text-center py-12 text-muted-foreground">
+              <Package className="h-14 w-14 mx-auto mb-4 opacity-30" />
               {hasActiveFilters ? (
                 <>
-                  <p className="font-medium text-lg">No loads match your filters</p>
+                  <p className="font-medium text-base">No loads match your filters</p>
                   <p className="text-sm mt-1">Try adjusting your search or filters</p>
                   <Button
                     variant="outline"
-                    className="mt-4 hover:scale-105 transition-transform"
+                    className="mt-4"
                     onClick={clearFilters}
                   >
                     Clear Filters
@@ -295,110 +266,25 @@ export default function ClientLoadsPage() {
                 </>
               ) : (
                 <>
-                  <p className="font-medium text-lg">No loads yet</p>
+                  <p className="font-medium text-base">No loads yet</p>
                   <p className="text-sm mt-1">Your shipments will appear here</p>
                 </>
               )}
-            </motion.div>
+            </div>
           ) : (
             <>
               {/* Pagination info */}
-              <AnimatePresence>
-                {filteredLoads.length > ITEMS_PER_PAGE && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-between mb-4 text-sm text-muted-foreground"
-                  >
-                    <span className="font-medium">
-                      Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredLoads.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredLoads.length)} of {filteredLoads.length}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage <= 1}
-                        onClick={() => updateParam('page', String(currentPage - 1))}
-                        className="hover:scale-105 transition-transform disabled:hover:scale-100"
-                      >
-                        Previous
-                      </Button>
-                      <span className="text-xs font-semibold px-3 py-1 bg-muted rounded-md">
-                        Page {currentPage} of {Math.ceil(filteredLoads.length / ITEMS_PER_PAGE)}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage * ITEMS_PER_PAGE >= filteredLoads.length}
-                        onClick={() => updateParam('page', String(currentPage + 1))}
-                        className="hover:scale-105 transition-transform disabled:hover:scale-100"
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Desktop Table */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="hidden md:block overflow-x-auto rounded-lg border border-subtle"
-              >
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="font-semibold">Load ID</TableHead>
-                      <TableHead className="font-semibold">Route</TableHead>
-                      <TableHead className="font-semibold">Loading Date</TableHead>
-                      <TableHead className="font-semibold">Delivery Date</TableHead>
-                      <TableHead className="font-semibold">Vehicle</TableHead>
-                      <TableHead className="font-semibold">Driver</TableHead>
-                      <TableHead className="font-semibold">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <AnimatePresence>
-                      {filteredLoads
-                        .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-                        .map((load, index) => (
-                          <LoadRow key={load.id} load={load} index={index} />
-                        ))}
-                    </AnimatePresence>
-                  </TableBody>
-                </Table>
-              </motion.div>
-
-              {/* Mobile Card List */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="md:hidden space-y-3"
-              >
-                <AnimatePresence>
-                  {filteredLoads
-                    .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-                    .map((load, index) => (
-                      <MobileLoadCard key={load.id} load={load} index={index} />
-                    ))}
-                </AnimatePresence>
-              </motion.div>
-
-              {/* Bottom pagination */}
-              <AnimatePresence>
-                {filteredLoads.length > ITEMS_PER_PAGE && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-end gap-2 mt-4"
-                  >
+              {filteredLoads.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-between mb-4 text-sm text-muted-foreground">
+                  <span className="font-medium">
+                    Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredLoads.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredLoads.length)} of {filteredLoads.length}
+                  </span>
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       disabled={currentPage <= 1}
                       onClick={() => updateParam('page', String(currentPage - 1))}
-                      className="hover:scale-105 transition-transform disabled:hover:scale-100"
                     >
                       Previous
                     </Button>
@@ -410,13 +296,70 @@ export default function ClientLoadsPage() {
                       size="sm"
                       disabled={currentPage * ITEMS_PER_PAGE >= filteredLoads.length}
                       onClick={() => updateParam('page', String(currentPage + 1))}
-                      className="hover:scale-105 transition-transform disabled:hover:scale-100"
                     >
                       Next
                     </Button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto rounded-lg border border-border/60">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableHead className="font-semibold">Load ID</TableHead>
+                      <TableHead className="font-semibold">Route</TableHead>
+                      <TableHead className="font-semibold">Loading Date</TableHead>
+                      <TableHead className="font-semibold">Delivery Date</TableHead>
+                      <TableHead className="font-semibold">Vehicle</TableHead>
+                      <TableHead className="font-semibold">Driver</TableHead>
+                      <TableHead className="font-semibold">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLoads
+                      .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+                      .map((load) => (
+                        <LoadRow key={load.id} load={load} />
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card List */}
+              <div className="md:hidden space-y-3">
+                {filteredLoads
+                  .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+                  .map((load) => (
+                    <MobileLoadCard key={load.id} load={load} />
+                  ))}
+              </div>
+
+              {/* Bottom pagination */}
+              {filteredLoads.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-end gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => updateParam('page', String(currentPage - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs font-semibold px-3 py-1 bg-muted rounded-md">
+                    Page {currentPage} of {Math.ceil(filteredLoads.length / ITEMS_PER_PAGE)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage * ITEMS_PER_PAGE >= filteredLoads.length}
+                    onClick={() => updateParam('page', String(currentPage + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </CardContent>
@@ -438,40 +381,29 @@ function StatsCard({
   color: 'slate' | 'blue' | 'emerald' | 'amber';
   delay?: number;
 }) {
-  const colorClasses = {
-    slate: 'bg-gradient-to-br from-slate-500/10 to-slate-500/5 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-800',
-    blue: 'bg-gradient-to-br from-blue-500/10 to-blue-500/5 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
-    emerald: 'bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
-    amber: 'bg-gradient-to-br from-amber-500/10 to-amber-500/5 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  const accentClasses = {
+    slate: 'text-slate-600 dark:text-slate-400 bg-slate-500/10 border-slate-500/20',
+    blue: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20',
+    emerald: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    amber: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.4 }}
-      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+      transition={{ delay, duration: 0.25 }}
     >
-      <Card className="kpi-card shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden">
-        <CardHeader className="pb-2 p-0">
-          <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 pt-1">
-          <div className="flex items-center gap-2">
-            <motion.div
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              className={cn('flex h-10 w-10 items-center justify-center rounded-lg border shadow-sm', colorClasses[color])}
-            >
+      <Card className="border-border/60 shadow-sm transition-colors hover:bg-muted/20">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
+              <p className="text-3xl font-bold tracking-tight text-foreground">{value}</p>
+            </div>
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl border', accentClasses[color])}>
               <Icon className="h-5 w-5" />
-            </motion.div>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: delay + 0.1 }}
-              className="text-2xl font-bold tracking-tight"
-            >
-              {value}
-            </motion.span>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -479,41 +411,36 @@ function StatsCard({
   );
 }
 
-function LoadRow({ load, index }: { load: Load; index: number }) {
+function LoadRow({ load }: { load: Load }) {
   const origin = getLocationDisplayName(load.origin);
   const destination = getLocationDisplayName(load.destination);
   const timeWindow = parseTimeWindow(load.time_window);
+  const subcontractor = getSubcontractorInfo(load);
+  const displayStatus = getEffectiveLoadStatus(load);
 
   return (
-    <motion.tr
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
-      whileHover={{ backgroundColor: "hsl(var(--muted) / 0.3)" }}
-      className="group"
-    >
+    <TableRow className="hover:bg-muted/30 transition-colors">
       <TableCell>
-        <div className="flex items-center gap-2">
-          <motion.div
-            whileHover={{ rotate: 10 }}
-            transition={{ type: "spring", stiffness: 300 }}
-          >
-            <Package className="h-4 w-4 text-primary" />
-          </motion.div>
-          <span className="font-semibold group-hover:text-primary transition-colors">{load.load_id}</span>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-muted-foreground" />
+            <span className="font-semibold">{load.load_id}</span>
+          </div>
+          {subcontractor && (
+            <Badge
+              variant="outline"
+              className="w-fit ml-6 text-[10px] font-semibold uppercase tracking-wider border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+              title={`Carried by subcontractor: ${subcontractor.name}`}
+            >
+              Subcontractor · {subcontractor.name}
+            </Badge>
+          )}
         </div>
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-1 text-sm">
           <span className="truncate max-w-[120px]">{origin}</span>
-          <motion.span
-            className="text-muted-foreground"
-            animate={{ x: [0, 3, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}
-          >
-            →
-          </motion.span>
+          <span className="text-muted-foreground">→</span>
           <span className="truncate max-w-[120px]">{destination}</span>
         </div>
         {timeWindow.waypoints && timeWindow.waypoints.length > 0 && (
@@ -543,9 +470,11 @@ function LoadRow({ load, index }: { load: Load; index: number }) {
       <TableCell>
         {load.fleet_vehicle ? (
           <div className="flex items-center gap-1.5">
-            <Truck className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+            <Truck className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="font-medium">{load.fleet_vehicle.vehicle_id}</span>
           </div>
+        ) : subcontractor ? (
+          <span className="text-xs text-muted-foreground italic">{subcontractor.name}</span>
         ) : (
           <span className="text-muted-foreground">-</span>
         )}
@@ -553,52 +482,49 @@ function LoadRow({ load, index }: { load: Load; index: number }) {
       <TableCell>
         {load.driver ? (
           <span className="font-medium">{load.driver.name}</span>
+        ) : subcontractor ? (
+          <span className="text-xs text-muted-foreground italic">Subcontractor driver</span>
         ) : (
           <span className="text-muted-foreground">-</span>
         )}
       </TableCell>
       <TableCell>
-        <StatusBadge status={load.status} />
+        <StatusBadge status={displayStatus} />
       </TableCell>
-    </motion.tr>
+    </TableRow>
   );
 }
 
-function MobileLoadCard({ load, index }: { load: Load; index: number }) {
+function MobileLoadCard({ load }: { load: Load }) {
   const origin = getLocationDisplayName(load.origin);
   const destination = getLocationDisplayName(load.destination);
   const timeWindow = parseTimeWindow(load.time_window);
+  const subcontractor = getSubcontractorInfo(load);
+  const displayStatus = getEffectiveLoadStatus(load);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
-      whileHover={{ scale: 1.02, boxShadow: "0 10px 30px -10px rgba(0,0,0,0.1)" }}
-      className="border border-subtle bg-card rounded-xl p-3.5 space-y-2.5 shadow-md hover:shadow-lg transition-all duration-200"
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <motion.div
-            whileHover={{ rotate: 10 }}
-            className="p-1.5 bg-primary/10 rounded-lg"
-          >
-            <Package className="h-4 w-4 text-primary" />
-          </motion.div>
-          <span className="font-semibold text-sm">{load.load_id}</span>
+    <div className="border border-border/60 bg-card rounded-xl p-3.5 space-y-2.5 shadow-sm hover:bg-muted/20 transition-colors">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-1.5 rounded-lg bg-muted border border-border/50">
+            <Package className="h-4 w-4 text-foreground" />
+          </div>
+          <span className="font-semibold text-sm truncate">{load.load_id}</span>
         </div>
-        <StatusBadge status={load.status} />
+        <StatusBadge status={displayStatus} />
       </div>
+      {subcontractor && (
+        <Badge
+          variant="outline"
+          className="w-fit text-[10px] font-semibold uppercase tracking-wider border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+          title={`Carried by subcontractor: ${subcontractor.name}`}
+        >
+          Subcontractor · {subcontractor.name}
+        </Badge>
+      )}
       <div className="text-sm text-muted-foreground truncate">
         <span>{origin}</span>
-        <motion.span
-          className="mx-1"
-          animate={{ opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          →
-        </motion.span>
+        <span className="mx-1">→</span>
         <span>{destination}</span>
       </div>
       {timeWindow.waypoints && timeWindow.waypoints.length > 0 && (
@@ -631,6 +557,6 @@ function MobileLoadCard({ load, index }: { load: Load; index: number }) {
           <span className="font-medium">{load.driver.name}</span>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

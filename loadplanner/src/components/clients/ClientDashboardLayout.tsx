@@ -70,10 +70,7 @@ export function ClientDashboardLayout({ children }: ClientDashboardLayoutProps) 
                 <div className="hidden sm:flex items-center gap-4 text-sm text-muted-foreground">
                   {client.contact_person && (
                     <span className="hidden lg:inline-flex items-center gap-1.5">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                      </span>
+                      <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
                       {client.contact_person}
                     </span>
                   )}

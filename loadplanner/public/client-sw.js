@@ -2,7 +2,12 @@
 /// Client Portal Service Worker
 /// Scoped to /portal/* routes only
 
-const CACHE_NAME = 'loadplan-client-portal-v1';
+// Bump SW_VERSION whenever the service worker logic or cache shape changes.
+// Clients (ClientPWARegistration.tsx) compare this against their expected
+// version and force-unregister + reload on mismatch so users on stale SWs
+// (especially on Edge, which caches aggressively) recover automatically.
+const SW_VERSION = 'v2';
+const CACHE_NAME = `loadplan-client-portal-${SW_VERSION}`;
 const STATIC_ASSETS = [
   '/loadplan-logo.png',
   '/favicon.svg',
@@ -18,6 +23,18 @@ self.addEventListener('install', (event) => {
   );
   // Activate immediately
   self.skipWaiting();
+});
+
+// Respond to version probes from the page so the client can detect a
+// stale/foreign service worker and self-heal.
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+  if (event.data.type === 'GET_VERSION') {
+    const port = event.ports && event.ports[0];
+    if (port) port.postMessage({ type: 'VERSION', version: SW_VERSION });
+  } else if (event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activate: clean up old caches

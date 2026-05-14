@@ -26,9 +26,16 @@ export interface ThirdPartyInfo {
   referenceNumber?: string;
 }
 
+export interface SubcontractorInfo {
+  supplierId?: string;
+  supplierName?: string;
+  cargoDescription?: string;
+}
+
 export interface TimeWindowDataFull extends TimeWindowData {
   backload: BackloadInfo | null;  // Make it explicitly non-optional
   thirdParty?: ThirdPartyInfo | null;
+  subcontractor?: SubcontractorInfo | null;
   varianceReason?: string;
   waypoints: Waypoint[];
 }
@@ -82,6 +89,9 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
         ? (data.backload as BackloadInfo)
         : null,
       thirdParty: data.thirdParty || null,
+      subcontractor: data.subcontractor && typeof data.subcontractor === 'object'
+        ? (data.subcontractor as SubcontractorInfo)
+        : null,
       varianceReason: typeof data.varianceReason === 'string' ? data.varianceReason : undefined,
       waypoints: Array.isArray(data.waypoints) ? (data.waypoints as Waypoint[]) : [],
     };
@@ -91,10 +101,30 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
       destination: { ...emptySection },
       backload: null,
       thirdParty: null,
+      subcontractor: null,
       varianceReason: undefined,
       waypoints: [],
     };
   }
+}
+
+/**
+ * Detect whether a load is being carried by a subcontractor and return the
+ * supplier name to display on customer-facing surfaces.
+ *
+ * A load is treated as subcontracted when either:
+ *   - its load_id uses the "SC-" prefix, or
+ *   - its time_window JSON carries a `subcontractor.supplierId`.
+ */
+export function getSubcontractorInfo(
+  load: { load_id?: string | null; time_window?: unknown } | null | undefined,
+): { name: string } | null {
+  if (!load) return null;
+  const tw = parseTimeWindow(load.time_window);
+  const sub = tw.subcontractor;
+  const isSubcontracted = !!sub?.supplierId || (load.load_id?.startsWith('SC-') ?? false);
+  if (!isSubcontracted) return null;
+  return { name: sub?.supplierName?.trim() || 'Subcontractor' };
 }
 
 // ---------------------------------------------------------------------------
