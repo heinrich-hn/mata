@@ -136,6 +136,35 @@ type Trip = {
     distance_km?: number;
     rate_per_km?: number;
     final_invoice_amount?: number;
+    created_at?: string;
+    created_by?: string;
+    completed_at?: string;
+    completed_by?: string;
+    edit_history?: Array<{
+        editedBy?: string;
+        editedAt?: string;
+        reason?: string;
+        changes?: Record<string, { old: unknown; new: unknown }>;
+    }> | null;
+};
+
+type TripDeletion = {
+    id: string;
+    trip_id: string;
+    trip_number: string;
+    deleted_by: string;
+    deleted_at: string;
+    deletion_reason: string;
+};
+
+type TripAuditEvent = {
+    trip_id: string;
+    trip_number: string;
+    fleet_number: string;
+    event: "Added" | "Edited" | "Completed" | "Deleted";
+    user: string;
+    timestamp: string;
+    details: string;
 };
 
 type Driver = {
@@ -1403,6 +1432,139 @@ const Reports = () => {
                     formats: ["excel"],
                     onExport: async () => {
                         setGapDaysDialogOpen(true);
+                    },
+                },
+                {
+                    id: "trips-audit-trail",
+                    label: "Trip Audit Trail",
+                    description: "Chronological log of who added, edited, completed, or deleted each trip (uses trip created_by, edit history, completion and deletion records).",
+                    formats: ["excel", "pdf"],
+                    onExport: async (fmt) => {
+                        const trips = await fetchTripsWithFleet();
+                        const { data: deletionsData, error: delErr } = await supabase
+                            .from("trip_deletions")
+                            .select("id, trip_id, trip_number, deleted_by, deleted_at, deletion_reason")
+                            .order("deleted_at", { ascending: false });
+                        if (delErr) throw delErr;
+                        const deletions = (deletionsData || []) as TripDeletion[];
+
+                        const fmtChanges = (changes?: Record<string, { old: unknown; new: unknown }>): string => {
+                            if (!changes) return "";
+                            return Object.entries(changes)
+                                .map(([k, v]) => `${k}: ${String(v.old ?? "—")} → ${String(v.new ?? "—")}`)
+                                .join("; ");
+                        };
+
+                        const events: TripAuditEvent[] = [];
+
+                        for (const t of trips) {
+                            const tripNum = t.trip_number || t.id?.slice(0, 8) || "-";
+                            const fleet = t.fleet_number || "-";
+
+                            if (t.created_at) {
+                                events.push({
+                                    trip_id: t.id,
+                                    trip_number: tripNum,
+                                    fleet_number: fleet,
+                                    event: "Added",
+                                    user: t.created_by || "Unknown",
+                                    timestamp: t.created_at,
+                                    details: `${t.origin || "-"} → ${t.destination || "-"}`,
+                                });
+                            }
+
+                            const history = Array.isArray(t.edit_history) ? t.edit_history : [];
+                            for (const h of history) {
+                                if (!h) continue;
+                                events.push({
+                                    trip_id: t.id,
+                                    trip_number: tripNum,
+                                    fleet_number: fleet,
+                                    event: "Edited",
+                                    user: h.editedBy || "Unknown",
+                                    timestamp: h.editedAt || t.created_at || "",
+                                    details: [h.reason, fmtChanges(h.changes)].filter(Boolean).join(" — "),
+                                });
+                            }
+
+                            if (t.completed_at) {
+                                events.push({
+                                    trip_id: t.id,
+                                    trip_number: tripNum,
+                                    fleet_number: fleet,
+                                    event: "Completed",
+                                    user: t.completed_by || "Unknown",
+                                    timestamp: t.completed_at,
+                                    details: "Trip marked completed",
+                                });
+                            }
+                        }
+
+                        for (const d of deletions) {
+                            events.push({
+                                trip_id: d.trip_id,
+                                trip_number: d.trip_number || "-",
+                                fleet_number: "-",
+                                event: "Deleted",
+                                user: d.deleted_by || "Unknown",
+                                timestamp: d.deleted_at,
+                                details: d.deletion_reason || "",
+                            });
+                        }
+
+                        events.sort((a, b) =>
+                            (b.timestamp || "").localeCompare(a.timestamp || "")
+                        );
+
+                        const headers = ["Timestamp", "Event", "Trip #", "Fleet", "User", "Details"];
+                        const rows = events.map((e) => [
+                            e.timestamp ? new Date(e.timestamp).toLocaleString() : "-",
+                            e.event,
+                            e.trip_number,
+                            e.fleet_number,
+                            e.user,
+                            e.details,
+                        ]);
+
+                        const filename = `Trip_Audit_Trail_${new Date().toISOString().split("T")[0]}.${fmt === "excel" ? "xlsx" : "pdf"}`;
+
+                        if (fmt === "excel") {
+                            const wb = createWorkbook();
+                            addStyledSheet(wb, "Audit Trail", {
+                                title: "TRIP AUDIT TRAIL",
+                                headers,
+                                rows,
+                            });
+
+                            // Per-user summary sheet
+                            const userCounts = new Map<string, { added: number; edited: number; completed: number; deleted: number }>();
+                            for (const e of events) {
+                                const u = e.user || "Unknown";
+                                const entry = userCounts.get(u) || { added: 0, edited: 0, completed: 0, deleted: 0 };
+                                if (e.event === "Added") entry.added++;
+                                else if (e.event === "Edited") entry.edited++;
+                                else if (e.event === "Completed") entry.completed++;
+                                else if (e.event === "Deleted") entry.deleted++;
+                                userCounts.set(u, entry);
+                            }
+                            const summaryRows = Array.from(userCounts.entries())
+                                .sort((a, b) => a[0].localeCompare(b[0]))
+                                .map(([user, c]) => [user, c.added, c.edited, c.completed, c.deleted, c.added + c.edited + c.completed + c.deleted]);
+                            addStyledSheet(wb, "By User", {
+                                title: "ACTIVITY BY USER",
+                                headers: ["User", "Added", "Edited", "Completed", "Deleted", "Total"],
+                                rows: summaryRows,
+                            });
+
+                            await saveWorkbook(wb, filename);
+                        } else {
+                            await exportGenericPdf(
+                                "TRIP AUDIT TRAIL",
+                                headers,
+                                rows.map((r) => r.map(String)),
+                                filename
+                            );
+                        }
                     },
                 },
             ],

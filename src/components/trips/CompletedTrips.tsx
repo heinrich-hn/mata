@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { requestGoogleSheetsSync } from '@/hooks/useGoogleSheetsSync';
 import { supabase } from '@/integrations/supabase/client';
 import type { EditHistoryRecord } from '@/types/forms';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { addDays, format, getISOWeek, parseISO, startOfWeek } from 'date-fns';
 import {
   AlertTriangle,
@@ -47,6 +47,7 @@ import {
   X
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
+import { compareTripNumbers } from '@/hooks/useTripKmValidation';
 import CompletedTripEditModal from './CompletedTripEditModal';
 import TripExpenseInline from './TripExpenseInline';
 import AdditionalRevenueBadge from './AdditionalRevenueBadge';
@@ -95,6 +96,7 @@ interface Trip {
   client_name?: string;
   vehicle_id?: string;
   fleet_number?: string;
+  fleet_vehicle_id?: string;
   base_revenue?: number;
   additional_revenue?: number;
   additional_revenue_reason?: string;
@@ -109,6 +111,7 @@ interface Trip {
   departure_date?: string;
   arrival_date?: string;
   completed_at?: string;
+  created_at?: string;
   origin?: string;
   destination?: string;
   description?: string;
@@ -139,6 +142,76 @@ interface CompletedTripsProps {
 const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: CompletedTripsProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Compute KM mismatches: for each trip, check if starting_km matches previous trip's ending_km on same vehicle
+  const vehicleIds = useMemo(
+    () => [...new Set(trips.map(t => t.fleet_vehicle_id).filter(Boolean))] as string[],
+    [trips]
+  );
+
+  const { data: previousEndingKmMap } = useQuery({
+    queryKey: ['completed-previous-ending-km', vehicleIds.join(',')],
+    queryFn: async () => {
+      if (vehicleIds.length === 0) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
+      const { data, error } = await supabase
+        .from('trips')
+        .select('id, fleet_vehicle_id, trip_number, ending_km')
+        .in('fleet_vehicle_id', vehicleIds)
+        .not('ending_km', 'is', null)
+        .not('trip_number', 'is', null);
+
+      if (error) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
+
+      const map = new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
+      for (const row of data || []) {
+        const vid = row.fleet_vehicle_id as string | null;
+        if (!vid) continue; // strict: must have fleet_vehicle_id
+        if (!map.has(vid)) map.set(vid, []);
+        map.get(vid)!.push({
+          id: row.id as string,
+          ending_km: row.ending_km as number,
+          trip_number: row.trip_number as string,
+        });
+      }
+
+      // Sort each vehicle's trips ascending by trip_number (POD sequence).
+      for (const [, vehicleTrips] of map) {
+        vehicleTrips.sort((a, b) => compareTripNumbers(a.trip_number, b.trip_number));
+      }
+
+      return map;
+    },
+    enabled: vehicleIds.length > 0,
+    staleTime: 30_000,
+  });
+
+  // Map tripId → km mismatch info
+  const kmMismatches = useMemo(() => {
+    const result = new Map<string, { gap: number; previousEndingKm: number; previousTripNumber: string }>();
+    if (!previousEndingKmMap) return result;
+
+    for (const trip of trips) {
+      if (!trip.starting_km || !trip.fleet_vehicle_id || !trip.trip_number) continue;
+      const vehicleTrips = previousEndingKmMap.get(trip.fleet_vehicle_id);
+      if (!vehicleTrips) continue;
+
+      // Find prev trip on the SAME vehicle with the largest trip_number STRICTLY less than current's.
+      let prev: typeof vehicleTrips[number] | null = null;
+      for (const vt of vehicleTrips) {
+        if (vt.id === trip.id) continue;
+        if (compareTripNumbers(vt.trip_number, trip.trip_number) < 0) {
+          if (!prev || compareTripNumbers(vt.trip_number, prev.trip_number) > 0) prev = vt;
+        }
+      }
+      if (!prev) continue;
+
+      const gap = trip.starting_km - prev.ending_km;
+      if (gap !== 0) {
+        result.set(trip.id, { gap, previousEndingKm: prev.ending_km, previousTripNumber: prev.trip_number });
+      }
+    }
+    return result;
+  }, [trips, previousEndingKmMap]);
 
   // Filter state
   const [fleetFilter, setFleetFilter] = useState<string>('all');
@@ -924,6 +997,16 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                           return acc;
                         }, {});
 
+                        // Sort trips within each fleet by download date (created_at) desc,
+                        // falling back to departure_date when created_at is missing.
+                        Object.values(fleetGroups).forEach((group) => {
+                          group.sort((a, b) => {
+                            const aTime = new Date(a.created_at || a.departure_date || 0).getTime();
+                            const bTime = new Date(b.created_at || b.departure_date || 0).getTime();
+                            return bTime - aTime;
+                          });
+                        });
+
                         return Object.entries(fleetGroups)
                           .sort(([a], [b]) => {
                             if (a === 'Unassigned') return 1;
@@ -1101,8 +1184,21 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                                                   <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs whitespace-nowrap">
                                                     {trip.arrival_date ? format(parseISO(trip.arrival_date), 'dd MMM yyyy') : '—'}
                                                   </td>
-                                                  <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
-                                                    {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
+                                                  <td className={`py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs ${kmMismatches.has(trip.id) ? 'bg-red-100' : ''}`}>
+                                                    <div className="flex items-center justify-end gap-1">
+                                                      {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
+                                                      {kmMismatches.has(trip.id) && (
+                                                        <Tooltip>
+                                                          <TooltipTrigger>
+                                                            <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                                          </TooltipTrigger>
+                                                          <TooltipContent side="left" className="max-w-xs">
+                                                            <p className="font-medium">KM Mismatch</p>
+                                                            <p className="text-xs">Previous trip {kmMismatches.get(trip.id)!.previousTripNumber} ended at {kmMismatches.get(trip.id)!.previousEndingKm.toLocaleString()} km. Gap: {kmMismatches.get(trip.id)!.gap > 0 ? '+' : ''}{kmMismatches.get(trip.id)!.gap.toLocaleString()} km</p>
+                                                          </TooltipContent>
+                                                        </Tooltip>
+                                                      )}
+                                                    </div>
                                                   </td>
                                                   <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
                                                     {trip.ending_km ? trip.ending_km.toLocaleString() : '—'}
@@ -1350,8 +1446,21 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
                           <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs whitespace-nowrap">
                             {trip.arrival_date ? format(parseISO(trip.arrival_date), 'dd MMM yyyy') : '\u2014'}
                           </td>
-                          <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
-                            {trip.starting_km ? trip.starting_km.toLocaleString() : '\u2014'}
+                          <td className={`py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs ${kmMismatches.has(trip.id) ? 'bg-red-100' : ''}`}>
+                            <div className="flex items-center justify-end gap-1">
+                              {trip.starting_km ? trip.starting_km.toLocaleString() : '\u2014'}
+                              {kmMismatches.has(trip.id) && (
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left" className="max-w-xs">
+                                    <p className="font-medium">KM Mismatch</p>
+                                    <p className="text-xs">Previous trip {kmMismatches.get(trip.id)!.previousTripNumber} ended at {kmMismatches.get(trip.id)!.previousEndingKm.toLocaleString()} km. Gap: {kmMismatches.get(trip.id)!.gap > 0 ? '+' : ''}{kmMismatches.get(trip.id)!.gap.toLocaleString()} km</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
                             {trip.ending_km ? trip.ending_km.toLocaleString() : '\u2014'}

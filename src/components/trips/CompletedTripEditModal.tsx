@@ -70,7 +70,7 @@ const CompletedTripEditModal = ({
   onClose,
   onSave
 }: CompletedTripEditModalProps) => {
-  const { userName } = useAuth();
+  const { userName, userEmail } = useAuth();
   const { data: vehicles, isLoading: vehiclesLoading } = useWialonVehicles();
   const [formData, setFormData] = useState({
     vehicle_id: trip.vehicle_id || '',
@@ -207,7 +207,7 @@ const CompletedTripEditModal = ({
     const finalReason = editReason === 'Other (specify in comments)' ? customReason : editReason;
 
     const editRecord: EditHistoryRecord = {
-      editedBy: userName || 'Unknown User',
+      editedBy: userEmail || userName || 'Unknown User',
       editedAt: new Date().toISOString(),
       reason: finalReason,
     };

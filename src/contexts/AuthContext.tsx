@@ -7,6 +7,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   userName: string | null;
+  userEmail: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,6 +17,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -27,11 +29,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Extract user name from metadata or email
         if (session?.user) {
           const name = session.user.user_metadata?.name ||
-                      session.user.email?.split('@')[0] ||
-                      'User';
+            session.user.email?.split('@')[0] ||
+            'User';
           setUserName(name);
+          setUserEmail(session.user.email ?? null);
         } else {
           setUserName(null);
+          setUserEmail(null);
         }
       }
     );
@@ -43,9 +47,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (session?.user) {
         const name = session.user.user_metadata?.name ||
-                    session.user.email?.split('@')[0] ||
-                    'User';
+          session.user.email?.split('@')[0] ||
+          'User';
         setUserName(name);
+        setUserEmail(session.user.email ?? null);
       }
 
       setLoading(false);
@@ -55,7 +60,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, userName }}>
+    <AuthContext.Provider value={{ user, session, loading, userName, userEmail }}>
       {children}
     </AuthContext.Provider>
   );

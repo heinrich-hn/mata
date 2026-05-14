@@ -12,16 +12,20 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useToast } from '@/hooks/use-toast';
 import { ensureAlert } from '@/lib/alertUtils';
 import { resolveMissingRevenueAlert } from '@/lib/alertResolution';
+import { compareTripNumbers } from '@/hooks/useTripKmValidation';
 import { useAuth } from '@/contexts/AuthContext';
 import { addDays, format, getISOWeek, parseISO, startOfWeek } from 'date-fns';
 import {
   AlertTriangle,
   Building,
   Calendar,
+  Check,
   ChevronDown,
   ChevronRight,
   DollarSign,
@@ -32,6 +36,7 @@ import {
   FilterX,
   Gauge,
   MoreVertical,
+  Pencil,
   Plus,
   RefreshCw,
   RouteIcon,
@@ -51,7 +56,6 @@ import AdditionalRevenueBadge from './AdditionalRevenueBadge';
 import TripExpenseExportDialog from './TripExpenseExportDialog';
 import TripExportDialog from './TripExportDialog';
 import ShareTripDialog from './ShareTripDialog';
-import { compareTripNumbers } from '@/hooks/useTripKmValidation';
 
 // Helper function to get week key (Monday of the week)
 const getWeekKey = (dateString: string): string => {
@@ -110,6 +114,8 @@ interface Trip {
   ending_km?: number;
   departure_date?: string;
   arrival_date?: string;
+  created_at?: string;
+  edit_history?: Array<{ editedBy: string; editedAt: string; reason: string; changes?: Record<string, { old: unknown; new: unknown }> }>;
   costs?: CostEntry[];
   additional_costs?: AdditionalCost[];
   pod_verified?: boolean;
@@ -146,42 +152,107 @@ const ActiveTrips = ({
   onRefresh,
   isLoading = false
 }: ActiveTripsProps) => {
-  const { userName } = useAuth();
+  const { userName, userEmail } = useAuth();
+  const { toast } = useToast();
+
+  // Inline POD edit state
+  const [editingPodId, setEditingPodId] = useState<string | null>(null);
+  const [editingPodValue, setEditingPodValue] = useState<string>('');
+  const [savingPodId, setSavingPodId] = useState<string | null>(null);
+
+  const startEditPod = (trip: Trip, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingPodId(trip.id);
+    setEditingPodValue(trip.trip_number);
+  };
+
+  const cancelEditPod = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.stopPropagation();
+    setEditingPodId(null);
+    setEditingPodValue('');
+  };
+
+  const saveEditPod = async (trip: Trip, e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.stopPropagation();
+    const newValue = editingPodValue.trim();
+    if (!newValue) {
+      toast({ title: 'POD number required', description: 'POD number cannot be empty.', variant: 'destructive' });
+      return;
+    }
+    if (newValue === trip.trip_number) {
+      cancelEditPod();
+      return;
+    }
+    setSavingPodId(trip.id);
+    try {
+      const existingHistory = Array.isArray(trip.edit_history) ? trip.edit_history : [];
+      const newHistory = [
+        ...existingHistory,
+        {
+          editedBy: userEmail || userName || 'Unknown User',
+          editedAt: new Date().toISOString(),
+          reason: 'Inline POD number change',
+          changes: { trip_number: { old: trip.trip_number, new: newValue } },
+        },
+      ];
+      const { error } = await supabase
+        .from('trips')
+        .update({
+          trip_number: newValue,
+          edit_history: JSON.parse(JSON.stringify(newHistory)),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', trip.id);
+      if (error) throw error;
+      toast({ title: 'POD updated', description: `POD ${trip.trip_number} → ${newValue}` });
+      setEditingPodId(null);
+      setEditingPodValue('');
+      onRefresh?.();
+    } catch (err) {
+      toast({
+        title: 'Failed to update POD',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingPodId(null);
+    }
+  };
 
   // Compute KM mismatches: for each trip, check if starting_km matches previous trip's ending_km on same vehicle
-  const vehicleIds = useMemo(() => [...new Set(trips.map(t => t.fleet_vehicle_id || t.vehicle_id).filter(Boolean))] as string[], [trips]);
+  const vehicleIds = useMemo(
+    () => [...new Set(trips.map(t => t.fleet_vehicle_id).filter(Boolean))] as string[],
+    [trips]
+  );
 
   const { data: previousEndingKmMap } = useQuery({
     queryKey: ['previous-ending-km', vehicleIds.join(',')],
     queryFn: async () => {
-      if (vehicleIds.length === 0) return new Map<string, { ending_km: number; trip_number: string; departure_date: string | null }[]>();
-      // For each vehicle, get all trips with ending_km
+      if (vehicleIds.length === 0) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
       const { data, error } = await supabase
         .from('trips')
-        .select('id, fleet_vehicle_id, trip_number, ending_km, departure_date')
+        .select('id, fleet_vehicle_id, trip_number, ending_km')
         .in('fleet_vehicle_id', vehicleIds)
-        .not('ending_km', 'is', null);
+        .not('ending_km', 'is', null)
+        .not('trip_number', 'is', null);
 
-      if (error) return new Map<string, { ending_km: number; trip_number: string; departure_date: string | null }[]>();
+      if (error) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
 
-      const map = new Map<string, { ending_km: number; trip_number: string; departure_date: string | null }[]>();
+      const map = new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
       for (const row of data || []) {
-        const vid = row.fleet_vehicle_id as string;
+        const vid = row.fleet_vehicle_id as string | null;
+        if (!vid) continue; // strict: must have fleet_vehicle_id
         if (!map.has(vid)) map.set(vid, []);
         map.get(vid)!.push({
+          id: row.id as string,
           ending_km: row.ending_km as number,
           trip_number: row.trip_number as string,
-          departure_date: row.departure_date as string | null,
         });
       }
 
-      // Sort each vehicle's trips by trip_number (POD sequence), then departure_date as tiebreaker
+      // Sort each vehicle's trips ascending by trip_number (POD sequence).
       for (const [, vehicleTrips] of map) {
-        vehicleTrips.sort((a, b) => {
-          const cmp = compareTripNumbers(a.trip_number, b.trip_number);
-          if (cmp !== 0) return cmp;
-          return (a.departure_date || '').localeCompare(b.departure_date || '');
-        });
+        vehicleTrips.sort((a, b) => compareTripNumbers(a.trip_number, b.trip_number));
       }
 
       return map;
@@ -196,15 +267,20 @@ const ActiveTrips = ({
     if (!previousEndingKmMap) return result;
 
     for (const trip of trips) {
-      if (!trip.starting_km || !trip.fleet_vehicle_id) continue;
+      if (!trip.starting_km || !trip.fleet_vehicle_id || !trip.trip_number) continue;
       const vehicleTrips = previousEndingKmMap.get(trip.fleet_vehicle_id);
       if (!vehicleTrips) continue;
 
-      // Find this trip's position in the sorted list, then get the one before it
-      const idx = vehicleTrips.findIndex(vt => vt.trip_number === trip.trip_number);
-      if (idx <= 0) continue;
+      // Find the prev trip on the SAME vehicle with the largest trip_number STRICTLY less than current's.
+      let prev: typeof vehicleTrips[number] | null = null;
+      for (const vt of vehicleTrips) {
+        if (vt.id === trip.id) continue;
+        if (compareTripNumbers(vt.trip_number, trip.trip_number) < 0) {
+          if (!prev || compareTripNumbers(vt.trip_number, prev.trip_number) > 0) prev = vt;
+        }
+      }
+      if (!prev) continue;
 
-      const prev = vehicleTrips[idx - 1];
       const gap = trip.starting_km - prev.ending_km;
       if (gap !== 0) {
         result.set(trip.id, { gap, previousEndingKm: prev.ending_km, previousTripNumber: prev.trip_number });
@@ -898,6 +974,16 @@ const ActiveTrips = ({
                           return acc;
                         }, {});
 
+                        // Sort trips within each fleet by download date (created_at) desc,
+                        // falling back to departure_date when created_at is missing.
+                        Object.values(fleetGroups).forEach((group) => {
+                          group.sort((a, b) => {
+                            const aTime = new Date(a.created_at || a.departure_date || 0).getTime();
+                            const bTime = new Date(b.created_at || b.departure_date || 0).getTime();
+                            return bTime - aTime;
+                          });
+                        });
+
                         return Object.entries(fleetGroups)
                           .sort(([a], [b]) => {
                             if (a === 'Unassigned') return 1;
@@ -974,8 +1060,42 @@ const ActiveTrips = ({
                                                   onClick={() => onView(trip)}
                                                 >
                                                   <td className="py-2.5 px-3">
-                                                    <div className="flex items-center gap-1.5">
-                                                      <span className="font-semibold text-primary tabular-nums">{trip.trip_number}</span>
+                                                    <div className="flex items-center gap-1.5" onClick={(e) => { if (editingPodId === trip.id) e.stopPropagation(); }}>
+                                                      {editingPodId === trip.id ? (
+                                                        <div className="flex items-center gap-1">
+                                                          <Input
+                                                            value={editingPodValue}
+                                                            onChange={(e) => setEditingPodValue(e.target.value)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onKeyDown={(e) => {
+                                                              if (e.key === 'Enter') { e.preventDefault(); saveEditPod(trip, e); }
+                                                              else if (e.key === 'Escape') { e.preventDefault(); cancelEditPod(e); }
+                                                            }}
+                                                            autoFocus
+                                                            disabled={savingPodId === trip.id}
+                                                            className="h-7 w-28 text-sm font-semibold tabular-nums"
+                                                          />
+                                                          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={savingPodId === trip.id} onClick={(e) => saveEditPod(trip, e)}>
+                                                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                                          </Button>
+                                                          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={savingPodId === trip.id} onClick={(e) => cancelEditPod(e)}>
+                                                            <X className="h-3.5 w-3.5 text-muted-foreground" />
+                                                          </Button>
+                                                        </div>
+                                                      ) : (
+                                                        <>
+                                                          <span className="font-semibold text-primary tabular-nums">{trip.trip_number}</span>
+                                                          <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                                            onClick={(e) => startEditPod(trip, e)}
+                                                            title="Edit POD"
+                                                          >
+                                                            <Pencil className="h-3 w-3 text-muted-foreground" />
+                                                          </Button>
+                                                        </>
+                                                      )}
                                                       {isDuplicate && (
                                                         <Tooltip>
                                                           <TooltipTrigger><AlertTriangle className="h-3 w-3 text-destructive shrink-0" /></TooltipTrigger>
@@ -1073,7 +1193,7 @@ const ActiveTrips = ({
                                                   <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs whitespace-nowrap">
                                                     {trip.arrival_date ? format(parseISO(trip.arrival_date), 'dd MMM yyyy') : '—'}
                                                   </td>
-                                                  <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
+                                                  <td className={`py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs ${kmMismatches.has(trip.id) ? 'bg-red-100' : ''}`}>
                                                     <div className="flex items-center justify-end gap-1">
                                                       {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
                                                       {kmMismatches.has(trip.id) && (
@@ -1265,8 +1385,42 @@ const ActiveTrips = ({
                           onClick={() => onView(trip)}
                         >
                           <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-semibold text-primary tabular-nums">{trip.trip_number}</span>
+                            <div className="flex items-center gap-1.5" onClick={(e) => { if (editingPodId === trip.id) e.stopPropagation(); }}>
+                              {editingPodId === trip.id ? (
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    value={editingPodValue}
+                                    onChange={(e) => setEditingPodValue(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') { e.preventDefault(); saveEditPod(trip, e); }
+                                      else if (e.key === 'Escape') { e.preventDefault(); cancelEditPod(e); }
+                                    }}
+                                    autoFocus
+                                    disabled={savingPodId === trip.id}
+                                    className="h-7 w-28 text-sm font-semibold tabular-nums"
+                                  />
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" disabled={savingPodId === trip.id} onClick={(e) => saveEditPod(trip, e)}>
+                                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" disabled={savingPodId === trip.id} onClick={(e) => cancelEditPod(e)}>
+                                    <X className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="font-semibold text-primary tabular-nums">{trip.trip_number}</span>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                    onClick={(e) => startEditPod(trip, e)}
+                                    title="Edit POD"
+                                  >
+                                    <Pencil className="h-3 w-3 text-muted-foreground" />
+                                  </Button>
+                                </>
+                              )}
                               {isDuplicate && <AlertTriangle className="h-3 w-3 text-destructive" />}
                               {needsAttention && (
                                 <Tooltip>
@@ -1331,7 +1485,7 @@ const ActiveTrips = ({
                           <td className="py-2.5 px-3 text-muted-foreground tabular-nums text-xs whitespace-nowrap">
                             {trip.arrival_date ? format(parseISO(trip.arrival_date), 'dd MMM yyyy') : '—'}
                           </td>
-                          <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs">
+                          <td className={`py-2.5 px-3 text-right tabular-nums text-muted-foreground text-xs ${kmMismatches.has(trip.id) ? 'bg-red-100' : ''}`}>
                             <div className="flex items-center justify-end gap-1">
                               {trip.starting_km ? trip.starting_km.toLocaleString() : '—'}
                               {kmMismatches.has(trip.id) && (

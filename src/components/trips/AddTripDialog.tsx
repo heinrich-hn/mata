@@ -79,7 +79,7 @@ interface AddTripDialogProps {
 const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
   const { addTrip, addCostEntry } = useOperations();
   const { toast } = useToast();
-  const { userName } = useAuth();
+  const { userName, userEmail } = useAuth();
   const { data: vehicles, isLoading: vehiclesLoading } = useWialonVehicles();
   const { effectiveRates } = useEffectiveRates();
 
@@ -211,6 +211,7 @@ const AddTripDialog = ({ isOpen, onClose }: AddTripDialogProps) => {
         additional_revenue_verified_at: data.additional_revenue_verified ? new Date().toISOString() : null,
         zero_revenue_comment: data.zero_revenue_comment || null,
         status: 'active',
+        created_by: userEmail || userName || null,
       } as Omit<Trip, 'id' | 'created_at' | 'updated_at'>;
 
       const tripId = await addTrip(tripData);

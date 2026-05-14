@@ -63,6 +63,7 @@ export interface Trip {
   follow_up_history?: FollowUpRecord[];
   costs?: CostEntry[];
   created_at?: string;
+  created_by?: string;
   updated_at?: string;
 }
 
