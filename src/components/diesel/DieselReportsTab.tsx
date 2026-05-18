@@ -16,6 +16,7 @@ import {
   generateStyledDieselExcel,
   generateComprehensiveDieselPDF,
   generateYearlyWeeklyDieselExcel,
+  generateDriverMonthlyDieselExcel,
   type DieselExportRecord,
   type ExportSheetSelection,
 } from '@/lib/dieselFleetExport';
@@ -188,6 +189,10 @@ const DieselReportsTab = ({
     truckTransactions: false, reeferTransactions: false,
   });
   const [isExporting, setIsExporting] = useState(false);
+  const now = new Date();
+  const [driverMonthYear, setDriverMonthYear] = useState<number>(now.getFullYear());
+  const [driverMonthMonth, setDriverMonthMonth] = useState<number>(now.getMonth() + 1);
+  const [driverMonthDriver, setDriverMonthDriver] = useState<string>('__all__');
 
   const toggleSheet = (key: keyof ExportSheetSelection) =>
     setExportSel(prev => ({ ...prev, [key]: !prev[key] }));
@@ -921,6 +926,31 @@ const DieselReportsTab = ({
       });
     } catch (e) {
       console.error('Yearly export failed:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  /** Distinct driver names across both truck & reefer record sets, sorted alphabetically. */
+  const allDriverNames = useMemo(() => {
+    const set = new Set<string>();
+    truckRecords.forEach(r => { if (r.driver_name?.trim()) set.add(r.driver_name.trim()); });
+    reeferRecords.forEach(r => { if (r.driver_name?.trim()) set.add(r.driver_name.trim()); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [truckRecords, reeferRecords]);
+
+  const handleExportDriverMonthly = async () => {
+    setIsExporting(true);
+    try {
+      await generateDriverMonthlyDieselExcel({
+        year: driverMonthYear,
+        month: driverMonthMonth,
+        truckRecords: truckRecords as unknown as DieselExportRecord[],
+        reeferRecords: reeferRecords as unknown as DieselExportRecord[],
+        drivers: driverMonthDriver === '__all__' ? undefined : [driverMonthDriver],
+      });
+    } catch (e) {
+      console.error('Driver monthly export failed:', e);
     } finally {
       setIsExporting(false);
     }
@@ -2534,6 +2564,70 @@ const DieselReportsTab = ({
                   </Button>
                 ))}
               </div>
+            </div>
+
+            {/* Driver Monthly Export */}
+            <div className="border-t pt-3 space-y-2">
+              <p className="text-sm font-semibold">Driver Monthly Export</p>
+              <p className="text-xs text-muted-foreground">
+                Export per-driver diesel transactions (trucks &amp; reefers) for a specific month.
+                Choose a single driver or export all drivers.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <Label htmlFor="dm-month" className="text-xs">Month</Label>
+                  <Select value={String(driverMonthMonth)} onValueChange={v => setDriverMonthMonth(Number(v))}>
+                    <SelectTrigger id="dm-month" className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                        <SelectItem key={m} value={String(m)}>
+                          {new Date(2000, m - 1, 1).toLocaleString('en-ZA', { month: 'long' })}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="dm-year" className="text-xs">Year</Label>
+                  <Select value={String(driverMonthYear)} onValueChange={v => setDriverMonthYear(Number(v))}>
+                    <SelectTrigger id="dm-year" className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="dm-driver" className="text-xs">Driver</Label>
+                  <Select value={driverMonthDriver} onValueChange={setDriverMonthDriver}>
+                    <SelectTrigger id="dm-driver" className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Drivers</SelectItem>
+                      {allDriverNames.map(d => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportDriverMonthly}
+                disabled={isExporting}
+                className="gap-1 mt-1"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Export {new Date(driverMonthYear, driverMonthMonth - 1, 1).toLocaleString('en-ZA', { month: 'short', year: 'numeric' })}
+                {driverMonthDriver !== '__all__' ? ` — ${driverMonthDriver}` : ''}
+              </Button>
             </div>
           </div>
 

@@ -903,3 +903,175 @@ export function exportCalendarToExcel(
   XLSX.utils.book_append_sheet(wb, ws, `Week ${weekNumber}`);
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
+
+// ---------------------------------------------------------------------------
+// Daily on-time export — same layout as the weekly Excel, but for a single
+// day, and with the four Planned/Actual/Variance triples collapsed into a
+// single "On Time" Yes/No column.
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns "Yes" if no leg of the load was late by more than 15 minutes,
+ * "No" if any leg was late by more than 15 minutes, and "—" if there is
+ * no actual data on any leg yet.
+ */
+function computeOnTimeYesNo(load: Load): { label: "Yes" | "No" | "—"; isOnTime: boolean | null } {
+  const tw = timeWindowLib.parseTimeWindow(load.time_window);
+  const legs: Array<[string | null | undefined, string | null | undefined]> = [
+    [tw.origin.plannedArrival, load.actual_loading_arrival || tw.origin.actualArrival],
+    [tw.origin.plannedDeparture, load.actual_loading_departure || tw.origin.actualDeparture],
+    [tw.destination.plannedArrival, load.actual_offloading_arrival || tw.destination.actualArrival],
+    [tw.destination.plannedDeparture, load.actual_offloading_departure || tw.destination.actualDeparture],
+  ];
+  let hasData = false;
+  for (const [planned, actual] of legs) {
+    const v = computeTimeVariance(planned, actual);
+    if (v.diffMin === null) continue;
+    hasData = true;
+    if (v.diffMin > 15) return { label: "No", isOnTime: false };
+  }
+  return hasData ? { label: "Yes", isOnTime: true } : { label: "—", isOnTime: null };
+}
+
+interface DayOnTimeOptions {
+  filename?: string;
+  sheetName?: string;
+}
+
+export function exportLoadsForDayOnTimeExcel(
+  loads: Load[],
+  dayIso: string,
+  options: DayOnTimeOptions = {},
+): void {
+  const dayLabel = (() => {
+    try { return format(parseISO(dayIso), "EEEE dd/MM/yyyy"); } catch { return dayIso; }
+  })();
+  const {
+    filename = `daily-load-plan-on-time-${dayIso}`,
+    sheetName = format(parseISO(dayIso), "dd MMM yyyy"),
+  } = options;
+
+  const excelData = loads.map((load) => {
+    const timeWindow = timeWindowLib.parseTimeWindow(load.time_window);
+    const subcontractor = getSubcontractorInfo(load);
+
+    let backloadQuantities = "";
+    if (timeWindow.backload?.quantities) {
+      const { bins, crates, pallets } = timeWindow.backload.quantities;
+      const parts: string[] = [];
+      if (bins > 0) parts.push(`${bins} bins`);
+      if (crates > 0) parts.push(`${crates} crates`);
+      if (pallets > 0) parts.push(`${pallets} pallets`);
+      backloadQuantities = parts.join(", ");
+    }
+
+    const onTime = computeOnTimeYesNo(load);
+
+    return {
+      load,
+      effectiveStatus: getEffectiveStatus(load),
+      onTime,
+      row: {
+        "Load ID": load.load_id,
+        Status: statusLabels[getEffectiveStatus(load)] || load.status,
+        Origin: load.origin,
+        Destination: load.destination,
+        Vehicle: load.fleet_vehicle?.vehicle_id || "",
+        Driver: load.driver?.name || "",
+        "Cargo Type": cargoLabels[load.cargo_type] || load.cargo_type,
+        "Loading Date": format(parseISO(load.loading_date), "dd/MM/yyyy"),
+        "Offloading Date": format(parseISO(load.offloading_date), "dd/MM/yyyy"),
+        "On Time": onTime.label,
+        "Backload Destination": timeWindow.backload?.destination || "",
+        "Backload Offloading Date": timeWindow.backload?.offloadingDate || "",
+        "Backload Quantities": backloadQuantities,
+        "Variance Reason": timeWindow.varianceReason || "",
+        "Subcontracted": subcontractor ? "Yes" : "No",
+        "Subcontractor": subcontractor?.name || "",
+        "Subcontractor Cargo": timeWindow.subcontractor?.cargoDescription || "",
+      },
+    };
+  });
+
+  // Index of the "On Time" column within the row above
+  const onTimeCol = 9;
+
+  const titleRow = [
+    `${COMPANY_NAME} — Daily Load Plan (On-Time) — ${dayLabel}`,
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, [], []]);
+
+  excelData.sort((a, b) =>
+    (a.load.fleet_vehicle?.vehicle_id || "zzz").localeCompare(
+      b.load.fleet_vehicle?.vehicle_id || "zzz",
+      undefined,
+      { numeric: true },
+    ) || a.load.load_id.localeCompare(b.load.load_id),
+  );
+
+  const columnKeys = Object.keys(excelData[0]?.row ?? {}) as (keyof typeof excelData[0]["row"])[];
+  XLSX.utils.sheet_add_aoa(worksheet, [columnKeys as string[]], { origin: { r: 3, c: 0 } });
+
+  const colCount = columnKeys.length || 17;
+  const mergeRanges: XLSX.Range[] = [];
+  applyTitleRows(worksheet, colCount, mergeRanges);
+  emphasizeTitleRow(worksheet, colCount);
+  applyHeaderStyle(worksheet, 3, colCount);
+
+  let currentRow = 4;
+  excelData.forEach((item) => {
+    const values = columnKeys.map((k) => (item.row as Record<string, string | number | undefined>)[k as string]);
+    XLSX.utils.sheet_add_aoa(worksheet, [values], { origin: { r: currentRow, c: 0 } });
+
+    const rowFill = rowFillForStatus(item.effectiveStatus);
+    if (rowFill) {
+      for (let c = 0; c < colCount; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: currentRow, c });
+        if (!worksheet[cellRef]) worksheet[cellRef] = { v: "", t: "s" };
+        worksheet[cellRef].s = { ...rowFill };
+      }
+    }
+
+    // Colour the On Time cell: green for Yes, red for No, neutral for —
+    const onTimeRef = XLSX.utils.encode_cell({ r: currentRow, c: onTimeCol });
+    const onTimeCell = worksheet[onTimeRef];
+    if (onTimeCell) {
+      if (item.onTime.isOnTime === true) onTimeCell.s = greenFill;
+      else if (item.onTime.isOnTime === false) onTimeCell.s = redFill;
+      else onTimeCell.s = onTimeFill;
+    }
+
+    currentRow += 1;
+  });
+
+  worksheet["!merges"] = mergeRanges;
+  worksheet["!ref"] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: Math.max(currentRow - 1, 3), c: colCount - 1 },
+  });
+
+  worksheet["!cols"] = [
+    { wch: 15 }, // Load ID
+    { wch: 14 }, // Status
+    { wch: 22 }, // Origin
+    { wch: 22 }, // Destination
+    { wch: 12 }, // Vehicle
+    { wch: 22 }, // Driver
+    { wch: 18 }, // Cargo Type
+    { wch: 12 }, // Loading Date
+    { wch: 14 }, // Offloading Date
+    { wch: 10 }, // On Time
+    { wch: 22 }, // Backload Destination
+    { wch: 18 }, // Backload Offloading Date
+    { wch: 24 }, // Backload Quantities
+    { wch: 32 }, // Variance Reason
+    { wch: 14 }, // Subcontracted
+    { wch: 24 }, // Subcontractor
+    { wch: 28 }, // Subcontractor Cargo
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.writeFile(workbook, `${filename}.xlsx`);
+}

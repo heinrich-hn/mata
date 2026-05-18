@@ -213,9 +213,11 @@ const ManualDieselEntryModal = ({
         notes: editRecord.notes || '',
         currency: editRecord.currency || 'USD',
       });
-      // When editing, use the stored previous_km_reading
-      setPreviousKmReading(editRecord.previous_km_reading || null);
-      setPreviousKmDate(null); // We don't store this date when editing
+      // Do NOT seed from editRecord.previous_km_reading: the stored value can be stale
+      // (the prior fill-up may have been edited/deleted since this row was created). Reset
+      // and let the async fetchPreviousKmReading effect populate the authoritative value.
+      setPreviousKmReading(null);
+      setPreviousKmDate(null);
       // Reset fuel source to station when editing (bunker transactions can't be edited)
       setFuelSource('station');
       setSelectedBunkerId('');
@@ -404,277 +406,277 @@ const ManualDieselEntryModal = ({
       <div className="flex flex-col">
         <div className="flex-1 overflow-y-auto space-y-4 pr-2 max-h-[60vh]">
           {operationSuccess && (
-          <Alert className="bg-success/10 border-success">
-            <CheckCircle2 className="h-4 w-4 text-success" />
-            <AlertDescription className="text-success">
-              Diesel record saved successfully!
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {operationError && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{operationError}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label="Fleet Number"
-            value={formData.fleet_number}
-            onChange={(e) => setFormData({ ...formData, fleet_number: e.target.value })}
-            options={fleetOptions}
-            error={errors.fleet_number}
-            disabled={isProcessing}
-          />
-
-          <div className="space-y-2">
-            <Label>Date</Label>
-            <DatePicker
-              value={formData.date}
-              onChange={(date) => {
-                if (date) {
-                  // Use local date formatting to avoid timezone issues
-                  const year = date.getFullYear();
-                  const month = String(date.getMonth() + 1).padStart(2, '0');
-                  const day = String(date.getDate()).padStart(2, '0');
-                  setFormData({ ...formData, date: `${year}-${month}-${day}` });
-                } else {
-                  setFormData({ ...formData, date: '' });
-                }
-              }}
-              disabled={isProcessing}
-              placeholder="Select date"
-            />
-            {errors.date && <p className="text-sm text-destructive">{errors.date}</p>}
-          </div>
-
-          {/* Fuel Source Selection */}
-          <div className="md:col-span-2 space-y-3">
-            <label className="text-sm font-medium text-foreground">Fuel Source</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="fuelSource"
-                  value="station"
-                  checked={fuelSource === 'station'}
-                  onChange={() => {
-                    setFuelSource('station');
-                    setSelectedBunkerId('');
-                  }}
-                  disabled={isProcessing}
-                  className="w-4 h-4 text-primary"
-                />
-                <span className="text-sm">Filling Station</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="fuelSource"
-                  value="bunker"
-                  checked={fuelSource === 'bunker'}
-                  onChange={() => setFuelSource('bunker')}
-                  disabled={isProcessing}
-                  className="w-4 h-4 text-primary"
-                />
-                <span className="text-sm">Fuel Bunker</span>
-              </label>
-            </div>
-          </div>
-
-          {fuelSource === 'station' ? (
-            <div className="space-y-2">
-              <Label>Filling Station</Label>
-              <FuelStationSelect
-                value={formData.fuel_station}
-                onValueChange={(value) => setFormData({ ...formData, fuel_station: value })}
-                onPriceChange={(price, currency) => {
-                  if (price !== null && !formData.cost_per_litre) {
-                    // Auto-fill price if not already set
-                    setFormData(prev => ({
-                      ...prev,
-                      cost_per_litre: price.toString(),
-                      currency: currency,
-                    }));
-                  }
-                }}
-                error={errors.fuel_station}
-                disabled={isProcessing}
-                placeholder="Select or add filling station..."
-              />
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-foreground">Select Bunker</label>
-              <select
-                value={selectedBunkerId}
-                onChange={(e) => setSelectedBunkerId(e.target.value)}
-                disabled={isProcessing || isLoadingBunkers}
-                className="w-full px-3 py-2 border rounded-md bg-background text-foreground"
-              >
-                <option value="">Select a bunker...</option>
-                {bunkers?.map((bunker) => (
-                  <option key={bunker.id} value={bunker.id}>
-                    {bunker.name} - {bunker.location} ({bunker.current_level_liters?.toFixed(0) || 0}L available)
-                  </option>
-                ))}
-              </select>
-              {errors.bunker && (
-                <p className="text-sm text-destructive">{errors.bunker}</p>
-              )}
-              {selectedBunkerId && bunkers && (
-                <p className="text-xs text-muted-foreground">
-                  Available: {bunkers.find(b => b.id === selectedBunkerId)?.current_level_liters?.toFixed(0) || 0}L
-                </p>
-              )}
-            </div>
+            <Alert className="bg-success/10 border-success">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              <AlertDescription className="text-success">
+                Diesel record saved successfully!
+              </AlertDescription>
+            </Alert>
           )}
 
-          <div className="space-y-2">
-            <Label>Driver</Label>
-            <DriverSelect
-              value={formData.driver_name}
-              onValueChange={(value) => setFormData({ ...formData, driver_name: value })}
-              placeholder="Select driver"
-              allowCreate={true}
-              disabled={isProcessing}
-            />
-          </div>
+          {operationError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{operationError}</AlertDescription>
+            </Alert>
+          )}
 
-          <Input
-            label="Litres Filled"
-            type="number"
-            step="0.01"
-            value={formData.litres_filled}
-            onChange={(e) => setFormData({ ...formData, litres_filled: e.target.value })}
-            error={errors.litres_filled}
-            disabled={isProcessing}
-          />
-
-          <Input
-            label="Cost per Litre"
-            type="number"
-            step="0.01"
-            value={formData.cost_per_litre}
-            onChange={(e) => setFormData({ ...formData, cost_per_litre: e.target.value })}
-            disabled={isProcessing}
-          />
-
-          <div className="flex items-end gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
-              label="Currency"
-              value={formData.currency}
-              onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-              options={currencyOptions}
+              label="Fleet Number"
+              value={formData.fleet_number}
+              onChange={(e) => setFormData({ ...formData, fleet_number: e.target.value })}
+              options={fleetOptions}
+              error={errors.fleet_number}
               disabled={isProcessing}
-              className="w-24"
             />
-            <Input
-              label="Total Cost"
-              type="number"
-              step="0.01"
-              value={formData.total_cost}
-              onChange={(e) => setFormData({ ...formData, total_cost: e.target.value })}
-              error={errors.total_cost}
-              disabled={isProcessing}
-              className="flex-1"
-            />
-          </div>
 
-          <Input
-            label="KM Reading"
-            type="number"
-            value={formData.km_reading}
-            onChange={(e) => setFormData({ ...formData, km_reading: e.target.value })}
-            error={errors.km_reading}
-            disabled={isProcessing}
-          />
-
-          {/* Previous KM Reading - Auto-fetched from last fill-up */}
-          <div className="space-y-2 md:col-span-2">
-            <Label className="text-sm font-medium">Previous KM Reading</Label>
-            <div className="flex items-center h-10 px-3 border rounded-md bg-muted/50">
-              {isLoadingPreviousKm ? (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Loading...</span>
-                </div>
-              ) : previousKmReading !== null ? (
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{previousKmReading.toLocaleString()} km</span>
-                  {previousKmDate && (
-                    <span className="text-xs text-muted-foreground">
-                      from {new Date(previousKmDate).toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
-              ) : formData.fleet_number ? (
-                <span className="text-sm text-muted-foreground italic">No previous fill-up found</span>
-              ) : (
-                <span className="text-sm text-muted-foreground italic">Select a fleet number first</span>
-              )}
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <DatePicker
+                value={formData.date}
+                onChange={(date) => {
+                  if (date) {
+                    // Use local date formatting to avoid timezone issues
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    setFormData({ ...formData, date: `${year}-${month}-${day}` });
+                  } else {
+                    setFormData({ ...formData, date: '' });
+                  }
+                }}
+                disabled={isProcessing}
+                placeholder="Select date"
+              />
+              {errors.date && <p className="text-sm text-destructive">{errors.date}</p>}
             </div>
-            {previousKmReading !== null && formData.km_reading && (
-              <p className="text-xs text-muted-foreground">
-                Distance: {(parseInt(formData.km_reading) - previousKmReading).toLocaleString()} km
-              </p>
-            )}
-          </div>
-        </div>
 
-        {/* Efficiency Preview & Norm Check */}
-        {previousKmReading !== null && formData.km_reading && formData.litres_filled && (
-          (() => {
-            const distance = parseInt(formData.km_reading) - previousKmReading;
-            const litres = parseFloat(formData.litres_filled);
-            const kmPerLitre = litres > 0 && distance > 0 ? distance / litres : 0;
-            const normCheck = kmPerLitre > 0 ? checkNormViolation(kmPerLitre) : { exceeds: false, reason: '' };
+            {/* Fuel Source Selection */}
+            <div className="md:col-span-2 space-y-3">
+              <label className="text-sm font-medium text-foreground">Fuel Source</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="fuelSource"
+                    value="station"
+                    checked={fuelSource === 'station'}
+                    onChange={() => {
+                      setFuelSource('station');
+                      setSelectedBunkerId('');
+                    }}
+                    disabled={isProcessing}
+                    className="w-4 h-4 text-primary"
+                  />
+                  <span className="text-sm">Filling Station</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="fuelSource"
+                    value="bunker"
+                    checked={fuelSource === 'bunker'}
+                    onChange={() => setFuelSource('bunker')}
+                    disabled={isProcessing}
+                    className="w-4 h-4 text-primary"
+                  />
+                  <span className="text-sm">Fuel Bunker</span>
+                </label>
+              </div>
+            </div>
 
-            return (
-              <div className={`p-4 rounded-lg border-2 ${normCheck.exceeds ? 'border-destructive bg-destructive/10' : 'border-green-500 bg-green-500/10'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Calculated Efficiency</span>
-                  <span className={`text-lg font-bold ${normCheck.exceeds ? 'text-destructive' : 'text-green-600'}`}>
-                    {kmPerLitre.toFixed(2)} km/L
-                  </span>
-                </div>
-
-                {dieselNorm ? (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Fleet Norm: {dieselNorm.expected_km_per_litre.toFixed(2)} km/L</span>
-                      <span>Range: {dieselNorm.min_acceptable.toFixed(2)} - {dieselNorm.max_acceptable.toFixed(2)} km/L</span>
-                    </div>
-                    {normCheck.exceeds ? (
-                      <Alert variant="destructive" className="py-2">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          <strong>⚠️ Debrief Required:</strong> {normCheck.reason}
-                        </AlertDescription>
-                      </Alert>
-                    ) : kmPerLitre > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-green-600">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span>Consumption within acceptable range</span>
-                      </div>
-                    )}
-                  </div>
-                ) : isLoadingNorm ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    <span>Loading norm...</span>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">
-                    No diesel norm configured for this fleet number
+            {fuelSource === 'station' ? (
+              <div className="space-y-2">
+                <Label>Filling Station</Label>
+                <FuelStationSelect
+                  value={formData.fuel_station}
+                  onValueChange={(value) => setFormData({ ...formData, fuel_station: value })}
+                  onPriceChange={(price, currency) => {
+                    if (price !== null && !formData.cost_per_litre) {
+                      // Auto-fill price if not already set
+                      setFormData(prev => ({
+                        ...prev,
+                        cost_per_litre: price.toString(),
+                        currency: currency,
+                      }));
+                    }
+                  }}
+                  error={errors.fuel_station}
+                  disabled={isProcessing}
+                  placeholder="Select or add filling station..."
+                />
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground">Select Bunker</label>
+                <select
+                  value={selectedBunkerId}
+                  onChange={(e) => setSelectedBunkerId(e.target.value)}
+                  disabled={isProcessing || isLoadingBunkers}
+                  className="w-full px-3 py-2 border rounded-md bg-background text-foreground"
+                >
+                  <option value="">Select a bunker...</option>
+                  {bunkers?.map((bunker) => (
+                    <option key={bunker.id} value={bunker.id}>
+                      {bunker.name} - {bunker.location} ({bunker.current_level_liters?.toFixed(0) || 0}L available)
+                    </option>
+                  ))}
+                </select>
+                {errors.bunker && (
+                  <p className="text-sm text-destructive">{errors.bunker}</p>
+                )}
+                {selectedBunkerId && bunkers && (
+                  <p className="text-xs text-muted-foreground">
+                    Available: {bunkers.find(b => b.id === selectedBunkerId)?.current_level_liters?.toFixed(0) || 0}L
                   </p>
                 )}
               </div>
-            );
-          })()
-        )}
+            )}
+
+            <div className="space-y-2">
+              <Label>Driver</Label>
+              <DriverSelect
+                value={formData.driver_name}
+                onValueChange={(value) => setFormData({ ...formData, driver_name: value })}
+                placeholder="Select driver"
+                allowCreate={true}
+                disabled={isProcessing}
+              />
+            </div>
+
+            <Input
+              label="Litres Filled"
+              type="number"
+              step="0.01"
+              value={formData.litres_filled}
+              onChange={(e) => setFormData({ ...formData, litres_filled: e.target.value })}
+              error={errors.litres_filled}
+              disabled={isProcessing}
+            />
+
+            <Input
+              label="Cost per Litre"
+              type="number"
+              step="0.01"
+              value={formData.cost_per_litre}
+              onChange={(e) => setFormData({ ...formData, cost_per_litre: e.target.value })}
+              disabled={isProcessing}
+            />
+
+            <div className="flex items-end gap-2">
+              <Select
+                label="Currency"
+                value={formData.currency}
+                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                options={currencyOptions}
+                disabled={isProcessing}
+                className="w-24"
+              />
+              <Input
+                label="Total Cost"
+                type="number"
+                step="0.01"
+                value={formData.total_cost}
+                onChange={(e) => setFormData({ ...formData, total_cost: e.target.value })}
+                error={errors.total_cost}
+                disabled={isProcessing}
+                className="flex-1"
+              />
+            </div>
+
+            <Input
+              label="KM Reading"
+              type="number"
+              value={formData.km_reading}
+              onChange={(e) => setFormData({ ...formData, km_reading: e.target.value })}
+              error={errors.km_reading}
+              disabled={isProcessing}
+            />
+
+            {/* Previous KM Reading - Auto-fetched from last fill-up */}
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-sm font-medium">Previous KM Reading</Label>
+              <div className="flex items-center h-10 px-3 border rounded-md bg-muted/50">
+                {isLoadingPreviousKm ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Loading...</span>
+                  </div>
+                ) : previousKmReading !== null ? (
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{previousKmReading.toLocaleString()} km</span>
+                    {previousKmDate && (
+                      <span className="text-xs text-muted-foreground">
+                        from {new Date(previousKmDate).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                ) : formData.fleet_number ? (
+                  <span className="text-sm text-muted-foreground italic">No previous fill-up found</span>
+                ) : (
+                  <span className="text-sm text-muted-foreground italic">Select a fleet number first</span>
+                )}
+              </div>
+              {previousKmReading !== null && formData.km_reading && (
+                <p className="text-xs text-muted-foreground">
+                  Distance: {(parseInt(formData.km_reading) - previousKmReading).toLocaleString()} km
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Efficiency Preview & Norm Check */}
+          {previousKmReading !== null && formData.km_reading && formData.litres_filled && (
+            (() => {
+              const distance = parseInt(formData.km_reading) - previousKmReading;
+              const litres = parseFloat(formData.litres_filled);
+              const kmPerLitre = litres > 0 && distance > 0 ? distance / litres : 0;
+              const normCheck = kmPerLitre > 0 ? checkNormViolation(kmPerLitre) : { exceeds: false, reason: '' };
+
+              return (
+                <div className={`p-4 rounded-lg border-2 ${normCheck.exceeds ? 'border-destructive bg-destructive/10' : 'border-green-500 bg-green-500/10'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Calculated Efficiency</span>
+                    <span className={`text-lg font-bold ${normCheck.exceeds ? 'text-destructive' : 'text-green-600'}`}>
+                      {kmPerLitre.toFixed(2)} km/L
+                    </span>
+                  </div>
+
+                  {dieselNorm ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Fleet Norm: {dieselNorm.expected_km_per_litre.toFixed(2)} km/L</span>
+                        <span>Range: {dieselNorm.min_acceptable.toFixed(2)} - {dieselNorm.max_acceptable.toFixed(2)} km/L</span>
+                      </div>
+                      {normCheck.exceeds ? (
+                        <Alert variant="destructive" className="py-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-xs">
+                            <strong>⚠️ Debrief Required:</strong> {normCheck.reason}
+                          </AlertDescription>
+                        </Alert>
+                      ) : kmPerLitre > 0 && (
+                        <div className="flex items-center gap-2 text-xs text-green-600">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Consumption within acceptable range</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : isLoadingNorm ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Loading norm...</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">
+                      No diesel norm configured for this fleet number
+                    </p>
+                  )}
+                </div>
+              );
+            })()
+          )}
 
           <TextArea
             label="Notes"
@@ -689,8 +691,8 @@ const ManualDieselEntryModal = ({
           <Button variant="outline" onClick={onClose} disabled={isProcessing}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isProcessing}>
-            {isProcessing ? 'Saving...' : editRecord ? 'Update' : 'Save'}
+          <Button onClick={handleSave} disabled={isProcessing || isLoadingPreviousKm}>
+            {isProcessing ? 'Saving...' : isLoadingPreviousKm ? 'Loading…' : editRecord ? 'Update' : 'Save'}
           </Button>
         </div>
       </div>

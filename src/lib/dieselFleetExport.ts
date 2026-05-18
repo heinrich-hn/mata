@@ -2141,3 +2141,203 @@ export const generateYearlyWeeklyDieselExcel = async (
   a.click();
   URL.revokeObjectURL(url);
 };
+
+export interface DriverMonthlyExportInput {
+  /** Calendar year (e.g. 2026) */
+  year: number;
+  /** 1-12 calendar month */
+  month: number;
+  truckRecords: DieselExportRecord[];
+  reeferRecords: DieselExportRecord[];
+  /** Optional filter — when provided only these drivers are included */
+  drivers?: string[];
+}
+
+/**
+ * Generate a monthly Excel workbook with per-driver breakdown of diesel transactions.
+ * Sheets:
+ *   1. "Driver Summary"      — One row per driver with month totals (trucks + reefers).
+ *   2. "Truck Transactions"  — Per-driver sections of all truck fills in the month.
+ *   3. "Reefer Transactions" — Per-driver sections of all reefer fills in the month.
+ */
+export const generateDriverMonthlyDieselExcel = async (
+  input: DriverMonthlyExportInput,
+): Promise<void> => {
+  const { year, month, truckRecords, reeferRecords, drivers: driverFilter } = input;
+
+  const monthStartStr = `${year}-${String(month).padStart(2, '0')}-01`;
+  const monthEndDate = new Date(year, month, 0);
+  const monthEndStr = `${year}-${String(month).padStart(2, '0')}-${String(monthEndDate.getDate()).padStart(2, '0')}`;
+  const monthLabel = format(new Date(year, month - 1, 1), 'MMMM yyyy');
+
+  const inMonth = (r: DieselExportRecord) => r.date >= monthStartStr && r.date <= monthEndStr;
+  const driverKey = (r: DieselExportRecord) => (r.driver_name?.trim() || 'Unknown Driver');
+  const filterDriver = (name: string) => !driverFilter || driverFilter.length === 0 || driverFilter.includes(name);
+
+  const monthTrucks = truckRecords.filter(r => inMonth(r) && filterDriver(driverKey(r)));
+  const monthReefers = reeferRecords.filter(r => inMonth(r) && filterDriver(driverKey(r)));
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Car Craft Co — Fleet Management';
+  wb.created = new Date();
+  const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
+
+  /** Collect all unique drivers (across both record sets) sorted alphabetically. */
+  const allDrivers = Array.from(
+    new Set<string>([...monthTrucks.map(driverKey), ...monthReefers.map(driverKey)]),
+  ).sort((a, b) => a.localeCompare(b));
+
+  // ── Driver Summary Sheet ──────────────────────────────────────────────
+  const summaryHeaders = [
+    'Driver', 'Truck Fills', 'Truck Litres', 'Truck Distance (km)', 'Truck km/L', 'Truck Cost',
+    'Reefer Fills', 'Reefer Litres', 'Reefer Hours', 'Reefer L/H', 'Reefer Cost', 'Total Cost',
+  ];
+  const summaryCols = summaryHeaders.length;
+  const wsSum = wb.addWorksheet('Driver Summary');
+  wsSum.columns = [28, 10, 12, 16, 10, 14, 10, 12, 12, 10, 14, 14].map(w => ({ width: w }));
+  _xlSheetTitle(wsSum, `DRIVER MONTHLY DIESEL SUMMARY — ${monthLabel.toUpperCase()}`, `Generated: ${generatedOn}`, summaryCols);
+  _xlHeaders(wsSum, summaryHeaders);
+
+  let gTL = 0, gTC = 0, gTD = 0, gTF = 0, gRL = 0, gRC = 0, gRH = 0, gRF = 0;
+  allDrivers.forEach((drv, idx) => {
+    const tRecs = monthTrucks.filter(r => driverKey(r) === drv);
+    const rRecs = monthReefers.filter(r => driverKey(r) === drv);
+    const tLitres = tRecs.reduce((s, r) => s + (r.litres_filled || 0), 0);
+    const tCost = tRecs.reduce((s, r) => s + (r.total_cost || 0), 0);
+    const tDist = tRecs.reduce((s, r) => s + (r.distance_travelled || 0), 0);
+    const rLitres = rRecs.reduce((s, r) => s + (r.litres_filled || 0), 0);
+    const rCost = rRecs.reduce((s, r) => s + (r.total_cost || 0), 0);
+    const rHours = rRecs.reduce((s, r) => s + (r.hours_operated || 0), 0);
+
+    gTL += tLitres; gTC += tCost; gTD += tDist; gTF += tRecs.length;
+    gRL += rLitres; gRC += rCost; gRH += rHours; gRF += rRecs.length;
+
+    _xlDataRow(wsSum, [
+      drv,
+      tRecs.length || '',
+      tLitres ? n2(tLitres) : '',
+      tDist || '',
+      tDist && tLitres ? n3(tDist / tLitres) : '—',
+      tCost ? n2(tCost) : '',
+      rRecs.length || '',
+      rLitres ? n2(rLitres) : '',
+      rHours ? n2(rHours) : '',
+      rHours && rLitres ? n2(rLitres / rHours) : '—',
+      rCost ? n2(rCost) : '',
+      n2(tCost + rCost),
+    ], idx % 2 === 1);
+  });
+
+  if (allDrivers.length > 0) {
+    _xlTotalRow(wsSum, [
+      `TOTAL — ${allDrivers.length} driver(s)`,
+      gTF || '',
+      gTL ? n2(gTL) : '',
+      gTD || '',
+      gTD && gTL ? n3(gTD / gTL) : '—',
+      gTC ? n2(gTC) : '',
+      gRF || '',
+      gRL ? n2(gRL) : '',
+      gRH ? n2(gRH) : '',
+      gRH && gRL ? n2(gRL / gRH) : '—',
+      gRC ? n2(gRC) : '',
+      n2(gTC + gRC),
+    ]);
+  } else {
+    wsSum.addRow(['No transactions found for this month.']);
+  }
+  wsSum.views = [{ state: 'frozen', ySplit: 4 }];
+
+  // ── Truck Transactions Sheet (per driver sections) ────────────────────
+  const truckHeaders = ['Date', 'Fleet', 'Fuel Station', 'Litres', 'Cost/L', 'Total Cost', 'Currency', 'KM Reading', 'Distance', 'km/L', 'Notes'];
+  const truckCols = truckHeaders.length;
+  const wsT = wb.addWorksheet('Truck Transactions');
+  wsT.columns = [14, 10, 28, 12, 12, 14, 8, 12, 12, 8, 32].map(w => ({ width: w }));
+  _xlSheetTitle(wsT, `TRUCK DIESEL — BY DRIVER — ${monthLabel.toUpperCase()}`, `Generated: ${generatedOn}`, truckCols);
+
+  const truckDrivers = allDrivers.filter(d => monthTrucks.some(r => driverKey(r) === d));
+  truckDrivers.forEach(drv => {
+    const recs = monthTrucks
+      .filter(r => driverKey(r) === drv)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    _xlSection(wsT, `▸  ${drv}  —  ${recs.length} transaction(s)`, truckCols);
+    _xlHeaders(wsT, truckHeaders);
+
+    let wL = 0, wC = 0, wD = 0;
+    recs.forEach((r, i) => {
+      const litres = r.litres_filled || 0;
+      const cost = r.total_cost || 0;
+      const dist = r.distance_travelled || 0;
+      wL += litres; wC += cost; wD += dist;
+      _xlDataRow(wsT, [
+        r.date, r.fleet_number, r.fuel_station || '',
+        litres ? n2(litres) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '',
+        cost ? n2(cost) : '', r.currency || 'USD',
+        r.km_reading || '', dist || '', dist && litres ? n3(dist / litres) : '—',
+        (r.notes || '').replace(/[\t\n\r]/g, ' '),
+      ], i % 2 === 1);
+    });
+    _xlTotalRow(wsT, [
+      `${drv} Total`, '', '',
+      wL ? n2(wL) : '', '', wC ? n2(wC) : '', '',
+      '', wD || '', wD && wL ? n3(wD / wL) : '—', '',
+    ]);
+    wsT.addRow([]);
+  });
+  if (truckDrivers.length === 0) wsT.addRow(['No truck transactions for this month.']);
+  wsT.views = [{ state: 'frozen', ySplit: 4 }];
+
+  // ── Reefer Transactions Sheet (per driver sections) ───────────────────
+  const reeferHeaders = ['Date', 'Reefer Unit', 'Fuel Station', 'Litres', 'Cost/L', 'Total Cost', 'Currency', 'Op. Hours', 'Hrs Operated', 'L/H', 'Notes'];
+  const reeferCols = reeferHeaders.length;
+  const wsR = wb.addWorksheet('Reefer Transactions');
+  wsR.columns = [14, 14, 28, 12, 12, 14, 8, 14, 14, 8, 32].map(w => ({ width: w }));
+  _xlSheetTitle(wsR, `REEFER DIESEL — BY DRIVER — ${monthLabel.toUpperCase()}`, `Generated: ${generatedOn}`, reeferCols);
+
+  const reeferDrivers = allDrivers.filter(d => monthReefers.some(r => driverKey(r) === d));
+  reeferDrivers.forEach(drv => {
+    const recs = monthReefers
+      .filter(r => driverKey(r) === drv)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    _xlSection(wsR, `▸  ${drv}  —  ${recs.length} transaction(s)`, reeferCols, XC.cyan);
+    _xlHeaders(wsR, reeferHeaders, XC.cyan);
+
+    let wL = 0, wC = 0, wH = 0;
+    recs.forEach((r, i) => {
+      const litres = r.litres_filled || 0;
+      const cost = r.total_cost || 0;
+      const hrs = r.hours_operated || 0;
+      wL += litres; wC += cost; wH += hrs;
+      _xlDataRow(wsR, [
+        r.date, r.fleet_number, r.fuel_station || '',
+        litres ? n2(litres) : '', r.cost_per_litre ? n2(r.cost_per_litre) : '',
+        cost ? n2(cost) : '', r.currency || 'USD',
+        r.operating_hours ?? '', r.hours_operated ?? '',
+        hrs && litres ? n2(litres / hrs) : '—',
+        (r.notes || '').replace(/[\t\n\r]/g, ' '),
+      ], i % 2 === 1);
+    });
+    _xlTotalRow(wsR, [
+      `${drv} Total`, '', '',
+      wL ? n2(wL) : '', '', wC ? n2(wC) : '', '',
+      '', wH ? n2(wH) : '',
+      wH && wL ? n2(wL / wH) : '—', '',
+    ]);
+    wsR.addRow([]);
+  });
+  if (reeferDrivers.length === 0) wsR.addRow(['No reefer transactions for this month.']);
+  wsR.views = [{ state: 'frozen', ySplit: 4 }];
+
+  // ── Write buffer → browser download ───────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer as ArrayBuffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const monthFile = `${year}-${String(month).padStart(2, '0')}`;
+  a.download = `diesel-driver-monthly-${monthFile}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+};

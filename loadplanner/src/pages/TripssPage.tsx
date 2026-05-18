@@ -41,8 +41,9 @@ import {
   exportLoadsByVehicleExcel,
   exportLoadsByVehiclePdf,
 } from "@/lib/exportLoadsByVehicle";
-import { exportLoadsForDayPdf } from "@/lib/exportLoadsForDayPdf";
+import { exportLoadsForDayOnTimePdf, exportLoadsForDayPdf } from "@/lib/exportLoadsForDayPdf";
 import {
+  exportLoadsForDayOnTimeExcel,
   exportLoadsToExcel,
   exportLoadsToExcelSimplified,
 } from "@/lib/exportTripsToExcel";
@@ -143,6 +144,7 @@ export default function LoadsPage() {
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [weekFilter, setWeekFilter] = useState<WeekFilter>(getInitialWeekFilter);
   const [dayExportOpen, setDayExportOpen] = useState(false);
+  const [dayExportMode, setDayExportMode] = useState<"plan" | "ontime-excel" | "ontime-pdf">("plan");
   const [dayExportDate, setDayExportDate] = useState<string>(() =>
     format(new Date(), "yyyy-MM-dd"),
   );
@@ -234,11 +236,26 @@ export default function LoadsPage() {
 
   const handleConfirmDayExport = useCallback(() => {
     if (!dayExportDate || dayExportLoads.length === 0) return;
-    exportLoadsForDayPdf(dayExportLoads, dayExportDate, {
-      filename: `daily-load-plan-${dayExportDate}`,
-    });
+    if (dayExportMode === "ontime-excel") {
+      exportLoadsForDayOnTimeExcel(dayExportLoads, dayExportDate, {
+        filename: `daily-load-plan-on-time-${dayExportDate}`,
+      });
+    } else if (dayExportMode === "ontime-pdf") {
+      exportLoadsForDayOnTimePdf(dayExportLoads, dayExportDate, {
+        filename: `daily-load-plan-on-time-${dayExportDate}`,
+      });
+    } else {
+      exportLoadsForDayPdf(dayExportLoads, dayExportDate, {
+        filename: `daily-load-plan-${dayExportDate}`,
+      });
+    }
     setDayExportOpen(false);
-  }, [dayExportDate, dayExportLoads]);
+  }, [dayExportDate, dayExportLoads, dayExportMode]);
+
+  const openDayExport = useCallback((mode: "plan" | "ontime-excel" | "ontime-pdf") => {
+    setDayExportMode(mode);
+    setDayExportOpen(true);
+  }, []);
 
   // Render helpers
   const noAssignedVehicles = assignedLoads.length === 0;
@@ -269,7 +286,17 @@ export default function LoadsPage() {
       },
       {
         label: "Day Plan — PDF (pick a day)",
-        onClick: () => setDayExportOpen(true),
+        onClick: () => openDayExport("plan"),
+        icon: CalendarDays,
+      },
+      {
+        label: "Day On-Time — Excel (pick a day)",
+        onClick: () => openDayExport("ontime-excel"),
+        icon: CalendarDays,
+      },
+      {
+        label: "Day On-Time — PDF (pick a day)",
+        onClick: () => openDayExport("ontime-pdf"),
         icon: CalendarDays,
       },
     ];
@@ -354,11 +381,16 @@ export default function LoadsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4" />
-              Export Day Plan to PDF
+              {dayExportMode === "ontime-excel"
+                ? "Export Day On-Time to Excel"
+                : dayExportMode === "ontime-pdf"
+                  ? "Export Day On-Time to PDF"
+                  : "Export Day Plan to PDF"}
             </DialogTitle>
             <DialogDescription>
-              Pick a loading date. The PDF will include every load scheduled to
-              load on that day, grouped by vehicle.
+              {dayExportMode === "plan"
+                ? "Pick a loading date. The PDF will include every load scheduled to load on that day, grouped by vehicle."
+                : "Pick a loading date. The report shows every load scheduled to load on that day with a single On Time column (Yes if no leg is more than 15 minutes late)."}
             </DialogDescription>
           </DialogHeader>
 
@@ -386,8 +418,17 @@ export default function LoadsPage() {
               disabled={!dayExportDate || dayExportLoads.length === 0}
               className="gap-2"
             >
-              <FileText className="h-4 w-4" />
-              Export PDF
+              {dayExportMode === "ontime-excel" ? (
+                <>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export Excel
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4" />
+                  Export PDF
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

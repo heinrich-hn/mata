@@ -8,12 +8,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useDriverPerformanceSummary } from "@/hooks/useDriverBehaviorEvents";
+import { useDriverBehaviorEvents, useDriverPerformanceSummary } from "@/hooks/useDriverBehaviorEvents";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { AlertTriangle, CheckCircle, Download, FileSpreadsheet, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, CalendarRange, CheckCircle, Download, FileSpreadsheet, TrendingDown, TrendingUp, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   Bar,
@@ -80,6 +80,7 @@ const formatRiskPct = (avg: number | null | undefined): string => {
 
 const DriverPerformanceSummary = () => {
   const { data: driverSummaries = [], isLoading } = useDriverPerformanceSummary();
+  const { data: allEvents = [] } = useDriverBehaviorEvents();
   const [selectedDriver, setSelectedDriver] = useState<string>("all");
 
   // Chart data for severity distribution
@@ -598,6 +599,259 @@ const DriverPerformanceSummary = () => {
     );
   };
 
+  // ───── Monthly scores export (driver × month) ─────
+  const handleExportMonthlyExcel = async () => {
+    if (!allEvents || allEvents.length === 0) return;
+
+    const events = selectedDriver === "all"
+      ? allEvents
+      : allEvents.filter(e => e.driver_name === selectedDriver);
+    if (events.length === 0) return;
+
+    type MonthBucket = {
+      total_events: number;
+      critical_events: number;
+      high_events: number;
+      medium_events: number;
+      low_events: number;
+      open_events: number;
+      resolved_events: number;
+      total_points: number;
+      risk_score_total: number;
+      risk_score_count: number;
+    };
+    const emptyBucket = (): MonthBucket => ({
+      total_events: 0, critical_events: 0, high_events: 0, medium_events: 0, low_events: 0,
+      open_events: 0, resolved_events: 0, total_points: 0, risk_score_total: 0, risk_score_count: 0,
+    });
+
+    // driver -> month (YYYY-MM) -> bucket
+    const matrix = new Map<string, Map<string, MonthBucket>>();
+
+    for (const e of events) {
+      if (!e.event_date) continue;
+      const month = e.event_date.slice(0, 7); // YYYY-MM
+      const driver = e.driver_name || "Unknown";
+      if (!matrix.has(driver)) matrix.set(driver, new Map());
+      const months = matrix.get(driver)!;
+      if (!months.has(month)) months.set(month, emptyBucket());
+      const b = months.get(month)!;
+
+      b.total_events++;
+      b.total_points += e.points || 0;
+      const sev = (e.severity || "medium").toLowerCase();
+      if (sev === "critical") b.critical_events++;
+      else if (sev === "high") b.high_events++;
+      else if (sev === "medium") b.medium_events++;
+      else b.low_events++;
+      const status = (e.status || "open").toLowerCase();
+      if (status === "open" || status === "pending") b.open_events++;
+      else b.resolved_events++;
+      if (typeof e.risk_score === "number") {
+        b.risk_score_total += e.risk_score;
+        b.risk_score_count++;
+      }
+    }
+
+    const drivers = Array.from(matrix.keys()).sort((a, b) => a.localeCompare(b));
+    const monthLabel = (m: string) => {
+      const [y, mo] = m.split("-");
+      const d = new Date(Number(y), Number(mo) - 1, 1);
+      return d.toLocaleString("en-GB", { month: "short", year: "numeric" });
+    };
+    const generatedAt = new Date().toLocaleString("en-GB", {
+      day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+    const scopeLabel = selectedDriver === "all"
+      ? `All Drivers (${drivers.length})`
+      : selectedDriver;
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "MATA Fleet Management";
+    wb.created = new Date();
+
+    // ───── Index sheet: scope + driver list ─────
+    const index = wb.addWorksheet("Index", { properties: { tabColor: { argb: XC.navy } } });
+    index.columns = [{ width: 6 }, { width: 36 }, { width: 14 }, { width: 14 }, { width: 14 }];
+
+    const iTitle = index.addRow(["Monthly Driver Performance"]);
+    index.mergeCells(`A${iTitle.number}:E${iTitle.number}`);
+    xlFill(iTitle.getCell(1), XC.navy);
+    xlFont(iTitle.getCell(1), true, 16, XC.white);
+    iTitle.height = 26;
+    iTitle.getCell(1).alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+
+    const iSub = index.addRow([`Scope: ${scopeLabel}    •    Generated: ${generatedAt}`]);
+    index.mergeCells(`A${iSub.number}:E${iSub.number}`);
+    xlFill(iSub.getCell(1), XC.subtitleBg);
+    xlFont(iSub.getCell(1), false, 10, XC.grayText);
+    iSub.getCell(1).alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+    iSub.height = 18;
+
+    index.addRow([]);
+
+    const iHead = index.addRow(["#", "Driver", "Total Events", "Total Points", "Avg Risk"]);
+    iHead.height = 22;
+    iHead.eachCell(cell => {
+      xlFill(cell, XC.navy);
+      xlFont(cell, true, 10, XC.white);
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+      xlBorder(cell);
+    });
+
+    // Track sheet names per driver for hyperlinks
+    const usedNames = new Set<string>();
+    const sanitizeSheetName = (raw: string) => {
+      let name = raw.replace(/[\\/?*[\]:]/g, " ").trim().slice(0, 31) || "Driver";
+      let i = 2;
+      const base = name;
+      while (usedNames.has(name)) {
+        const suffix = ` (${i++})`;
+        name = base.slice(0, 31 - suffix.length) + suffix;
+      }
+      usedNames.add(name);
+      return name;
+    };
+
+    // Build a sheet per driver
+    drivers.forEach((driver, idx) => {
+      const monthsForDriver = matrix.get(driver)!;
+      const sortedMonths = Array.from(monthsForDriver.keys()).sort();
+      const sheetName = sanitizeSheetName(driver);
+
+      const ws = wb.addWorksheet(sheetName, { properties: { tabColor: { argb: XC.purple } } });
+      ws.columns = [
+        { width: 14 }, { width: 9 }, { width: 10 }, { width: 9 }, { width: 10 },
+        { width: 9 }, { width: 9 }, { width: 11 }, { width: 10 }, { width: 11 }, { width: 10 },
+      ];
+
+      const t = ws.addRow([driver]);
+      ws.mergeCells(`A${t.number}:K${t.number}`);
+      xlFill(t.getCell(1), XC.navy);
+      xlFont(t.getCell(1), true, 16, XC.white);
+      t.height = 26;
+      t.getCell(1).alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+
+      const sub = ws.addRow([`Monthly performance    •    Generated: ${generatedAt}`]);
+      ws.mergeCells(`A${sub.number}:K${sub.number}`);
+      xlFill(sub.getCell(1), XC.subtitleBg);
+      xlFont(sub.getCell(1), false, 10, XC.grayText);
+      sub.getCell(1).alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      sub.height = 18;
+
+      ws.addRow([]);
+
+      const head = ws.addRow([
+        "Month", "Total", "Critical", "High", "Medium", "Low",
+        "Open", "Resolved", "Points", "Avg Risk", "Risk %",
+      ]);
+      head.height = 22;
+      head.eachCell(cell => {
+        xlFill(cell, XC.navy);
+        xlFont(cell, true, 10, XC.white);
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        xlBorder(cell);
+      });
+
+      // Totals across driver
+      const tot = {
+        total_events: 0, critical: 0, high: 0, medium: 0, low: 0,
+        open: 0, resolved: 0, points: 0, risk_total: 0, risk_count: 0,
+      };
+
+      sortedMonths.forEach((m, i) => {
+        const b = monthsForDriver.get(m)!;
+        const avgRisk = b.risk_score_count > 0 ? b.risk_score_total / b.risk_score_count : null;
+        const r = ws.addRow([
+          monthLabel(m),
+          b.total_events,
+          b.critical_events,
+          b.high_events,
+          b.medium_events,
+          b.low_events,
+          b.open_events,
+          b.resolved_events,
+          b.total_points,
+          avgRisk != null ? Number(avgRisk.toFixed(2)) : "—",
+          formatRiskPct(avgRisk),
+        ]);
+        const isAlt = i % 2 === 1;
+        r.eachCell((cell, colNumber) => {
+          if (isAlt) xlFill(cell, XC.altRow);
+          cell.alignment = { vertical: "middle", horizontal: colNumber === 1 ? "left" : "center" };
+          xlFont(cell, colNumber === 1 || colNumber === 9 || colNumber === 10 || colNumber === 11, 10, XC.darkText);
+          xlBorder(cell);
+        });
+        if (b.critical_events > 0) xlFont(r.getCell(3), true, 10, XC.red);
+        if (avgRisk != null) {
+          xlFont(r.getCell(10), true, 10, XC.purple);
+          xlFont(r.getCell(11), true, 10, XC.purple);
+        }
+
+        tot.total_events += b.total_events;
+        tot.critical += b.critical_events;
+        tot.high += b.high_events;
+        tot.medium += b.medium_events;
+        tot.low += b.low_events;
+        tot.open += b.open_events;
+        tot.resolved += b.resolved_events;
+        tot.points += b.total_points;
+        tot.risk_total += b.risk_score_total;
+        tot.risk_count += b.risk_score_count;
+      });
+
+      const overallAvg = tot.risk_count > 0 ? tot.risk_total / tot.risk_count : null;
+      const totalsRow = ws.addRow([
+        "TOTAL",
+        tot.total_events, tot.critical, tot.high, tot.medium, tot.low,
+        tot.open, tot.resolved, tot.points,
+        overallAvg != null ? Number(overallAvg.toFixed(2)) : "—",
+        formatRiskPct(overallAvg),
+      ]);
+      totalsRow.eachCell((cell, colNumber) => {
+        xlFill(cell, XC.totalBg);
+        xlFont(cell, true, 11, XC.totalText);
+        cell.alignment = { vertical: "middle", horizontal: colNumber === 1 ? "left" : "center" };
+        xlBorder(cell);
+      });
+
+      ws.views = [{ state: "frozen", ySplit: 4 }];
+
+      // Index row with hyperlink to driver sheet
+      const ir = index.addRow([
+        idx + 1,
+        driver,
+        tot.total_events,
+        tot.points,
+        overallAvg != null ? Number(overallAvg.toFixed(2)) : "—",
+      ]);
+      const isAlt = idx % 2 === 1;
+      ir.eachCell((cell, colNumber) => {
+        if (isAlt) xlFill(cell, XC.altRow);
+        cell.alignment = { vertical: "middle", horizontal: colNumber === 2 ? "left" : "center" };
+        xlFont(cell, colNumber === 2, 10, XC.darkText);
+        xlBorder(cell);
+      });
+      const linkCell = ir.getCell(2);
+      linkCell.value = {
+        text: driver,
+        hyperlink: `#'${sheetName.replace(/'/g, "''")}'!A1`,
+      };
+      xlFont(linkCell, true, 10, XC.blue);
+      linkCell.alignment = { vertical: "middle", horizontal: "left" };
+    });
+
+    index.views = [{ state: "frozen", ySplit: 4 }];
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const fileScope = selectedDriver === "all" ? "all-drivers" : selectedDriver.replace(/\s+/g, "-").toLowerCase();
+    const filename = `driver-monthly-scores-${fileScope}-${new Date().toISOString().split("T")[0]}.xlsx`;
+    saveAs(
+      new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      filename,
+    );
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -659,6 +913,16 @@ const DriverPerformanceSummary = () => {
               >
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Export Excel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportMonthlyExcel}
+                disabled={allEvents.length === 0}
+                title="Export per-driver scores grouped by month"
+              >
+                <CalendarRange className="h-4 w-4 mr-2" />
+                Export Monthly
               </Button>
               <Button
                 variant="outline"
