@@ -29,6 +29,9 @@ import type { DieselConsumptionRecord, DieselNorms } from '@/types/operations';
 import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, ChevronsUpDown, DollarSign, Edit, Eye, FileSpreadsheet, FileText, Filter, Fuel, Link, List, Plus, Settings, Snowflake, Trash2, Truck, User, X } from 'lucide-react';
 import { type ComponentProps, useCallback, useEffect, useMemo, useState } from 'react';
 import BatchDebriefModal, { type BatchDebriefData } from '@/components/diesel/BatchDebriefModal';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import { headerFill, headerFont, headerAlign, thinBorder, altRowFill, bodyFont, bodyAlign } from '@/utils/excelStyles';
 
 const isReeferFleet = (fleet?: string | null) => !!fleet && fleet.toUpperCase().trim().endsWith('F');
 
@@ -506,50 +509,35 @@ const DieselManagement = () => {
     return { totalLitres, totalCost, totalDistance, avgKmL, count: records.length, pendingDebrief };
   };
 
-  const exportAllTransactionsToExcel = () => {
-    // Create Excel-compatible CSV with all transaction details
-    const headers = [
-      'Date',
-      'Fleet Number',
-      'Driver',
-      'Fuel Station',
-      'Litres Filled',
-      'Cost per Litre',
-      'Total Cost',
-      'Currency',
-      'KM Reading',
-      'Previous KM',
-      'Distance Travelled',
-      'km/L',
-      'Debrief Status',
-      'Debrief Required',
-      'Debriefed By',
-      'Debrief Date',
-      'Debrief Reason',
-      'Notes',
-      'Trip ID',
-      'Probe Verified',
-    ].join('\t');
+  const exportAllTransactionsToExcel = async (grouping: 'none' | 'month' | 'week' = 'none') => {
+    const HEADERS = [
+      'Date', 'Fleet Number', 'Driver', 'Fuel Station',
+      'Litres Filled', 'Cost per Litre', 'Total Cost', 'Currency',
+      'KM Reading', 'Previous KM', 'Distance Travelled', 'km/L',
+      'Debrief Status', 'Debrief Required', 'Debriefed By', 'Debrief Date',
+      'Debrief Reason', 'Notes', 'Trip ID', 'Probe Verified',
+    ];
+    const COL_WIDTHS = [12, 12, 22, 22, 12, 12, 12, 10, 12, 12, 14, 10, 14, 12, 18, 12, 28, 30, 14, 12];
+    const NUMERIC_COLS = new Set([5, 6, 7, 9, 10, 11, 12]); // 1-based column indices
 
-    const rows = dieselRecords.map(record => {
+    const recordToRow = (record: DieselConsumptionRecord) => {
       const kmPerLitre = record.distance_travelled && record.litres_filled
-        ? (record.distance_travelled / record.litres_filled).toFixed(2)
-        : '';
+        ? Math.round((record.distance_travelled / record.litres_filled) * 100) / 100
+        : null;
       const norm = getNormForFleet(record.fleet_number);
-      const requiresDebrief = kmPerLitre && norm && parseFloat(kmPerLitre) < norm.min_acceptable;
-
+      const requiresDebrief = !!(kmPerLitre && norm && kmPerLitre < norm.min_acceptable);
       return [
         record.date,
         record.fleet_number,
         record.driver_name || '',
         record.fuel_station || '',
-        record.litres_filled?.toFixed(2) || '',
-        record.cost_per_litre?.toFixed(2) || '',
-        record.total_cost?.toFixed(2) || '',
+        record.litres_filled ?? null,
+        record.cost_per_litre ?? null,
+        record.total_cost ?? null,
         record.currency || 'USD',
-        record.km_reading || '',
-        record.previous_km_reading || '',
-        record.distance_travelled || '',
+        record.km_reading ?? null,
+        record.previous_km_reading ?? null,
+        record.distance_travelled ?? null,
         kmPerLitre,
         record.debrief_signed ? 'Completed' : (requiresDebrief ? 'Pending' : 'Not Required'),
         requiresDebrief ? 'Yes' : 'No',
@@ -559,16 +547,166 @@ const DieselManagement = () => {
         (record.notes || '').replace(/[\t\n\r]/g, ' '),
         record.trip_id || '',
         record.probe_verified ? 'Yes' : 'No',
-      ].join('\t');
+      ];
+    };
+
+    const groupKey = (record: DieselConsumptionRecord): { key: string; label: string } => {
+      if (!record.date) return { key: 'unknown', label: 'Unknown' };
+      const d = new Date(record.date);
+      if (grouping === 'month') {
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
+        return { key, label };
+      }
+      // week (ISO-like): Monday-start week
+      const tmp = new Date(d);
+      const day = tmp.getDay();
+      const diff = tmp.getDate() - day + (day === 0 ? -6 : 1);
+      tmp.setDate(diff);
+      tmp.setHours(0, 0, 0, 0);
+      const end = new Date(tmp);
+      end.setDate(end.getDate() + 6);
+      const key = tmp.toISOString().split('T')[0];
+      const fmt: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+      const label = `${tmp.toLocaleDateString('en-ZA', fmt)} – ${end.toLocaleDateString('en-ZA', fmt)}`;
+      return { key, label };
+    };
+
+    // Sort by date ascending for consistent grouping
+    const sorted = [...dieselRecords].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'MATA Fleet';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Diesel Transactions', {
+      views: [{ state: 'frozen', ySplit: 4 }],
     });
 
-    // Use tab-separated values for better Excel compatibility
-    const tsvContent = '\uFEFF' + headers + '\n' + rows.join('\n'); // BOM for Excel UTF-8
-    const blob = new Blob([tsvContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `diesel_transactions_${new Date().toISOString().split('T')[0]}.xls`;
-    link.click();
+    ws.columns = COL_WIDTHS.map(w => ({ width: w }));
+
+    // Title row
+    const groupingLabel = grouping === 'month' ? 'Grouped by Month' : grouping === 'week' ? 'Grouped by Week' : 'All Transactions';
+    const titleRow = ws.addRow(['MATA Diesel Transactions Report']);
+    ws.mergeCells(titleRow.number, 1, titleRow.number, HEADERS.length);
+    titleRow.getCell(1).font = { bold: true, size: 14, color: { argb: 'FFFFFF' }, name: 'Calibri' };
+    titleRow.getCell(1).fill = headerFill;
+    titleRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    titleRow.height = 22;
+
+    const metaRow = ws.addRow([`${groupingLabel}  •  Generated ${new Date().toLocaleString('en-ZA')}  •  ${sorted.length} record(s)`]);
+    ws.mergeCells(metaRow.number, 1, metaRow.number, HEADERS.length);
+    metaRow.getCell(1).font = { italic: true, size: 9, color: { argb: '666666' }, name: 'Calibri' };
+    metaRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    ws.addRow([]); // spacer
+
+    const headerRow = ws.addRow(HEADERS);
+    headerRow.height = 22;
+    headerRow.eachCell(cell => {
+      cell.fill = headerFill;
+      cell.font = headerFont;
+      cell.alignment = headerAlign;
+      cell.border = thinBorder;
+    });
+
+    let stripeIdx = 0;
+    const writeDataRow = (values: ReturnType<typeof recordToRow>) => {
+      const row = ws.addRow(values);
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.font = bodyFont;
+        cell.alignment = bodyAlign;
+        cell.border = thinBorder;
+        if (stripeIdx % 2 === 1) cell.fill = altRowFill;
+        if (NUMERIC_COLS.has(colNumber)) {
+          cell.alignment = { ...bodyAlign, horizontal: 'right' };
+          if (colNumber === 6 || colNumber === 7) cell.numFmt = '#,##0.00';
+          else if (colNumber === 5 || colNumber === 12) cell.numFmt = '0.00';
+          else cell.numFmt = '#,##0';
+        }
+      });
+      stripeIdx += 1;
+    };
+
+    const writeSubtotal = (label: string, records: DieselConsumptionRecord[]) => {
+      const totalLitres = records.reduce((s, r) => s + (r.litres_filled || 0), 0);
+      const totalCost = records.reduce((s, r) => s + (r.total_cost || 0), 0);
+      const totalDistance = records.reduce((s, r) => s + (r.distance_travelled || 0), 0);
+      const avgKmL = totalLitres > 0 ? totalDistance / totalLitres : null;
+      const row = ws.addRow([
+        label, '', '', `Subtotal (${records.length})`,
+        Math.round(totalLitres * 100) / 100, '', Math.round(totalCost * 100) / 100, '',
+        '', '', Math.round(totalDistance * 100) / 100, avgKmL ? Math.round(avgKmL * 100) / 100 : '',
+        '', '', '', '', '', '', '', '',
+      ]);
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.font = { ...bodyFont, bold: true, color: { argb: '1F3864' } };
+        cell.alignment = NUMERIC_COLS.has(colNumber) ? { ...bodyAlign, horizontal: 'right' } : bodyAlign;
+        cell.border = thinBorder;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E8EEF7' } };
+        if (colNumber === 6 || colNumber === 7) cell.numFmt = '#,##0.00';
+        else if (colNumber === 5 || colNumber === 12) cell.numFmt = '0.00';
+        else if (NUMERIC_COLS.has(colNumber)) cell.numFmt = '#,##0';
+      });
+      stripeIdx = 0; // reset stripe after a subtotal
+    };
+
+    if (grouping === 'none') {
+      sorted.forEach(r => writeDataRow(recordToRow(r)));
+    } else {
+      const groups = new Map<string, { label: string; records: DieselConsumptionRecord[] }>();
+      sorted.forEach(r => {
+        const { key, label } = groupKey(r);
+        if (!groups.has(key)) groups.set(key, { label, records: [] });
+        groups.get(key)!.records.push(r);
+      });
+      const orderedKeys = [...groups.keys()].sort();
+      orderedKeys.forEach(key => {
+        const { label, records } = groups.get(key)!;
+        // Group banner row
+        const banner = ws.addRow([label]);
+        ws.mergeCells(banner.number, 1, banner.number, HEADERS.length);
+        banner.getCell(1).font = { bold: true, size: 11, color: { argb: 'FFFFFF' }, name: 'Calibri' };
+        banner.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2E5AA8' } };
+        banner.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        banner.height = 18;
+        stripeIdx = 0;
+        records.forEach(r => writeDataRow(recordToRow(r)));
+        writeSubtotal(label, records);
+        ws.addRow([]); // spacer between groups
+      });
+    }
+
+    // Grand total
+    const grandLitres = sorted.reduce((s, r) => s + (r.litres_filled || 0), 0);
+    const grandCost = sorted.reduce((s, r) => s + (r.total_cost || 0), 0);
+    const grandDistance = sorted.reduce((s, r) => s + (r.distance_travelled || 0), 0);
+    const grandKmL = grandLitres > 0 ? grandDistance / grandLitres : null;
+    const grandRow = ws.addRow([
+      'GRAND TOTAL', '', '', `${sorted.length} record(s)`,
+      Math.round(grandLitres * 100) / 100, '', Math.round(grandCost * 100) / 100, '',
+      '', '', Math.round(grandDistance * 100) / 100, grandKmL ? Math.round(grandKmL * 100) / 100 : '',
+      '', '', '', '', '', '', '', '',
+    ]);
+    grandRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.font = { ...headerFont, size: 10 };
+      cell.fill = headerFill;
+      cell.alignment = NUMERIC_COLS.has(colNumber) ? { ...headerAlign, horizontal: 'right' } : headerAlign;
+      cell.border = thinBorder;
+      if (colNumber === 6 || colNumber === 7) cell.numFmt = '#,##0.00';
+      else if (colNumber === 5 || colNumber === 12) cell.numFmt = '0.00';
+      else if (NUMERIC_COLS.has(colNumber)) cell.numFmt = '#,##0';
+    });
+
+    // Autofilter on the header row
+    ws.autoFilter = {
+      from: { row: headerRow.number, column: 1 },
+      to: { row: headerRow.number, column: HEADERS.length },
+    };
+
+    const buf = await wb.xlsx.writeBuffer();
+    const suffix = grouping === 'none' ? 'all' : `by_${grouping}`;
+    const filename = `diesel_transactions_${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
   };
 
 
@@ -873,14 +1011,29 @@ const DieselManagement = () => {
                 <Snowflake className="h-4 w-4" />
                 Add Reefer Entry
               </Button>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={exportAllTransactionsToExcel}
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                Export All to Excel
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Export to Excel
+                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuItem onClick={() => exportAllTransactionsToExcel('none')}>
+                    <List className="h-4 w-4 mr-2" />
+                    All Transactions
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportAllTransactionsToExcel('month')}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Grouped by Month
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportAllTransactionsToExcel('week')}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Grouped by Week
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               {viewMode === 'list' && (
                 <FleetFilterCombobox
                   value={listFleetFilter}

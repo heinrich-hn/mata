@@ -54,6 +54,8 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ExcelJS from "exceljs";
@@ -83,6 +85,8 @@ type OvertimeRow = OvertimeEntry & {
 export default function OvertimeApprovalTab() {
     const queryClient = useQueryClient();
     const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [monthFilter, setMonthFilter] = useState<string>("all");
+    const [inspectorFilter, setInspectorFilter] = useState<string>("all");
     const [search, setSearch] = useState("");
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editing, setEditing] = useState<OvertimeEntry | null>(null);
@@ -108,10 +112,40 @@ export default function OvertimeApprovalTab() {
         },
     });
 
+    const entryMonth = (e: OvertimeRow) =>
+        e.entry_mode === "monthly"
+            ? (e.month || (e.date ? e.date.slice(0, 7) : ""))
+            : (e.date ? e.date.slice(0, 7) : "");
+
+    const entryInspectorKey = (e: OvertimeRow) =>
+        e.inspector_id || e.inspector_name || "unknown";
+
+    const monthOptions = useMemo(() => {
+        const set = new Set<string>();
+        entries.forEach((e) => {
+            const m = entryMonth(e);
+            if (m) set.add(m);
+        });
+        return Array.from(set).sort((a, b) => b.localeCompare(a));
+    }, [entries]);
+
+    const inspectorOptions = useMemo(() => {
+        const map = new Map<string, string>();
+        entries.forEach((e) => {
+            const key = entryInspectorKey(e);
+            if (!map.has(key)) map.set(key, e.inspector_name || "Unknown");
+        });
+        return Array.from(map.entries())
+            .map(([key, name]) => ({ key, name }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [entries]);
+
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return entries.filter((e) => {
             if (statusFilter !== "all" && e.status !== statusFilter) return false;
+            if (monthFilter !== "all" && entryMonth(e) !== monthFilter) return false;
+            if (inspectorFilter !== "all" && entryInspectorKey(e) !== inspectorFilter) return false;
             if (!q) return true;
             return (
                 (e.inspector_name || "").toLowerCase().includes(q) ||
@@ -120,7 +154,7 @@ export default function OvertimeApprovalTab() {
                 (e.job_card?.job_number || "").toLowerCase().includes(q)
             );
         });
-    }, [entries, search, statusFilter]);
+    }, [entries, search, statusFilter, monthFilter, inspectorFilter]);
 
     const stats = useMemo(() => {
         const pending = entries.filter((e) => e.status === "pending").length;
@@ -315,16 +349,54 @@ export default function OvertimeApprovalTab() {
         return LINK_LABEL[e.link_type || ""] || "Other";
     };
 
-    const exportFileBase = () =>
-        `overtime-${new Date().toISOString().slice(0, 10)}${statusFilter !== "all" ? "-" + statusFilter : ""
-        }`;
-
-    const exportExcel = async () => {
-        if (filtered.length === 0) {
-            toast.error("Nothing to export");
-            return;
+    const exportFileBase = () => {
+        const parts: string[] = ["overtime"];
+        if (monthFilter !== "all") parts.push(monthFilter);
+        if (inspectorFilter !== "all") {
+            const name = inspectorOptions.find((o) => o.key === inspectorFilter)?.name || "inspector";
+            parts.push(name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
         }
-        const groups = groupByInspector(filtered);
+        if (statusFilter !== "all") parts.push(statusFilter);
+        parts.push(new Date().toISOString().slice(0, 10));
+        return parts.filter(Boolean).join("-");
+    };
+
+    const filterSummary = () => {
+        const parts: string[] = [];
+        parts.push(`Status: ${statusFilter === "all" ? "All" : statusFilter}`);
+        parts.push(
+            `Month: ${monthFilter === "all"
+                ? "All"
+                : format(new Date(`${monthFilter}-01`), "MMM yyyy")
+            }`
+        );
+        const inspectorName =
+            inspectorFilter === "all"
+                ? "All"
+                : inspectorOptions.find((o) => o.key === inspectorFilter)?.name || "Unknown";
+        parts.push(`Inspector: ${inspectorName}`);
+        return parts.join(" \u00B7 ");
+    };
+
+    const slugify = (s: string) =>
+        s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "report";
+
+    const computeStatsFor = (rows: OvertimeRow[]) => {
+        const pending = rows.filter((e) => e.status === "pending").length;
+        const approved = rows.filter((e) => e.status === "approved").length;
+        const rejected = rows.filter((e) => e.status === "rejected").length;
+        const totalHours = rows
+            .filter((e) => e.status === "approved")
+            .reduce((s, e) => s + (Number(e.hours) || 0), 0);
+        return { pending, approved, rejected, totalHours };
+    };
+
+    const buildExcelBlob = async (
+        rows: OvertimeRow[],
+        scopeLabel: string
+    ): Promise<Blob> => {
+        const groups = groupByInspector(rows);
+        const localStats = computeStatsFor(rows);
         const wb = new ExcelJS.Workbook();
         wb.creator = "MATA Fleet";
         wb.created = new Date();
@@ -347,19 +419,18 @@ export default function OvertimeApprovalTab() {
 
         summary.mergeCells("A2:F2");
         const subtitle = summary.getCell("A2");
-        subtitle.value = `Generated ${format(new Date(), "yyyy-MM-dd HH:mm")} · Status: ${statusFilter === "all" ? "All" : statusFilter
-            } · ${filtered.length} entries`;
+        subtitle.value = `Generated ${format(new Date(), "yyyy-MM-dd HH:mm")} \u00B7 ${scopeLabel} \u00B7 ${rows.length} entries`;
         subtitle.font = { name: "Calibri", size: 10, italic: true, color: { argb: "FF64748B" } };
 
         // KPI block
         summary.getCell("A4").value = "Pending entries";
-        summary.getCell("B4").value = stats.pending;
+        summary.getCell("B4").value = localStats.pending;
         summary.getCell("A5").value = "Approved entries";
-        summary.getCell("B5").value = stats.approved;
+        summary.getCell("B5").value = localStats.approved;
         summary.getCell("A6").value = "Rejected entries";
-        summary.getCell("B6").value = stats.rejected;
+        summary.getCell("B6").value = localStats.rejected;
         summary.getCell("A7").value = "Approved hours";
-        summary.getCell("B7").value = Number(stats.totalHours.toFixed(2));
+        summary.getCell("B7").value = Number(localStats.totalHours.toFixed(2));
         ["A4", "A5", "A6", "A7"].forEach((c) => {
             summary.getCell(c).font = { bold: true };
         });
@@ -414,7 +485,7 @@ export default function OvertimeApprovalTab() {
         // Totals row
         const totalRow = tableHeaderRow + 1 + groups.length;
         summary.getCell(totalRow, 1).value = "TOTAL";
-        summary.getCell(totalRow, 2).value = filtered.length;
+        summary.getCell(totalRow, 2).value = rows.length;
         summary.getCell(totalRow, 3).value = Number(
             groups.reduce((s, g) => s + g.pendingHours, 0).toFixed(2)
         );
@@ -547,21 +618,14 @@ export default function OvertimeApprovalTab() {
         });
 
         const buf = await wb.xlsx.writeBuffer();
-        saveAs(
-            new Blob([buf], {
-                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            }),
-            `${exportFileBase()}.xlsx`
-        );
-        toast.success("Excel export ready");
+        return new Blob([buf], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
     };
 
-    const exportPdf = () => {
-        if (filtered.length === 0) {
-            toast.error("Nothing to export");
-            return;
-        }
-        const groups = groupByInspector(filtered);
+    const buildPdfBlob = (rows: OvertimeRow[], scopeLabel: string): Blob => {
+        const groups = groupByInspector(rows);
+        const localStats = computeStatsFor(rows);
         const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
         const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -575,8 +639,7 @@ export default function OvertimeApprovalTab() {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
         doc.text(
-            `Generated ${format(new Date(), "yyyy-MM-dd HH:mm")}  ·  Status: ${statusFilter === "all" ? "All" : statusFilter
-            }  ·  ${filtered.length} entries`,
+            `Generated ${format(new Date(), "yyyy-MM-dd HH:mm")}  \u00B7  ${scopeLabel}  \u00B7  ${rows.length} entries`,
             14,
             19
         );
@@ -584,10 +647,10 @@ export default function OvertimeApprovalTab() {
 
         // KPI strip
         const kpis = [
-            { label: "Pending", value: String(stats.pending) },
-            { label: "Approved", value: String(stats.approved) },
-            { label: "Rejected", value: String(stats.rejected) },
-            { label: "Approved hrs", value: stats.totalHours.toFixed(2) },
+            { label: "Pending", value: String(localStats.pending) },
+            { label: "Approved", value: String(localStats.approved) },
+            { label: "Rejected", value: String(localStats.rejected) },
+            { label: "Approved hrs", value: localStats.totalHours.toFixed(2) },
         ];
         const kpiY = 28;
         const kpiW = (pageWidth - 28 - (kpis.length - 1) * 4) / kpis.length;
@@ -621,7 +684,7 @@ export default function OvertimeApprovalTab() {
             foot: [
                 [
                     "TOTAL",
-                    String(filtered.length),
+                    String(rows.length),
                     groups.reduce((s, g) => s + g.pendingHours, 0).toFixed(2),
                     groups.reduce((s, g) => s + g.approvedHours, 0).toFixed(2),
                     groups.reduce((s, g) => s + g.rejectedHours, 0).toFixed(2),
@@ -712,8 +775,114 @@ export default function OvertimeApprovalTab() {
             );
         }
 
-        doc.save(`${exportFileBase()}.pdf`);
-        toast.success("PDF export ready");
+        return doc.output("blob") as Blob;
+    };
+
+    type ExportSet = { rows: OvertimeRow[]; suffix: string; label: string };
+
+    const buildSetsForCurrent = (): ExportSet[] => [
+        { rows: filtered, suffix: exportFileBase(), label: filterSummary() },
+    ];
+
+    const buildSetsPerMonth = (): ExportSet[] => {
+        const byMonth = new Map<string, OvertimeRow[]>();
+        filtered.forEach((e) => {
+            const m = entryMonth(e) || "unknown";
+            if (!byMonth.has(m)) byMonth.set(m, []);
+            byMonth.get(m)!.push(e);
+        });
+        return Array.from(byMonth.entries())
+            .sort(([a], [b]) => b.localeCompare(a))
+            .map(([m, rows]) => {
+                const monthLabel =
+                    m && m !== "unknown" ? format(new Date(`${m}-01`), "MMM yyyy") : "Unknown month";
+                const parts: string[] = ["overtime", m];
+                if (inspectorFilter !== "all") {
+                    const name = inspectorOptions.find((o) => o.key === inspectorFilter)?.name || "inspector";
+                    parts.push(slugify(name));
+                }
+                if (statusFilter !== "all") parts.push(statusFilter);
+                return {
+                    rows,
+                    suffix: parts.filter(Boolean).join("-"),
+                    label: `Month: ${monthLabel} \u00B7 Status: ${statusFilter === "all" ? "All" : statusFilter}`,
+                };
+            });
+    };
+
+    const buildSetsPerInspector = (): ExportSet[] => {
+        const byInspector = new Map<string, { name: string; rows: OvertimeRow[] }>();
+        filtered.forEach((e) => {
+            const key = entryInspectorKey(e);
+            if (!byInspector.has(key)) {
+                byInspector.set(key, { name: e.inspector_name || "Unknown", rows: [] });
+            }
+            byInspector.get(key)!.rows.push(e);
+        });
+        return Array.from(byInspector.values())
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(({ name, rows }) => {
+                const parts: string[] = ["overtime", slugify(name)];
+                if (monthFilter !== "all") parts.push(monthFilter);
+                if (statusFilter !== "all") parts.push(statusFilter);
+                return {
+                    rows,
+                    suffix: parts.filter(Boolean).join("-"),
+                    label: `Inspector: ${name} \u00B7 Month: ${monthFilter === "all"
+                        ? "All"
+                        : format(new Date(`${monthFilter}-01`), "MMM yyyy")
+                        } \u00B7 Status: ${statusFilter === "all" ? "All" : statusFilter}`,
+                };
+            });
+    };
+
+    const saveSetsExcel = async (sets: ExportSet[], successMsg: string) => {
+        if (sets.length === 0 || sets.every((s) => s.rows.length === 0)) {
+            toast.error("Nothing to export");
+            return;
+        }
+        for (const s of sets) {
+            if (s.rows.length === 0) continue;
+            const blob = await buildExcelBlob(s.rows, s.label);
+            saveAs(blob, `${s.suffix}.xlsx`);
+        }
+        toast.success(successMsg);
+    };
+
+    const saveSetsPdf = (sets: ExportSet[], successMsg: string) => {
+        if (sets.length === 0 || sets.every((s) => s.rows.length === 0)) {
+            toast.error("Nothing to export");
+            return;
+        }
+        for (const s of sets) {
+            if (s.rows.length === 0) continue;
+            const blob = buildPdfBlob(s.rows, s.label);
+            saveAs(blob, `${s.suffix}.pdf`);
+        }
+        toast.success(successMsg);
+    };
+
+    const exportExcel = () =>
+        void saveSetsExcel(buildSetsForCurrent(), "Excel export ready");
+    const exportPdf = () =>
+        saveSetsPdf(buildSetsForCurrent(), "PDF export ready");
+
+    const exportExcelPerMonth = () => {
+        const sets = buildSetsPerMonth();
+        void saveSetsExcel(sets, `${sets.length} monthly Excel file${sets.length === 1 ? "" : "s"} downloaded`);
+    };
+    const exportPdfPerMonth = () => {
+        const sets = buildSetsPerMonth();
+        saveSetsPdf(sets, `${sets.length} monthly PDF${sets.length === 1 ? "" : "s"} downloaded`);
+    };
+
+    const exportExcelPerInspector = () => {
+        const sets = buildSetsPerInspector();
+        void saveSetsExcel(sets, `${sets.length} per-inspector Excel file${sets.length === 1 ? "" : "s"} downloaded`);
+    };
+    const exportPdfPerInspector = () => {
+        const sets = buildSetsPerInspector();
+        saveSetsPdf(sets, `${sets.length} per-inspector PDF${sets.length === 1 ? "" : "s"} downloaded`);
     };
 
     return (
@@ -731,6 +900,32 @@ export default function OvertimeApprovalTab() {
                         placeholder="Search inspector, reason, JC#…"
                         className="h-9 w-[260px] bg-background"
                     />
+                    <Select value={monthFilter} onValueChange={setMonthFilter}>
+                        <SelectTrigger className="h-9 w-[150px] bg-background">
+                            <SelectValue placeholder="Month" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All months</SelectItem>
+                            {monthOptions.map((m) => (
+                                <SelectItem key={m} value={m}>
+                                    {format(new Date(`${m}-01`), "MMM yyyy")}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={inspectorFilter} onValueChange={setInspectorFilter}>
+                        <SelectTrigger className="h-9 w-[180px] bg-background">
+                            <SelectValue placeholder="Inspector" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All inspectors</SelectItem>
+                            {inspectorOptions.map((o) => (
+                                <SelectItem key={o.key} value={o.key}>
+                                    {o.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger className="h-9 w-[140px] bg-background">
                             <SelectValue />
@@ -757,7 +952,10 @@ export default function OvertimeApprovalTab() {
                                 <Download className="h-4 w-4 mr-1.5" /> Export
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-64">
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                Combined (current filters)
+                            </DropdownMenuLabel>
                             <DropdownMenuItem onSelect={() => void exportExcel()}>
                                 <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
                                 Excel (.xlsx)
@@ -765,6 +963,30 @@ export default function OvertimeApprovalTab() {
                             <DropdownMenuItem onSelect={() => exportPdf()}>
                                 <FileText className="h-4 w-4 mr-2 text-rose-600" />
                                 PDF (.pdf)
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                Separate file per month
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => exportExcelPerMonth()}>
+                                <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+                                Excel per month
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => exportPdfPerMonth()}>
+                                <FileText className="h-4 w-4 mr-2 text-rose-600" />
+                                PDF per month
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                Separate file per inspector
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => exportExcelPerInspector()}>
+                                <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+                                Excel per inspector
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => exportPdfPerInspector()}>
+                                <FileText className="h-4 w-4 mr-2 text-rose-600" />
+                                PDF per inspector
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

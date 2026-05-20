@@ -21,6 +21,7 @@ import React, { useEffect, useState } from 'react';
 import { extractRegistrationNumber } from "@/constants/fleetTyreConfig";
 import FleetTyreLayoutDiagram from "../tyres/FleetTyreLayoutDiagram";
 import VehicleEquipmentList from "../tools/VehicleEquipmentList";
+import VehicleFinesSection from "./VehicleFinesSection";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 interface Vehicle {
@@ -422,6 +423,7 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
             <TabsTrigger value="compliance">Compliance</TabsTrigger>
             <TabsTrigger value="tyres" disabled={!vehicle.fleetNumber}>Tyres</TabsTrigger>
             <TabsTrigger value="equipment">Equipment</TabsTrigger>
+            <TabsTrigger value="fines">Fines</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>
           </TabsList>
           <TabsContent value="general">
@@ -916,6 +918,9 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
                 <VehicleEquipmentList vehicleId={vehicle.id} />
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="fines">
+            <VehicleFinesSection vehicleId={vehicle.id} />
           </TabsContent>
         </Tabs>
       </DialogContent>
