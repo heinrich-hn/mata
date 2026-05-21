@@ -46,6 +46,7 @@ import {
   exportLoadsForDayOnTimeExcel,
   exportLoadsToExcel,
   exportLoadsToExcelSimplified,
+  exportLoadsWithUnverifiedTimesToExcel,
 } from "@/lib/exportTripsToExcel";
 
 // Types
@@ -192,6 +193,10 @@ export default function LoadsPage() {
     exportTimeComparisonToExcel(filteredLoads, getWeekInfo());
   }, [filteredLoads, getWeekInfo]);
 
+  const handleExportUnverifiedTimes = useCallback(() => {
+    exportLoadsWithUnverifiedTimesToExcel(filteredLoads, getWeekInfo());
+  }, [filteredLoads, getWeekInfo]);
+
   const assignedLoads = useMemo(
     () => filteredLoads.filter((l) => !!l.fleet_vehicle_id),
     [filteredLoads],
@@ -270,6 +275,11 @@ export default function LoadsPage() {
       {
         label: "Time Comparison (Planned vs Actual)",
         onClick: handleExportTimeComparison,
+        icon: Clock,
+      },
+      {
+        label: "Unverified / Missing Times",
+        onClick: handleExportUnverifiedTimes,
         icon: Clock,
       },
       {

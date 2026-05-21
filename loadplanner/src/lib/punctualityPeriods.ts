@@ -24,6 +24,13 @@ export interface PunctualityPeriodBucket {
     onTime: number;
     late: number;
     early: number;
+    // Breakdown counts (denominator is the matching *Measured field).
+    // Arrivals: on-time = variance ≤ 15m (early counts as on-time), late = > 15m.
+    // Departures: early = < -15m, late = > 15m.
+    oaOnTime: number; oaLate: number; oaMeasured: number;
+    daOnTime: number; daLate: number; daMeasured: number;
+    odEarly: number; odLate: number; odMeasured: number;
+    ddEarly: number; ddLate: number; ddMeasured: number;
 }
 
 function variance(planned?: string | null, actual?: string | null): number | null {
@@ -97,7 +104,11 @@ export function bucketPunctuality(
         const dd: Array<number | null> = [];
         let onTime = 0;
         let late = 0;
-        let early = 0;
+        const early = 0;
+        let oaOnTime = 0, oaLate = 0, oaMeasured = 0;
+        let daOnTime = 0, daLate = 0, daMeasured = 0;
+        let odEarly = 0, odLate = 0, odMeasured = 0;
+        let ddEarly = 0, ddLate = 0, ddMeasured = 0;
         for (const l of bLoads) {
             const tw = timeWindowLib.parseTimeWindowOrNull(l.time_window);
             if (!tw) continue;
@@ -109,12 +120,16 @@ export function bucketPunctuality(
             od.push(odV);
             da.push(daV);
             dd.push(ddV);
-            // Classify by destination arrival variance (primary punctuality KPI)
+            // Classify by destination arrival variance (primary punctuality KPI).
+            // Early arrivals are treated as on-time per business rule.
             if (daV !== null) {
                 if (daV > 15) late++;
-                else if (daV < -5) early++;
                 else onTime++;
             }
+            if (oaV !== null) { oaMeasured++; if (oaV > 15) oaLate++; else oaOnTime++; }
+            if (daV !== null) { daMeasured++; if (daV > 15) daLate++; else daOnTime++; }
+            if (odV !== null) { odMeasured++; if (odV < -15) odEarly++; else if (odV > 15) odLate++; }
+            if (ddV !== null) { ddMeasured++; if (ddV < -15) ddEarly++; else if (ddV > 15) ddLate++; }
         }
         buckets.push({
             key,
@@ -128,6 +143,10 @@ export function bucketPunctuality(
             onTime,
             late,
             early,
+            oaOnTime, oaLate, oaMeasured,
+            daOnTime, daLate, daMeasured,
+            odEarly, odLate, odMeasured,
+            ddEarly, ddLate, ddMeasured,
         });
     }
 
@@ -144,6 +163,10 @@ export interface PunctualityTotals {
     onTime: number;
     late: number;
     early: number;
+    oaOnTime: number; oaLate: number; oaMeasured: number;
+    daOnTime: number; daLate: number; daMeasured: number;
+    odEarly: number; odLate: number; odMeasured: number;
+    ddEarly: number; ddLate: number; ddMeasured: number;
 }
 
 export function computeTotals(loads: Load[]): PunctualityTotals {
@@ -153,7 +176,11 @@ export function computeTotals(loads: Load[]): PunctualityTotals {
     const dd: Array<number | null> = [];
     let onTime = 0;
     let late = 0;
-    let early = 0;
+    const early = 0;
+    let oaOnTime = 0, oaLate = 0, oaMeasured = 0;
+    let daOnTime = 0, daLate = 0, daMeasured = 0;
+    let odEarly = 0, odLate = 0, odMeasured = 0;
+    let ddEarly = 0, ddLate = 0, ddMeasured = 0;
     for (const l of loads) {
         const tw = timeWindowLib.parseTimeWindowOrNull(l.time_window);
         if (!tw) continue;
@@ -167,9 +194,12 @@ export function computeTotals(loads: Load[]): PunctualityTotals {
         dd.push(ddV);
         if (daV !== null) {
             if (daV > 15) late++;
-            else if (daV < -5) early++;
             else onTime++;
         }
+        if (oaV !== null) { oaMeasured++; if (oaV > 15) oaLate++; else oaOnTime++; }
+        if (daV !== null) { daMeasured++; if (daV > 15) daLate++; else daOnTime++; }
+        if (odV !== null) { odMeasured++; if (odV < -15) odEarly++; else if (odV > 15) odLate++; }
+        if (ddV !== null) { ddMeasured++; if (ddV < -15) ddEarly++; else if (ddV > 15) ddLate++; }
     }
     return {
         count: loads.length,
@@ -180,10 +210,20 @@ export function computeTotals(loads: Load[]): PunctualityTotals {
         onTime,
         late,
         early,
+        oaOnTime, oaLate, oaMeasured,
+        daOnTime, daLate, daMeasured,
+        odEarly, odLate, odMeasured,
+        ddEarly, ddLate, ddMeasured,
     };
 }
 
 export function fmtMin(v: number | null): string {
     if (v === null) return "—";
     return v.toFixed(1);
+}
+
+/** Format a percentage given numerator/denominator. Returns "—" when denominator is 0. */
+export function fmtPct(num: number, denom: number): string {
+    if (!denom) return "—";
+    return `${((num / denom) * 100).toFixed(1)}%`;
 }

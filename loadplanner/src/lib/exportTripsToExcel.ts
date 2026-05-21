@@ -12,6 +12,28 @@ import {
   xlSectionHeader,
   applyHeaderStyle, applyTitleRows,
 } from "@/lib/exportStyles";
+// `DateChangeEntry` describes a single audit entry recorded when a load's
+// loading_date or offloading_date is edited. The history is appended to
+// `time_window.dateChangeHistory` and rendered into exports by
+// `formatDateChangeHistory` below.
+import type { DateChangeEntry } from "@/types/Trips";
+
+// Format a load's date-change history into a single human-readable cell.
+function formatDateChangeHistory(history: DateChangeEntry[] | undefined): string {
+  if (!history || history.length === 0) return "";
+  return history
+    .map((e) => {
+      const fieldLabel = e.field === "loading_date" ? "Loading" : "Offloading";
+      let when = "";
+      try {
+        when = format(parseISO(e.changedAt), "dd/MM/yyyy HH:mm");
+      } catch {
+        when = e.changedAt;
+      }
+      return `[${when}] ${fieldLabel}: ${e.oldValue} → ${e.newValue} — ${e.reason}`;
+    })
+    .join("\n");
+}
 
 // Status labels
 const statusLabels: Record<string, string> = {
@@ -337,6 +359,7 @@ export function exportLoadsToExcel(
     { wch: 18 }, // Backload Offloading Date
     { wch: 25 }, // Backload Quantities
     { wch: 40 }, // Variance Reason
+    { wch: 50 }, // Date Change Reasons
     { wch: 14 }, // Subcontracted
     { wch: 24 }, // Subcontractor
     { wch: 28 }, // Subcontractor Cargo
@@ -502,6 +525,7 @@ export function exportLoadsToExcelSimplified(
         "Backload Destination": timeWindow.backload?.destination || "",
         "Backload Offloading Date": timeWindow.backload?.offloadingDate || "",
         "Backload Quantities": backloadQuantities,
+        "Date Change Reasons": formatDateChangeHistory(timeWindow.dateChangeHistory),
       },
     };
   });
@@ -596,6 +620,7 @@ export function exportLoadsToExcelSimplified(
     { wch: 20 }, // Backload Destination
     { wch: 18 }, // Backload Offloading Date
     { wch: 25 }, // Backload Quantities
+    { wch: 50 }, // Date Change Reasons
   ];
   worksheet["!cols"] = columnWidths;
 
@@ -616,6 +641,177 @@ export function exportWeeklyLoadsToExcelSimplified(
     filename: `loads-simplified-week-${weekNumber}-${year}`,
     sheetName: `Week ${weekNumber}`,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Unverified / Missing Times export
+// ---------------------------------------------------------------------------
+// Lists every load that has at least one actual time that is either missing
+// (no value recorded) or unverified (recorded automatically by geofence but
+// not yet confirmed by an operator). Each of the four actual time slots gets
+// its own value column plus a status column ("Missing" / "Unverified" /
+// "Verified") so reviewers can quickly see what still needs attention.
+
+type TimeSlotKey =
+  | "actual_loading_arrival"
+  | "actual_loading_departure"
+  | "actual_offloading_arrival"
+  | "actual_offloading_departure";
+
+const TIME_SLOTS: Array<{ key: TimeSlotKey; verifiedKey: `${TimeSlotKey}_verified`; sourceKey: `${TimeSlotKey}_source`; label: string }> = [
+  { key: "actual_loading_arrival", verifiedKey: "actual_loading_arrival_verified", sourceKey: "actual_loading_arrival_source", label: "Loading Arrival" },
+  { key: "actual_loading_departure", verifiedKey: "actual_loading_departure_verified", sourceKey: "actual_loading_departure_source", label: "Loading Departure" },
+  { key: "actual_offloading_arrival", verifiedKey: "actual_offloading_arrival_verified", sourceKey: "actual_offloading_arrival_source", label: "Offloading Arrival" },
+  { key: "actual_offloading_departure", verifiedKey: "actual_offloading_departure_verified", sourceKey: "actual_offloading_departure_source", label: "Offloading Departure" },
+];
+
+function getTimeSlotStatus(load: Load, slot: typeof TIME_SLOTS[number]): "Missing" | "Unverified" | "Verified" {
+  const value = load[slot.key];
+  if (!value) return "Missing";
+  return load[slot.verifiedKey] ? "Verified" : "Unverified";
+}
+
+function formatActualTime(value: string | null | undefined): string {
+  if (!value) return "";
+  try {
+    return format(parseISO(value), "dd/MM/yyyy HH:mm");
+  } catch {
+    return value;
+  }
+}
+
+export function exportLoadsWithUnverifiedTimesToExcel(
+  loads: Load[],
+  options: ExportOptions = {},
+): void {
+  const weekNum = options.weekNumber ?? getWeek(new Date(), { weekStartsOn: 1 });
+  const yr = options.year ?? new Date().getFullYear();
+  const {
+    filename = `loads-unverified-times-week-${weekNum}-${yr}`,
+    sheetName = `Unverified Times W${weekNum}`,
+  } = options;
+
+  // Only loads with at least one missing or unverified actual time
+  const flagged = loads.filter((load) =>
+    TIME_SLOTS.some((slot) => getTimeSlotStatus(load, slot) !== "Verified"),
+  );
+
+  const rows = flagged.map((load) => {
+    const slotResults = TIME_SLOTS.map((slot) => ({
+      slot,
+      status: getTimeSlotStatus(load, slot),
+      value: formatActualTime(load[slot.key] as string | null | undefined),
+      source: (load[slot.sourceKey] as string | undefined) ?? "",
+    }));
+
+    const issues = slotResults.filter((r) => r.status !== "Verified");
+
+    return {
+      load,
+      row: {
+        "Load ID": load.load_id,
+        Status: statusLabels[getEffectiveStatus(load)] || load.status,
+        Origin: load.origin,
+        Destination: load.destination,
+        Vehicle: load.fleet_vehicle?.vehicle_id || "",
+        "Loading Date": format(parseISO(load.loading_date), "dd/MM/yyyy"),
+        "Offloading Date": format(parseISO(load.offloading_date), "dd/MM/yyyy"),
+        "Loading Arrival": slotResults[0].value,
+        "Loading Arrival Status": slotResults[0].status,
+        "Loading Arrival Source": slotResults[0].source,
+        "Loading Departure": slotResults[1].value,
+        "Loading Departure Status": slotResults[1].status,
+        "Loading Departure Source": slotResults[1].source,
+        "Offloading Arrival": slotResults[2].value,
+        "Offloading Arrival Status": slotResults[2].status,
+        "Offloading Arrival Source": slotResults[2].source,
+        "Offloading Departure": slotResults[3].value,
+        "Offloading Departure Status": slotResults[3].status,
+        "Offloading Departure Source": slotResults[3].source,
+        "Issues": issues.length,
+        "Missing / Unverified": issues
+          .map((r) => `${r.slot.label}: ${r.status}`)
+          .join("; "),
+      },
+    };
+  });
+
+  // Sort by loading date ascending
+  rows.sort((a, b) => a.load.loading_date.localeCompare(b.load.loading_date));
+
+  const titleRow = [`${COMPANY_NAME} — Unverified / Missing Times — Week ${weekNum}, ${yr}`];
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet([titleRow, [], []]);
+
+  if (rows.length === 0) {
+    XLSX.utils.sheet_add_aoa(worksheet, [["No loads with missing or unverified times for this period."]], {
+      origin: { r: 3, c: 0 },
+    });
+    applyTitleRows(worksheet, 1, []);
+    emphasizeTitleRow(worksheet, 1);
+    worksheet["!cols"] = [{ wch: 80 }];
+    worksheet["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 3, c: 0 } });
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.writeFile(workbook, `${filename}.xlsx`);
+    return;
+  }
+
+  const columnKeys = Object.keys(rows[0].row) as string[];
+  const colCount = columnKeys.length;
+  const merges: XLSX.Range[] = [];
+
+  XLSX.utils.sheet_add_aoa(worksheet, [columnKeys], { origin: { r: 3, c: 0 } });
+  applyTitleRows(worksheet, colCount, merges);
+  emphasizeTitleRow(worksheet, colCount);
+  applyHeaderStyle(worksheet, 3, colCount);
+
+  const statusColIndices = columnKeys
+    .map((k, i) => (k.endsWith("Status") ? i : -1))
+    .filter((i) => i >= 0);
+
+  let r = 4;
+  rows.forEach((item) => {
+    const values = columnKeys.map((k) => (item.row as Record<string, string | number>)[k]);
+    XLSX.utils.sheet_add_aoa(worksheet, [values], { origin: { r, c: 0 } });
+
+    // Tint each *Status* cell based on its value
+    statusColIndices.forEach((c) => {
+      const cellRef = XLSX.utils.encode_cell({ r, c });
+      const cell = worksheet[cellRef];
+      if (!cell) return;
+      const v = String(cell.v ?? "");
+      if (v === "Missing") cell.s = xlBadVariance;
+      else if (v === "Unverified") cell.s = xlNeutralVariance;
+      else if (v === "Verified") cell.s = xlGoodVariance;
+    });
+
+    r += 1;
+  });
+
+  worksheet["!merges"] = merges;
+  worksheet["!ref"] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: Math.max(r - 1, 3), c: colCount - 1 },
+  });
+
+  worksheet["!cols"] = [
+    { wch: 15 }, // Load ID
+    { wch: 14 }, // Status
+    { wch: 20 }, // Origin
+    { wch: 20 }, // Destination
+    { wch: 12 }, // Vehicle
+    { wch: 12 }, // Loading Date
+    { wch: 14 }, // Offloading Date
+    { wch: 18 }, { wch: 12 }, { wch: 10 }, // Loading Arrival x3
+    { wch: 18 }, { wch: 12 }, { wch: 10 }, // Loading Departure x3
+    { wch: 18 }, { wch: 12 }, { wch: 10 }, // Offloading Arrival x3
+    { wch: 18 }, { wch: 12 }, { wch: 10 }, // Offloading Departure x3
+    { wch: 8 },  // Issues count
+    { wch: 60 }, // Missing / Unverified summary
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.writeFile(workbook, `${filename}.xlsx`);
 }
 
 // ---------------------------------------------------------------------------

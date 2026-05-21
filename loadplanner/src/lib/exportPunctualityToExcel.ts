@@ -12,6 +12,7 @@ import {
 import {
   bucketPunctuality,
   computeTotals,
+  fmtPct,
   viewLabel,
   viewSlug,
   type PunctualityView,
@@ -61,9 +62,23 @@ export function exportPunctualityToExcel(
     ["Avg Origin Departure Variance (min)", fmt(totals.avgOriginDep)],
     ["Avg Destination Arrival Variance (min)", fmt(totals.avgDestArr)],
     ["Avg Destination Departure Variance (min)", fmt(totals.avgDestDep)],
-    ["On-Time Loads (|var| ≤ 15m)", totals.onTime],
+    ["On-Time Loads (early or ≤15m late)", totals.onTime],
     ["Late Loads (>15m)", totals.late],
-    ["Early Loads (<-5m)", totals.early],
+    ["% On-Time (overall)", fmtPct(totals.onTime, totals.daMeasured)],
+    ["% Late (overall)", fmtPct(totals.late, totals.daMeasured)],
+    [],
+    ["Loading Point Arrivals", ""],
+    ["% On-Time at Loading", fmtPct(totals.oaOnTime, totals.oaMeasured)],
+    ["% Late at Loading", fmtPct(totals.oaLate, totals.oaMeasured)],
+    ["Destination Arrivals", ""],
+    ["% On-Time at Destination", fmtPct(totals.daOnTime, totals.daMeasured)],
+    ["% Late at Destination", fmtPct(totals.daLate, totals.daMeasured)],
+    ["Origin Departures", ""],
+    ["% Early Departures (Origin)", fmtPct(totals.odEarly, totals.odMeasured)],
+    ["% Late Departures (Origin)", fmtPct(totals.odLate, totals.odMeasured)],
+    ["Destination Departures", ""],
+    ["% Early Departures (Destination)", fmtPct(totals.ddEarly, totals.ddMeasured)],
+    ["% Late Departures (Destination)", fmtPct(totals.ddLate, totals.ddMeasured)],
   ];
   const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
   applyTitleRows(summaryWs, 2, []);
@@ -83,7 +98,16 @@ export function exportPunctualityToExcel(
       "Avg D-Dep (m)",
       "On-Time",
       "Late",
-      "Early",
+      "% On-Time",
+      "% Late",
+      "% On-Time @ Loading",
+      "% Late @ Loading",
+      "% On-Time @ Dest",
+      "% Late @ Dest",
+      "% Early Dep Origin",
+      "% Late Dep Origin",
+      "% Early Dep Dest",
+      "% Late Dep Dest",
     ];
     const periodAoa: (string | number)[][] = [
       [`${COMPANY_NAME} — Punctuality ${viewLabel(view)} Breakdown`],
@@ -101,7 +125,16 @@ export function exportPunctualityToExcel(
         fmt(b.avgDestDep),
         b.onTime,
         b.late,
-        b.early,
+        fmtPct(b.daOnTime, b.daMeasured),
+        fmtPct(b.daLate, b.daMeasured),
+        fmtPct(b.oaOnTime, b.oaMeasured),
+        fmtPct(b.oaLate, b.oaMeasured),
+        fmtPct(b.daOnTime, b.daMeasured),
+        fmtPct(b.daLate, b.daMeasured),
+        fmtPct(b.odEarly, b.odMeasured),
+        fmtPct(b.odLate, b.odMeasured),
+        fmtPct(b.ddEarly, b.ddMeasured),
+        fmtPct(b.ddLate, b.ddMeasured),
       ]);
     }
     periodAoa.push([
@@ -113,7 +146,16 @@ export function exportPunctualityToExcel(
       fmt(totals.avgDestDep),
       totals.onTime,
       totals.late,
-      totals.early,
+      fmtPct(totals.daOnTime, totals.daMeasured),
+      fmtPct(totals.daLate, totals.daMeasured),
+      fmtPct(totals.oaOnTime, totals.oaMeasured),
+      fmtPct(totals.oaLate, totals.oaMeasured),
+      fmtPct(totals.daOnTime, totals.daMeasured),
+      fmtPct(totals.daLate, totals.daMeasured),
+      fmtPct(totals.odEarly, totals.odMeasured),
+      fmtPct(totals.odLate, totals.odMeasured),
+      fmtPct(totals.ddEarly, totals.ddMeasured),
+      fmtPct(totals.ddLate, totals.ddMeasured),
     ]);
     const periodWs = XLSX.utils.aoa_to_sheet(periodAoa);
     applyTitleRows(periodWs, headerRow.length, []);
@@ -128,7 +170,12 @@ export function exportPunctualityToExcel(
       { wch: 38 },
       { wch: 8 },
       { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-      { wch: 10 }, { wch: 10 }, { wch: 10 },
+      { wch: 10 }, { wch: 10 },
+      { wch: 12 }, { wch: 12 },
+      { wch: 18 }, { wch: 18 },
+      { wch: 16 }, { wch: 16 },
+      { wch: 18 }, { wch: 18 },
+      { wch: 18 }, { wch: 18 },
     ];
     XLSX.utils.book_append_sheet(wb, periodWs, viewLabel(view));
   }
@@ -145,18 +192,20 @@ export function exportPunctualityToExcel(
       Status: l.status,
     };
     if (t) {
-      row["Origin Planned Arr"] = t.origin.plannedArrival || "";
-      row["Origin Actual Arr"] = t.origin.actualArrival || "";
-      row["Origin Var Arr (min)"] = minutesVariance(t.origin.plannedArrival, t.origin.actualArrival);
-      row["Origin Planned Dep"] = t.origin.plannedDeparture || "";
-      row["Origin Actual Dep"] = t.origin.actualDeparture || "";
-      row["Origin Var Dep (min)"] = minutesVariance(t.origin.plannedDeparture, t.origin.actualDeparture);
-      row["Dest Planned Arr"] = t.destination.plannedArrival || "";
-      row["Dest Actual Arr"] = t.destination.actualArrival || "";
-      row["Dest Var Arr (min)"] = minutesVariance(t.destination.plannedArrival, t.destination.actualArrival);
-      row["Dest Planned Dep"] = t.destination.plannedDeparture || "";
-      row["Dest Actual Dep"] = t.destination.actualDeparture || "";
-      row["Dest Var Dep (min)"] = minutesVariance(t.destination.plannedDeparture, t.destination.actualDeparture);
+      // Arrivals grouped together (Loading then Offloading)
+      row["Loading Planned Arr"] = t.origin.plannedArrival || "";
+      row["Loading Actual Arr"] = t.origin.actualArrival || "";
+      row["Loading Var Arr (min)"] = minutesVariance(t.origin.plannedArrival, t.origin.actualArrival);
+      row["Offloading Planned Arr"] = t.destination.plannedArrival || "";
+      row["Offloading Actual Arr"] = t.destination.actualArrival || "";
+      row["Offloading Var Arr (min)"] = minutesVariance(t.destination.plannedArrival, t.destination.actualArrival);
+      // Departures grouped together (Loading then Offloading)
+      row["Loading Planned Dep"] = t.origin.plannedDeparture || "";
+      row["Loading Actual Dep"] = t.origin.actualDeparture || "";
+      row["Loading Var Dep (min)"] = minutesVariance(t.origin.plannedDeparture, t.origin.actualDeparture);
+      row["Offloading Planned Dep"] = t.destination.plannedDeparture || "";
+      row["Offloading Actual Dep"] = t.destination.actualDeparture || "";
+      row["Offloading Var Dep (min)"] = minutesVariance(t.destination.plannedDeparture, t.destination.actualDeparture);
     }
     return {
       row, variances: t ? {
@@ -180,9 +229,11 @@ export function exportPunctualityToExcel(
   detailsWs["!merges"] = merges;
   applyHeaderStyle(detailsWs, 3, colCount);
 
-  // Variance columns: 9, 12, 15, 18 (0-based among data cols)
+  // Variance columns: 9, 12, 15, 18 (0-based among data cols).
+  // After the regrouping (Arrivals first, then Departures) the variance
+  // keys at those columns are: Loading Arr, Offloading Arr, Loading Dep, Offloading Dep.
   const varianceCols = [9, 12, 15, 18];
-  const varianceKeys = ["oaV", "odV", "daV", "ddV"] as const;
+  const varianceKeys = ["oaV", "daV", "odV", "ddV"] as const;
 
   detailsRows.forEach((item, rowIdx) => {
     const excelRow = rowIdx + 4;
@@ -208,5 +259,16 @@ export function exportPunctualityToExcel(
   XLSX.utils.book_append_sheet(wb, detailsWs, "Details");
 
   const nowLabel = format(new Date(), "yyyyMMdd-HHmm");
-  XLSX.writeFile(wb, `Punctuality-${viewSlug(view)}-${timeRange}-${nowLabel}.xlsx`);
+  const filename = `Punctuality-${viewSlug(view)}-${timeRange}-${nowLabel}.xlsx`;
+  // Use XLSX.write + Blob to avoid `fs` being pulled in by XLSX.writeFile in the browser.
+  const buffer = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

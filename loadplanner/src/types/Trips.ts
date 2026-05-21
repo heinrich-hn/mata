@@ -57,11 +57,20 @@ export interface Waypoint {
   notes?: string;
 }
 
+export interface DateChangeEntry {
+  field: 'loading_date' | 'offloading_date';
+  oldValue: string;
+  newValue: string;
+  reason: string;
+  changedAt: string; // ISO timestamp
+}
+
 export interface TimeWindowData {
   origin: TimeWindowSection;
   destination: TimeWindowSection;
   backload?: BackloadInfo | null;
   waypoints?: Waypoint[];
+  dateChangeHistory?: DateChangeEntry[];
 }
 
 export interface Load {

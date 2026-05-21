@@ -6,13 +6,14 @@
 
 import type {
   BackloadInfo,
+  DateChangeEntry,
   TimeWindowData,
   TimeWindowSection,
   Waypoint,
 } from "@/types/Trips";
 
 // Re-export the types so consumers don't need a second import
-export type { BackloadInfo, TimeWindowData, TimeWindowSection, Waypoint };
+export type { BackloadInfo, DateChangeEntry, TimeWindowData, TimeWindowSection, Waypoint };
 
 // ---------------------------------------------------------------------------
 // Extended data that can live inside a time_window JSON blob
@@ -38,6 +39,7 @@ export interface TimeWindowDataFull extends TimeWindowData {
   subcontractor?: SubcontractorInfo | null;
   varianceReason?: string;
   waypoints: Waypoint[];
+  dateChangeHistory: DateChangeEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +96,9 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
         : null,
       varianceReason: typeof data.varianceReason === 'string' ? data.varianceReason : undefined,
       waypoints: Array.isArray(data.waypoints) ? (data.waypoints as Waypoint[]) : [],
+      dateChangeHistory: Array.isArray(data.dateChangeHistory)
+        ? (data.dateChangeHistory as DateChangeEntry[])
+        : [],
     };
   } catch {
     return {
@@ -104,6 +109,7 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
       subcontractor: null,
       varianceReason: undefined,
       waypoints: [],
+      dateChangeHistory: [],
     };
   }
 }

@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -40,10 +41,11 @@ import { useFleetVehicles } from "@/hooks/useFleetVehicles";
 import { type Load, useUpdateLoad } from "@/hooks/useTrips";
 import * as timeWindowLib from "@/lib/timeWindow";
 import { cn } from "@/lib/utils";
+import type { DateChangeEntry } from "@/types/Trips";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, CalendarIcon, CheckCircle2, Clock, MapPin, Package, Pencil } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -158,6 +160,15 @@ export function EditLoadDialog({
   const hasBackload = form.watch("hasBackload");
   const selectedCargoType = form.watch("cargoType");
 
+  // Date-change reason flow: when the user changes loadingDate or
+  // offloadingDate we require a reason before persisting the update.
+  const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
+  const [pendingDateChanges, setPendingDateChanges] = useState<
+    Array<{ field: 'loading_date' | 'offloading_date'; oldValue: string; newValue: string }>
+  >([]);
+  const [dateChangeReason, setDateChangeReason] = useState("");
+  const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
+
   // Get available destinations based on cargo type, including custom locations
   const customOrigins = customLocations
     .filter((loc) => loc.type === "farm")
@@ -235,6 +246,46 @@ export function EditLoadDialog({
   const handleSubmit = (data: FormData) => {
     if (!load) return;
 
+    // Detect date changes (loading_date / offloading_date). If any changed,
+    // require the user to provide a reason before persisting.
+    const newLoadingDateStr = format(data.loadingDate, "yyyy-MM-dd");
+    const newOffloadingDateStr = format(data.offloadingDate, "yyyy-MM-dd");
+    const dateChanges: Array<{
+      field: 'loading_date' | 'offloading_date';
+      oldValue: string;
+      newValue: string;
+    }> = [];
+    if (newLoadingDateStr !== load.loading_date) {
+      dateChanges.push({
+        field: 'loading_date',
+        oldValue: load.loading_date,
+        newValue: newLoadingDateStr,
+      });
+    }
+    if (newOffloadingDateStr !== load.offloading_date) {
+      dateChanges.push({
+        field: 'offloading_date',
+        oldValue: load.offloading_date,
+        newValue: newOffloadingDateStr,
+      });
+    }
+
+    if (dateChanges.length > 0) {
+      setPendingFormData(data);
+      setPendingDateChanges(dateChanges);
+      setDateChangeReason("");
+      setReasonDialogOpen(true);
+      return;
+    }
+
+    persistUpdate(data, []);
+  };
+
+  const persistUpdate = (
+    data: FormData,
+    newDateChangeEntries: DateChangeEntry[],
+  ) => {
+    if (!load) return;
     // Parse existing time_window to preserve actual times & notes
     const currentTimes = timeWindowLib.parseTimeWindow(load.time_window);
     // Access raw JSON for notes (not in the typed interface)
@@ -268,6 +319,14 @@ export function EditLoadDialog({
     // Preserve backload data if present
     if (currentTimes.backload) {
       timeData.backload = currentTimes.backload;
+    }
+
+    // Carry forward existing date-change history and append any new entries
+    const previousHistory = Array.isArray(currentTimes.dateChangeHistory)
+      ? currentTimes.dateChangeHistory
+      : [];
+    if (previousHistory.length > 0 || newDateChangeEntries.length > 0) {
+      timeData.dateChangeHistory = [...previousHistory, ...newDateChangeEntries];
     }
 
     // Add backload info if enabled
@@ -1250,6 +1309,92 @@ export function EditLoadDialog({
           </form>
         </Form>
       </DialogContent>
+
+      <Dialog
+        open={reasonDialogOpen}
+        onOpenChange={(o) => {
+          setReasonDialogOpen(o);
+          if (!o) {
+            setPendingFormData(null);
+            setPendingDateChanges([]);
+            setDateChangeReason("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5 text-amber-600" />
+              Reason for Date Change Required
+            </DialogTitle>
+            <DialogDescription>
+              You changed the schedule for this load. Please provide a reason —
+              it will be recorded against this load and included in exports.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+              {pendingDateChanges.map((c) => (
+                <div key={c.field} className="flex items-center gap-2">
+                  <span className="font-medium">
+                    {c.field === 'loading_date' ? 'Loading Date' : 'Offloading Date'}:
+                  </span>
+                  <span className="font-mono text-xs">{c.oldValue}</span>
+                  <span>→</span>
+                  <span className="font-mono text-xs font-semibold">{c.newValue}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="date-change-reason">Reason</Label>
+              <Textarea
+                id="date-change-reason"
+                value={dateChangeReason}
+                onChange={(e) => setDateChangeReason(e.target.value)}
+                placeholder="e.g. Customer postponed delivery, vehicle breakdown, weather, ..."
+                className="resize-none"
+                rows={4}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReasonDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!dateChangeReason.trim() || updateLoad.isPending || !pendingFormData}
+              onClick={() => {
+                if (!pendingFormData) return;
+                const reason = dateChangeReason.trim();
+                if (!reason) return;
+                const changedAt = new Date().toISOString();
+                const entries: DateChangeEntry[] = pendingDateChanges.map((c) => ({
+                  ...c,
+                  reason,
+                  changedAt,
+                }));
+                const dataToSave = pendingFormData;
+                setReasonDialogOpen(false);
+                setPendingFormData(null);
+                setPendingDateChanges([]);
+                setDateChangeReason("");
+                persistUpdate(dataToSave, entries);
+              }}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

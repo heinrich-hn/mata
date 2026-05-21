@@ -18,6 +18,7 @@ import {
   bucketPunctuality,
   computeTotals,
   fmtMin,
+  fmtPct,
   viewLabel,
   viewSlug,
   type PunctualityView,
@@ -922,7 +923,6 @@ export function exportPunctualityToPdf(
       { content: "Avg Dest Dep (m)", styles: { halign: "center" as const } },
       { content: "On-Time", styles: { halign: "center" as const } },
       { content: "Late (>15m)", styles: { halign: "center" as const } },
-      { content: "Early (<-5m)", styles: { halign: "center" as const } },
     ]],
     body: [[
       String(totals.count),
@@ -932,7 +932,6 @@ export function exportPunctualityToPdf(
       fmtMin(totals.avgDestDep),
       String(totals.onTime),
       String(totals.late),
-      String(totals.early),
     ]],
     theme: "grid",
     headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8, halign: "center", cellPadding: 2 },
@@ -942,6 +941,41 @@ export function exportPunctualityToPdf(
   });
 
   let detailsStartY = ((doc as jsPDFWithAutoTable).lastAutoTable?.finalY ?? 28) + 4;
+
+  // Percentage breakdown (overall on-time / late, plus per-stop arrival & departure splits)
+  autoTable(doc, {
+    startY: detailsStartY,
+    head: [[
+      { content: "% On-Time", styles: { halign: "center" as const } },
+      { content: "% Late", styles: { halign: "center" as const } },
+      { content: "Loading: % On-Time", styles: { halign: "center" as const } },
+      { content: "Loading: % Late", styles: { halign: "center" as const } },
+      { content: "Dest: % On-Time", styles: { halign: "center" as const } },
+      { content: "Dest: % Late", styles: { halign: "center" as const } },
+      { content: "Origin Dep: % Early", styles: { halign: "center" as const } },
+      { content: "Origin Dep: % Late", styles: { halign: "center" as const } },
+      { content: "Dest Dep: % Early", styles: { halign: "center" as const } },
+      { content: "Dest Dep: % Late", styles: { halign: "center" as const } },
+    ]],
+    body: [[
+      fmtPct(totals.daOnTime, totals.daMeasured),
+      fmtPct(totals.daLate, totals.daMeasured),
+      fmtPct(totals.oaOnTime, totals.oaMeasured),
+      fmtPct(totals.oaLate, totals.oaMeasured),
+      fmtPct(totals.daOnTime, totals.daMeasured),
+      fmtPct(totals.daLate, totals.daMeasured),
+      fmtPct(totals.odEarly, totals.odMeasured),
+      fmtPct(totals.odLate, totals.odMeasured),
+      fmtPct(totals.ddEarly, totals.ddMeasured),
+      fmtPct(totals.ddLate, totals.ddMeasured),
+    ]],
+    theme: "grid",
+    headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.5, halign: "center", cellPadding: 2 },
+    bodyStyles: { textColor: text, fontSize: 9, halign: "center", fontStyle: "bold", cellPadding: 2.5 },
+    margin: { left: 6, right: 6 },
+    tableWidth: pageWidth - 12,
+  });
+  detailsStartY = ((doc as jsPDFWithAutoTable).lastAutoTable?.finalY ?? detailsStartY) + 4;
 
   // Period breakdown (Weekly / Monthly)
   if (view !== "total" && buckets.length > 0) {
@@ -954,7 +988,6 @@ export function exportPunctualityToPdf(
       { content: "Avg D-Dep", styles: { halign: "center" as const } },
       { content: "On-Time", styles: { halign: "center" as const } },
       { content: "Late", styles: { halign: "center" as const } },
-      { content: "Early", styles: { halign: "center" as const } },
     ]];
     const periodBody: (string | number)[][] = buckets.map((b) => [
       b.label,
@@ -965,7 +998,6 @@ export function exportPunctualityToPdf(
       fmtMin(b.avgDestDep),
       b.onTime,
       b.late,
-      b.early,
     ]);
     periodBody.push([
       "TOTAL",
@@ -976,7 +1008,6 @@ export function exportPunctualityToPdf(
       fmtMin(totals.avgDestDep),
       totals.onTime,
       totals.late,
-      totals.early,
     ]);
 
     autoTable(doc, {
@@ -996,7 +1027,6 @@ export function exportPunctualityToPdf(
         5: { halign: "right" },
         6: { halign: "center", textColor: [21, 128, 61], fontStyle: "bold" },
         7: { halign: "center", textColor: [185, 28, 28], fontStyle: "bold" },
-        8: { halign: "center", textColor: [29, 78, 216], fontStyle: "bold" },
       },
       didParseCell: (data) => {
         if (data.section === "body" && data.row.index === periodBody.length - 1) {
@@ -1037,15 +1067,17 @@ export function exportPunctualityToPdf(
     if (tw) {
       rows.push([
         ...base,
+        // Arrivals (Loading then Offloading)
         tw.origin.plannedArrival || "",
         tw.origin.actualArrival || "",
         getVarianceString(tw.origin.plannedArrival, tw.origin.actualArrival),
-        tw.origin.plannedDeparture || "",
-        tw.origin.actualDeparture || "",
-        getVarianceString(tw.origin.plannedDeparture, tw.origin.actualDeparture),
         tw.destination.plannedArrival || "",
         tw.destination.actualArrival || "",
         getVarianceString(tw.destination.plannedArrival, tw.destination.actualArrival),
+        // Departures (Loading then Offloading)
+        tw.origin.plannedDeparture || "",
+        tw.origin.actualDeparture || "",
+        getVarianceString(tw.origin.plannedDeparture, tw.origin.actualDeparture),
         tw.destination.plannedDeparture || "",
         tw.destination.actualDeparture || "",
         getVarianceString(tw.destination.plannedDeparture, tw.destination.actualDeparture),
@@ -1055,21 +1087,21 @@ export function exportPunctualityToPdf(
     }
   }
 
-  // Group header row for visual clarity (Origin / Destination sections)
+  // Group header row for visual clarity (Arrivals / Departures sections)
   autoTable(doc, {
     startY: detailsStartY,
     head: [
       [
         { content: "Load Details", colSpan: 7, styles: { fillColor: primary, textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
-        { content: "Origin", colSpan: 6, styles: { fillColor: [55, 90, 140], textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
-        { content: "Destination", colSpan: 6, styles: { fillColor: [55, 90, 140], textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
+        { content: "Arrivals", colSpan: 6, styles: { fillColor: [55, 90, 140], textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
+        { content: "Departures", colSpan: 6, styles: { fillColor: [55, 90, 140], textColor: [255, 255, 255], halign: "center", fontStyle: "bold" } },
       ],
       [
         "Load ID", "Vehicle", "Origin", "Destination", "Load Date", "Offload Date", "Status",
-        "Plan Arr", "Act Arr", "Var (m)",
-        "Plan Dep", "Act Dep", "Var (m)",
-        "Plan Arr", "Act Arr", "Var (m)",
-        "Plan Dep", "Act Dep", "Var (m)",
+        "Loading Plan", "Loading Act", "Var (m)",
+        "Offload Plan", "Offload Act", "Var (m)",
+        "Loading Plan", "Loading Act", "Var (m)",
+        "Offload Plan", "Offload Act", "Var (m)",
       ],
     ],
     body: rows,
