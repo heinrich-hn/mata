@@ -46,8 +46,7 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       global: "globalThis",
-      'process.env': {},
-      'process.env.NODE_ENV': JSON.stringify(mode),
+      'process.env.NODE_ENV': JSON.stringify(mode === 'development' ? 'development' : 'production'),
     },
     build: {
       manifest: false,
