@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { CalendarDays, ChevronDown, Clock, FileSpreadsheet, FileText, Plus, Truck } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, FileSpreadsheet, FileText, MessageCircle, Plus, Truck } from "lucide-react";
 import {
   startOfWeek,
   endOfWeek,
@@ -48,6 +48,8 @@ import {
   exportLoadsToExcelSimplified,
   exportLoadsWithUnverifiedTimesToExcel,
 } from "@/lib/exportTripsToExcel";
+import { shareVehicleLocationsForDayWhatsApp } from "@/lib/exportVehicleLocationsForDay";
+import { toast } from "sonner";
 
 // Types
 interface WeekFilter {
@@ -145,7 +147,8 @@ export default function LoadsPage() {
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [weekFilter, setWeekFilter] = useState<WeekFilter>(getInitialWeekFilter);
   const [dayExportOpen, setDayExportOpen] = useState(false);
-  const [dayExportMode, setDayExportMode] = useState<"plan" | "ontime-excel" | "ontime-pdf">("plan");
+  const [dayExportMode, setDayExportMode] = useState<"plan" | "ontime-excel" | "ontime-pdf" | "vehicle-locations">("plan");
+  const [dayExportBusy, setDayExportBusy] = useState(false);
   const [dayExportDate, setDayExportDate] = useState<string>(() =>
     format(new Date(), "yyyy-MM-dd"),
   );
@@ -239,25 +242,45 @@ export default function LoadsPage() {
     });
   }, [loads, dayExportDate]);
 
-  const handleConfirmDayExport = useCallback(() => {
+  const handleConfirmDayExport = useCallback(async () => {
     if (!dayExportDate || dayExportLoads.length === 0) return;
     if (dayExportMode === "ontime-excel") {
       exportLoadsForDayOnTimeExcel(dayExportLoads, dayExportDate, {
         filename: `daily-load-plan-on-time-${dayExportDate}`,
       });
+      setDayExportOpen(false);
     } else if (dayExportMode === "ontime-pdf") {
       exportLoadsForDayOnTimePdf(dayExportLoads, dayExportDate, {
         filename: `daily-load-plan-on-time-${dayExportDate}`,
       });
+      setDayExportOpen(false);
+    } else if (dayExportMode === "vehicle-locations") {
+      setDayExportBusy(true);
+      try {
+        const result = await shareVehicleLocationsForDayWhatsApp(
+          dayExportLoads,
+          dayExportDate,
+        );
+        toast.success(
+          `WhatsApp message ready — ${result.fetched} of ${result.vehicleCount} vehicle${result.vehicleCount === 1 ? "" : "s"} located (copied to clipboard)` +
+          (result.skipped ? `, ${result.skipped} without telematics` : "") +
+          (result.failed ? `, ${result.failed} failed` : ""),
+        );
+        setDayExportOpen(false);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to build vehicle locations message");
+      } finally {
+        setDayExportBusy(false);
+      }
     } else {
       exportLoadsForDayPdf(dayExportLoads, dayExportDate, {
         filename: `daily-load-plan-${dayExportDate}`,
       });
+      setDayExportOpen(false);
     }
-    setDayExportOpen(false);
   }, [dayExportDate, dayExportLoads, dayExportMode]);
 
-  const openDayExport = useCallback((mode: "plan" | "ontime-excel" | "ontime-pdf") => {
+  const openDayExport = useCallback((mode: "plan" | "ontime-excel" | "ontime-pdf" | "vehicle-locations") => {
     setDayExportMode(mode);
     setDayExportOpen(true);
   }, []);
@@ -308,6 +331,11 @@ export default function LoadsPage() {
         label: "Day On-Time — PDF (pick a day)",
         onClick: () => openDayExport("ontime-pdf"),
         icon: CalendarDays,
+      },
+      {
+        label: "Day Vehicle Locations — WhatsApp (pick a day)",
+        onClick: () => openDayExport("vehicle-locations"),
+        icon: MessageCircle,
       },
     ];
 
@@ -395,12 +423,16 @@ export default function LoadsPage() {
                 ? "Export Day On-Time to Excel"
                 : dayExportMode === "ontime-pdf"
                   ? "Export Day On-Time to PDF"
-                  : "Export Day Plan to PDF"}
+                  : dayExportMode === "vehicle-locations"
+                    ? "Share Day Vehicle Locations on WhatsApp"
+                    : "Export Day Plan to PDF"}
             </DialogTitle>
             <DialogDescription>
               {dayExportMode === "plan"
                 ? "Pick a loading date. The PDF will include every load scheduled to load on that day, grouped by vehicle."
-                : "Pick a loading date. The report shows every load scheduled to load on that day with a single On Time column (Yes if no leg is more than 15 minutes late)."}
+                : dayExportMode === "vehicle-locations"
+                  ? "Pick a loading date. Fetches the current telematics position of every vehicle assigned to a load on that day, copies a WhatsApp-formatted summary to your clipboard and opens WhatsApp to share. Requires Telematics Guru sign-in (Live Tracking page)."
+                  : "Pick a loading date. The report shows every load scheduled to load on that day with a single On Time column (Yes if no leg is more than 15 minutes late)."}
             </DialogDescription>
           </DialogHeader>
 
@@ -420,18 +452,23 @@ export default function LoadsPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDayExportOpen(false)}>
+            <Button variant="outline" onClick={() => setDayExportOpen(false)} disabled={dayExportBusy}>
               Cancel
             </Button>
             <Button
               onClick={handleConfirmDayExport}
-              disabled={!dayExportDate || dayExportLoads.length === 0}
+              disabled={!dayExportDate || dayExportLoads.length === 0 || dayExportBusy}
               className="gap-2"
             >
-              {dayExportMode === "ontime-excel" ? (
+              {dayExportMode === "vehicle-locations" ? (
+                <>
+                  <MessageCircle className="h-4 w-4" />
+                  {dayExportBusy ? "Fetching…" : "Share on WhatsApp"}
+                </>
+              ) : dayExportMode === "ontime-excel" ? (
                 <>
                   <FileSpreadsheet className="h-4 w-4" />
-                  Export Excel
+                  {dayExportBusy ? "Fetching…" : "Export Excel"}
                 </>
               ) : (
                 <>
