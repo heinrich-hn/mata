@@ -7,6 +7,14 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
     Table,
     TableBody,
     TableCell,
@@ -17,16 +25,19 @@ import {
 import { TabsContent } from "@/components/ui/tabs";
 import {
     useMutareDepotActivity,
-    type MutareDepotStay,
 } from "@/hooks/useMutareDepotActivity";
+import {
+    exportMutareDepotToExcel,
+    exportMutareDepotToPdf,
+    type MutareDepotExportData,
+    type MutareDepotTimeRange,
+} from "@/lib/exportMutareDepot";
 import { format, parseISO, subMonths } from "date-fns";
 import { Download, MapPin } from "lucide-react";
 import { useMemo } from "react";
 
-type TimeRange = "3months" | "6months" | "12months";
-
 interface MutareDepotTabProps {
-    timeRange: TimeRange;
+    timeRange: MutareDepotTimeRange;
 }
 
 function formatDuration(minutes: number | null): string {
@@ -44,44 +55,6 @@ function formatTime(iso: string | null): string {
     } catch {
         return iso;
     }
-}
-
-function csvEscape(val: string | number | null | undefined): string {
-    if (val == null) return "";
-    const s = String(val);
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-}
-
-function downloadCsv(stays: MutareDepotStay[]) {
-    const headers = [
-        "Vehicle",
-        "Entry Time",
-        "Exit Time",
-        "Duration (minutes)",
-        "Duration",
-        "Still Inside",
-    ];
-    const rows = stays.map((s) => [
-        s.vehicleRegistration,
-        formatTime(s.entryTime),
-        formatTime(s.exitTime),
-        s.durationMinutes ?? "",
-        formatDuration(s.durationMinutes),
-        s.stillInside ? "Yes" : "No",
-    ]);
-    const csv = [headers, ...rows]
-        .map((r) => r.map(csvEscape).join(","))
-        .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `mutare-depot-activity-${format(new Date(), "yyyyMMdd-HHmm")}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
 }
 
 export function MutareDepotTab({ timeRange }: MutareDepotTabProps) {
@@ -105,6 +78,13 @@ export function MutareDepotTab({ timeRange }: MutareDepotTabProps) {
         };
     }, [stays]);
 
+    const exportData = useMemo<MutareDepotExportData>(
+        () => ({ stays, summary, startDate, endDate, timeRange }),
+        [stays, summary, startDate, endDate, timeRange],
+    );
+
+    const disabled = stays.length === 0 || isLoading;
+
     return (
         <TabsContent value="mutare-depot" className="space-y-6">
             <Card>
@@ -118,15 +98,38 @@ export function MutareDepotTab({ timeRange }: MutareDepotTabProps) {
                             Entry / exit times for every truck detected at the Mutare Depot geofence.
                         </CardDescription>
                     </div>
-                    <Button
-                        variant="outline"
-                        className="gap-2"
-                        onClick={() => downloadCsv(stays)}
-                        disabled={stays.length === 0}
-                    >
-                        <Download className="h-4 w-4" />
-                        Download CSV
-                    </Button>
+                    <div className="flex gap-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-2" disabled={disabled}>
+                                    <Download className="h-4 w-4" />
+                                    Export PDF
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel>Mutare Depot Report</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => exportMutareDepotToPdf(exportData)}>
+                                    Full Report (PDF)
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-2" disabled={disabled}>
+                                    <Download className="h-4 w-4" />
+                                    Export Excel
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel>Mutare Depot Workbook</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => exportMutareDepotToExcel(exportData)}>
+                                    Full Report (Excel)
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
