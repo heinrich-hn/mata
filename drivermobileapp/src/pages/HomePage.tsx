@@ -13,13 +13,12 @@ import {
   useVehicleAssignmentSubscription,
 } from "@/hooks/use-realtime";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertCircle,
   ChevronRight,
-  Droplet,
   Gauge,
   MapPin,
   Snowflake,
@@ -27,7 +26,8 @@ import {
   Truck
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { TripDetailSheet } from "@/components/trip-detail-sheet";
 
 const TRUCK_TYPES = ['truck', 'van', 'bus', 'rigid_truck', 'horse_truck', 'refrigerated_truck'];
 const TRAILER_TYPES = ['reefer', 'trailer', 'interlink'];
@@ -86,6 +86,9 @@ interface Trip {
   client_name: string | null;
   vehicle_id: string | null;
   fleet_vehicle_id: string | null;
+  starting_km: number | null;
+  ending_km: number | null;
+  created_at: string | null;
 }
 
 // Assignment row type
@@ -109,6 +112,9 @@ export default function HomePage() {
 
   // Use ref for debug info to avoid re-renders
   const debugLoggedRef = useRef(false);
+
+  // Active trip dialog state
+  const [activeTripDialog, setActiveTripDialog] = useState<Trip | null>(null);
 
   // Log debug info once on mount (not in useEffect that causes re-renders)
   if (DEBUG_MODE && !debugLoggedRef.current) {
@@ -265,7 +271,8 @@ export default function HomePage() {
         .from("trips")
         .select(`
           id, trip_number, origin, destination, departure_date, arrival_date,
-          status, base_revenue, invoice_amount, distance_km, driver_name, client_name, vehicle_id, fleet_vehicle_id
+          status, base_revenue, invoice_amount, distance_km, driver_name, client_name, vehicle_id, fleet_vehicle_id,
+          starting_km, ending_km, created_at
         `)
         .eq("fleet_vehicle_id", vehicle.id)
         .gte("departure_date", firstDayOfMonth)
@@ -279,25 +286,6 @@ export default function HomePage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch recent diesel records
-  const { data: recentDiesel = [] } = useQuery({
-    queryKey: ["recent-diesel-records", vehicle?.fleet_number],
-    queryFn: async () => {
-      if (!vehicle?.fleet_number) return [];
-      const { data, error } = await supabase
-        .from("diesel_records")
-        .select("id, date, litres_filled, total_cost, cost_per_litre, km_reading, previous_km_reading, distance_travelled, fuel_station, fleet_number, driver_name, currency")
-        .eq("fleet_number", vehicle.fleet_number)
-        .order("date", { ascending: false })
-        .limit(5);
-
-      if (error) throw error;
-      return (data || []) as DieselRecord[];
-    },
-    enabled: !!vehicle?.fleet_number,
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Fetch recent trips
   const { data: recentTrips = [] } = useQuery({
     queryKey: ["recent-trips", vehicle?.id],
@@ -308,7 +296,8 @@ export default function HomePage() {
         .from("trips")
         .select(`
           id, trip_number, origin, destination, departure_date, arrival_date,
-          status, base_revenue, invoice_amount, distance_km, driver_name, client_name, vehicle_id, fleet_vehicle_id
+          status, base_revenue, invoice_amount, distance_km, driver_name, client_name, vehicle_id, fleet_vehicle_id,
+          starting_km, ending_km, created_at
         `)
         .eq("fleet_vehicle_id", vehicle.id)
         .order("departure_date", { ascending: false })
@@ -322,9 +311,8 @@ export default function HomePage() {
   });
 
   // Memoized monthly stats
-  const { totalDieselLitres, totalDieselCost, totalTrips, completedTrips, kmTraveled, consumption } = useMemo(() => {
+  const { totalTrips, completedTrips, kmTraveled, kmPerLitre } = useMemo(() => {
     const dieselLitres = monthlyDiesel.reduce((sum, entry) => sum + (entry.litres_filled || 0), 0);
-    const dieselCost = monthlyDiesel.reduce((sum, entry) => sum + (entry.total_cost || 0), 0);
     const trips = monthlyTrips.length;
     const completed = monthlyTrips.filter(t => t.status === "completed").length;
     const distanceKm = monthlyTrips.reduce((sum, trip) => sum + (trip.distance_km || 0), 0);
@@ -338,15 +326,13 @@ export default function HomePage() {
       ? odometerReadings[odometerReadings.length - 1] - odometerReadings[0]
       : distanceKm;
 
-    const cons = km > 0 ? (dieselLitres / km) * 100 : 0;
+    const kmpl = dieselLitres > 0 ? km / dieselLitres : 0;
 
     return {
-      totalDieselLitres: dieselLitres,
-      totalDieselCost: dieselCost,
       totalTrips: trips,
       completedTrips: completed,
       kmTraveled: km,
-      consumption: cons,
+      kmPerLitre: kmpl,
     };
   }, [monthlyDiesel, monthlyTrips]);
 
@@ -516,22 +502,6 @@ export default function HomePage() {
               <p className="text-xs text-muted-foreground">this month</p>
             </div>
 
-            {/* Diesel Consumption */}
-            <Link to="/diesel" className="block">
-              <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="icon-container icon-container-sm bg-info/10">
-                    <Droplet className="w-4 h-4 text-info" strokeWidth={2} />
-                  </div>
-                  <p className="stat-label">Diesel</p>
-                </div>
-                <p className="text-2xl font-bold">{formatNumber(totalDieselLitres)}L</p>
-                <p className="text-xs text-muted-foreground">
-                  {consumption > 0 ? `${consumption.toFixed(1)} L/100km` : "this month"}
-                </p>
-              </div>
-            </Link>
-
             {/* Total Trips */}
             <Link to="/trip" className="block">
               <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
@@ -548,78 +518,105 @@ export default function HomePage() {
               </div>
             </Link>
 
-            {/* Diesel Cost */}
+            {/* Average Fuel Efficiency (km/L) */}
             <Link to="/diesel" className="block">
               <div className="rounded-2xl border border-border bg-card shadow-sm p-4 h-full active:scale-[0.98] transition-transform">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="icon-container icon-container-sm bg-warning/10">
                     <TrendingUp className="w-4 h-4 text-warning" strokeWidth={2} />
                   </div>
-                  <p className="stat-label">Fuel Cost</p>
+                  <p className="stat-label">Avg km/L</p>
                 </div>
-                <p className="text-2xl font-bold">{formatCurrency(totalDieselCost, "USD")}</p>
-                <p className="text-xs text-muted-foreground">this month</p>
+                <p className="text-2xl font-bold">
+                  {kmPerLitre > 0 ? kmPerLitre.toFixed(2) : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {kmPerLitre > 0 ? "km per litre" : "this month"}
+                </p>
               </div>
             </Link>
           </div>
 
-          {/* Recent Activity */}
-          <div className="animate-fade-up stagger-3">
-            <p className="section-title mb-3">Recent Activity</p>
-            <div className="space-y-2">
-              {recentTrips.slice(0, 3).map((trip) => (
-                <Link to="/trip" key={trip.id} className="block">
-                  <div className="rounded-2xl border border-border bg-card shadow-sm p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
-                    <div className={`icon-container icon-container-sm ${trip.status === "completed" ? "bg-success/10" : "bg-warning/10"}`}>
-                      <MapPin className={`w-4 h-4 ${trip.status === "completed" ? "text-success" : "text-warning"}`} strokeWidth={2} />
+          {/* Active Trip */}
+          {(() => {
+            const activeTrip = recentTrips.find(
+              (t) => t.status === "in_progress" || t.status === "active"
+            );
+            return (
+              <div className="animate-fade-up stagger-3">
+                <p className="section-title mb-3">Active Trip</p>
+                {activeTrip ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTripDialog(activeTrip)}
+                    className="block w-full text-left"
+                  >
+                    <div className="rounded-2xl border border-border bg-card shadow-sm p-5 active:scale-[0.98] transition-transform">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                        <p className="text-[11px] font-bold text-success uppercase tracking-widest">
+                          In Progress
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="icon-container icon-container-lg bg-primary/10">
+                          <MapPin className="w-6 h-6 text-primary" strokeWidth={2} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-base truncate">
+                            {activeTrip.origin || "N/A"} → {activeTrip.destination || "N/A"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {activeTrip.trip_number ? `#${activeTrip.trip_number} • ` : ""}
+                            {activeTrip.departure_date
+                              ? new Date(activeTrip.departure_date).toLocaleDateString()
+                              : ""}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      {(activeTrip.client_name || activeTrip.distance_km) && (
+                        <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+                          {activeTrip.client_name && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {activeTrip.client_name}
+                            </p>
+                          )}
+                          {activeTrip.distance_km != null && (
+                            <p className="text-xs font-semibold text-foreground">
+                              {formatNumber(activeTrip.distance_km)} km
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {trip.origin || "N/A"} → {trip.destination || "N/A"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {trip.departure_date ? new Date(trip.departure_date).toLocaleDateString() : "N/A"} • {trip.status || "pending"}
-                      </p>
+                  </button>
+                ) : (
+                  <div className="rounded-2xl border border-border bg-card shadow-sm p-6 text-center">
+                    <div className="icon-container icon-container-sm bg-muted/50 mx-auto mb-3">
+                      <Activity className="w-4 h-4 text-muted-foreground" strokeWidth={2} />
                     </div>
+                    <p className="text-sm font-medium">No active trip</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Start a trip to see it here
+                    </p>
                   </div>
-                </Link>
-              ))}
-
-              {recentDiesel.slice(0, 2).map((entry) => (
-                <Link to="/diesel" key={entry.id} className="block">
-                  <div className="rounded-2xl border border-border bg-card shadow-sm p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
-                    <div className="icon-container icon-container-sm bg-info/10">
-                      <Droplet className="w-4 h-4 text-info" strokeWidth={2} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">
-                        {formatNumber(entry.litres_filled)}L Diesel
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(entry.date).toLocaleDateString()} • {entry.fuel_station || "Unknown station"}
-                      </p>
-                    </div>
-                    {entry.total_cost && (
-                      <p className="text-sm font-semibold text-info">
-                        {formatCurrency(entry.total_cost, entry.currency || "USD")}
-                      </p>
-                    )}
-                  </div>
-                </Link>
-              ))}
-
-              {recentTrips.length === 0 && recentDiesel.length === 0 && (
-                <div className="rounded-2xl border border-border bg-card shadow-sm p-6 text-center">
-                  <p className="text-sm text-muted-foreground">No recent activity</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Record a trip or diesel fill-up to get started
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </PullToRefresh>
+
+      {activeTripDialog && (
+        <TripDetailSheet
+          trip={activeTripDialog}
+          open={!!activeTripDialog}
+          onOpenChange={(open) => {
+            if (!open) setActiveTripDialog(null);
+          }}
+        />
+      )}
     </MobileShell>
   );
 }

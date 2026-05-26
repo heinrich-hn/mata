@@ -2,23 +2,23 @@ import { Button } from "@/components/ui/button";
 import * as timeWindowLib from "@/lib/timeWindow";
 import { timeToSASTMinutes } from "@/lib/timeWindow";
 import {
-Card,
-CardContent,
+  Card,
+  CardContent,
 } from "@/components/ui/card";
 import {
-DropdownMenu,
-DropdownMenuContent,
-DropdownMenuItem,
-DropdownMenuLabel,
-DropdownMenuSeparator,
-DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-Select,
-SelectContent,
-SelectItem,
-SelectTrigger,
-SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { parseBackloadInfo, useLoads } from "@/hooks/useTrips";
@@ -29,6 +29,7 @@ import { DistributionTab } from "@/components/reports/DistributionTab";
 import { TimeAnalysisTab } from "@/components/reports/TimeAnalysisTab";
 import { BackloadAnalyticsTab } from "@/components/reports/BackloadAnalyticsTab";
 import { ClientFeedbackTab } from "@/components/reports/ClientFeedbackTab";
+import { MutareDepotTab } from "@/components/reports/MutareDepotTab";
 import type {
   CargoDistribution,
   StatusDistribution,
@@ -53,24 +54,25 @@ interface TimeWindowData {
   count: number;
 }
 import {
-eachWeekOfInterval,
-endOfMonth,
-endOfWeek,
-format,
-getDay,
-parseISO,
-startOfMonth,
-subMonths,
+  eachWeekOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  getDay,
+  parseISO,
+  startOfMonth,
+  subMonths,
 } from "date-fns";
 import {
-Clock,
-Download,
-FileText,
-Map as MapIcon,
-MessageSquare,
-Package,
-PieChart as PieChartIcon,
-TrendingUp,
+  Clock,
+  Download,
+  FileText,
+  Map as MapIcon,
+  MapPin,
+  MessageSquare,
+  Package,
+  PieChart as PieChartIcon,
+  TrendingUp,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -1029,12 +1031,12 @@ export default function ReportsPage() {
 
   if (isLoading) {
     return (
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center space-y-4">
-            <div className="h-12 w-12 mx-auto border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <p className="text-muted-foreground">Loading reports data...</p>
-          </div>
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center space-y-4">
+          <div className="h-12 w-12 mx-auto border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <p className="text-muted-foreground">Loading reports data...</p>
         </div>
+      </div>
     );
   }
 
@@ -1231,6 +1233,13 @@ export default function ReportsPage() {
               <MessageSquare className="h-4 w-4" />
               Client Feedback
             </TabsTrigger>
+            <TabsTrigger
+              value="mutare-depot"
+              className="data-[state=active]:bg-background gap-2"
+            >
+              <MapPin className="h-4 w-4" />
+              Mutare Depot
+            </TabsTrigger>
           </TabsList>
 
           <DistributionTab
@@ -1269,6 +1278,8 @@ export default function ReportsPage() {
           />
 
           <ClientFeedbackTab granularity={granularity} timeRange={timeRange} />
+
+          <MutareDepotTab timeRange={timeRange} />
         </Tabs>
       </div>
     </>

@@ -112,7 +112,7 @@ export const DEPOTS: Depot[] = [
     longitude: 32.6388758,
     type: "depot",
     country: "Zimbabwe",
-    radius: 500,
+    radius: 200,
   },
   {
     id: "freshmark-polokwane",

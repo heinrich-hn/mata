@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useAuth } from "@/hooks/useAuth";
 import { useCustomLocations } from "@/hooks/useCustomLocations";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   useGeofenceLoadUpdate,
   useLoads,
@@ -10,6 +12,7 @@ import {
 } from "@/hooks/useTrips";
 import {
   customLocationToDepot,
+  DEPOTS,
   findDepotByName,
   isWithinDepot,
 } from "@/lib/depots";
@@ -792,6 +795,79 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [loadsWithAssets, geofenceUpdateMutation, extraDepots]);
+
+  // ==========================================================================
+  // MUTARE DEPOT ALL-VEHICLE ACTIVITY MONITOR
+  // Tracks every telematics asset entering / leaving the Mutare Depot,
+  // independent of any load assignment. Each transition is logged to
+  // geofence_events (event_type = 'depot_entry' | 'depot_exit') and a toast
+  // notification is shown so dispatchers see the activity in real time.
+  // ==========================================================================
+  const mutareInsideRef = useRef<Map<string, boolean>>(new Map());
+  const mutareLoggedKeysRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user || telematicsAssets.length === 0) return;
+    const mutareDepot = DEPOTS.find((d) => d.id === "mutare-depot");
+    if (!mutareDepot) return;
+
+    for (const asset of telematicsAssets) {
+      if (asset.lastLatitude == null || asset.lastLongitude == null) continue;
+      const vehicleKey = asset.id?.toString() || asset.registrationNumber || "";
+      if (!vehicleKey) continue;
+
+      const isInside = isWithinDepot(asset.lastLatitude, asset.lastLongitude, mutareDepot);
+      const wasInside = mutareInsideRef.current.get(vehicleKey);
+
+      if (wasInside === undefined) {
+        // First observation — seed state without firing an event.
+        mutareInsideRef.current.set(vehicleKey, isInside);
+        continue;
+      }
+      if (wasInside === isInside) continue;
+
+      mutareInsideRef.current.set(vehicleKey, isInside);
+
+      const eventType = isInside ? "depot_entry" : "depot_exit";
+      const timestamp = new Date();
+      const vehicleReg = asset.registrationNumber || asset.name || vehicleKey;
+      // Dedupe across re-renders within the same minute (telematics poll runs every 10s)
+      const dedupeKey = `${vehicleKey}-${eventType}-${timestamp.toISOString().slice(0, 16)}`;
+      if (mutareLoggedKeysRef.current.has(dedupeKey)) continue;
+      mutareLoggedKeysRef.current.add(dedupeKey);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("geofence_events")
+        .insert({
+          load_id: null,
+          load_number: null,
+          vehicle_registration: vehicleReg,
+          telematics_asset_id: String(asset.id),
+          event_type: eventType,
+          geofence_name: mutareDepot.name,
+          latitude: asset.lastLatitude,
+          longitude: asset.lastLongitude,
+          event_time: timestamp.toISOString(),
+          source: "auto-depot-monitor",
+        })
+        .then(({ error }: { error: unknown }) => {
+          if (error) {
+            console.error("[MutareDepot] geofence_events INSERT failed", { vehicleReg, eventType, error });
+          }
+        });
+
+      if (isInside) {
+        toast.success(`${vehicleReg} entered Mutare Depot`, {
+          description: `Arrived at ${timestamp.toLocaleTimeString()}`,
+        });
+      } else {
+        toast.info(`${vehicleReg} left Mutare Depot`, {
+          description: `Departed at ${timestamp.toLocaleTimeString()}`,
+        });
+      }
+    }
+  }, [telematicsAssets, user]);
 
   const contextValue = useMemo<GeofenceMonitorContextType>(
     () => ({

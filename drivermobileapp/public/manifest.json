@@ -4,8 +4,8 @@
   "description": "Fleet management driver application for Matanuska",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2563EB",
+  "background_color": "#f2f9f8",
+  "theme_color": "#3FB8B0",
   "orientation": "portrait",
   "icons": [
     {
@@ -57,7 +57,10 @@
       "purpose": "maskable any"
     }
   ],
-  "categories": ["business", "productivity"],
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "screenshots": [],
   "prefer_related_applications": false
 }
