@@ -237,7 +237,7 @@ const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) => {
             model: data.model,
             vehicle_type: data.vehicle_type as Database["public"]["Enums"]["vehicle_type"],
             tonnage: data.tonnage ? parseFloat(data.tonnage) : null,
-            engine_specs: data.vin_number || null,
+            vin: data.vin_number || null,
             active: data.active,
           },
         ])

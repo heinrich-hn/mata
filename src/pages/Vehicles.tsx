@@ -22,8 +22,10 @@ import type { Database } from "@/integrations/supabase/types";
 import { ensureAlert } from '@/lib/alertUtils';
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from 'date-fns';
-import { Eye, Loader2, Pencil, Plus, Search, Trash2, Truck } from "lucide-react";
+import { Eye, FileSpreadsheet, FileText, Loader2, Pencil, Plus, Search, Trash2, Truck } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { exportFleetExcel, exportFleetPDF } from "@/lib/fleetListExport";
+import { useToast } from "@/hooks/use-toast";
 
 // Update the Vehicle interface to match the actual Supabase table structure
 interface Vehicle {
@@ -76,6 +78,8 @@ const Vehicles = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [isExporting, setIsExporting] = useState<null | "excel" | "pdf">(null);
+  const { toast } = useToast();
 
   const { data: rawVehicles = [], isLoading } = useQuery<Vehicle[]>({
     queryKey: ["vehicles", deferredSearchTerm, statusFilter, typeFilter],
@@ -114,20 +118,20 @@ const Vehicles = () => {
       // First, sort by vehicle type (big to small)
       const typeOrderA = VEHICLE_TYPE_ORDER[a.vehicle_type] || 999;
       const typeOrderB = VEHICLE_TYPE_ORDER[b.vehicle_type] || 999;
-      
+
       if (typeOrderA !== typeOrderB) {
         return typeOrderA - typeOrderB;
       }
-      
+
       // Within same type, sort by fleet number (smallest to largest)
       const numA = a.fleet_number ? parseInt(a.fleet_number, 10) : null;
       const numB = b.fleet_number ? parseInt(b.fleet_number, 10) : null;
-      
+
       // Handle null values - push them to the end within the type group
       if (numA === null && numB === null) return 0;
       if (numA === null) return 1;
       if (numB === null) return -1;
-      
+
       // Sort numerically (smallest to largest)
       return numA - numB;
     });
@@ -223,10 +227,66 @@ const Vehicles = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Vehicle
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled={isLoading || vehicles.length === 0 || isExporting !== null}
+              onClick={async () => {
+                try {
+                  setIsExporting("excel");
+                  await exportFleetExcel(vehicles);
+                  toast({ title: "Excel exported", description: `${vehicles.length} vehicles` });
+                } catch (e) {
+                  toast({
+                    title: "Export failed",
+                    description: e instanceof Error ? e.message : "Unable to export Excel",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsExporting(null);
+                }
+              }}
+            >
+              {isExporting === "excel" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="h-4 w-4" />
+              )}
+              Export Excel
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled={isLoading || vehicles.length === 0 || isExporting !== null}
+              onClick={() => {
+                try {
+                  setIsExporting("pdf");
+                  exportFleetPDF(vehicles);
+                  toast({ title: "PDF exported", description: `${vehicles.length} vehicles` });
+                } catch (e) {
+                  toast({
+                    title: "Export failed",
+                    description: e instanceof Error ? e.message : "Unable to export PDF",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsExporting(null);
+                }
+              }}
+            >
+              {isExporting === "pdf" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              Export PDF
+            </Button>
+            <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add Vehicle
+            </Button>
+          </div>
         </div>
 
         {/* Document Alerts */}

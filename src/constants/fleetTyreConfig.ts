@@ -8,7 +8,7 @@ export interface FleetTyrePosition {
 
 export interface FleetConfig {
   fleetNumber: string;
-  fleetType: 'horse' | 'trailer' | 'reefer';
+  fleetType: 'horse' | 'trailer' | 'reefer' | 'van';
   tableName: string;
   positions: FleetTyrePosition[];
 }
@@ -417,7 +417,7 @@ export const FLEET_CONFIGURATIONS: Record<string, FleetConfig> = {
       { position: 'SP', label: 'SP - Spare', axle: 'Spare' },
     ],
   },
-  
+
   // Reefer Trailer Fleets - Super Single configuration (T1-T6 + SP)
   // 3 axles × 2 tyres (Left/Right) per axle
   '4F': {
@@ -513,7 +513,7 @@ export function getFleetConfig(identifier: string): FleetConfig | null {
   // First, try to extract fleet number from registration (e.g., "33H JFK963FS" -> "33H")
   const fleetMatch = identifier.match(/^(\d+[A-Z]+)/);
   const fleetNumber = fleetMatch ? fleetMatch[1] : identifier;
-  
+
   return FLEET_CONFIGURATIONS[fleetNumber] || null;
 }
 

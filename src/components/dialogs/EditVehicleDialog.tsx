@@ -1,20 +1,20 @@
 import { Button } from "@/components/ui/button";
 import {
-Dialog,
-DialogContent,
-DialogDescription,
-DialogFooter,
-DialogHeader,
-DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-Select,
-SelectContent,
-SelectItem,
-SelectTrigger,
-SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +32,7 @@ interface Vehicle {
   vehicle_type: string;
   tonnage: number | null;
   engine_specs: string | null;
+  vin?: string | null;
   active: boolean | null;
 }
 
@@ -85,7 +86,7 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
         model: vehicle.model,
         vehicle_type: vehicle.vehicle_type,
         tonnage: vehicle.tonnage?.toString() || "",
-        vin_number: vehicle.engine_specs || "",
+        vin_number: vehicle.vin || vehicle.engine_specs || "",
         active: vehicle.active ?? true,
       });
     }
@@ -104,7 +105,7 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
           model: data.model,
           vehicle_type: data.vehicle_type as Database["public"]["Enums"]["vehicle_type"],
           tonnage: data.tonnage ? parseFloat(data.tonnage) : null,
-          engine_specs: data.vin_number || null,
+          vin: data.vin_number || null,
           active: data.active,
         })
         .eq("id", vehicle.id)

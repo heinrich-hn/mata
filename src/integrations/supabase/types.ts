@@ -5533,6 +5533,78 @@ export type Database = {
         }
         Relationships: []
       }
+      inspection_schedule_rules: {
+        Row: {
+          active: boolean
+          cadence: string
+          created_at: string | null
+          created_by: string | null
+          day_of_month: number | null
+          end_date: string | null
+          id: string
+          interval_days: number | null
+          notes: string | null
+          start_date: string
+          template_id: string | null
+          template_name: string | null
+          updated_at: string | null
+          vehicle_id: string | null
+          vehicle_label: string | null
+          weekday: number | null
+        }
+        Insert: {
+          active?: boolean
+          cadence: string
+          created_at?: string | null
+          created_by?: string | null
+          day_of_month?: number | null
+          end_date?: string | null
+          id?: string
+          interval_days?: number | null
+          notes?: string | null
+          start_date?: string
+          template_id?: string | null
+          template_name?: string | null
+          updated_at?: string | null
+          vehicle_id?: string | null
+          vehicle_label?: string | null
+          weekday?: number | null
+        }
+        Update: {
+          active?: boolean
+          cadence?: string
+          created_at?: string | null
+          created_by?: string | null
+          day_of_month?: number | null
+          end_date?: string | null
+          id?: string
+          interval_days?: number | null
+          notes?: string | null
+          start_date?: string
+          template_id?: string | null
+          template_name?: string | null
+          updated_at?: string | null
+          vehicle_id?: string | null
+          vehicle_label?: string | null
+          weekday?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_schedule_rules_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_schedule_rules_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspection_results: {
         Row: {
           created_at: string | null
@@ -8774,6 +8846,8 @@ export type Database = {
           inspection_type: string | null
           notes: string | null
           scheduled_date: string
+          template_id: string | null
+          template_name: string | null
           updated_at: string | null
           vehicle_id: string | null
           vehicle_label: string | null
@@ -8787,6 +8861,8 @@ export type Database = {
           inspection_type?: string | null
           notes?: string | null
           scheduled_date: string
+          template_id?: string | null
+          template_name?: string | null
           updated_at?: string | null
           vehicle_id?: string | null
           vehicle_label?: string | null
@@ -8800,6 +8876,8 @@ export type Database = {
           inspection_type?: string | null
           notes?: string | null
           scheduled_date?: string
+          template_id?: string | null
+          template_name?: string | null
           updated_at?: string | null
           vehicle_id?: string | null
           vehicle_label?: string | null
@@ -8817,6 +8895,13 @@ export type Database = {
             columns: ["completed_inspection_id"]
             isOneToOne: false
             referencedRelation: "vehicle_inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_inspections_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -10996,6 +11081,7 @@ export type Database = {
           tonnage: number | null
           updated_at: string | null
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+          vin: string | null
           wialon_id: number | null
         }
         Insert: {
@@ -11014,6 +11100,7 @@ export type Database = {
           tonnage?: number | null
           updated_at?: string | null
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+          vin?: string | null
           wialon_id?: number | null
         }
         Update: {
@@ -11032,6 +11119,7 @@ export type Database = {
           tonnage?: number | null
           updated_at?: string | null
           vehicle_type?: Database["public"]["Enums"]["vehicle_type"]
+          vin?: string | null
           wialon_id?: number | null
         }
         Relationships: []
