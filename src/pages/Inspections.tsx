@@ -2,6 +2,7 @@ import { BreakdownsList } from "@/components/inspections/BreakdownsList";
 import FaultTracking from "@/components/inspections/FaultTracking";
 import IncidentManagement from "@/components/incidents/IncidentManagement";
 import { InspectionHistory } from "@/components/inspections/InspectionHistory";
+import { InspectionScheduleCalendar } from "@/components/inspections/InspectionScheduleCalendar";
 import { OutOfCommissionList } from "@/components/inspections/OutOfCommissionList";
 import Layout from "@/components/Layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,9 +16,12 @@ const Inspections = () => {
     <Layout>
       <Tabs defaultValue={defaultTab} className="space-y-6">
         <div className="overflow-x-auto -mx-1 px-1">
-          <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-3xl sm:grid-cols-5">
+          <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-3xl sm:grid-cols-6">
             <TabsTrigger value="inspections" className="px-5 py-2.5 text-base whitespace-nowrap">
               Inspections
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="px-5 py-2.5 text-base whitespace-nowrap">
+              Schedule
             </TabsTrigger>
             <TabsTrigger value="faults" className="px-5 py-2.5 text-base whitespace-nowrap">
               Faults
@@ -35,6 +39,9 @@ const Inspections = () => {
         </div>
         <TabsContent value="inspections">
           <InspectionHistory />
+        </TabsContent>
+        <TabsContent value="schedule">
+          <InspectionScheduleCalendar />
         </TabsContent>
         <TabsContent value="faults">
           <FaultTracking />
