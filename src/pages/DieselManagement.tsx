@@ -779,7 +779,17 @@ const DieselManagement = () => {
   // Handler functions
   const handleManualSave = async (record: DieselConsumptionRecord | Omit<DieselConsumptionRecord, 'id' | 'created_at' | 'updated_at'>) => {
     if (isReeferFleet(record.fleet_number)) {
-      // Reefer fleet selected in truck form - redirect to reefer save
+      // Reefer fleet selected in truck form - redirect to reefer save.
+      // Map km_reading -> operating_hours so previous-hours lookups keep
+      // working even when a reefer fill is entered via the truck form.
+      const opHours = record.operating_hours ?? record.km_reading ?? null;
+      const prevOpHours = record.previous_operating_hours ?? record.previous_km_reading ?? null;
+      const hoursOp = (opHours != null && prevOpHours != null && opHours > prevOpHours)
+        ? opHours - prevOpHours
+        : null;
+      const lph = (hoursOp != null && hoursOp > 0 && record.litres_filled > 0)
+        ? record.litres_filled / hoursOp
+        : null;
       const reeferRecord: ReeferDieselRecord = {
         id: 'id' in record ? record.id : undefined as unknown as string,
         reefer_unit: record.fleet_number,
@@ -789,10 +799,10 @@ const DieselManagement = () => {
         cost_per_litre: record.cost_per_litre ?? null,
         total_cost: record.total_cost,
         currency: record.currency || 'USD',
-        operating_hours: null,
-        previous_operating_hours: null,
-        hours_operated: null,
-        litres_per_hour: null,
+        operating_hours: opHours,
+        previous_operating_hours: prevOpHours,
+        hours_operated: hoursOp,
+        litres_per_hour: lph,
         linked_diesel_record_id: null,
         driver_name: record.driver_name || '',
         notes: record.notes || '',

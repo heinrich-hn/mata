@@ -3360,6 +3360,8 @@ export type Database = {
           tonnage: number | null
           updated_at: string | null
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+          vin: string | null
+          year: number | null
         }
         Insert: {
           active?: boolean | null
@@ -3374,6 +3376,8 @@ export type Database = {
           tonnage?: number | null
           updated_at?: string | null
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+          vin?: string | null
+          year?: number | null
         }
         Update: {
           active?: boolean | null
@@ -3388,6 +3392,8 @@ export type Database = {
           tonnage?: number | null
           updated_at?: string | null
           vehicle_type?: Database["public"]["Enums"]["vehicle_type"]
+          vin?: string | null
+          year?: number | null
         }
         Relationships: []
       }

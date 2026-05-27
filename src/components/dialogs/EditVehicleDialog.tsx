@@ -33,6 +33,7 @@ interface Vehicle {
   tonnage: number | null;
   engine_specs: string | null;
   vin?: string | null;
+  year?: number | null;
   active: boolean | null;
 }
 
@@ -50,6 +51,7 @@ interface VehicleFormData {
   vehicle_type: string;
   tonnage: string;
   vin_number: string;
+  year: string;
   active: boolean;
 }
 
@@ -74,6 +76,7 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
     vehicle_type: "",
     tonnage: "",
     vin_number: "",
+    year: "",
     active: true,
   });
 
@@ -87,6 +90,7 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
         vehicle_type: vehicle.vehicle_type,
         tonnage: vehicle.tonnage?.toString() || "",
         vin_number: vehicle.vin || vehicle.engine_specs || "",
+        year: vehicle.year?.toString() || "",
         active: vehicle.active ?? true,
       });
     }
@@ -106,6 +110,7 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
           vehicle_type: data.vehicle_type as Database["public"]["Enums"]["vehicle_type"],
           tonnage: data.tonnage ? parseFloat(data.tonnage) : null,
           vin: data.vin_number || null,
+          year: data.year ? parseInt(data.year, 10) : null,
           active: data.active,
         })
         .eq("id", vehicle.id)
@@ -283,6 +288,26 @@ const EditVehicleDialog = ({ open, onOpenChange, vehicle }: EditVehicleDialogPro
                   setFormData({ ...formData, vin_number: e.target.value })
                 }
                 placeholder="e.g., YV1AS565781234567"
+                className="col-span-3"
+              />
+            </div>
+
+            {/* Year Model */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="year" className="text-right">
+                Year Model
+              </Label>
+              <Input
+                id="year"
+                type="number"
+                inputMode="numeric"
+                min={1900}
+                max={new Date().getFullYear() + 1}
+                value={formData.year}
+                onChange={(e) =>
+                  setFormData({ ...formData, year: e.target.value })
+                }
+                placeholder="e.g., 2022"
                 className="col-span-3"
               />
             </div>

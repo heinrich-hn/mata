@@ -72,6 +72,98 @@ interface UseReeferDieselRecordsOptions {
 
 const getReeferTable = () => supabase.from('reefer_diesel_records');
 
+// Verifies that the DB cascade trigger correctly updated the chronological
+// predecessor and successor of an edited reefer row. Logs a clear console
+// warning when an expected propagation did not happen, so silent failures
+// (missing trigger, stale data, RLS, etc.) are easy to spot.
+const verifyReeferCascade = async (
+  saved: ReeferDieselRecordRow,
+  changed: { hoursChanged: boolean; litresChanged: boolean },
+) => {
+  try {
+    const { data: prev } = await supabase
+      .from('reefer_diesel_records')
+      .select('id, date, created_at, operating_hours')
+      .eq('reefer_unit', saved.reefer_unit)
+      .not('operating_hours', 'is', null)
+      .neq('id', saved.id)
+      .or(`date.lt.${saved.date},and(date.eq.${saved.date},created_at.lt.${saved.created_at})`)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const { data: next } = await supabase
+      .from('reefer_diesel_records')
+      .select('id, date, created_at, operating_hours, previous_operating_hours, litres_filled, hours_operated, litres_per_hour')
+      .eq('reefer_unit', saved.reefer_unit)
+      .not('operating_hours', 'is', null)
+      .neq('id', saved.id)
+      .or(`date.gt.${saved.date},and(date.eq.${saved.date},created_at.gt.${saved.created_at})`)
+      .order('date', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const issues: string[] = [];
+
+    const expectedPrev = prev?.operating_hours ?? null;
+    if (Number(saved.previous_operating_hours ?? NaN) !== Number(expectedPrev ?? NaN)
+        && !(saved.previous_operating_hours == null && expectedPrev == null)) {
+      issues.push(
+        `Edited row's previous_operating_hours=${saved.previous_operating_hours} does not match predecessor operating_hours=${expectedPrev}`,
+      );
+    }
+
+    if (next) {
+      const expectedNextPrev = saved.operating_hours;
+      if (Number(next.previous_operating_hours ?? NaN) !== Number(expectedNextPrev ?? NaN)) {
+        issues.push(
+          `Next transaction (${next.id} on ${next.date}) previous_operating_hours=${next.previous_operating_hours} did not update to ${expectedNextPrev}`,
+        );
+      }
+      if (expectedNextPrev != null && next.operating_hours != null) {
+        const expectedHoursOp = Number(next.operating_hours) > Number(expectedNextPrev)
+          ? Number(next.operating_hours) - Number(expectedNextPrev)
+          : null;
+        if (expectedHoursOp != null && Number(next.hours_operated ?? NaN) !== expectedHoursOp) {
+          issues.push(
+            `Next transaction (${next.id}) hours_operated=${next.hours_operated} did not recalculate to ${expectedHoursOp}`,
+          );
+        }
+        if (expectedHoursOp && Number(next.litres_filled) > 0) {
+          const expectedLph = Number(next.litres_filled) / expectedHoursOp;
+          const actualLph = Number(next.litres_per_hour ?? NaN);
+          if (!Number.isFinite(actualLph) || Math.abs(actualLph - expectedLph) > 0.01) {
+            issues.push(
+              `Next transaction (${next.id}) litres_per_hour=${next.litres_per_hour} did not recalculate to ${expectedLph.toFixed(2)}`,
+            );
+          }
+        }
+      }
+    }
+
+    if (issues.length > 0) {
+      console.error(
+        '[reefer-diesel cascade] Edit to reefer %s on %s did not propagate as expected. ' +
+        'Verify migration 20260527000002_recalc_reefer_consumption.sql is applied.',
+        saved.reefer_unit,
+        saved.date,
+        {
+          editedId: saved.id,
+          hoursChanged: changed.hoursChanged,
+          litresChanged: changed.litresChanged,
+          predecessor: prev,
+          successor: next,
+          issues,
+        },
+      );
+    }
+  } catch (err) {
+    console.error('[reefer-diesel cascade] Failed to verify cascade propagation', err);
+  }
+};
+
 interface DieselRecordRow {
   id: string;
   fleet_number: string;
@@ -157,6 +249,13 @@ export const useReeferDieselRecords = (options: UseReeferDieselRecordsOptions = 
     mutationFn: async (record: ReeferDieselRecord) => {
       if (!record.id) throw new Error('Record ID is required for update');
 
+      // Snapshot the row before the update so we can detect whether the
+      // cascade (DB trigger) propagated the new values to dependent rows.
+      const { data: before } = await getReeferTable()
+        .select('id, reefer_unit, date, created_at, operating_hours, litres_filled')
+        .eq('id', record.id)
+        .maybeSingle();
+
       const { id, ...updateData } = record;
       const { data, error } = await getReeferTable()
         .update(updateData)
@@ -165,12 +264,24 @@ export const useReeferDieselRecords = (options: UseReeferDieselRecordsOptions = 
         .single();
 
       if (error) throw error;
-      return data as ReeferDieselRecordRow;
+
+      const saved = data as ReeferDieselRecordRow;
+      const hoursChanged =
+        before && Number(before.operating_hours) !== Number(saved.operating_hours);
+      const litresChanged =
+        before && Number(before.litres_filled) !== Number(saved.litres_filled);
+
+      if (hoursChanged || litresChanged) {
+        await verifyReeferCascade(saved, { hoursChanged: !!hoursChanged, litresChanged: !!litresChanged });
+      }
+
+      return saved;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reefer-diesel-records'] });
       queryClient.invalidateQueries({ queryKey: ['reefer-consumption-summary'] });
       queryClient.invalidateQueries({ queryKey: ['reefer-consumption-by-horse'] });
+      queryClient.invalidateQueries({ queryKey: ['reefer-consumption-by-truck'] });
       toast({ title: 'Success', description: 'Reefer diesel record updated' });
       requestGoogleSheetsSync('diesel');
     },

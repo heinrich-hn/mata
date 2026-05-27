@@ -476,9 +476,116 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
     return data.id;
   };
 
+  // Verifies that the DB cascade trigger correctly updated the chronological
+  // predecessor and successor of an edited horse/truck diesel row. Logs a
+  // clear console error when an expected propagation did not happen so silent
+  // failures (missing trigger, RLS, etc.) are easy to spot.
+  const verifyDieselCascade = async (
+    editedId: string,
+    changed: { kmChanged: boolean; litresChanged: boolean },
+  ) => {
+    try {
+      const { data: saved } = await supabase
+        .from('diesel_records')
+        .select('id, fleet_number, date, created_at, km_reading, litres_filled, vehicle_litres_only, previous_km_reading, distance_travelled, km_per_litre')
+        .eq('id', editedId)
+        .maybeSingle();
+      if (!saved) return;
+
+      const { data: prev } = await supabase
+        .from('diesel_records')
+        .select('id, date, created_at, km_reading')
+        .eq('fleet_number', saved.fleet_number)
+        .neq('id', saved.id)
+        .or(`date.lt.${saved.date},and(date.eq.${saved.date},created_at.lt.${saved.created_at})`)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { data: next } = await supabase
+        .from('diesel_records')
+        .select('id, date, created_at, km_reading, litres_filled, vehicle_litres_only, previous_km_reading, distance_travelled, km_per_litre')
+        .eq('fleet_number', saved.fleet_number)
+        .neq('id', saved.id)
+        .or(`date.gt.${saved.date},and(date.eq.${saved.date},created_at.gt.${saved.created_at})`)
+        .order('date', { ascending: true })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      const issues: string[] = [];
+
+      const expectedPrev = prev?.km_reading ?? null;
+      if (Number(saved.previous_km_reading ?? NaN) !== Number(expectedPrev ?? NaN)
+        && !(saved.previous_km_reading == null && expectedPrev == null)) {
+        issues.push(
+          `Edited row's previous_km_reading=${saved.previous_km_reading} does not match predecessor km_reading=${expectedPrev}`,
+        );
+      }
+
+      if (next) {
+        if (Number(next.previous_km_reading ?? NaN) !== Number(saved.km_reading ?? NaN)) {
+          issues.push(
+            `Next transaction (${next.id} on ${next.date}) previous_km_reading=${next.previous_km_reading} did not update to ${saved.km_reading}`,
+          );
+        }
+        if (saved.km_reading != null && next.km_reading != null) {
+          const expectedDist = Number(next.km_reading) > Number(saved.km_reading)
+            ? Number(next.km_reading) - Number(saved.km_reading)
+            : null;
+          if (expectedDist != null && Number(next.distance_travelled ?? NaN) !== expectedDist) {
+            issues.push(
+              `Next transaction (${next.id}) distance_travelled=${next.distance_travelled} did not recalculate to ${expectedDist}`,
+            );
+          }
+          const litresForCalc = next.vehicle_litres_only && Number(next.vehicle_litres_only) > 0
+            ? Number(next.vehicle_litres_only)
+            : Number(next.litres_filled);
+          if (expectedDist && litresForCalc > 0) {
+            const expectedKmpl = expectedDist / litresForCalc;
+            const actualKmpl = Number(next.km_per_litre ?? NaN);
+            if (!Number.isFinite(actualKmpl) || Math.abs(actualKmpl - expectedKmpl) > 0.01) {
+              issues.push(
+                `Next transaction (${next.id}) km_per_litre=${next.km_per_litre} did not recalculate to ${expectedKmpl.toFixed(3)}`,
+              );
+            }
+          }
+        }
+      }
+
+      if (issues.length > 0) {
+        console.error(
+          '[diesel cascade] Edit to fleet %s on %s did not propagate as expected. ' +
+          'Verify migration 20260527000003_recalc_diesel_consumption.sql is applied.',
+          saved.fleet_number,
+          saved.date,
+          {
+            editedId: saved.id,
+            kmChanged: changed.kmChanged,
+            litresChanged: changed.litresChanged,
+            predecessor: prev,
+            successor: next,
+            issues,
+          },
+        );
+      }
+    } catch (err) {
+      console.error('[diesel cascade] Failed to verify cascade propagation', err);
+    }
+  };
+
   const updateDieselRecord = async (record: DieselConsumptionRecord) => {
     // If updating and distance data is missing, try to recalculate
     const enrichedRecord = { ...record };
+
+    // Snapshot the row before update to detect whether km/litres actually
+    // changed, so we can verify the cascade trigger after the write.
+    const { data: beforeRow } = await supabase
+      .from('diesel_records')
+      .select('id, fleet_number, date, created_at, km_reading, litres_filled, vehicle_litres_only')
+      .eq('id', record.id)
+      .maybeSingle();
 
     if (enrichedRecord.km_reading && enrichedRecord.date && (enrichedRecord.previous_km_reading === null || enrichedRecord.previous_km_reading === undefined || enrichedRecord.distance_travelled === null || enrichedRecord.distance_travelled === undefined)) {
       const prevRecord = await fetchPreviousKmReading(enrichedRecord.fleet_number, enrichedRecord.date, enrichedRecord.id);
@@ -502,6 +609,14 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
     };
     const { error } = await supabase.from('diesel_records').update(dbData).eq('id', record.id);
     if (error) throw error;
+
+    const kmChanged = beforeRow && Number(beforeRow.km_reading) !== Number(enrichedRecord.km_reading);
+    const litresChanged = beforeRow
+      && (Number(beforeRow.litres_filled) !== Number(enrichedRecord.litres_filled)
+        || Number(beforeRow.vehicle_litres_only ?? NaN) !== Number(enrichedRecord.vehicle_litres_only ?? NaN));
+    if (kmChanged || litresChanged) {
+      await verifyDieselCascade(record.id, { kmChanged: !!kmChanged, litresChanged: !!litresChanged });
+    }
 
     // Sync reefer diesel records for linked trailers
     // First, delete any existing reefer records linked to this diesel record

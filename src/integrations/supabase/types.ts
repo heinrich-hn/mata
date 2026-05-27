@@ -11083,6 +11083,7 @@ export type Database = {
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
           vin: string | null
           wialon_id: number | null
+          year: number | null
         }
         Insert: {
           active?: boolean | null
@@ -11102,6 +11103,7 @@ export type Database = {
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
           vin?: string | null
           wialon_id?: number | null
+          year?: number | null
         }
         Update: {
           active?: boolean | null
@@ -11121,6 +11123,7 @@ export type Database = {
           vehicle_type?: Database["public"]["Enums"]["vehicle_type"]
           vin?: string | null
           wialon_id?: number | null
+          year?: number | null
         }
         Relationships: []
       }

@@ -78,7 +78,7 @@ const ReeferDieselEntryModal = ({
   const [operationSuccess, setOperationSuccess] = useState(false);
 
   // Function to fetch previous hour reading from last fill-up
-  const fetchPreviousHourReading = useCallback(async (reeferUnit: string, currentDate: string) => {
+  const fetchPreviousHourReading = useCallback(async (reeferUnit: string, currentDate: string, excludeRecordId?: string) => {
     if (!reeferUnit || !currentDate) {
       setPreviousHourReading(null);
       setPreviousHourDate(null);
@@ -92,15 +92,24 @@ const ReeferDieselEntryModal = ({
       let previousHours: number | null = null;
       let previousDate: string | null = null;
 
-      // Try reefer_diesel_records first (new records)
-      const { data: anyReeferData } = await supabase
+      // Try reefer_diesel_records first (new records) — pick the most recent
+      // row strictly before the current date that actually has an
+      // operating_hours reading. Excluding the row being edited and rows on
+      // the same/future date prevents an entry from referencing itself or a
+      // later fill.
+      let query = supabase
         .from('reefer_diesel_records')
-        .select('operating_hours, date')
+        .select('id, operating_hours, date')
         .eq('reefer_unit', reeferUnit)
+        .not('operating_hours', 'is', null)
+        .lt('date', currentDate)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      if (excludeRecordId) {
+        query = query.neq('id', excludeRecordId);
+      }
+      const { data: anyReeferData } = await query.maybeSingle();
 
       if (anyReeferData?.operating_hours !== null && anyReeferData?.operating_hours !== undefined) {
         previousHours = anyReeferData.operating_hours;
@@ -112,6 +121,7 @@ const ReeferDieselEntryModal = ({
           .from('diesel_records')
           .select('date')
           .eq('fleet_number', reeferUnit)
+          .lt('date', currentDate)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1)
@@ -147,8 +157,12 @@ const ReeferDieselEntryModal = ({
 
   // Fetch previous hour reading when reefer unit changes
   useEffect(() => {
-    if (formData.reefer_unit && !editRecord) {
-      fetchPreviousHourReading(formData.reefer_unit, formData.date);
+    if (formData.reefer_unit) {
+      fetchPreviousHourReading(
+        formData.reefer_unit,
+        formData.date,
+        editRecord?.id,
+      );
     }
   }, [formData.reefer_unit, formData.date, editRecord, fetchPreviousHourReading]);
 
@@ -166,8 +180,10 @@ const ReeferDieselEntryModal = ({
         notes: editRecord.notes || '',
         currency: editRecord.currency || 'USD',
       });
-      // When editing, use the stored previous_operating_hours
-      setPreviousHourReading(editRecord.previous_operating_hours || null);
+      // Seed from the stored previous reading if present; the effect above
+      // will then refine it by querying prior records (covers legacy rows
+      // where previous_operating_hours was never populated).
+      setPreviousHourReading(editRecord.previous_operating_hours ?? null);
       setPreviousHourDate(null);
       setIsFutureDateWarning(false);
       setFuelSource('station');
@@ -342,7 +358,6 @@ const ReeferDieselEntryModal = ({
   ];
 
   const currencyOptions = [
-    { label: 'USD', value: 'USD' },
     { label: 'USD', value: 'USD' },
   ];
 
