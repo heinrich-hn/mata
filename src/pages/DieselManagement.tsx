@@ -22,8 +22,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOperations } from '@/contexts/OperationsContext';
+import { useDieselRecordsWindow } from '@/hooks/useDieselRecordsWindow';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useReeferConsumptionSummary, useReeferDieselRecords, type ReeferDieselRecordRow } from '@/hooks/useReeferDiesel';
+import { useQueryClient } from '@tanstack/react-query';
+import { Input } from '@/components/ui/input';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/formatters';
 import type { DieselConsumptionRecord, DieselNorms } from '@/types/operations';
 import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, ChevronsUpDown, DollarSign, Edit, Eye, FileSpreadsheet, FileText, Filter, Fuel, Link, List, Plus, Settings, Snowflake, Trash2, Truck, User, X } from 'lucide-react';
@@ -122,21 +125,37 @@ const FleetFilterCombobox = ({ value, onChange, fleets }: FleetFilterComboboxPro
 };
 
 
+// Default date window for the Diesel Management page. Loading the entire
+// history on every visit is the dominant cause of the slow load; the page
+// fetches only this window by default and the user can widen it on demand.
+const DEFAULT_WINDOW_DAYS = 90;
+
+const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
+const getDefaultDateFrom = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - DEFAULT_WINDOW_DAYS);
+  return toIsoDate(d);
+};
+const getDefaultDateTo = () => toIsoDate(new Date());
+
 const DieselManagement = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [viewMode, setViewMode] = useState<'grouped' | 'list'>('grouped');
   const [listFleetFilter, setListFleetFilter] = useState<string>('all');
   const [fleetFilter, _setFleetFilter] = useState<string>('');
   const [weekFilter, _setWeekFilter] = useState<string>('');
+  const [dateFrom, setDateFrom] = useState<string>(getDefaultDateFrom);
+  const [dateTo, setDateTo] = useState<string>(getDefaultDateTo);
+  const [allTime, setAllTime] = useState<boolean>(false);
+  const queryClient = useQueryClient();
   const {
-    dieselRecords,
     trips,
     dieselNorms,
-    addDieselRecord,
-    updateDieselRecord,
-    deleteDieselRecord,
-    linkDieselToTrip,
-    unlinkDieselFromTrip,
+    addDieselRecord: addDieselRecordRaw,
+    updateDieselRecord: updateDieselRecordRaw,
+    deleteDieselRecord: deleteDieselRecordRaw,
+    linkDieselToTrip: linkDieselToTripRaw,
+    unlinkDieselFromTrip: unlinkDieselFromTripRaw,
     addDieselNorm,
     updateDieselNorm,
     deleteDieselNorm,
@@ -144,12 +163,59 @@ const DieselManagement = () => {
     deleteCostEntry,
   } = useOperations();
 
+  // Effective window passed to all data hooks. `allTime` skips the bounds.
+  const effectiveFrom = allTime ? undefined : dateFrom || undefined;
+  const effectiveTo = allTime ? undefined : dateTo || undefined;
+
+  // Windowed diesel records (truck + legacy reefer). Replaces the full-table
+  // load from OperationsContext on this page.
+  const { data: dieselRecords = [], isFetching: isDieselFetching } = useDieselRecordsWindow({
+    from: effectiveFrom,
+    to: effectiveTo,
+  });
+
+  // Wrap mutations so the windowed query (and reefer query) refresh after writes.
+  const invalidateDieselQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['diesel-records-window'] });
+    queryClient.invalidateQueries({ queryKey: ['reefer-diesel-records'] });
+    queryClient.invalidateQueries({ queryKey: ['reefer-consumption-summary'] });
+  }, [queryClient]);
+
+  const addDieselRecord = useCallback(async (...args: Parameters<typeof addDieselRecordRaw>) => {
+    const r = await addDieselRecordRaw(...args);
+    invalidateDieselQueries();
+    return r;
+  }, [addDieselRecordRaw, invalidateDieselQueries]);
+  const updateDieselRecord = useCallback(async (...args: Parameters<typeof updateDieselRecordRaw>) => {
+    const r = await updateDieselRecordRaw(...args);
+    invalidateDieselQueries();
+    return r;
+  }, [updateDieselRecordRaw, invalidateDieselQueries]);
+  const deleteDieselRecord = useCallback(async (...args: Parameters<typeof deleteDieselRecordRaw>) => {
+    const r = await deleteDieselRecordRaw(...args);
+    invalidateDieselQueries();
+    return r;
+  }, [deleteDieselRecordRaw, invalidateDieselQueries]);
+  const linkDieselToTrip = useCallback(async (...args: Parameters<typeof linkDieselToTripRaw>) => {
+    const r = await linkDieselToTripRaw(...args);
+    invalidateDieselQueries();
+    return r;
+  }, [linkDieselToTripRaw, invalidateDieselQueries]);
+  const unlinkDieselFromTrip = useCallback(async (...args: Parameters<typeof unlinkDieselFromTripRaw>) => {
+    const r = await unlinkDieselFromTripRaw(...args);
+    invalidateDieselQueries();
+    return r;
+  }, [unlinkDieselFromTripRaw, invalidateDieselQueries]);
+
   // Batch debrief state
   const [isBatchDebriefOpen, setIsBatchDebriefOpen] = useState(false);
   const [selectedFleetForBatch, setSelectedFleetForBatch] = useState<string>('');
 
   // Consolidated reefer diesel records hook (CRUD + records from reefer_diesel_records table)
-  const { records: allReeferRecords, createRecordAsync, updateRecordAsync, deleteRecordAsync: deleteReeferRecordAsync, linkToVehicleAsync, unlinkFromVehicleAsync } = useReeferDieselRecords({});
+  const { records: allReeferRecords, createRecordAsync, updateRecordAsync, deleteRecordAsync: deleteReeferRecordAsync, linkToVehicleAsync, unlinkFromVehicleAsync } = useReeferDieselRecords({
+    startDate: effectiveFrom,
+    endDate: effectiveTo,
+  });
 
   const truckRecords = useMemo(
     () => dieselRecords.filter(record => !isReeferFleet(record.fleet_number)),
@@ -1051,6 +1117,36 @@ const DieselManagement = () => {
                   fleets={[...new Set([...uniqueFleetNumbers, ...reeferFleetNumbers])].sort()}
                 />
               )}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground hidden sm:inline">From:</span>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => { setAllTime(false); setDateFrom(e.target.value); }}
+                  disabled={allTime}
+                  className="h-9 w-[150px]"
+                />
+                <span className="text-xs font-medium text-muted-foreground hidden sm:inline">To:</span>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => { setAllTime(false); setDateTo(e.target.value); }}
+                  disabled={allTime}
+                  className="h-9 w-[150px]"
+                />
+                <Button
+                  variant={allTime ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-9"
+                  onClick={() => setAllTime((v) => !v)}
+                  title="Load every diesel record (slow on large histories)"
+                >
+                  {allTime ? 'All time \u2713' : 'All time'}
+                </Button>
+                {isDieselFetching && (
+                  <span className="text-xs text-muted-foreground">Loading\u2026</span>
+                )}
+              </div>
               <div className="ml-auto">
                 <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grouped' | 'list')}>
                   <TabsList className="h-9">
