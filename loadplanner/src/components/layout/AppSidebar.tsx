@@ -12,6 +12,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 import {
   AlertTriangle,
   BarChart3,
@@ -20,10 +21,10 @@ import {
   Fuel,
   Handshake,
   LayoutDashboard,
+  LogOut,
   MapPin,
   Package,
   Route,
-  Settings,
   Truck,
   Users,
 } from "lucide-react";
@@ -53,6 +54,11 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const { signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   const NavItem = ({ item }: { item: (typeof mainNavItems)[0] }) => {
     const isActive = location.pathname === item.url ||
@@ -87,16 +93,13 @@ export function AppSidebar() {
     >
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar-primary">
-            <Package className="h-5 w-5 text-sidebar-primary-foreground" />
-          </div>
           {!collapsed && (
             <div className="animate-fade-in">
               <h1 className="text-lg font-bold text-sidebar-foreground">
-                LoadPlan
+                Matanuska
               </h1>
               <p className="text-xs text-sidebar-foreground/60">
-                Fleet Management
+                Transport
               </p>
             </div>
           )}
@@ -140,18 +143,15 @@ export function AppSidebar() {
       <SidebarFooter className="p-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <RouterNavLink
-                to="/settings"
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  location.pathname === "/settings" && "bg-sidebar-accent",
-                )}
-              >
-                <Settings className="h-5 w-5 shrink-0" />
-                {!collapsed && <span>Settings</span>}
-              </RouterNavLink>
+            <SidebarMenuButton
+              onClick={handleSignOut}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                "hover:bg-destructive/10 hover:text-destructive text-destructive",
+              )}
+            >
+              <LogOut className="h-5 w-5 shrink-0" />
+              {!collapsed && <span>Sign out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
