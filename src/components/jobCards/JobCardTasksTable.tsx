@@ -1,13 +1,12 @@
 import {
-AlertDialog,
-AlertDialogCancel,
-AlertDialogContent,
-AlertDialogDescription,
-AlertDialogFooter,
-AlertDialogHeader,
-AlertDialogTitle,
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -120,14 +119,37 @@ const JobCardTasksTable = ({ jobCardId, tasks, onTaskUpdate, onRefresh }: JobCar
     }
   };
 
-  const getPriorityVariant = (priority: string) => {
-    switch (priority) {
-      case "urgent": return "destructive";
-      case "high": return "destructive";
-      case "medium": return "default";
-      case "low": return "secondary";
-      default: return "secondary";
-    }
+  const PILL_BASE =
+    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none capitalize";
+
+  const renderPriorityPill = (priority: string) => {
+    const styles: Record<string, { wrap: string; dot: string }> = {
+      urgent: { wrap: "border-red-200 bg-red-50 text-red-700", dot: "bg-red-500" },
+      high: { wrap: "border-orange-200 bg-orange-50 text-orange-700", dot: "bg-orange-500" },
+      medium: { wrap: "border-blue-200 bg-blue-50 text-blue-700", dot: "bg-blue-500" },
+      low: { wrap: "border-slate-200 bg-slate-50 text-slate-600", dot: "bg-slate-400" },
+    };
+    const s = styles[priority] ?? styles.low;
+    return (
+      <span className={`${PILL_BASE} ${s.wrap}`}>
+        <span className={`inline-flex h-1.5 w-1.5 rounded-full ${s.dot}`} aria-hidden />
+        {priority}
+      </span>
+    );
+  };
+
+  const renderTaskStatusPill = (status: string) => {
+    const isCompleted = status === "completed";
+    const wrap = isCompleted
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-slate-200 bg-slate-50 text-slate-600";
+    const dot = isCompleted ? "bg-emerald-500" : "bg-slate-400";
+    return (
+      <span className={`${PILL_BASE} ${wrap}`}>
+        <span className={`inline-flex h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
+        {status.replace("_", " ")}
+      </span>
+    );
   };
 
   const handleStatusToggle = (task: Task) => {
@@ -190,13 +212,13 @@ const JobCardTasksTable = ({ jobCardId, tasks, onTaskUpdate, onRefresh }: JobCar
       </CardHeader>
       <CardContent>
         {tasks.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="rounded-md border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
             No tasks yet. Click "Add Task" to get started.
           </div>
         ) : (
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="bg-muted/40 hover:bg-muted/40 [&>th]:text-[11px] [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
                 <TableHead className="w-12"></TableHead>
                 <TableHead>Task</TableHead>
                 <TableHead>Assignee</TableHead>
@@ -226,14 +248,10 @@ const JobCardTasksTable = ({ jobCardId, tasks, onTaskUpdate, onRefresh }: JobCar
                   </TableCell>
                   <TableCell>{task.assignee || "-"}</TableCell>
                   <TableCell>
-                    <Badge variant={getPriorityVariant(task.priority)}>
-                      {task.priority}
-                    </Badge>
+                    {renderPriorityPill(task.priority)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={task.status === "completed" ? "default" : "secondary"}>
-                      {task.status.replace('_', ' ')}
-                    </Badge>
+                    {renderTaskStatusPill(task.status)}
                   </TableCell>
                   <TableCell>
                     {task.due_date ? (

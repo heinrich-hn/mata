@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { UserSelect } from "@/components/ui/user-select";
 import { useVehicles } from "@/hooks/useVehicles";
-import { ChevronDown, Pencil } from "lucide-react";
+import { ChevronDown, Info, Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface JobCardGeneralInfoProps {
@@ -67,9 +67,12 @@ const JobCardGeneralInfo = ({ jobCard, vehicle, onUpdate, defaultCollapsed = fal
     <Collapsible defaultOpen={!defaultCollapsed}>
       <Card>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
-            <CardTitle className="flex items-center gap-2">
-              General Information
+          <CardHeader className="cursor-pointer rounded-t-lg hover:bg-accent/50 transition-colors">
+            <CardTitle className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <Info className="h-5 w-5 text-muted-foreground" />
+                General Information
+              </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
             </CardTitle>
           </CardHeader>

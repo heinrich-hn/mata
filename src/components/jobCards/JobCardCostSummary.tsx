@@ -144,15 +144,17 @@ export default function JobCardCostSummary({ jobCardId }: JobCardCostSummaryProp
       {/* Cost Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Inventory Parts */}
-        <Card>
+        <Card className="border-l-4 border-l-emerald-400 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Package className="h-4 w-4 text-green-600" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-100">
+                <Package className="h-4 w-4 text-emerald-600" />
+              </span>
               Inventory Parts
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-green-700">
+            <p className="text-2xl font-bold text-emerald-700 tabular-nums">
               ${costSummary.inventory_parts_cost.toFixed(2)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -162,15 +164,17 @@ export default function JobCardCostSummary({ jobCardId }: JobCardCostSummaryProp
         </Card>
 
         {/* External Parts */}
-        <Card>
+        <Card className="border-l-4 border-l-orange-400 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-orange-600" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-orange-100">
+                <DollarSign className="h-4 w-4 text-orange-600" />
+              </span>
               External Parts
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-orange-700">
+            <p className="text-2xl font-bold text-orange-700 tabular-nums">
               ${costSummary.external_parts_cost.toFixed(2)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -180,15 +184,17 @@ export default function JobCardCostSummary({ jobCardId }: JobCardCostSummaryProp
         </Card>
 
         {/* Services */}
-        <Card>
+        <Card className="border-l-4 border-l-purple-400 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Wrench className="h-4 w-4 text-purple-600" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-purple-100">
+                <Wrench className="h-4 w-4 text-purple-600" />
+              </span>
               Services
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-purple-700">
+            <p className="text-2xl font-bold text-purple-700 tabular-nums">
               ${costSummary.services_cost.toFixed(2)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -198,15 +204,17 @@ export default function JobCardCostSummary({ jobCardId }: JobCardCostSummaryProp
         </Card>
 
         {/* Labor */}
-        <Card>
+        <Card className="border-l-4 border-l-sky-400 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="h-4 w-4 text-sky-600" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-100">
+                <Users className="h-4 w-4 text-sky-600" />
+              </span>
               Labor
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-sky-700">
+            <p className="text-2xl font-bold text-sky-700 tabular-nums">
               ${costSummary.labor_cost.toFixed(2)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">

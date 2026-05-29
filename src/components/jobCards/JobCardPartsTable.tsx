@@ -165,10 +165,10 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
   };
 
   const getSourceColor = (part: PartsRequest) => {
-    if (part.is_service) return "bg-purple-100 text-purple-700 hover:bg-purple-200";
-    if (part.tyre_id) return "bg-cyan-100 text-cyan-700 hover:bg-cyan-200";
-    if (part.is_from_inventory) return "bg-green-100 text-green-700 hover:bg-green-200";
-    return "bg-orange-100 text-orange-700 hover:bg-orange-200";
+    if (part.is_service) return "border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100";
+    if (part.tyre_id) return "border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100";
+    if (part.is_from_inventory) return "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100";
+    return "border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100";
   };
 
   const getStatusVariant = (status: string) => {
@@ -242,14 +242,14 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
       </CardHeader>
       <CardContent>
         {parts.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="rounded-md border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
             No parts or services added yet. Click "Add Part/Service" to get started.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-muted/40 hover:bg-muted/40 [&>th]:text-[11px] [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
                   <TableHead>Source</TableHead>
                   <TableHead>Name/Description</TableHead>
                   {isTyreJobCard && <TableHead>Position</TableHead>}
@@ -273,7 +273,7 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
                         <Tooltip>
                           <TooltipTrigger>
                             <div
-                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium ${getSourceColor(part)} ${part.is_from_inventory ? 'cursor-pointer' : ''
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold transition-colors ${getSourceColor(part)} ${part.is_from_inventory ? 'cursor-pointer' : ''
                                 }`}
                               onClick={() =>
                                 part.is_from_inventory && handleInventoryClick(part.inventory_id || null)
@@ -370,8 +370,8 @@ const JobCardPartsTable = ({ jobCardId, parts, onRefresh, fleetNumber, jobNumber
                           </Tooltip>
                         </TooltipProvider>
                       ) : (
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100">
-                          <FileText className="h-4 w-4 text-gray-400" />
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted">
+                          <FileText className="h-4 w-4 text-muted-foreground/50" />
                         </div>
                       )}
                     </TableCell>

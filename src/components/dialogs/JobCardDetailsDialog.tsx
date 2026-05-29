@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateJobCardPDF, type JobCardExportData } from "@/lib/jobCardExport";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useQuery } from "@tanstack/react-query";
-import { FileText } from "lucide-react";
+import { FileText, Info, ListChecks, Package, StickyNote, Wrench } from "lucide-react";
 import JobCardGeneralInfo from "../jobCards/JobCardGeneralInfo";
 import JobCardHeader from "../jobCards/JobCardHeader";
 import JobCardLaborTable from "../jobCards/JobCardLaborTable";
@@ -16,6 +16,14 @@ import JobCardNotes from "../jobCards/JobCardNotes";
 import JobCardPartsTable from "../jobCards/JobCardPartsTable";
 import JobCardStats from "../jobCards/JobCardStats";
 import JobCardTasksTable from "../jobCards/JobCardTasksTable";
+
+const DETAIL_TABS = [
+  { value: "overview", label: "Overview", icon: Info, activeClass: "data-[state=active]:bg-indigo-600" },
+  { value: "tasks", label: "Tasks", icon: ListChecks, activeClass: "data-[state=active]:bg-blue-600" },
+  { value: "parts", label: "Parts", icon: Package, activeClass: "data-[state=active]:bg-emerald-600" },
+  { value: "labor", label: "Labor", icon: Wrench, activeClass: "data-[state=active]:bg-cyan-600" },
+  { value: "notes", label: "Notes", icon: StickyNote, activeClass: "data-[state=active]:bg-amber-500" },
+] as const;
 
 interface JobCardDetailsDialogProps {
   open: boolean;
@@ -319,12 +327,20 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate, initialEd
             />
 
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="tasks">Tasks</TabsTrigger>
-                <TabsTrigger value="parts">Parts</TabsTrigger>
-                <TabsTrigger value="labor">Labor</TabsTrigger>
-                <TabsTrigger value="notes">Notes</TabsTrigger>
+              <TabsList
+                className="grid w-full h-auto gap-1 bg-muted/60 p-1"
+                style={{ gridTemplateColumns: `repeat(${DETAIL_TABS.length}, minmax(0, 1fr))` }}
+              >
+                {DETAIL_TABS.map(({ value, label, icon: Icon, activeClass }) => (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    className={`gap-1.5 rounded-md py-2 text-muted-foreground transition-all data-[state=active]:text-white data-[state=active]:shadow-sm ${activeClass}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </TabsTrigger>
+                ))}
               </TabsList>
 
               <TabsContent value="overview" className="space-y-4">

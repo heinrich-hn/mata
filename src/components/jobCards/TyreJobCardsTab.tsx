@@ -509,23 +509,61 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         });
     };
 
+    const PILL_BASE = "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none";
+
     const getPriorityBadge = (priority: string) => {
         switch (priority) {
-            case "urgent": return <Badge variant="destructive">Urgent</Badge>;
-            case "high": return <Badge variant="destructive">High</Badge>;
-            case "medium": return <Badge>Medium</Badge>;
-            case "low": return <Badge variant="secondary">Low</Badge>;
-            default: return <Badge variant="secondary">{priority}</Badge>;
+            case "urgent": return (
+                <span className={`${PILL_BASE} border-red-200 bg-red-50 text-red-700`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />Urgent
+                </span>
+            );
+            case "high": return (
+                <span className={`${PILL_BASE} border-orange-200 bg-orange-50 text-orange-700`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-orange-500" />High
+                </span>
+            );
+            case "medium": return (
+                <span className={`${PILL_BASE} border-blue-200 bg-blue-50 text-blue-700`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" />Medium
+                </span>
+            );
+            case "low": return (
+                <span className={`${PILL_BASE} border-slate-200 bg-slate-50 text-slate-700`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" />Low
+                </span>
+            );
+            default: return (
+                <span className={`${PILL_BASE} border-slate-200 bg-slate-50 text-slate-700 capitalize`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" />{priority}
+                </span>
+            );
         }
     };
 
     const getStatusBadge = (status: string) => {
         const s = status?.toLowerCase();
         switch (s) {
-            case "pending": return <Badge variant="secondary">Pending</Badge>;
-            case "in_progress": case "in progress": return <Badge className="bg-blue-500">In Progress</Badge>;
-            case "completed": return <Badge className="bg-green-500">Completed</Badge>;
-            default: return <Badge variant="secondary">{status}</Badge>;
+            case "pending": return (
+                <span className={`${PILL_BASE} border-slate-200 bg-slate-50 text-slate-700`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" />Pending
+                </span>
+            );
+            case "in_progress": case "in progress": return (
+                <span className={`${PILL_BASE} border-blue-200 bg-blue-50 text-blue-700`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" />In Progress
+                </span>
+            );
+            case "completed": return (
+                <span className={`${PILL_BASE} border-emerald-200 bg-emerald-50 text-emerald-700`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />Completed
+                </span>
+            );
+            default: return (
+                <span className={`${PILL_BASE} border-slate-200 bg-slate-50 text-slate-700 capitalize`}>
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" />{status}
+                </span>
+            );
         }
     };
 
@@ -533,7 +571,7 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
         <div className="overflow-x-auto">
             <Table>
                 <TableHeader>
-                    <TableRow className="hover:bg-transparent">
+                    <TableRow className="bg-muted/40 hover:bg-muted/40 [&>th]:text-[11px] [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
                         <TableHead className="h-9 px-3 py-2 text-xs w-[90px]">Job #</TableHead>
                         <TableHead className="h-9 px-3 py-2 text-xs">Title</TableHead>
                         <TableHead className="h-9 px-3 py-2 text-xs">Fleet / Vehicle</TableHead>
@@ -643,9 +681,11 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
                         </TableRow>
                     ))}
                     {cards.length === 0 && (
-                        <TableRow>
-                            <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                                No tyre job cards found
+                        <TableRow className="hover:bg-transparent">
+                            <TableCell colSpan={9} className="py-8">
+                                <div className="rounded-md border border-dashed bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
+                                    No tyre job cards found
+                                </div>
                             </TableCell>
                         </TableRow>
                     )}
@@ -792,14 +832,14 @@ export default function TyreJobCardsTab({ onJobCardClick }: TyreJobCardsTabProps
 
             {/* Active vs Completed sub-tabs */}
             <Tabs defaultValue="active" className="space-y-4">
-                <TabsList>
-                    <TabsTrigger value="active" className="gap-2">
-                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+                <TabsList className="gap-1 bg-muted/60 p-1">
+                    <TabsTrigger value="active" className="group gap-2 rounded-md transition-all data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500 group-data-[state=active]:bg-white" aria-hidden />
                         Active
                         <Badge variant="secondary" className="ml-1">{activeCards.length}</Badge>
                     </TabsTrigger>
-                    <TabsTrigger value="completed" className="gap-2">
-                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                    <TabsTrigger value="completed" className="group gap-2 rounded-md transition-all data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 group-data-[state=active]:bg-white" aria-hidden />
                         Completed
                         <Badge variant="secondary" className="ml-1">{completedCards.length}</Badge>
                     </TabsTrigger>

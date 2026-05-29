@@ -1,13 +1,12 @@
-import
-  {
-    AlertDialog,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+import {
+AlertDialog,
+AlertDialogCancel,
+AlertDialogContent,
+AlertDialogDescription,
+AlertDialogFooter,
+AlertDialogHeader,
+AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -171,66 +170,66 @@ const JobCardLaborTable = ({ jobCardId, laborEntries, onRefresh }: JobCardLaborT
       </CardHeader>
       <CardContent>
         {laborEntries.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="rounded-md border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
             No labor entries yet. Click "Add Labor" to track work.
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
-            <Table className="min-w-[650px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Technician</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Hours</TableHead>
-                  <TableHead>Rate</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {laborEntries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell className="font-medium">{entry.technician_name}</TableCell>
-                    <TableCell className="text-sm">{entry.description || "-"}</TableCell>
-                    <TableCell>{new Date(entry.work_date).toLocaleDateString()}</TableCell>
-                    <TableCell>{entry.hours_worked}h</TableCell>
-                    <TableCell>${entry.hourly_rate}/h</TableCell>
-                    <TableCell className="text-right font-medium">${entry.total_cost.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setEditLabor({ ...entry })}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleteLaborId(entry.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+              <Table className="min-w-[650px]">
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40 [&>th]:text-[11px] [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
+                    <TableHead>Technician</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Hours</TableHead>
+                    <TableHead>Rate</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={5} className="text-right font-semibold">
-                    Total Labor Cost:
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">
-                    ${totalCost.toFixed(2)}
-                  </TableCell>
-                  <TableCell></TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {laborEntries.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell className="font-medium">{entry.technician_name}</TableCell>
+                      <TableCell className="text-sm">{entry.description || "-"}</TableCell>
+                      <TableCell>{new Date(entry.work_date).toLocaleDateString()}</TableCell>
+                      <TableCell>{entry.hours_worked}h</TableCell>
+                      <TableCell>${entry.hourly_rate}/h</TableCell>
+                      <TableCell className="text-right font-medium">${entry.total_cost.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                            onClick={() => setEditLabor({ ...entry })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleteLaborId(entry.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-right font-semibold">
+                      Total Labor Cost:
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      ${totalCost.toFixed(2)}
+                    </TableCell>
+                    <TableCell></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
           </>
         )}

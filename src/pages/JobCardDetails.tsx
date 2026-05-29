@@ -16,7 +16,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { generateJobCardPDF, type JobCardExportData } from "@/lib/jobCardExport";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, ChevronDown, ClipboardList, FileText, Link2, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ClipboardList, FileText, Link2, Loader2, ListChecks, Package, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { LinkInspectionToJobCardDialog } from "@/components/dialogs/LinkInspectionJobCardDialogs";
@@ -429,8 +429,9 @@ const JobCardDetails = () => {
   if (isLoading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-screen">
-          <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="flex flex-col items-center justify-center h-screen gap-3 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm font-medium">Loading job card…</p>
         </div>
       </Layout>
     );
@@ -439,9 +440,18 @@ const JobCardDetails = () => {
   if (!jobCard) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center h-screen">
-          <p className="text-lg text-muted-foreground mb-4">Job card not found</p>
-          <Button onClick={() => navigate("/job-cards")}>Back to Job Cards</Button>
+        <div className="flex flex-col items-center justify-center h-screen gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+            <FileText className="h-7 w-7 text-muted-foreground" />
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold tracking-tight">Job card not found</p>
+            <p className="text-sm text-muted-foreground mt-1">The job card you're looking for doesn't exist or was removed.</p>
+          </div>
+          <Button onClick={() => navigate("/job-cards")} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Job Cards
+          </Button>
         </div>
       </Layout>
     );
@@ -527,7 +537,9 @@ const JobCardDetails = () => {
                 <Button variant="ghost" size="sm">View</Button>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No inspection linked. Click &quot;Link Inspection&quot; to associate one.</p>
+              <div className="rounded-md border border-dashed bg-muted/20 px-4 py-6 text-center">
+                <p className="text-sm text-muted-foreground">No inspection linked. Click &quot;Link Inspection&quot; to associate one.</p>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -536,9 +548,12 @@ const JobCardDetails = () => {
         <Collapsible defaultOpen={false}>
           <Card>
             <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
-                <CardTitle className="flex items-center gap-2">
-                  Tasks
+              <CardHeader className="cursor-pointer rounded-t-lg hover:bg-accent/50 transition-colors">
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <ListChecks className="h-5 w-5 text-muted-foreground" />
+                    Tasks
+                  </span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
                 </CardTitle>
               </CardHeader>
@@ -560,9 +575,12 @@ const JobCardDetails = () => {
         <Collapsible defaultOpen={false}>
           <Card>
             <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
-                <CardTitle className="flex items-center gap-2">
-                  Labor Entries
+              <CardHeader className="cursor-pointer rounded-t-lg hover:bg-accent/50 transition-colors">
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <Wrench className="h-5 w-5 text-muted-foreground" />
+                    Labor Entries
+                  </span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
                 </CardTitle>
               </CardHeader>
@@ -583,9 +601,12 @@ const JobCardDetails = () => {
         <Collapsible defaultOpen={false}>
           <Card>
             <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-accent/50 transition-colors">
-                <CardTitle className="flex items-center gap-2">
-                  Parts &amp; Materials
+              <CardHeader className="cursor-pointer rounded-t-lg hover:bg-accent/50 transition-colors">
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-muted-foreground" />
+                    Parts &amp; Materials
+                  </span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
                 </CardTitle>
               </CardHeader>

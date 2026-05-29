@@ -43,6 +43,9 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
       subtext: "Parts + Labor",
       color: "text-emerald-600",
       bgColor: "bg-emerald-50",
+      iconBg: "bg-emerald-100",
+      ring: "ring-emerald-100",
+      progress: null as number | null,
     },
     {
       icon: Package,
@@ -51,6 +54,9 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
       subtext: `${activeParts.filter(p => !p.is_service).length} items`,
       color: "text-blue-500",
       bgColor: "bg-blue-50",
+      iconBg: "bg-blue-100",
+      ring: "ring-blue-100",
+      progress: null as number | null,
     },
     {
       icon: Wrench,
@@ -59,6 +65,9 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
       subtext: `${activeParts.filter(p => p.is_service).length} services`,
       color: "text-purple-500",
       bgColor: "bg-purple-50",
+      iconBg: "bg-purple-100",
+      ring: "ring-purple-100",
+      progress: null as number | null,
     },
     {
       icon: DollarSign,
@@ -67,6 +76,9 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
       subtext: `${totalLaborHours.toFixed(1)}h total`,
       color: "text-orange-500",
       bgColor: "bg-orange-50",
+      iconBg: "bg-orange-100",
+      ring: "ring-orange-100",
+      progress: null as number | null,
     },
     {
       icon: ListTodo,
@@ -75,6 +87,9 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
       subtext: `${taskProgress.toFixed(0)}% complete`,
       color: "text-slate-600",
       bgColor: "bg-slate-50",
+      iconBg: "bg-slate-200",
+      ring: "ring-slate-100",
+      progress: taskProgress,
     },
     {
       icon: CheckCircle2,
@@ -83,22 +98,38 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
       subtext: taskProgress === 100 ? "Ready to close" : "In progress",
       color: taskProgress === 100 ? "text-green-500" : "text-blue-500",
       bgColor: taskProgress === 100 ? "bg-green-50" : "bg-blue-50",
+      iconBg: taskProgress === 100 ? "bg-green-100" : "bg-blue-100",
+      ring: taskProgress === 100 ? "ring-green-100" : "ring-blue-100",
+      progress: taskProgress,
     },
   ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {stats.map((stat, index) => (
-        <Card key={index} className={stat.bgColor}>
+        <Card
+          key={index}
+          className={`${stat.bgColor} border-transparent ring-1 ${stat.ring} shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5`}
+        >
           <CardContent className="pt-4 pb-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium">{stat.label}</p>
-                <p className="text-xl font-bold mt-1">{stat.value}</p>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide truncate">{stat.label}</p>
+                <p className="text-xl font-bold mt-1 tabular-nums">{stat.value}</p>
                 <p className="text-xs text-muted-foreground mt-1">{stat.subtext}</p>
               </div>
-              <stat.icon className={`h-6 w-6 ${stat.color}`} />
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${stat.iconBg}`}>
+                <stat.icon className={`h-5 w-5 ${stat.color}`} />
+              </div>
             </div>
+            {stat.progress !== null && (
+              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-black/5">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${stat.progress === 100 ? "bg-green-500" : "bg-blue-500"}`}
+                  style={{ width: `${Math.min(100, Math.max(0, stat.progress))}%` }}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Pencil, Plus, StickyNote, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -118,8 +118,9 @@ const JobCardNotes = ({ jobCardId, notes, onRefresh, defaultCollapsed = false }:
     <Collapsible defaultOpen={!defaultCollapsed}>
       <Card>
         <CollapsibleTrigger asChild>
-          <CardHeader className="flex flex-row items-center justify-between cursor-pointer hover:bg-accent/50 transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between cursor-pointer rounded-t-lg hover:bg-accent/50 transition-colors">
             <CardTitle className="flex items-center gap-2">
+              <StickyNote className="h-5 w-5 text-muted-foreground" />
               Notes
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
             </CardTitle>

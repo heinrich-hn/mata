@@ -341,10 +341,27 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
 
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase();
-    if (s === "completed") return <Badge className="bg-green-500 text-white">Completed</Badge>;
-    if (s === "in_progress" || s === "in progress") return <Badge className="bg-blue-500 text-white">In Progress</Badge>;
-    if (s === "pending") return <Badge variant="secondary">Pending</Badge>;
-    return <Badge variant="secondary">{status}</Badge>;
+    const base = "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none";
+    if (s === "completed") return (
+      <span className={`${base} border-emerald-200 bg-emerald-50 text-emerald-700`}>
+        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />Completed
+      </span>
+    );
+    if (s === "in_progress" || s === "in progress") return (
+      <span className={`${base} border-blue-200 bg-blue-50 text-blue-700`}>
+        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" />In Progress
+      </span>
+    );
+    if (s === "pending") return (
+      <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>
+        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" />Pending
+      </span>
+    );
+    return (
+      <span className={`${base} border-slate-200 bg-slate-50 text-slate-700 capitalize`}>
+        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" />{status}
+      </span>
+    );
   };
 
   // Export to Excel
@@ -709,7 +726,7 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
                       </span>
                     )}
                     {week.partsCost > 0 && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
                         Parts {formatCurrency(week.partsCost)}
                       </span>
                     )}
@@ -737,15 +754,15 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
               {isExpanded && (
                 <div className="border-t border-border/60 bg-background">
                   {!hasCards ? (
-                    <div className="text-center py-8 text-muted-foreground">
+                    <div className="m-4 rounded-md border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
                       <Calendar className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">No job cards for this week</p>
+                      <p>No job cards for this week</p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow>
+                          <TableRow className="bg-muted/40 hover:bg-muted/40 [&>th]:text-[11px] [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
                             <TableHead className="w-[100px]">Job #</TableHead>
                             <TableHead>Title</TableHead>
                             <TableHead>Fleet</TableHead>
@@ -789,7 +806,7 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
                               <TableCell className="text-right">
                                 {jc.partsCost > 0 ? (
                                   <div>
-                                    <span className="text-green-600">{formatCurrency(jc.partsCost)}</span>
+                                    <span className="text-emerald-600">{formatCurrency(jc.partsCost)}</span>
                                     {(jc.inventoryPartsCost > 0 || jc.externalPartsCost > 0) && (
                                       <div className="text-[10px] text-muted-foreground">
                                         {jc.inventoryPartsCost > 0 && <span>Inv: {formatCurrency(jc.inventoryPartsCost)}</span>}
@@ -822,7 +839,7 @@ export default function JobCardWeeklyCostReport({ filter = "all" }: JobCardWeekl
                             <TableCell className="text-right text-blue-600">
                               {week.laborCost > 0 ? formatCurrency(week.laborCost) : "—"}
                             </TableCell>
-                            <TableCell className="text-right text-green-600">
+                            <TableCell className="text-right text-emerald-600">
                               {week.partsCost > 0 ? formatCurrency(week.partsCost) : "—"}
                             </TableCell>
                             <TableCell className="text-right text-purple-600">

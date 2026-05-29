@@ -50,7 +50,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import {
   Calendar,
+  CalendarClock,
   ChevronDown,
+  CircleDollarSign,
+  ClipboardList,
+  Disc3,
   Download,
   Eye,
   FileText,
@@ -59,6 +63,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Receipt,
   Search,
   Share2,
   Archive as ArchiveIcon,
@@ -925,35 +930,89 @@ const JobCards = () => {
   };
 
   const getPriorityBadge = (priority: string) => {
+    const pillBase =
+      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none";
     switch (priority) {
       case "urgent":
-        return <Badge variant="destructive">Urgent</Badge>;
+        return (
+          <span className={`${pillBase} border-red-200 bg-red-50 text-red-700`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden />
+            Urgent
+          </span>
+        );
       case "high":
-        return <Badge variant="destructive">High</Badge>;
+        return (
+          <span className={`${pillBase} border-orange-200 bg-orange-50 text-orange-700`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden />
+            High
+          </span>
+        );
       case "medium":
-        return <Badge>Medium</Badge>;
+        return (
+          <span className={`${pillBase} border-blue-200 bg-blue-50 text-blue-700`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" aria-hidden />
+            Medium
+          </span>
+        );
       case "low":
-        return <Badge variant="secondary">Low</Badge>;
+        return (
+          <span className={`${pillBase} border-slate-200 bg-slate-50 text-slate-600`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
+            Low
+          </span>
+        );
       default:
-        return <Badge variant="secondary">{priority}</Badge>;
+        return (
+          <span className={`${pillBase} border-slate-200 bg-slate-50 text-slate-600 capitalize`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
+            {priority}
+          </span>
+        );
     }
   };
 
   const getStatusBadge = (status: string) => {
     const normalizedStatus = status?.toLowerCase();
+    const pillBase =
+      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-none";
     switch (normalizedStatus) {
       case "pending":
-        return <Badge variant="secondary">Pending</Badge>;
+        return (
+          <span className={`${pillBase} border-slate-200 bg-slate-50 text-slate-600`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
+            Pending
+          </span>
+        );
       case "in_progress":
       case "in progress":
-        return <Badge className="bg-blue-500">In Progress</Badge>;
+        return (
+          <span className={`${pillBase} border-blue-200 bg-blue-50 text-blue-700`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" aria-hidden />
+            In Progress
+          </span>
+        );
       case "on_hold":
       case "on hold":
-        return <Badge className="bg-yellow-500">On Hold</Badge>;
+        return (
+          <span className={`${pillBase} border-amber-200 bg-amber-50 text-amber-700`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+            On Hold
+          </span>
+        );
       case "completed":
-        return <Badge className="bg-green-500">Completed</Badge>;
+        return (
+          <span className={`${pillBase} border-emerald-200 bg-emerald-50 text-emerald-700`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+            Completed
+          </span>
+        );
       default:
-        return <Badge variant="secondary">{status}</Badge>;
+        return (
+          <span className={`${pillBase} border-slate-200 bg-slate-50 text-slate-600 capitalize`}>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
+            {status}
+          </span>
+        );
     }
   };
 
@@ -961,16 +1020,16 @@ const JobCards = () => {
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="h-9 px-3 py-2 text-xs w-[90px]">Job #</TableHead>
-            <TableHead className="h-9 px-3 py-2 text-xs">Title</TableHead>
-            <TableHead className="h-9 px-3 py-2 text-xs">Fleet / Vehicle</TableHead>
-            <TableHead className="h-9 px-3 py-2 text-xs">Status</TableHead>
-            <TableHead className="h-9 px-3 py-2 text-xs">Priority</TableHead>
-            <TableHead className="h-9 px-3 py-2 text-xs">Assignee</TableHead>
-            <TableHead className="h-9 px-3 py-2 text-xs">Due</TableHead>
-            <TableHead className="h-9 px-3 py-2 text-xs">Links</TableHead>
-            <TableHead className="h-9 px-3 py-2 text-xs w-[60px] text-right">Actions</TableHead>
+          <TableRow className="hover:bg-transparent bg-muted/40">
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground w-[90px]">Job #</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Title</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fleet / Vehicle</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Priority</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Links</TableHead>
+            <TableHead className="h-9 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground w-[60px] text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -980,7 +1039,11 @@ const JobCards = () => {
               className="cursor-pointer border-b transition-colors hover:bg-muted/30"
               onClick={() => handleJobClick(card)}
             >
-              <TableCell className="px-3 py-2 font-mono text-xs">#{card.job_number}</TableCell>
+              <TableCell className="px-3 py-2">
+                <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium text-muted-foreground">
+                  #{card.job_number}
+                </span>
+              </TableCell>
               <TableCell className="px-3 py-2 max-w-[260px]">
                 <p className="font-medium text-sm leading-tight truncate">{card.title}</p>
                 <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
@@ -1246,23 +1309,29 @@ const JobCards = () => {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="overflow-x-auto -mx-1 px-1">
-            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:max-w-6xl sm:grid-cols-6">
-              <TabsTrigger value="job-cards" className="px-5 py-2.5 text-base whitespace-nowrap">
+            <TabsList className="inline-flex h-auto w-auto min-w-full gap-1 bg-muted/60 p-1 sm:grid sm:w-full sm:max-w-6xl sm:grid-cols-6">
+              <TabsTrigger value="job-cards" className="gap-2 whitespace-nowrap rounded-md px-5 py-2.5 text-base text-muted-foreground transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                <ClipboardList className="h-4 w-4" />
                 Job Cards
               </TabsTrigger>
-              <TabsTrigger value="cost-reports" className="px-5 py-2.5 text-base whitespace-nowrap">
+              <TabsTrigger value="cost-reports" className="gap-2 whitespace-nowrap rounded-md px-5 py-2.5 text-base text-muted-foreground transition-all data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                <Receipt className="h-4 w-4" />
                 Cost Reports
               </TabsTrigger>
-              <TabsTrigger value="follow-ups" className="px-5 py-2.5 text-base whitespace-nowrap">
+              <TabsTrigger value="follow-ups" className="gap-2 whitespace-nowrap rounded-md px-5 py-2.5 text-base text-muted-foreground transition-all data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                <CalendarClock className="h-4 w-4" />
                 Follow-ups
               </TabsTrigger>
-              <TabsTrigger value="tyre-job-cards" className="px-5 py-2.5 text-base whitespace-nowrap">
+              <TabsTrigger value="tyre-job-cards" className="gap-2 whitespace-nowrap rounded-md px-5 py-2.5 text-base text-muted-foreground transition-all data-[state=active]:bg-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                <Disc3 className="h-4 w-4" />
                 Tyre Job Cards
               </TabsTrigger>
-              <TabsTrigger value="tyre-costs" className="px-5 py-2.5 text-base whitespace-nowrap">
+              <TabsTrigger value="tyre-costs" className="gap-2 whitespace-nowrap rounded-md px-5 py-2.5 text-base text-muted-foreground transition-all data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                <CircleDollarSign className="h-4 w-4" />
                 Tyre Costs
               </TabsTrigger>
-              <TabsTrigger value="archived" className="px-5 py-2.5 text-base whitespace-nowrap">
+              <TabsTrigger value="archived" className="gap-2 whitespace-nowrap rounded-md px-5 py-2.5 text-base text-muted-foreground transition-all data-[state=active]:bg-slate-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                <ArchiveIcon className="h-4 w-4" />
                 Archived
                 {allArchivedCards.length > 0 && (
                   <Badge variant="secondary" className="ml-2 text-xs">{allArchivedCards.length}</Badge>
@@ -1354,14 +1423,14 @@ const JobCards = () => {
 
             {/* Active vs Completed sub-tabs */}
             <Tabs defaultValue="active" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="active" className="gap-2">
-                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+              <TabsList className="gap-1 bg-muted/60 p-1">
+                <TabsTrigger value="active" className="group gap-2 rounded-md transition-all data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500 group-data-[state=active]:bg-white" aria-hidden />
                   Active
                   <Badge variant="secondary" className="ml-1">{allActiveCards.length}</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="completed" className="gap-2">
-                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                <TabsTrigger value="completed" className="group gap-2 rounded-md transition-all data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 group-data-[state=active]:bg-white" aria-hidden />
                   Completed
                   <Badge variant="secondary" className="ml-1">{allCompletedCards.length}</Badge>
                 </TabsTrigger>
