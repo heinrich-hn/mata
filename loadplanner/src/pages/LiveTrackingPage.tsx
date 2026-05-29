@@ -1,4 +1,5 @@
 import { TripHistoryDialog } from "@/components/tracking/TripHistoryDialog";
+import { MovementReportDialog } from "@/components/tracking/MovementReportDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -427,6 +428,7 @@ export default function LiveTrackingPage() {
   const { data: customLocations = [] } = useCustomLocations();
   const [maximizeMap, setMaximizeMap] = useState(false);
   const [showRouteCalculator, setShowRouteCalculator] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(
     null,
@@ -804,6 +806,18 @@ export default function LiveTrackingPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     Refresh
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowReportDialog(true)}
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    title="Generate vehicle movement report"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6h6v6m-9 4h12a2 2 0 002-2V7a2 2 0 00-2-2h-3.586a1 1 0 01-.707-.293l-1.414-1.414A1 1 0 0011.586 3H6a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Report
                   </Button>
                   <Button
                     variant="ghost"
@@ -1502,6 +1516,13 @@ export default function LiveTrackingPage() {
           activeLoad={tripHistoryAsset ? getLoadForAsset(tripHistoryAsset) : null}
           vehicleLoads={tripHistoryLoads as never[]}
           organisationId={organisationId ? parseInt(organisationId) : null}
+        />
+
+        {/* Vehicle Movement Report Dialog */}
+        <MovementReportDialog
+          open={showReportDialog}
+          onOpenChange={setShowReportDialog}
+          geofences={geofences}
         />
       </div>
     </>
