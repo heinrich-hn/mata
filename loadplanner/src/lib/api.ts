@@ -36,7 +36,7 @@ export async function getActiveLoadsForTracking(): Promise<ActiveLoadsResponse> 
       destination,
       status,
       driver:drivers!loads_driver_id_fkey(id, name),
-      fleet_vehicle:fleet_vehicles(id, vehicle_id, type)
+      fleet_vehicle:fleet_vehicles!loads_fleet_vehicle_id_fkey(id, vehicle_id, type)
     `)
     .in('status', ['in-transit', 'scheduled', 'pending']);
 

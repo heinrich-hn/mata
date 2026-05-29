@@ -624,7 +624,7 @@ export default function LiveTrackingPage() {
           actual_offloading_arrival, actual_offloading_arrival_source, actual_offloading_arrival_verified,
           actual_offloading_departure, actual_offloading_departure_source, actual_offloading_departure_verified,
           driver:drivers!loads_driver_id_fkey(id, name, contact),
-          fleet_vehicle:fleet_vehicles(id, vehicle_id, telematics_asset_id)
+          fleet_vehicle:fleet_vehicles!loads_fleet_vehicle_id_fkey(id, vehicle_id, telematics_asset_id)
         `)
         .order("loading_date", { ascending: false })
         .limit(20);
