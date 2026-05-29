@@ -3,9 +3,8 @@ import { Calendar } from '@/components/ui/calendar';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/ui/dialog-hero';
 import {
   Form,
   FormControl,
@@ -127,14 +126,10 @@ export function CreateFleetDialog({ open, onOpenChange }: CreateFleetDialogProps
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-              <Truck className="h-4 w-4" />
-            </span>
-            Add New Vehicle
-          </DialogTitle>
-        </DialogHeader>
+        <DialogHero
+          icon={Truck}
+          title="Add New Vehicle"
+        />
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">

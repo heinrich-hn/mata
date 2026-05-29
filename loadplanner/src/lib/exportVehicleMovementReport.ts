@@ -224,6 +224,131 @@ function buildFilename(ext: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Aggregations — power the summary cards & breakdown tables
+// ---------------------------------------------------------------------------
+
+interface LocationStat {
+    location: string;
+    visits: number;
+    completed: number;
+    uniqueVehicles: number;
+    totalDwellMin: number;
+    avgDwellMin: number | null;
+}
+
+interface VehicleStat {
+    fleetNumber: string;
+    registration: string;
+    vehicleType: string;
+    visits: number;
+    uniqueLocations: number;
+    totalDwellMin: number;
+    lastSeen: string | null;
+}
+
+interface ReportStats {
+    total: number;
+    completed: number;
+    open: number;
+    uniqueVehicles: number;
+    uniqueLocations: number;
+    totalDwellMin: number;
+    avgDwellMin: number | null;
+    longest: MovementRecord | null;
+    byLocation: LocationStat[];
+    byVehicle: VehicleStat[];
+}
+
+function computeStats(records: MovementRecord[]): ReportStats {
+    const completedRecords = records.filter((r) => r.entryTime && r.exitTime);
+    const totalDwellMin = records.reduce(
+        (sum, r) => sum + (r.durationMinutes && r.durationMinutes > 0 ? r.durationMinutes : 0),
+        0,
+    );
+
+    let longest: MovementRecord | null = null;
+    for (const r of records) {
+        if (r.durationMinutes != null && r.durationMinutes > 0) {
+            if (!longest || r.durationMinutes > (longest.durationMinutes ?? 0)) longest = r;
+        }
+    }
+
+    // By location.
+    const locMap = new Map<string, { vehicles: Set<string>; rows: MovementRecord[] }>();
+    for (const r of records) {
+        let entry = locMap.get(r.location);
+        if (!entry) {
+            entry = { vehicles: new Set(), rows: [] };
+            locMap.set(r.location, entry);
+        }
+        entry.vehicles.add(r.fleetNumber);
+        entry.rows.push(r);
+    }
+    const byLocation: LocationStat[] = Array.from(locMap.entries())
+        .map(([location, { vehicles, rows }]) => {
+            const dwell = rows.reduce(
+                (s, r) => s + (r.durationMinutes && r.durationMinutes > 0 ? r.durationMinutes : 0),
+                0,
+            );
+            const completed = rows.filter((r) => r.entryTime && r.exitTime).length;
+            return {
+                location,
+                visits: rows.length,
+                completed,
+                uniqueVehicles: vehicles.size,
+                totalDwellMin: dwell,
+                avgDwellMin: completed > 0 ? dwell / completed : null,
+            };
+        })
+        .sort((a, b) => b.visits - a.visits);
+
+    // By vehicle.
+    const vehMap = new Map<
+        string,
+        { meta: MovementRecord; locations: Set<string>; rows: MovementRecord[]; lastSeen: number }
+    >();
+    for (const r of records) {
+        const key = `${r.fleetNumber}::${r.registration}`;
+        let entry = vehMap.get(key);
+        if (!entry) {
+            entry = { meta: r, locations: new Set(), rows: [], lastSeen: 0 };
+            vehMap.set(key, entry);
+        }
+        entry.locations.add(r.location);
+        entry.rows.push(r);
+        const t = new Date(r.exitTime || r.entryTime || 0).getTime();
+        if (t > entry.lastSeen) entry.lastSeen = t;
+    }
+    const byVehicle: VehicleStat[] = Array.from(vehMap.values())
+        .map(({ meta, locations, rows, lastSeen }) => ({
+            fleetNumber: meta.fleetNumber,
+            registration: meta.registration,
+            vehicleType: meta.vehicleType,
+            visits: rows.length,
+            uniqueLocations: locations.size,
+            totalDwellMin: rows.reduce(
+                (s, r) => s + (r.durationMinutes && r.durationMinutes > 0 ? r.durationMinutes : 0),
+                0,
+            ),
+            lastSeen: lastSeen > 0 ? new Date(lastSeen).toISOString() : null,
+        }))
+        .sort((a, b) => b.visits - a.visits);
+
+    return {
+        total: records.length,
+        completed: completedRecords.length,
+        open: records.length - completedRecords.length,
+        uniqueVehicles: new Set(records.map((r) => r.fleetNumber)).size,
+        uniqueLocations: new Set(records.map((r) => r.location)).size,
+        totalDwellMin,
+        avgDwellMin: completedRecords.length > 0 ? totalDwellMin / completedRecords.length : null,
+        longest,
+        byLocation,
+        byVehicle,
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Excel export
 // ---------------------------------------------------------------------------
 
@@ -370,22 +495,45 @@ export function exportMovementReportToExcel(
 
     XLSX.utils.book_append_sheet(workbook, ws, "Movement Detail");
 
-    // ── Summary sheet ──────────────────────────────────────────────────────
-    const uniqueVehicles = new Set(records.map((r) => r.fleetNumber)).size;
-    const uniqueLocations = new Set(records.map((r) => r.location)).size;
-    const completed = records.filter((r) => r.entryTime && r.exitTime).length;
-    const totalDwell = records.reduce(
-        (sum, r) => sum + (r.durationMinutes && r.durationMinutes > 0 ? r.durationMinutes : 0),
-        0,
-    );
+    // Auto-filter across the detail table header + data rows.
+    if (records.length > 0) {
+        const lastRow = headerRow + records.length;
+        ws["!autofilter"] = {
+            ref: `${XLSX.utils.encode_cell({ r: headerRow, c: 0 })}:${XLSX.utils.encode_cell({
+                r: lastRow,
+                c: colCount - 1,
+            })}`,
+        };
+    }
 
+    // ── Aggregations ────────────────────────────────────────────────────────
+    const stats = computeStats(records);
+
+    // Styled header applied to row 0 of a json_to_sheet worksheet.
+    const styleSheetHeader = (sheet: XLSX.WorkSheet, cols: number) => {
+        for (let c = 0; c < cols; c++) {
+            const ref = XLSX.utils.encode_cell({ r: 0, c });
+            if (sheet[ref]) sheet[ref].s = xlHeader;
+        }
+    };
+
+    // ── Summary sheet ──────────────────────────────────────────────────────
     const summaryData: { Metric: string; Value: string | number }[] = [
-        { Metric: "Total Movements", Value: records.length },
-        { Metric: "Completed Visits (Entry + Exit)", Value: completed },
-        { Metric: "Open Visits (No Exit)", Value: records.length - completed },
-        { Metric: "Unique Vehicles", Value: uniqueVehicles },
-        { Metric: "Unique Locations", Value: uniqueLocations },
-        { Metric: "Total Dwell Time", Value: formatDuration(totalDwell) },
+        { Metric: "Total Movements", Value: stats.total },
+        { Metric: "Completed Visits (Entry + Exit)", Value: stats.completed },
+        { Metric: "Open Visits (No Exit)", Value: stats.open },
+        { Metric: "Unique Vehicles", Value: stats.uniqueVehicles },
+        { Metric: "Unique Locations", Value: stats.uniqueLocations },
+        { Metric: "Total Dwell Time", Value: formatDuration(stats.totalDwellMin) },
+        { Metric: "Average Dwell / Visit", Value: formatDuration(stats.avgDwellMin) },
+        {
+            Metric: "Longest Visit",
+            Value: stats.longest
+                ? `${stats.longest.fleetNumber} @ ${stats.longest.location} (${formatDuration(
+                    stats.longest.durationMinutes,
+                )})`
+                : "—",
+        },
         { Metric: "", Value: "" },
         ...summaryLines.map((line) => {
             const [k, ...rest] = line.split(": ");
@@ -395,9 +543,8 @@ export function exportMovementReportToExcel(
     ];
 
     const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-    summarySheet["!cols"] = [{ wch: 32 }, { wch: 48 }];
-    if (summarySheet["A1"]) summarySheet["A1"].s = xlHeader;
-    if (summarySheet["B1"]) summarySheet["B1"].s = xlHeader;
+    summarySheet["!cols"] = [{ wch: 34 }, { wch: 52 }];
+    styleSheetHeader(summarySheet, 2);
     for (let r = 1; r <= summaryData.length; r++) {
         const rA = XLSX.utils.encode_cell({ r, c: 0 });
         const rB = XLSX.utils.encode_cell({ r, c: 1 });
@@ -407,6 +554,58 @@ export function exportMovementReportToExcel(
         }
     }
     XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+
+    // ── By Location sheet ────────────────────────────────────────────────
+    const locationData = stats.byLocation.map((l) => ({
+        Location: l.location,
+        Visits: l.visits,
+        Completed: l.completed,
+        "Unique Vehicles": l.uniqueVehicles,
+        "Total Dwell": formatDuration(l.totalDwellMin),
+        "Avg Dwell / Visit": formatDuration(l.avgDwellMin),
+    }));
+    const locationSheet = XLSX.utils.json_to_sheet(
+        locationData.length > 0
+            ? locationData
+            : [{ Location: "No data", Visits: "", Completed: "", "Unique Vehicles": "", "Total Dwell": "", "Avg Dwell / Visit": "" }],
+    );
+    locationSheet["!cols"] = [
+        { wch: 32 },
+        { wch: 10 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 14 },
+        { wch: 18 },
+    ];
+    styleSheetHeader(locationSheet, 6);
+    XLSX.utils.book_append_sheet(workbook, locationSheet, "By Location");
+
+    // ── By Vehicle sheet ───────────────────────────────────────────────
+    const vehicleData = stats.byVehicle.map((v) => ({
+        "Fleet No": v.fleetNumber,
+        Registration: v.registration,
+        Type: v.vehicleType,
+        Visits: v.visits,
+        "Unique Locations": v.uniqueLocations,
+        "Total Dwell": formatDuration(v.totalDwellMin),
+        "Last Seen": v.lastSeen ? `${fmtDate(v.lastSeen)} ${fmtTime(v.lastSeen)}` : "—",
+    }));
+    const vehicleSheet = XLSX.utils.json_to_sheet(
+        vehicleData.length > 0
+            ? vehicleData
+            : [{ "Fleet No": "No data", Registration: "", Type: "", Visits: "", "Unique Locations": "", "Total Dwell": "", "Last Seen": "" }],
+    );
+    vehicleSheet["!cols"] = [
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 10 },
+        { wch: 16 },
+        { wch: 14 },
+        { wch: 20 },
+    ];
+    styleSheetHeader(vehicleSheet, 7);
+    XLSX.utils.book_append_sheet(workbook, vehicleSheet, "By Vehicle");
 
     // Use XLSX.write + Blob to avoid `fs` being pulled in by XLSX.writeFile in the browser.
     const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
@@ -436,93 +635,188 @@ export function exportMovementReportToPdf(
     const pageHeight = doc.internal.pageSize.getHeight();
 
     const reportDate = format(new Date(), "MMMM d, yyyy");
+    const reportTime = format(new Date(), "HH:mm");
     const primaryColor: [number, number, number] = pdfColors.navy;
     const textColor: [number, number, number] = pdfColors.textPrimary;
     const mutedColor: [number, number, number] = pdfColors.textMuted;
 
-    // Header — corporate banner
+    const stats = computeStats(records);
+
+    // ── Banner ───────────────────────────────────────────────────────────
+    const bannerH = 24;
     doc.setFillColor(...pdfColors.navy);
-    doc.rect(0, 0, pageWidth, 3, "F");
+    doc.rect(0, 0, pageWidth, bannerH, "F");
+    // Accent underline strip.
+    doc.setFillColor(...pdfColors.accent);
+    doc.rect(0, bannerH, pageWidth, 1.2, "F");
 
-    doc.setTextColor(...pdfColors.navy);
-    doc.setFontSize(14);
+    doc.setTextColor(...pdfColors.white);
+    doc.setFontSize(15);
     doc.setFont("helvetica", "bold");
-    doc.text(COMPANY_NAME, 12, 14);
+    doc.text(COMPANY_NAME, 12, 11);
 
-    doc.setTextColor(...pdfColors.textMuted);
-    doc.setFontSize(7);
+    doc.setTextColor(...pdfColors.lightBlue);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.text(SYSTEM_NAME, 12, 19);
+    doc.text(SYSTEM_NAME, 12, 17);
 
-    doc.setTextColor(...pdfColors.navy);
-    doc.setFontSize(16);
+    doc.setTextColor(...pdfColors.white);
+    doc.setFontSize(15);
     doc.setFont("helvetica", "bold");
-    doc.text("VEHICLE MOVEMENT REPORT", pageWidth - 12, 14, { align: "right" });
+    doc.text("VEHICLE MOVEMENT REPORT", pageWidth - 12, 11, { align: "right" });
 
-    doc.setTextColor(...pdfColors.textMuted);
-    doc.setFontSize(9);
+    doc.setTextColor(...pdfColors.lightBlue);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.text(`Generated: ${reportDate}`, pageWidth - 12, 19, { align: "right" });
+    doc.text(`Generated: ${reportDate} ${reportTime}`, pageWidth - 12, 17, { align: "right" });
 
-    doc.setDrawColor(...pdfColors.navy);
-    doc.setLineWidth(0.5);
-    doc.line(12, 23, pageWidth - 12, 23);
+    let yPos = bannerH + 8;
 
-    let yPos = 30;
+    // ── Filter card ──────────────────────────────────────────────────────
+    const filterLines = buildFilterSummary(filters);
+    const filterCardH = 8 + filterLines.length * 4.6;
+    doc.setFillColor(...pdfColors.offWhite);
+    doc.setDrawColor(...pdfColors.gray);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(12, yPos, pageWidth - 24, filterCardH, 1.5, 1.5, "FD");
+    // Accent bar on the left edge.
+    doc.setFillColor(...pdfColors.accent);
+    doc.rect(12, yPos, 1.2, filterCardH, "F");
 
-    // Filter summary block
     doc.setTextColor(...primaryColor);
-    doc.setFontSize(11);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("Report Filters", 15, yPos);
-    yPos += 6;
+    doc.text("REPORT FILTERS", 17, yPos + 5);
 
     doc.setTextColor(...textColor);
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setFont("helvetica", "normal");
-    for (const line of buildFilterSummary(filters)) {
-        doc.text(line, 15, yPos);
-        yPos += 5;
+    let fy = yPos + 10;
+    for (const line of filterLines) {
+        doc.text(line, 17, fy);
+        fy += 4.6;
     }
-    yPos += 4;
+    yPos += filterCardH + 7;
 
-    // Summary metrics
-    const uniqueVehicles = new Set(records.map((r) => r.fleetNumber)).size;
-    const uniqueLocations = new Set(records.map((r) => r.location)).size;
-    const completed = records.filter((r) => r.entryTime && r.exitTime).length;
+    // ── Stat cards ───────────────────────────────────────────────────────
+    const cards: { label: string; value: string; accent: [number, number, number] }[] = [
+        { label: "Total Movements", value: String(stats.total), accent: pdfColors.navy },
+        { label: "Completed Visits", value: String(stats.completed), accent: pdfColors.success },
+        { label: "Open Visits", value: String(stats.open), accent: pdfColors.warning },
+        { label: "Unique Vehicles", value: String(stats.uniqueVehicles), accent: pdfColors.blue },
+        { label: "Unique Locations", value: String(stats.uniqueLocations), accent: pdfColors.teal },
+        { label: "Total Dwell", value: formatDuration(stats.totalDwellMin), accent: pdfColors.purple },
+        {
+            label: "Avg Dwell / Visit",
+            value: formatDuration(stats.avgDwellMin),
+            accent: pdfColors.accent,
+        },
+    ];
+    const gap = 4;
+    const cardW = (pageWidth - 24 - gap * (cards.length - 1)) / cards.length;
+    const cardH = 18;
+    cards.forEach((card, i) => {
+        const x = 12 + i * (cardW + gap);
+        doc.setFillColor(...pdfColors.white);
+        doc.setDrawColor(...pdfColors.gray);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(x, yPos, cardW, cardH, 1.5, 1.5, "FD");
+        // Top accent strip.
+        doc.setFillColor(...card.accent);
+        doc.rect(x, yPos, cardW, 1.4, "F");
 
+        doc.setTextColor(...card.accent);
+        doc.setFontSize(15);
+        doc.setFont("helvetica", "bold");
+        doc.text(card.value, x + cardW / 2, yPos + 9.5, { align: "center" });
+
+        doc.setTextColor(...mutedColor);
+        doc.setFontSize(6.5);
+        doc.setFont("helvetica", "normal");
+        doc.text(card.label.toUpperCase(), x + cardW / 2, yPos + 14.5, { align: "center" });
+    });
+    yPos += cardH + 10;
+
+    // Shared accent section heading.
+    const sectionHeading = (title: string) => {
+        if (yPos > pageHeight - 30) {
+            doc.addPage();
+            yPos = 20;
+        }
+        doc.setFillColor(...pdfColors.accent);
+        doc.rect(12, yPos - 3.6, 1.4, 5, "F");
+        doc.setTextColor(...primaryColor);
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text(title, 16, yPos);
+        yPos += 4;
+    };
+
+    const sharedHeadStyles = {
+        fillColor: primaryColor,
+        textColor: [255, 255, 255] as [number, number, number],
+        fontStyle: "bold" as const,
+        fontSize: 9,
+    };
+
+    // ── Activity by Location ────────────────────────────────────────────
+    sectionHeading("Activity by Location");
     autoTable(doc, {
         startY: yPos,
-        head: [["Total Movements", "Completed Visits", "Open Visits", "Vehicles", "Locations"]],
-        body: [
-            [
-                records.length.toString(),
-                completed.toString(),
-                (records.length - completed).toString(),
-                uniqueVehicles.toString(),
-                uniqueLocations.toString(),
-            ],
-        ],
+        head: [["Location", "Visits", "Completed", "Vehicles", "Total Dwell", "Avg Dwell"]],
+        body: stats.byLocation.map((l) => [
+            l.location,
+            String(l.visits),
+            String(l.completed),
+            String(l.uniqueVehicles),
+            formatDuration(l.totalDwellMin),
+            formatDuration(l.avgDwellMin),
+        ]),
         theme: "grid",
-        headStyles: {
-            fillColor: primaryColor,
-            textColor: [255, 255, 255],
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "center",
+        headStyles: sharedHeadStyles,
+        bodyStyles: { textColor, fontSize: 8 },
+        alternateRowStyles: { fillColor: pdfColors.offWhite },
+        columnStyles: {
+            0: { cellWidth: 80 },
+            1: { halign: "right", cellWidth: 24 },
+            2: { halign: "right", cellWidth: 28 },
+            3: { halign: "right", cellWidth: 26 },
+            4: { halign: "right" },
+            5: { halign: "right" },
         },
-        bodyStyles: { textColor, fontSize: 10, halign: "center" },
         margin: { left: 15, right: 15 },
     });
+    yPos = (doc as jsPDFWithAutoTable).lastAutoTable.finalY + 9;
 
-    yPos = (doc as jsPDFWithAutoTable).lastAutoTable.finalY + 10;
+    // ── Activity by Vehicle ─────────────────────────────────────────────
+    sectionHeading("Activity by Vehicle");
+    autoTable(doc, {
+        startY: yPos,
+        head: [["Fleet No", "Registration", "Type", "Visits", "Locations", "Total Dwell", "Last Seen"]],
+        body: stats.byVehicle.map((v) => [
+            v.fleetNumber,
+            v.registration,
+            v.vehicleType,
+            String(v.visits),
+            String(v.uniqueLocations),
+            formatDuration(v.totalDwellMin),
+            v.lastSeen ? `${fmtDate(v.lastSeen)} ${fmtTime(v.lastSeen)}` : "—",
+        ]),
+        theme: "grid",
+        headStyles: sharedHeadStyles,
+        bodyStyles: { textColor, fontSize: 8 },
+        alternateRowStyles: { fillColor: pdfColors.offWhite },
+        columnStyles: {
+            3: { halign: "right", cellWidth: 22 },
+            4: { halign: "right", cellWidth: 24 },
+            5: { halign: "right" },
+        },
+        margin: { left: 15, right: 15 },
+    });
+    yPos = (doc as jsPDFWithAutoTable).lastAutoTable.finalY + 9;
 
-    // Movement detail table
-    doc.setTextColor(...primaryColor);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("Movement Detail", 15, yPos);
-    yPos += 4;
+    // ── Movement detail table ───────────────────────────────────────────
+    sectionHeading("Movement Detail");
 
     autoTable(doc, {
         startY: yPos,

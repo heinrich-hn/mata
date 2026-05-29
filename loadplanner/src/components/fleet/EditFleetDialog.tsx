@@ -3,10 +3,8 @@ import { Calendar } from '@/components/ui/calendar';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/ui/dialog-hero';
 import {
   Form,
   FormControl,
@@ -167,17 +165,11 @@ export function EditFleetDialog({ open, onOpenChange, vehicle }: EditFleetDialog
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Pencil className="h-4 w-4" />
-            </span>
-            Edit Vehicle: {vehicle.vehicle_id}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Edit fleet vehicle details including vehicle information, linked trailers, expiry dates, and availability status.
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={Pencil}
+          title={`Edit Vehicle: ${vehicle.vehicle_id}`}
+          description="Edit fleet vehicle details including vehicle information, linked trailers, expiry dates, and availability status."
+        />
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">

@@ -722,23 +722,29 @@ export function TripHistoryDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" />
-            {displayVehicleName} — Trip History
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Geofence entry and exit history for {displayVehicleName}
-          </DialogDescription>
-          {asset && (
-            <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-              <span>{Math.round(asset.speedKmH)} km/h</span>
-              <span>•</span>
-              <span>{asset.inTrip ? "Moving" : "Parked"}</span>
-              <span>•</span>
-              <span>Last seen: {formatLastConnected(asset.lastConnectedUtc)}</span>
+        <DialogHeader className="space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+              <Truck className="h-5 w-5" />
             </div>
-          )}
+            <div className="flex-1 space-y-1 text-left">
+              <DialogTitle className="text-lg">
+                {displayVehicleName} — Trip History
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                Geofence entry and exit history for {displayVehicleName}
+              </DialogDescription>
+              {asset && (
+                <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                  <span>{Math.round(asset.speedKmH)} km/h</span>
+                  <span>•</span>
+                  <span>{asset.inTrip ? "Moving" : "Parked"}</span>
+                  <span>•</span>
+                  <span>Last seen: {formatLastConnected(asset.lastConnectedUtc)}</span>
+                </div>
+              )}
+            </div>
+          </div>
         </DialogHeader>
 
         <ScrollArea className="flex-1 -mx-6 px-6">

@@ -2,11 +2,9 @@ import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
     DialogFooter,
-    DialogHeader,
-    DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogHero } from "@/components/ui/dialog-hero";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,7 +23,7 @@ import {
     type LoadOrderImageAttachment,
 } from "@/lib/exportLoadOrderToPdf";
 import { format, parseISO } from "date-fns";
-import { FileDown, Loader2, Mail, Paperclip, X } from "lucide-react";
+import { FileDown, FileText, Loader2, Mail, Paperclip, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -364,17 +362,11 @@ export function ExportLoadOrderDialog({
     return (
         <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
             <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <FileDown className="h-5 w-5 text-primary" />
-                        Export Load Order
-                    </DialogTitle>
-                    <DialogDescription>
-                        Sends a subcontractor Load Order containing only the supplier
-                        details, agreed trip rate, loading and offloading points, and the
-                        standard subcontractor terms.
-                    </DialogDescription>
-                </DialogHeader>
+                <DialogHero
+                    icon={FileText}
+                    title="Export Load Order"
+                    description="Sends a subcontractor Load Order containing only the supplier details, agreed trip rate, loading and offloading points, and the standard subcontractor terms."
+                />
 
                 <div className="space-y-4 py-2">
                     <div className="grid grid-cols-[1fr_120px] gap-3 items-end">

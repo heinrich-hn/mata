@@ -2,11 +2,9 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/ui/dialog-hero';
 import {
   Form,
   FormControl,
@@ -92,15 +90,11 @@ export function AddLocationDialog({ open, onOpenChange }: AddLocationDialogProps
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-green-600" />
-            Add New Location
-          </DialogTitle>
-          <DialogDescription>
-            Add a custom depot or location for third-party loads. Enter the name and GPS coordinates.
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={MapPin}
+          title="Add New Location"
+          description="Add a custom depot or location for third-party loads. Enter the name and GPS coordinates."
+        />
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -128,11 +122,11 @@ export function AddLocationDialog({ open, onOpenChange }: AddLocationDialogProps
                   <FormItem>
                     <FormLabel>Latitude *</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="any" 
-                        placeholder="-17.8292" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="-17.8292"
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -146,11 +140,11 @@ export function AddLocationDialog({ open, onOpenChange }: AddLocationDialogProps
                   <FormItem>
                     <FormLabel>Longitude *</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="any" 
-                        placeholder="31.0522" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="31.0522"
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -220,7 +214,7 @@ export function AddLocationDialog({ open, onOpenChange }: AddLocationDialogProps
                 <FormItem>
                   <FormLabel>Notes (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Any additional notes about this location..."
                       className="resize-none"
                       rows={2}
@@ -236,8 +230,8 @@ export function AddLocationDialog({ open, onOpenChange }: AddLocationDialogProps
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={createLocation.isPending}
                 className="bg-green-600 hover:bg-green-700"
               >

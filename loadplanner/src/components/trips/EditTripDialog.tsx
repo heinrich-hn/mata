@@ -5,11 +5,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogHero } from "@/components/ui/dialog-hero";
 import {
   Form,
   FormControl,
@@ -452,17 +450,11 @@ export function EditLoadDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Pencil className="h-4 w-4" />
-            </span>
-            Edit Load - {load.load_id}
-          </DialogTitle>
-          <DialogDescription>
-            Update load details and assignment
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={Pencil}
+          title={`Edit Load - ${load.load_id}`}
+          description="Update load details and assignment"
+        />
 
         {/* Alert banner for delivered loads missing actual times */}
         {needsVerification && (
@@ -1322,16 +1314,11 @@ export function EditLoadDialog({
         }}
       >
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5 text-amber-600" />
-              Reason for Date Change Required
-            </DialogTitle>
-            <DialogDescription>
-              You changed the schedule for this load. Please provide a reason —
-              it will be recorded against this load and included in exports.
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHero
+            icon={CalendarIcon}
+            title="Reason for Date Change Required"
+            description="You changed the schedule for this load. Please provide a reason — it will be recorded against this load and included in exports."
+          />
 
           <div className="space-y-3">
             <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">

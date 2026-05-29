@@ -5,10 +5,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogHero } from "@/components/ui/dialog-hero";
 import {
   Form,
   FormControl,
@@ -257,17 +255,11 @@ export function CreateLoadDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Truck className="h-4 w-4" />
-            </span>
-            Create New Load
-          </DialogTitle>
-          <DialogDescription>
-            Plan a new load with origin and destination times
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={Truck}
+          title="Create New Load"
+          description="Plan a new load with origin and destination times"
+        />
 
         <Form {...form}>
           <form

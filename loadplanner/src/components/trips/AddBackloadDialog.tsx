@@ -4,10 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/ui/dialog-hero';
 import {
   Form,
   FormControl,
@@ -32,7 +30,7 @@ import { parseTimeWindow } from '@/lib/timeWindow';
 import { cn, getLocationDisplayName, safeFormatDate } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format, parseISO } from 'date-fns';
-import { CalendarIcon, MapPin, Package, RotateCcw, Truck } from 'lucide-react';
+import { CalendarIcon, MapPin, Package, Truck } from 'lucide-react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -163,17 +161,11 @@ export function AddBackloadDialog({ open, onOpenChange, load }: AddBackloadDialo
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-white">
-              <RotateCcw className="h-4 w-4" />
-            </span>
-            Add Backload
-          </DialogTitle>
-          <DialogDescription>
-            Add a return trip backload for load <span className="font-semibold">{load.load_id}</span>
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={Package}
+          title="Add Backload"
+          description={<>Add a return trip backload for load <span className="font-semibold">{load.load_id}</span></>}
+        />
 
         {/* Current Load Summary */}
         <Card className="bg-muted/50 border-muted">

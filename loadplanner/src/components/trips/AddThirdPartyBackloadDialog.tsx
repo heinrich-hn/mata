@@ -11,11 +11,9 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/ui/dialog-hero';
 import {
   Form,
   FormControl,
@@ -43,7 +41,7 @@ import { parseTimeWindow } from '@/lib/timeWindow';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format, parseISO } from 'date-fns';
-import { CalendarIcon, Check, ChevronsUpDown, Clock, Loader2, MapPin, RotateCcw, Truck, UserPlus } from 'lucide-react';
+import { CalendarIcon, Check, ChevronsUpDown, Clock, Loader2, MapPin, Package, Truck, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -354,18 +352,13 @@ export function AddThirdPartyBackloadDialog({ open, onOpenChange, load }: AddThi
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-orange-600" />
-              {isEditMode ? 'Edit Third-Party Backload' : 'Add Third-Party Backload'}
-            </DialogTitle>
-            <DialogDescription>
-              {isEditMode
-                ? <>Update the third-party backload details for load <span className="font-semibold text-orange-600">{load.load_id}</span>.</>
-                : <>Add a third-party backload for load <span className="font-semibold">{load.load_id}</span>. Configure the return journey with customer and location details.</>
-              }
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHero
+            icon={Package}
+            title={isEditMode ? 'Edit Third-Party Backload' : 'Add Third-Party Backload'}
+            description={isEditMode
+              ? <>Update the third-party backload details for load <span className="font-semibold text-orange-600">{load.load_id}</span>.</>
+              : <>Add a third-party backload for load <span className="font-semibold">{load.load_id}</span>. Configure the return journey with customer and location details.</>}
+          />
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

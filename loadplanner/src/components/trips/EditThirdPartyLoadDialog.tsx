@@ -3,11 +3,9 @@ import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogHero } from "@/components/ui/dialog-hero";
 import {
   Form,
   FormControl,
@@ -404,18 +402,11 @@ export function EditThirdPartyLoadDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-5 w-5 text-purple-600" />
-              {isSubcontractor ? "Edit Subcontractor Trip" : "Edit Third-Party Load"}
-            </DialogTitle>
-            <DialogDescription>
-              Update details for load{" "}
-              <span className="font-semibold text-purple-600">
-                {load.load_id}
-              </span>
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHero
+            icon={Pencil}
+            title={isSubcontractor ? "Edit Subcontractor Trip" : "Edit Third-Party Load"}
+            description={<>Update details for load{" "}<span className="font-semibold text-purple-600">{load.load_id}</span></>}
+          />
 
           <Form {...form}>
             <form

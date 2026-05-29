@@ -10,10 +10,8 @@ import {
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogHero } from "@/components/ui/dialog-hero";
 import {
     Form,
     FormControl,
@@ -153,19 +151,11 @@ export function AssignSubcontractorDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-lg">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-xl">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500 text-white">
-                            <Handshake className="h-4 w-4" />
-                        </span>
-                        Assign to Subcontractor
-                    </DialogTitle>
-                    <DialogDescription>
-                        Assign load{" "}
-                        <span className="font-semibold">{load.load_id}</span> to a
-                        supplier / subcontractor.
-                    </DialogDescription>
-                </DialogHeader>
+                <DialogHero
+                    icon={Handshake}
+                    title="Assign to Subcontractor"
+                    description={<>Assign load{" "}<span className="font-semibold">{load.load_id}</span> to a supplier / subcontractor.</>}
+                />
 
                 {/* Current Load Summary */}
                 <div className="rounded-lg border bg-muted/50 p-3 grid grid-cols-2 gap-3 text-sm">

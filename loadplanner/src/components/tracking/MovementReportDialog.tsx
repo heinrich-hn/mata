@@ -1,15 +1,23 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import {
+    CalendarRange,
+    FileSpreadsheet,
+    FileText,
+    Layers,
+    Loader2,
+    MapPin,
+    Route,
+    Truck,
+} from "lucide-react";
 
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
     DialogFooter,
-    DialogHeader,
-    DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogHero } from "@/components/ui/dialog-hero";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -230,19 +238,20 @@ export function MovementReportDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>Vehicle Movement Report</DialogTitle>
-                    <DialogDescription>
-                        Generate a report of vehicle entry and exit times at depots and
-                        geofenced locations. Refine the results using the filters below.
-                    </DialogDescription>
-                </DialogHeader>
+                <DialogHero
+                    icon={Route}
+                    title="Vehicle Movement Report"
+                    description="Generate a report of vehicle entry and exit times at depots and geofenced locations. Refine the results using the filters below."
+                />
 
                 <ScrollArea className="flex-1 pr-4 -mr-4">
                     <div className="space-y-6 py-2">
                         {/* Date range */}
                         <div className="space-y-2">
-                            <Label className="text-sm font-semibold">Date Range</Label>
+                            <Label className="flex items-center gap-2 text-sm font-semibold">
+                                <CalendarRange className="h-4 w-4 text-primary" />
+                                Date Range
+                            </Label>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
                                     <Label htmlFor="mr-start" className="text-xs text-muted-foreground">
@@ -275,7 +284,15 @@ export function MovementReportDialog({
 
                         {/* Fleets */}
                         <div className="space-y-2">
-                            <Label className="text-sm font-semibold">Fleets</Label>
+                            <Label className="flex items-center gap-2 text-sm font-semibold">
+                                <Layers className="h-4 w-4 text-primary" />
+                                Fleets
+                                {selectedFleetTypes.size > 0 && (
+                                    <Badge variant="secondary" className="ml-1">
+                                        {selectedFleetTypes.size} selected
+                                    </Badge>
+                                )}
+                            </Label>
                             <p className="text-xs text-muted-foreground">
                                 Leave all unchecked to include every fleet type.
                             </p>
@@ -286,7 +303,7 @@ export function MovementReportDialog({
                                     {fleetTypes.map((type) => (
                                         <label
                                             key={type}
-                                            className="flex items-center gap-2 text-sm cursor-pointer"
+                                            className="flex items-center gap-2 text-sm cursor-pointer rounded-md border px-2.5 py-1.5 transition-colors hover:bg-muted/60 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/5"
                                         >
                                             <Checkbox
                                                 checked={selectedFleetTypes.has(type)}
@@ -308,7 +325,15 @@ export function MovementReportDialog({
                         {/* Vehicles */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <Label className="text-sm font-semibold">Vehicles</Label>
+                                <Label className="flex items-center gap-2 text-sm font-semibold">
+                                    <Truck className="h-4 w-4 text-primary" />
+                                    Vehicles
+                                    {!allVehicles && selectedVehicles.size > 0 && (
+                                        <Badge variant="secondary" className="ml-1">
+                                            {selectedVehicles.size} selected
+                                        </Badge>
+                                    )}
+                                </Label>
                                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                                     <Checkbox
                                         checked={allVehicles}
@@ -332,7 +357,7 @@ export function MovementReportDialog({
                                             filteredVehicles.map((v) => (
                                                 <label
                                                     key={v.id}
-                                                    className="flex items-center gap-2 text-sm cursor-pointer py-0.5"
+                                                    className="flex items-center gap-2 text-sm cursor-pointer rounded-md px-2 py-1 transition-colors hover:bg-muted/60"
                                                 >
                                                     <Checkbox
                                                         checked={selectedVehicles.has(v.vehicle_id)}
@@ -358,7 +383,15 @@ export function MovementReportDialog({
                         {/* Locations */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <Label className="text-sm font-semibold">Locations</Label>
+                                <Label className="flex items-center gap-2 text-sm font-semibold">
+                                    <MapPin className="h-4 w-4 text-primary" />
+                                    Locations
+                                    {!allLocations && selectedLocations.size > 0 && (
+                                        <Badge variant="secondary" className="ml-1">
+                                            {selectedLocations.size} selected
+                                        </Badge>
+                                    )}
+                                </Label>
                                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                                     <Checkbox
                                         checked={allLocations}
@@ -382,7 +415,7 @@ export function MovementReportDialog({
                                             locationOptions.map((name) => (
                                                 <label
                                                     key={name}
-                                                    className="flex items-center gap-2 text-sm cursor-pointer py-0.5"
+                                                    className="flex items-center gap-2 text-sm cursor-pointer rounded-md px-2 py-1 transition-colors hover:bg-muted/60"
                                                 >
                                                     <Checkbox
                                                         checked={selectedLocations.has(name)}

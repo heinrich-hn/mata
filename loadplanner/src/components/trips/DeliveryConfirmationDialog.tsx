@@ -5,10 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/ui/dialog-hero';
 import {
   Form,
   FormControl,
@@ -34,7 +32,7 @@ import { computeTimeVariance, formatTimeAsSAST } from '@/lib/timeWindow';
 import { getLocationDisplayName, safeFormatDate } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addDays, format, formatISO, parseISO } from 'date-fns';
-import { AlertTriangle, ArrowRight, CheckCircle, CheckCircle2, Clock, MapPin, RotateCcw, Truck } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, MapPin, RotateCcw, Truck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
@@ -423,17 +421,11 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-600 text-white">
-              <CheckCircle className="h-4 w-4" />
-            </span>
-            {verificationOnly ? `Verify Times - ${load.load_id}` : `Confirm Delivery - ${load.load_id}`}
-          </DialogTitle>
-          <DialogDescription>
-            {verificationOnly ? 'Verify actual arrival and departure times' : 'Enter actual arrival and departure times to confirm delivery'}
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={CheckCircle2}
+          title={verificationOnly ? `Verify Times - ${load.load_id}` : `Confirm Delivery - ${load.load_id}`}
+          description={verificationOnly ? 'Verify actual arrival and departure times' : 'Enter actual arrival and departure times to confirm delivery'}
+        />
 
         {/* Load Summary */}
         <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
+import { DialogHero } from "@/components/ui/dialog-hero";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useUpdateLoadTimes, type Load } from "@/hooks/useTrips";
@@ -230,14 +231,11 @@ export function AlterLoadTimesDialog({ open, onOpenChange, load }: { open: boole
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Alter/Verify Actual Times</DialogTitle>
-          {load && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {load.load_id} — {load.origin} → {load.destination}
-            </p>
-          )}
-        </DialogHeader>
+        <DialogHero
+          icon={Clock}
+          title="Alter/Verify Actual Times"
+          description={load ? <>{load.load_id} — {load.origin} → {load.destination}</> : undefined}
+        />
 
         {/* Summary note for late times */}
         {lateCount > 0 && (

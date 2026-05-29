@@ -2,11 +2,9 @@ import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
     DialogFooter,
-    DialogHeader,
-    DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogHero } from "@/components/ui/dialog-hero";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,7 +20,7 @@ import type { Load } from "@/hooks/useTrips";
 import { downloadEmlWithAttachment } from "@/lib/emlExport";
 import { exportLoadToPdf } from "@/lib/exportTripsToPdf";
 import { format, parseISO } from "date-fns";
-import { FileDown, Loader2, Mail } from "lucide-react";
+import { FileCheck, FileDown, Loader2, Mail } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -248,17 +246,11 @@ export function ExportLoadConfirmationDialog({
     return (
         <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
             <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <FileDown className="h-5 w-5 text-primary" />
-                        Export Load Confirmation
-                    </DialogTitle>
-                    <DialogDescription>
-                        Add an optional rate and adjust the email recipients before
-                        sending. The rate is only printed on the PDF — it is not saved
-                        to the load.
-                    </DialogDescription>
-                </DialogHeader>
+                <DialogHero
+                    icon={FileCheck}
+                    title="Export Load Confirmation"
+                    description="Add an optional rate and adjust the email recipients before sending. The rate is only printed on the PDF — it is not saved to the load."
+                />
 
                 <div className="space-y-4 py-2">
                     <div className="grid grid-cols-[1fr_120px] gap-3 items-end">

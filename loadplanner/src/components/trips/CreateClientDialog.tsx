@@ -1,22 +1,18 @@
 import { Button } from '@/components/ui/button';
-import
-    {
-        Dialog,
-        DialogContent,
-        DialogDescription,
-        DialogFooter,
-        DialogHeader,
-        DialogTitle,
-    } from '@/components/ui/dialog';
-import
-    {
-        Form,
-        FormControl,
-        FormField,
-        FormItem,
-        FormLabel,
-        FormMessage,
-    } from '@/components/ui/form';
+import {
+Dialog,
+DialogContent,
+DialogFooter,
+} from '@/components/ui/dialog';
+import { DialogHero } from '@/components/ui/dialog-hero';
+import {
+Form,
+FormControl,
+FormField,
+FormItem,
+FormLabel,
+FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateClient } from '@/hooks/useClients';
@@ -74,17 +70,11 @@ export function CreateClientDialog({ open, onOpenChange, onClientCreated }: Crea
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500 text-white">
-              <Building2 className="h-4 w-4" />
-            </span>
-            Add New Customer
-          </DialogTitle>
-          <DialogDescription>
-            Create a new third-party customer
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHero
+          icon={Building2}
+          title="Add New Customer"
+          description="Create a new third-party customer"
+        />
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -153,11 +143,11 @@ export function CreateClientDialog({ open, onOpenChange, onClientCreated }: Crea
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Any notes about this customer..."
                       className="resize-none"
                       rows={2}
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />

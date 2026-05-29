@@ -3,10 +3,8 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
+import { DialogHero } from '@/components/ui/dialog-hero';
 import { Separator } from '@/components/ui/separator';
 import { type FleetVehicle, useFleetVehicles, useUpdateFleetVehicle } from '@/hooks/useFleetVehicles';
 import { cn } from '@/lib/utils';
@@ -162,13 +160,24 @@ export function ViewFleetDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">
-              {vehicle.vehicle_id}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              View fleet vehicle details, linked trailers, document expiry dates, and update vehicle availability.
-            </DialogDescription>
+          <DialogHero
+            icon={Truck}
+            title={vehicle.vehicle_id}
+            description="View fleet vehicle details, linked trailers, document expiry dates, and update vehicle availability."
+          />
+
+          {/* Status + actions */}
+          <div className="flex items-center justify-between gap-4">
+            <Badge
+              variant="outline"
+              className={cn(
+                vehicle.available
+                  ? 'bg-status-scheduled-bg text-status-scheduled border-status-scheduled/20'
+                  : 'bg-status-pending-bg text-status-pending border-status-pending/20'
+              )}
+            >
+              {vehicle.available ? 'Available' : 'Inactive'}
+            </Badge>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -187,26 +196,6 @@ export function ViewFleetDialog({
                 <XCircle className="h-4 w-4 mr-2" />
                 {vehicle.available ? 'Deactivate' : 'Activate'}
               </Button>
-            </div>
-          </DialogHeader>
-
-          {/* Header with vehicle info */}
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-              <Truck className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <Badge
-                variant="outline"
-                className={cn(
-                  'mt-1',
-                  vehicle.available
-                    ? 'bg-status-scheduled-bg text-status-scheduled border-status-scheduled/20'
-                    : 'bg-status-pending-bg text-status-pending border-status-pending/20'
-                )}
-              >
-                {vehicle.available ? 'Available' : 'Inactive'}
-              </Badge>
             </div>
           </div>
 

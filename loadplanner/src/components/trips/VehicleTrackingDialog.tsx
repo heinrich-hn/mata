@@ -284,7 +284,7 @@ export function VehicleTrackingDialog({
       clipboardText += `📊 Status: ${statusText}\n`;
       clipboardText += `📍 Route: ${originStr} → ${destStr}\n`;
       clipboardText += `🚛 Vehicle: ${vehicleName}\n`;
-      
+
       if (load.loading_date) {
         clipboardText += `📅 Loading: ${load.loading_date}\n`;
       }
@@ -298,7 +298,7 @@ export function VehicleTrackingDialog({
       }
 
       clipboardText += `\n🔗 Live tracking link (valid ${expiryHours}h):\n${result.shareUrl}`;
-        
+
       await navigator.clipboard.writeText(clipboardText);
       toast.success(`Live link and load details copied! Valid for ${expiryHours} hours.`);
     } catch (err) {
@@ -378,10 +378,12 @@ export function VehicleTrackingDialog({
       <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 gap-0 overflow-hidden shadow-2xl">
         {/* Header Section */}
         <DialogHeader className="p-6 pb-4 border-b bg-muted/20">
-          <div className="flex items-start justify-between pr-8">
-            <div className="space-y-1">
-              <DialogTitle className="flex items-center gap-2 text-xl">
-                <Radio className="w-5 h-5 text-primary animate-pulse" />
+          <div className="flex items-start gap-3 pr-8">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+              <Radio className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="space-y-1 text-left">
+              <DialogTitle className="text-xl">
                 Live Tracking: {load?.load_id}
               </DialogTitle>
               <DialogDescription className="text-base font-medium">
@@ -414,7 +416,7 @@ export function VehicleTrackingDialog({
               ) : (
                 <div className="h-9 w-48 bg-muted rounded-lg animate-pulse" />
               )}
-              
+
               {lastUpdate && (
                 <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" />
@@ -545,7 +547,7 @@ export function VehicleTrackingDialog({
                         <div className="flex justify-between items-center"><span className="text-muted-foreground">Load:</span> <span className="font-medium">{load?.load_id}</span></div>
                         <div className="flex justify-between items-center"><span className="text-muted-foreground">Speed:</span> <span className="font-medium">{asset.speedKmH} km/h</span></div>
                         <div className="flex justify-between items-center"><span className="text-muted-foreground">Heading:</span> <span className="font-medium">{getHeadingDirection(asset.heading || 0)}</span></div>
-                        <div className="flex justify-between items-center"><span className="text-muted-foreground">Status:</span> 
+                        <div className="flex justify-between items-center"><span className="text-muted-foreground">Status:</span>
                           <span className={isMoving ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold'}>
                             {isMoving ? 'Moving' : 'Stationary'}
                           </span>
