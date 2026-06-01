@@ -168,7 +168,10 @@ export function useCreateLoad() {
       queryClient.invalidateQueries({ queryKey: ['client-active-loads'] });
       toast({ title: 'Load created successfully' });
 
-      // One-time rule: only post to downstream receiver on first creation.
+      // Attempt a sync on creation. The receiver only posts a load once it is
+      // fully assigned (driver + vehicle) and never reposts an already-synced
+      // load, so a load created without an assignment is simply skipped here
+      // and posted later when the driver/vehicle are added.
       const createdId = (data as { id?: string } | null)?.id;
       triggerGoogleSheetsSync(createdId, 'create');
     },
@@ -220,14 +223,19 @@ export function useUpdateLoad() {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['loads'] });
       queryClient.invalidateQueries({ queryKey: ['client-loads'] });
       queryClient.invalidateQueries({ queryKey: ['client-active-loads'] });
       toast({ title: 'Load updated successfully' });
 
-      // Intentionally do NOT trigger webhook sync on updates.
-      // Business rule: post once on create, never repost on edits.
+      // Trigger a sync after edits too. The receiver only posts a load once
+      // it is fully assigned (driver + vehicle) and never reposts a load
+      // that has already been synced, so this cannot create duplicate trips.
+      // This is what lets a driver/vehicle assigned AFTER creation reach the
+      // Dashboard instead of staying "unassigned".
+      const updatedId = (data as { id?: string } | null)?.id;
+      triggerGoogleSheetsSync(updatedId, 'update');
     },
     onError: (error) => {
       console.error('[useUpdateLoad] Mutation FAILED:', error.message, error);

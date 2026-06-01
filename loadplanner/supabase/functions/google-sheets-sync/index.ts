@@ -466,14 +466,20 @@ serve(async (req) => {
       ? (loads as any[]).filter((load) => loadIds.includes(load.id))
       : (loads as any[]);
 
-    const unsyncedCandidates = receiverCandidates.filter((load) => !load.synced_to_dashboard);
-
-    const loadsToPost = syncTrigger === 'create'
-      ? unsyncedCandidates
-      : [];
+    // One-time post rule: a load is posted to the Dashboard exactly once,
+    // and only after it is fully assigned (both a driver AND a vehicle).
+    // The synced_to_dashboard flag is set after a successful post, so a
+    // load can never be posted twice (no duplicate trips). This applies
+    // regardless of whether the sync was triggered by a create or an edit,
+    // so an assignment made after creation still propagates.
+    const loadsToPost = receiverCandidates.filter((load) =>
+      !load.synced_to_dashboard &&
+      load.driver_id &&
+      load.fleet_vehicle_id
+    );
 
     console.log(
-      `📤 Posting ${loadsToPost.length} unsynced loads to receiver ` +
+      `📤 Posting ${loadsToPost.length} fully-assigned, unsynced loads to receiver ` +
       `(trigger=${syncTrigger}, ${receiverCandidates.length - loadsToPost.length} skipped)...`,
     );
 
