@@ -65,12 +65,23 @@ export interface DateChangeEntry {
   changedAt: string; // ISO timestamp
 }
 
+export interface TripQuestion {
+  id: string;
+  text: string;
+  createdAt: string; // ISO timestamp
+  askedBy?: string;
+  resolved?: boolean;
+  answer?: string;
+  resolvedAt?: string; // ISO timestamp
+}
+
 export interface TimeWindowData {
   origin: TimeWindowSection;
   destination: TimeWindowSection;
   backload?: BackloadInfo | null;
   waypoints?: Waypoint[];
   dateChangeHistory?: DateChangeEntry[];
+  questions?: TripQuestion[];
 }
 
 export interface Load {

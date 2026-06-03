@@ -9,11 +9,12 @@ import type {
   DateChangeEntry,
   TimeWindowData,
   TimeWindowSection,
+  TripQuestion,
   Waypoint,
 } from "@/types/Trips";
 
 // Re-export the types so consumers don't need a second import
-export type { BackloadInfo, DateChangeEntry, TimeWindowData, TimeWindowSection, Waypoint };
+export type { BackloadInfo, DateChangeEntry, TimeWindowData, TimeWindowSection, TripQuestion, Waypoint };
 
 // ---------------------------------------------------------------------------
 // Extended data that can live inside a time_window JSON blob
@@ -40,6 +41,7 @@ export interface TimeWindowDataFull extends TimeWindowData {
   varianceReason?: string;
   waypoints: Waypoint[];
   dateChangeHistory: DateChangeEntry[];
+  questions: TripQuestion[];
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +101,9 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
       dateChangeHistory: Array.isArray(data.dateChangeHistory)
         ? (data.dateChangeHistory as DateChangeEntry[])
         : [],
+      questions: Array.isArray(data.questions)
+        ? (data.questions as TripQuestion[])
+        : [],
     };
   } catch {
     return {
@@ -110,8 +115,26 @@ export function parseTimeWindow(timeWindow: unknown): TimeWindowDataFull {
       varianceReason: undefined,
       waypoints: [],
       dateChangeHistory: [],
+      questions: [],
     };
   }
+}
+
+/**
+ * Read the list of questions attached to a load (stored in time_window JSON).
+ * Always returns an array (never throws).
+ *
+ * By default only OPEN (unresolved) questions are returned so resolved
+ * questions disappear from the table row highlight and previews. Pass
+ * `{ includeResolved: true }` to get every question.
+ */
+export function getTripQuestions(
+  load: { time_window?: unknown } | null | undefined,
+  options: { includeResolved?: boolean } = {},
+): TripQuestion[] {
+  if (!load) return [];
+  const all = parseTimeWindow(load.time_window).questions;
+  return options.includeResolved ? all : all.filter((q) => !q.resolved);
 }
 
 /**

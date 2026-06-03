@@ -30,7 +30,7 @@ import {
 import { useDeleteLoad, useUpdateLoad, type Load } from "@/hooks/useTrips";
 import { shareTripViaWhatsApp, shareWeeklyScheduleViaWhatsApp } from "@/lib/exportTripWhatsApp";
 import { exportRoutePdf } from "@/lib/exportRoutePdf";
-import { parseTimeWindow as parseTimeWindowData } from "@/lib/timeWindow";
+import { getTripQuestions, parseTimeWindow as parseTimeWindowData } from "@/lib/timeWindow";
 import { cn, getLocationDisplayName } from "@/lib/utils";
 import {
   format,
@@ -47,6 +47,7 @@ import {
   FileDown,
   Fuel,
   Handshake,
+  HelpCircle,
   MapPin,
   MessageCircle,
   MoreHorizontal,
@@ -65,6 +66,7 @@ import { memo, useMemo, useState } from "react";
 import { AddBackloadDialog } from "./AddBackloadDialog";
 import { AddThirdPartyBackloadDialog } from "./AddThirdPartyBackloadDialog";
 import { AssignSubcontractorDialog } from "./AssignSubcontractorDialog";
+import { AskQuestionDialog } from "./AskQuestionDialog";
 import { AlterLoadTimesDialog } from "./AlterTripTimesDialog";
 import { DeliveryConfirmationDialog } from "./DeliveryConfirmationDialog";
 import { ExportLoadConfirmationDialog } from "./ExportLoadConfirmationDialog";
@@ -240,6 +242,8 @@ export function LoadsTable({
   const [loadForSubcontractor, setLoadForSubcontractor] = useState<Load | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [loadForExport, setLoadForExport] = useState<Load | null>(null);
+  const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
+  const [loadForQuestion, setLoadForQuestion] = useState<Load | null>(null);
 
   const deleteLoad = useDeleteLoad();
   const updateLoad = useUpdateLoad();
@@ -482,6 +486,7 @@ export function LoadsTable({
                         "animate-fade-in",
                         "[&>td]:py-2 [&>td]:align-middle",
                         needsVerification(load) && "bg-amber-50 dark:bg-amber-950/20 border-l-4 border-l-amber-500 hover:bg-amber-100/70 dark:hover:bg-amber-950/30",
+                        getTripQuestions(load).length > 0 && "bg-red-50/70 dark:bg-red-950/20 border-l-4 border-l-red-400 hover:bg-red-100/70 dark:hover:bg-red-950/30",
                       )}
                       style={{ animationDelay: `${index * 50}ms` }}
                       onClick={() => onLoadClick?.(load)}
@@ -548,6 +553,32 @@ export function LoadsTable({
                             interlinkId={load.fleet_vehicle?.linked_interlink_id}
                             vehicleMap={fleetVehicleMap}
                           />
+                          {(() => {
+                            const questions = getTripQuestions(load);
+                            if (questions.length === 0) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLoadForQuestion(load);
+                                  setQuestionDialogOpen(true);
+                                }}
+                                className="mt-1 w-full rounded-md border border-red-300 bg-red-50 p-1.5 text-left dark:border-red-700 dark:bg-red-950/30"
+                                title="View questions"
+                              >
+                                <div className="mb-0.5 flex items-center gap-1">
+                                  <HelpCircle className="h-3 w-3 flex-shrink-0 text-red-600 dark:text-red-400" />
+                                  <span className="text-[10px] font-semibold text-red-800 dark:text-red-300">
+                                    {questions.length} question{questions.length !== 1 ? "s" : ""}
+                                  </span>
+                                </div>
+                                <p className="line-clamp-2 text-[11px] leading-tight text-red-700 dark:text-red-300">
+                                  {questions[questions.length - 1].text}
+                                </p>
+                              </button>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -912,6 +943,17 @@ export function LoadsTable({
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setLoadForQuestion(load);
+                                setQuestionDialogOpen(true);
+                              }}
+                            >
+                              <HelpCircle className="h-4 w-4 mr-2" />
+                              Ask a Question
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setLoadForBreakdown(load);
                                 setBreakdownDialogOpen(true);
                               }}
@@ -1110,6 +1152,19 @@ export function LoadsTable({
           if (!open) setLoadForExport(null);
         }}
         load={loadForExport}
-      />    </div>
+      />
+      <AskQuestionDialog
+        open={questionDialogOpen}
+        onOpenChange={(open) => {
+          setQuestionDialogOpen(open);
+          if (!open) setLoadForQuestion(null);
+        }}
+        load={
+          loadForQuestion
+            ? loads.find((l) => l.id === loadForQuestion.id) ?? loadForQuestion
+            : null
+        }
+      />
+    </div>
   );
 }
