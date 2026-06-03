@@ -465,16 +465,6 @@ export function useAddPartForm(
         return;
       }
 
-      // ADDED: Validate vendor selection for external parts
-      if (state.sourceType === "external" && !state.selectedVendorId) {
-        toast({
-          variant: "destructive",
-          title: "Validation Error",
-          description: "Please select a vendor for external parts",
-        });
-        return;
-      }
-
       // Check for repeated usage on the same vehicle (only for parts, not services)
       if (state.sourceType !== "service" && !repeatReason) {
         const usages = await checkForRepeatedUsage(
@@ -517,8 +507,9 @@ export function useAddPartForm(
           status: "pending",
           unit_price: state.unitPrice || null,
           total_price: totalPrice || null,
-          // FIXED: Set vendor_id for external parts, null for others
-          vendor_id: state.sourceType === "external" ? state.selectedVendorId : null,
+          // Vendor is assigned later by the procurement team. Coerce empty string to
+          // null so we never send "" into the uuid vendor_id column (which returns 400).
+          vendor_id: state.selectedVendorId || null,
           ir_number: state.irNumber || null,
           is_service: state.sourceType === "service",
           is_from_inventory: state.sourceType === "inventory" || state.sourceType === "tyre-inventory",
