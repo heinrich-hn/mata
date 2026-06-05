@@ -510,7 +510,7 @@ export function VehicleTrackingDialog({
           <div className="flex-1 rounded-xl overflow-hidden border shadow-inner relative z-0 min-h-[300px]">
             {!telematicsAssetId ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/40 z-10">
-                <div className="bg-background p-6 rounded-2xl shadow-sm border text-center max-w-sm">
+                <div className="bg-background p-6 rounded-lg shadow-sm border text-center max-w-sm">
                   <Truck className="w-10 h-10 text-muted-foreground/50 mx-auto mb-4" />
                   <h3 className="font-semibold text-lg mb-1">No Telematics Setup</h3>
                   <p className="text-muted-foreground text-sm">

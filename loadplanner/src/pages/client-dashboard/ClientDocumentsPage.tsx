@@ -345,7 +345,7 @@ export default function ClientDocumentsPage() {
                         </div>
                     ) : filteredDocs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                            <div className="p-4 rounded-2xl bg-muted/50">
+                            <div className="p-4 rounded-lg bg-muted/50">
                                 <File className="h-12 w-12 text-muted-foreground/40" />
                             </div>
                             <p className="mt-4 text-sm font-medium text-foreground">No documents yet</p>

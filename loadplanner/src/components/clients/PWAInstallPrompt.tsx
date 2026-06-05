@@ -45,7 +45,7 @@ export function PWAInstallPrompt() {
       {/* Install Banner */}
       <div className="fixed bottom-0 inset-x-0 z-[60] p-4 sm:p-6 pointer-events-none">
         <div className="max-w-md mx-auto pointer-events-auto">
-          <div className="bg-card border border-border rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-card border border-border rounded-lg shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
             <div className="p-4 sm:p-5">
               <div className="flex items-start gap-3">
                 {/* App icon */}
@@ -95,7 +95,7 @@ export function PWAInstallPrompt() {
       {/* iOS Instructions Modal */}
       {showIOSInstructions && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-card border border-border rounded-lg shadow-2xl w-full max-w-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
             <div className="p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-base text-foreground">Install on iOS</h3>

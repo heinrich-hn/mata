@@ -38,6 +38,11 @@ import {
     useSendBreakdownToMainApp,
     useUpdateBreakdown,
 } from "@/hooks/useBreakdowns";
+import { useLoads } from "@/hooks/useTrips";
+import {
+    exportBreakdownsToExcel,
+    exportBreakdownsToPdf,
+} from "@/lib/exportBreakdowns";
 import {
     BREAKDOWN_STATUSES,
     type Breakdown,
@@ -48,13 +53,18 @@ import {
     AlertTriangle,
     CheckCircle,
     Clock,
+    Download,
+    FileSpreadsheet,
+    FileText,
     MoreHorizontal,
+    Pencil,
     Send,
     Trash2,
     Truck,
     Wrench,
 } from "lucide-react";
 import { useState } from "react";
+import { EditBreakdownDialog } from "./EditBreakdownDialog";
 
 function getSeverityVariant(severity: string): "default" | "destructive" | "secondary" {
     switch (severity) {
@@ -91,12 +101,14 @@ function getStatusLabel(status: string): string {
 
 export function BreakdownsTable() {
     const { data: breakdowns = [], isLoading } = useBreakdowns();
+    const { data: loads = [] } = useLoads();
     const updateBreakdown = useUpdateBreakdown();
     const deleteBreakdown = useDeleteBreakdown();
     const sendToMainApp = useSendBreakdownToMainApp();
 
     const [deleteTarget, setDeleteTarget] = useState<Breakdown | null>(null);
     const [sendTarget, setSendTarget] = useState<Breakdown | null>(null);
+    const [editTarget, setEditTarget] = useState<Breakdown | null>(null);
 
     const handleStatusChange = (breakdown: Breakdown, status: BreakdownStatus) => {
         updateBreakdown.mutate({
@@ -173,9 +185,29 @@ export function BreakdownsTable() {
 
             {/* Breakdowns Table */}
             <Card className="shadow-card">
-                <CardHeader>
-                    <CardTitle>Breakdowns</CardTitle>
-                    <CardDescription>All reported vehicle breakdowns from trips</CardDescription>
+                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+                    <div className="space-y-1.5">
+                        <CardTitle>Breakdowns</CardTitle>
+                        <CardDescription>All reported vehicle breakdowns from trips</CardDescription>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-2" disabled={breakdowns.length === 0}>
+                                <Download className="h-4 w-4" />
+                                Export
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => exportBreakdownsToExcel(breakdowns, loads)}>
+                                <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+                                Export to Excel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => exportBreakdownsToPdf(breakdowns, loads)}>
+                                <FileText className="h-4 w-4 mr-2 text-rose-600" />
+                                Export to PDF
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -266,6 +298,10 @@ export function BreakdownsTable() {
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => setEditTarget(bd)}>
+                                                            <Pencil className="h-4 w-4 mr-2" />
+                                                            Edit
+                                                        </DropdownMenuItem>
                                                         {!bd.sent_to_main_app && (
                                                             <DropdownMenuItem onClick={() => setSendTarget(bd)}>
                                                                 <Send className="h-4 w-4 mr-2" />
@@ -334,6 +370,13 @@ export function BreakdownsTable() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Edit Breakdown */}
+            <EditBreakdownDialog
+                open={!!editTarget}
+                onOpenChange={(o) => !o && setEditTarget(null)}
+                breakdown={editTarget}
+            />
         </>
     );
 }

@@ -61,6 +61,8 @@ import {
   Users,
 } from "lucide-react";
 import { useFleetVehicles } from "@/hooks/useFleetVehicles";
+import { useBreakdowns } from "@/hooks/useBreakdowns";
+import type { Breakdown } from "@/types/breakdown";
 import { toast } from "sonner";
 import { memo, useMemo, useState } from "react";
 import { AddBackloadDialog } from "./AddBackloadDialog";
@@ -248,6 +250,20 @@ export function LoadsTable({
   const deleteLoad = useDeleteLoad();
   const updateLoad = useUpdateLoad();
   const { data: allFleetVehicles = [] } = useFleetVehicles();
+  const { data: allBreakdowns = [] } = useBreakdowns();
+
+  // Map each trip (load) id to the breakdowns recorded against it so we can
+  // surface a "breakdown occurred on this trip" indicator on the row.
+  const breakdownsByLoad = useMemo(() => {
+    const map = new Map<string, Breakdown[]>();
+    for (const bd of allBreakdowns) {
+      if (!bd.load_id) continue;
+      const list = map.get(bd.load_id);
+      if (list) list.push(bd);
+      else map.set(bd.load_id, [bd]);
+    }
+    return map;
+  }, [allBreakdowns]);
 
   // Build a quick lookup so we can resolve linked_reefer_id / linked_interlink_id
   // from the fleet vehicle to display the linked trailer name on each trip row.
@@ -485,6 +501,7 @@ export function LoadsTable({
                         "cursor-pointer transition-colors hover:bg-muted/30",
                         "animate-fade-in",
                         "[&>td]:py-2 [&>td]:align-middle",
+                        (!load.fleet_vehicle_id || !load.driver_id) && "bg-muted/40 hover:bg-muted/60",
                         needsVerification(load) && "bg-amber-50 dark:bg-amber-950/20 border-l-4 border-l-amber-500 hover:bg-amber-100/70 dark:hover:bg-amber-950/30",
                         getTripQuestions(load).length > 0 && "bg-red-50/70 dark:bg-red-950/20 border-l-4 border-l-red-400 hover:bg-red-100/70 dark:hover:bg-red-950/30",
                       )}
@@ -530,6 +547,21 @@ export function LoadsTable({
                           <p className="font-semibold text-foreground text-sm leading-tight">
                             {load.load_id}
                           </p>
+                          {(() => {
+                            const bds = breakdownsByLoad.get(load.id);
+                            if (!bds || bds.length === 0) return null;
+                            const unresolved = bds.filter((b) => b.status !== "resolved").length;
+                            return (
+                              <Badge
+                                variant={unresolved > 0 ? "destructive" : "secondary"}
+                                className="mt-0.5 gap-1 text-[10px] py-0 px-1.5"
+                                title={`${bds.length} breakdown${bds.length !== 1 ? "s" : ""} recorded on this trip${unresolved > 0 ? ` · ${unresolved} unresolved` : ""}`}
+                              >
+                                <AlertTriangle className="h-2.5 w-2.5" />
+                                {bds.length} breakdown{bds.length !== 1 ? "s" : ""}
+                              </Badge>
+                            );
+                          })()}
                           {(() => {
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const rawTw: any = (() => { try { return typeof load.time_window === "string" ? JSON.parse(load.time_window || "{}") : (load.time_window ?? {}); } catch { return {}; } })();

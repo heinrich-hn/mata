@@ -346,7 +346,7 @@ export default function CalendarPage() {
     <TooltipProvider>
       <div className="space-y-6 animate-fade-in">
         {/* Modern Header with Glassmorphism */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-accent/5 to-background border border-primary/10 p-6">
+        <div className="relative overflow-hidden rounded-lg bg-gradient-to-br from-primary/10 via-accent/5 to-background border border-primary/10 p-6">
           <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,transparent,black)]" />
           <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div className="space-y-2">
@@ -476,7 +476,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar Grid with Truck Lanes */}
-        <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
           {/* Days Header with Truck Column */}
           <div className="grid grid-cols-[140px_repeat(7,1fr)] bg-gradient-to-r from-muted/80 to-muted/40 border-b">
             {/* Truck Column Header */}
@@ -546,7 +546,7 @@ export default function CalendarPage() {
             {weekLoads.length === 0 ? (
               <div className="flex items-center justify-center h-[350px]">
                 <div className="text-center space-y-4">
-                  <div className="mx-auto h-20 w-20 rounded-2xl bg-muted/50 flex items-center justify-center">
+                  <div className="mx-auto h-20 w-20 rounded-lg bg-muted/50 flex items-center justify-center">
                     <Truck className="h-10 w-10 text-muted-foreground/30" />
                   </div>
                   <div>

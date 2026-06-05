@@ -4,9 +4,9 @@ import tailwindcssAnimate from "tailwindcss-animate";
 export default {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{ts,tsx}", 
-    "./components/**/*.{ts,tsx}", 
-    "./app/**/*.{ts,tsx}", 
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
     "./src/**/*.{ts,tsx}"
   ],
   prefix: "",
@@ -20,7 +20,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter Tight', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        serif: ['Source Serif 4', 'Georgia', 'Times New Roman', 'serif'],
       },
       // Maps your custom CSS spacing variables into Tailwind's spacing scale (e.g., p-md, m-lg)
       spacing: {
@@ -110,6 +111,11 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        /* Cap the upper radius scale to keep cards/panels on the corporate
+           token (6–10px) instead of the soft Tailwind defaults (12–24px). */
+        xl: "var(--radius)",
+        "2xl": "calc(var(--radius) + 2px)",
+        "3xl": "calc(var(--radius) + 4px)",
       },
       // Maps your elegant CSS gradients so you can use them like `bg-gradient-primary`
       backgroundImage: {

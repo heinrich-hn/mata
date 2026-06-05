@@ -942,7 +942,7 @@ function MobileLoadCard({ load, clientId, feedback }: { load: Load; clientId: st
 function EmptyState({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-      <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mb-4 shadow-sm border border-border/50">
+      <div className="h-14 w-14 rounded-lg bg-muted flex items-center justify-center mb-4 shadow-sm border border-border/50">
         <Icon className="h-7 w-7 text-muted-foreground" />
       </div>
       <h3 className="text-lg font-semibold text-foreground tracking-tight">{title}</h3>
