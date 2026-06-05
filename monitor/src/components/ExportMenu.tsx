@@ -30,15 +30,15 @@ export function ExportMenu({ onExport, disabled, label = "Export", size = "sm" }
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem onClick={() => onExport("pdf")} className="cursor-pointer text-[0.8125rem]">
-                    <FileText className="h-3.5 w-3.5 mr-2 text-red-500" />
+                    <FileText className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
                     Export to PDF
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onExport("excel")} className="cursor-pointer text-[0.8125rem]">
-                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-green-600" />
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
                     Export to Excel
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onExport("outlook")} className="cursor-pointer text-[0.8125rem]">
-                    <Mail className="h-3.5 w-3.5 mr-2 text-blue-500" />
+                    <Mail className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
                     Send via Outlook
                 </DropdownMenuItem>
             </DropdownMenuContent>

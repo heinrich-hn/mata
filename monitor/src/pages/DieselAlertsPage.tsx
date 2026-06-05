@@ -139,8 +139,8 @@ export default function DieselAlertsPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-          <p className="text-sm text-slate-500">Loading pending debriefs...</p>
+          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading pending debriefs...</p>
         </div>
       </div>
     );
@@ -150,11 +150,11 @@ export default function DieselAlertsPage() {
     <div className="h-full overflow-y-auto">
       <div className="monitor-page-wide w-full">
         {/* Stats and Actions Bar */}
-        <div className="flex-shrink-0 px-6 py-4 border border-slate-200/90 rounded-xl bg-gradient-to-r from-cyan-50/70 via-white to-blue-50/65 shadow-sm">
+        <div className="flex-shrink-0 px-6 py-4 border border-border rounded bg-card shadow-card">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground">
                   {records.length} transaction{records.length !== 1 ? 's' : ''} across {groupedByDriver.length} driver{groupedByDriver.length !== 1 ? 's' : ''}
                 </p>
               </div>
@@ -171,7 +171,7 @@ export default function DieselAlertsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => generateDebriefPDF(groupedByDriver)}
-                    className="border-slate-200 text-slate-600 hover:bg-slate-50"
+                    className=""
                   >
                     <FileDown className="h-4 w-4 mr-2" />
                     Debrief PDF
@@ -202,7 +202,7 @@ export default function DieselAlertsPage() {
         </div>
 
         {/* Driver list */}
-        <div className="flex-1 min-h-0 px-6 py-4 space-y-2 monitor-soft-panel rounded-xl">
+        <div className="flex-1 min-h-0 px-6 py-4 space-y-2 rounded border border-border bg-card shadow-card">
           {records.length === 0 ? (
             <div className="flex items-center justify-center h-64 border border-slate-200 rounded-lg bg-slate-50/50">
               <div className="text-center">

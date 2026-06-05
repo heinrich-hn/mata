@@ -52,8 +52,8 @@ export default function DriverBehaviorPage() {
         return (
             <div className="flex items-center justify-center h-[calc(100vh-200px)]">
                 <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-                    <p className="text-sm text-slate-500">Loading driver behavior events...</p>
+                    <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+                    <p className="text-sm text-muted-foreground">Loading driver behavior events...</p>
                 </div>
             </div>
         );
@@ -67,8 +67,8 @@ export default function DriverBehaviorPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Driver Behavior</h1>
-                    <p className="text-sm text-slate-500 mt-1">Pending behavior events by driver</p>
+                    <h1 className="page-title text-2xl text-foreground">Driver Behavior</h1>
+                    <p className="text-sm text-muted-foreground mt-1">Pending behavior events by driver</p>
                 </div>
                 <ExportMenu
                     disabled={events.length === 0}
@@ -78,28 +78,28 @@ export default function DriverBehaviorPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="border-blue-200/60 bg-gradient-to-br from-blue-50/40 to-white">
-                    <CardContent className="p-5">
+                <Card>
+                    <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Total Events</p>
-                                <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.total}</p>
+                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Total Events</p>
+                                <p className="text-xl font-semibold text-foreground mt-0.5 tabular-nums">{stats.total}</p>
                             </div>
-                            <div className="p-2 rounded-lg bg-blue-100">
-                                <UserX className="h-5 w-5 text-blue-600" />
+                            <div className="p-2 rounded bg-info-soft text-info">
+                                <UserX className="h-5 w-5" />
                             </div>
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="border-amber-200/60 bg-gradient-to-br from-amber-50/40 to-white">
-                    <CardContent className="p-5">
+                <Card>
+                    <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Pending Debrief</p>
-                                <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.pending}</p>
+                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Pending Debrief</p>
+                                <p className="text-xl font-semibold text-foreground mt-0.5 tabular-nums">{stats.pending}</p>
                             </div>
-                            <div className="p-2 rounded-lg bg-amber-100">
-                                <UserX className="h-5 w-5 text-amber-600" />
+                            <div className="p-2 rounded bg-warning-soft text-warning">
+                                <UserX className="h-5 w-5" />
                             </div>
                         </div>
                     </CardContent>
@@ -110,7 +110,7 @@ export default function DriverBehaviorPage() {
             {events.length === 0 ? (
                 <Card>
                     <CardContent className="py-12 text-center">
-                        <p className="text-[0.8125rem] text-slate-400">No pending driver behavior events</p>
+                        <p className="text-[0.8125rem] text-muted-foreground">No pending driver behavior events</p>
                     </CardContent>
                 </Card>
             ) : (
@@ -122,7 +122,7 @@ export default function DriverBehaviorPage() {
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                                                <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 text-[0.6875rem]">
+                                                <Badge variant="outline" className="border-info/20 text-info bg-info-soft text-[0.6875rem]">
                                                     {formatType(event.event_type)}
                                                 </Badge>
                                                 {event.severity && (
@@ -131,8 +131,8 @@ export default function DriverBehaviorPage() {
                                                     </Badge>
                                                 )}
                                             </div>
-                                            <p className="text-[0.8125rem] text-slate-700 mt-1">{event.description}</p>
-                                            <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 flex-wrap">
+                                            <p className="text-[0.8125rem] text-foreground mt-1">{event.description}</p>
+                                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
                                                 {event.fleet_number && (
                                                     <span className="flex items-center gap-1">
                                                         <Truck className="h-3 w-3" />
@@ -148,12 +148,12 @@ export default function DriverBehaviorPage() {
                                             </div>
                                         </div>
                                         <div className="text-right flex-shrink-0">
-                                            <p className="text-xs text-slate-400">
+                                            <p className="text-xs text-muted-foreground">
                                                 {format(new Date(event.event_date), 'dd MMM yyyy')}
                                                 {event.event_time ? ` ${event.event_time}` : ''}
                                             </p>
                                             {event.points != null && (
-                                                <p className="text-xs font-semibold text-blue-700 mt-0.5">{event.points} pts</p>
+                                                <p className="text-xs font-semibold text-info mt-0.5">{event.points} pts</p>
                                             )}
                                         </div>
                                     </div>
@@ -173,13 +173,13 @@ function severityBadge(severity: string) {
     switch (severity) {
         case 'critical':
         case 'high':
-            return 'bg-rose-100 text-rose-700 border-rose-200';
+            return 'border-danger/20 bg-danger-soft text-danger';
         case 'medium':
-            return 'bg-amber-100 text-amber-700 border-amber-200';
+            return 'border-warning/20 bg-warning-soft text-warning';
         case 'low':
-            return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+            return 'border-success/20 bg-success-soft text-success';
         default:
-            return 'bg-slate-100 text-slate-600 border-slate-200';
+            return 'border-border bg-muted text-muted-foreground';
     }
 }
 
@@ -217,24 +217,24 @@ function DriverGroup({
                 onClick={() => setOpen(!open)}
                 className={cn(
                     'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
-                    open ? 'bg-blue-50' : 'hover:bg-slate-50'
+                    open ? 'bg-muted' : 'hover:bg-muted'
                 )}
             >
-                <div className="p-1.5 rounded-md bg-blue-50">
-                    <UserX className={cn('h-4 w-4', open ? 'text-blue-600' : 'text-blue-500')} />
+                <div className="p-1.5 rounded bg-secondary">
+                    <UserX className={cn('h-4 w-4', open ? 'text-primary' : 'text-muted-foreground')} />
                 </div>
-                <span className="font-semibold text-[0.8125rem] text-slate-900">{driverName}</span>
-                <Badge className="ml-auto text-[0.6875rem] bg-blue-100 text-blue-700 border-blue-200">
+                <span className="font-semibold text-[0.8125rem] text-foreground">{driverName}</span>
+                <Badge className="ml-auto text-[0.6875rem] border-border bg-muted text-muted-foreground">
                     {count} {count === 1 ? 'event' : 'events'}
                 </Badge>
                 <ChevronDown className={cn(
-                    'h-4 w-4 text-slate-400 transition-transform duration-200 flex-shrink-0',
+                    'h-4 w-4 text-muted-foreground transition-transform duration-200 flex-shrink-0',
                     open && 'rotate-180'
                 )} />
             </button>
 
             {open && (
-                <div className="border-t border-slate-100 divide-y divide-slate-50">
+                <div className="border-t border-border divide-y divide-border/60">
                     {children}
                 </div>
             )}

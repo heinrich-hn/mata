@@ -321,8 +321,8 @@ export default function TripAlertsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-          <p className="text-sm text-slate-500">Loading trip alerts...</p>
+          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading trip alerts...</p>
         </div>
       </div>
     );
@@ -335,36 +335,36 @@ export default function TripAlertsPage() {
       <div className="grid grid-cols-2 gap-3">
         <Card
           className={cn(
-            "border-slate-200 cursor-pointer transition-all hover:shadow-md",
-            activeTab === 'missing_revenue' && "ring-1 ring-slate-400"
+            "cursor-pointer transition-colors hover:bg-muted/40",
+            activeTab === 'missing_revenue' && "ring-1 ring-primary"
           )}
           onClick={() => handleTabChange('missing_revenue')}
         >
           <CardContent className="p-3.5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Missing Revenue</p>
-                <p className="text-xl font-bold text-slate-900 mt-0.5">{missingRevenueTrips.length}</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Missing Revenue</p>
+                <p className="text-xl font-semibold text-foreground mt-0.5 tabular-nums">{missingRevenueTrips.length}</p>
               </div>
-              <DollarSign className="h-5 w-5 text-slate-400" />
+              <DollarSign className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
 
         <Card
           className={cn(
-            "border-slate-200 cursor-pointer transition-all hover:shadow-md",
-            activeTab === 'duplicate_pods' && "ring-1 ring-slate-400"
+            "cursor-pointer transition-colors hover:bg-muted/40",
+            activeTab === 'duplicate_pods' && "ring-1 ring-primary"
           )}
           onClick={() => handleTabChange('duplicate_pods')}
         >
           <CardContent className="p-3.5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Duplicate Load Ref / POD</p>
-                <p className="text-xl font-bold text-slate-900 mt-0.5">{duplicateGroups.length}</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Duplicate Load Ref / POD</p>
+                <p className="text-xl font-semibold text-foreground mt-0.5 tabular-nums">{duplicateGroups.length}</p>
               </div>
-              <Copy className="h-5 w-5 text-slate-400" />
+              <Copy className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -372,11 +372,11 @@ export default function TripAlertsPage() {
 
       {/* ── Tabs ────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="bg-slate-100 border border-slate-200">
-          <TabsTrigger value="missing_revenue" className="data-[state=active]:bg-white data-[state=active]:text-slate-900">
+        <TabsList>
+          <TabsTrigger value="missing_revenue">
             Missing Revenue ({missingRevenueTrips.length})
           </TabsTrigger>
-          <TabsTrigger value="duplicate_pods" className="data-[state=active]:bg-white data-[state=active]:text-slate-900">
+          <TabsTrigger value="duplicate_pods">
             Duplicate POD / Load Ref ({duplicateGroups.length})
           </TabsTrigger>
         </TabsList>
@@ -551,7 +551,7 @@ export default function TripAlertsPage() {
                   <div key={weekKey} className="space-y-3">
                     <button
                       onClick={() => toggleWeek(weekKey)}
-                      className="w-full flex items-center justify-between p-4 bg-card border border-slate-200 rounded-lg hover:shadow-md transition-all cursor-pointer"
+                      className="w-full flex items-center justify-between p-4 bg-card border border-slate-200 rounded-lg hover:bg-muted/40 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-4">
                         <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
@@ -598,7 +598,7 @@ export default function TripAlertsPage() {
                                 <div key={fleetKey}>
                                   <button
                                     onClick={() => toggleFleet(fleetKey)}
-                                    className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all cursor-pointer"
+                                    className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/40 border border-transparent hover:border-slate-200 transition-colors cursor-pointer"
                                   >
                                     <div className="flex items-center gap-3">
                                       {isFleetExpanded ? <ChevronDown className="h-4 w-4 text-slate-600" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
@@ -763,7 +763,7 @@ export default function TripAlertsPage() {
                     {/* Duplicate group header */}
                     <button
                       onClick={() => toggleDuplicate(tripNumber)}
-                      className="w-full flex items-center justify-between p-4 bg-card border border-slate-200 rounded-lg hover:shadow-md transition-all cursor-pointer"
+                      className="w-full flex items-center justify-between p-4 bg-card border border-slate-200 rounded-lg hover:bg-muted/40 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-4">
                         <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">

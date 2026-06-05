@@ -1102,31 +1102,56 @@ export function exportCalendarToExcel(
 
 // ---------------------------------------------------------------------------
 // Daily on-time export — same layout as the weekly Excel, but for a single
-// day, and with the four Planned/Actual/Variance triples collapsed into a
-// single "On Time" Yes/No column.
+// day, and with the four Planned/Actual/Variance triples collapsed into four
+// per-leg "On Time" Yes/No/N/A columns.
 // ---------------------------------------------------------------------------
 
+type LegOnTime = { label: "Yes" | "No" | "N/A"; isOnTime: boolean | null };
+
 /**
- * Returns "Yes" if no leg of the load was late by more than 15 minutes,
- * "No" if any leg was late by more than 15 minutes, and "—" if there is
- * no actual data on any leg yet.
+ * On-time status for a single leg. Returns "N/A" when no actual time has been
+ * recorded yet (i.e. not yet confirmed through location monitoring / tracking),
+ * "No" if the actual time is more than 15 minutes late, otherwise "Yes".
  */
-function computeOnTimeYesNo(load: Load): { label: "Yes" | "No" | "—"; isOnTime: boolean | null } {
+function computeLegOnTime(
+  planned: string | null | undefined,
+  actual: string | null | undefined,
+): LegOnTime {
+  const v = computeTimeVariance(planned, actual);
+  if (v.diffMin === null) return { label: "N/A", isOnTime: null };
+  return v.diffMin > 15 ? { label: "No", isOnTime: false } : { label: "Yes", isOnTime: true };
+}
+
+/**
+ * Per-leg on-time labels for a load, in column order:
+ * [loading/depot arrival, origin departure, destination/offload arrival,
+ * destination/offload departure].
+ */
+function computeLegOnTimeLabels(load: Load): {
+  arrLoading: LegOnTime;
+  depOrigin: LegOnTime;
+  arrDest: LegOnTime;
+  depDest: LegOnTime;
+} {
   const tw = timeWindowLib.parseTimeWindow(load.time_window);
-  const legs: Array<[string | null | undefined, string | null | undefined]> = [
-    [tw.origin.plannedArrival, load.actual_loading_arrival || tw.origin.actualArrival],
-    [tw.origin.plannedDeparture, load.actual_loading_departure || tw.origin.actualDeparture],
-    [tw.destination.plannedArrival, load.actual_offloading_arrival || tw.destination.actualArrival],
-    [tw.destination.plannedDeparture, load.actual_offloading_departure || tw.destination.actualDeparture],
-  ];
-  let hasData = false;
-  for (const [planned, actual] of legs) {
-    const v = computeTimeVariance(planned, actual);
-    if (v.diffMin === null) continue;
-    hasData = true;
-    if (v.diffMin > 15) return { label: "No", isOnTime: false };
-  }
-  return hasData ? { label: "Yes", isOnTime: true } : { label: "—", isOnTime: null };
+  return {
+    arrLoading: computeLegOnTime(
+      tw.origin.plannedArrival,
+      load.actual_loading_arrival || tw.origin.actualArrival,
+    ),
+    depOrigin: computeLegOnTime(
+      tw.origin.plannedDeparture,
+      load.actual_loading_departure || tw.origin.actualDeparture,
+    ),
+    arrDest: computeLegOnTime(
+      tw.destination.plannedArrival,
+      load.actual_offloading_arrival || tw.destination.actualArrival,
+    ),
+    depDest: computeLegOnTime(
+      tw.destination.plannedDeparture,
+      load.actual_offloading_departure || tw.destination.actualDeparture,
+    ),
+  };
 }
 
 interface DayOnTimeOptions {
@@ -1161,12 +1186,12 @@ export function exportLoadsForDayOnTimeExcel(
       backloadQuantities = parts.join(", ");
     }
 
-    const onTime = computeOnTimeYesNo(load);
+    const legs = computeLegOnTimeLabels(load);
 
     return {
       load,
       effectiveStatus: getEffectiveStatus(load),
-      onTime,
+      legs,
       row: {
         "Load ID": load.load_id,
         Status: statusLabels[getEffectiveStatus(load)] || load.status,
@@ -1177,7 +1202,10 @@ export function exportLoadsForDayOnTimeExcel(
         "Cargo Type": cargoLabels[load.cargo_type] || load.cargo_type,
         "Loading Date": format(parseISO(load.loading_date), "dd/MM/yyyy"),
         "Offloading Date": format(parseISO(load.offloading_date), "dd/MM/yyyy"),
-        "On Time": onTime.label,
+        "Arrived Loading On Time": legs.arrLoading.label,
+        "Departed Origin On Time": legs.depOrigin.label,
+        "Arrived Dest/Offload On Time": legs.arrDest.label,
+        "Departed Dest/Offload On Time": legs.depDest.label,
         "Backload Destination": timeWindow.backload?.destination || "",
         "Backload Offloading Date": timeWindow.backload?.offloadingDate || "",
         "Backload Quantities": backloadQuantities,
@@ -1189,8 +1217,8 @@ export function exportLoadsForDayOnTimeExcel(
     };
   });
 
-  // Index of the "On Time" column within the row above
-  const onTimeCol = 9;
+  // Indices of the four on-time columns within the row above
+  const onTimeCols = [9, 10, 11, 12];
 
   const titleRow = [
     `${COMPANY_NAME} — Daily Load Plan (On-Time) — ${dayLabel}`,
@@ -1230,14 +1258,18 @@ export function exportLoadsForDayOnTimeExcel(
       }
     }
 
-    // Colour the On Time cell: green for Yes, red for No, neutral for —
-    const onTimeRef = XLSX.utils.encode_cell({ r: currentRow, c: onTimeCol });
-    const onTimeCell = worksheet[onTimeRef];
-    if (onTimeCell) {
-      if (item.onTime.isOnTime === true) onTimeCell.s = greenFill;
-      else if (item.onTime.isOnTime === false) onTimeCell.s = redFill;
-      else onTimeCell.s = onTimeFill;
-    }
+    // Colour each on-time cell: green for Yes, red for No, neutral for N/A
+    const legCells = [item.legs.arrLoading, item.legs.depOrigin, item.legs.arrDest, item.legs.depDest];
+    onTimeCols.forEach((col, i) => {
+      const ref = XLSX.utils.encode_cell({ r: currentRow, c: col });
+      const cell = worksheet[ref];
+      if (cell) {
+        const leg = legCells[i];
+        if (leg.isOnTime === true) cell.s = greenFill;
+        else if (leg.isOnTime === false) cell.s = redFill;
+        else cell.s = onTimeFill;
+      }
+    });
 
     currentRow += 1;
   });
@@ -1258,7 +1290,10 @@ export function exportLoadsForDayOnTimeExcel(
     { wch: 18 }, // Cargo Type
     { wch: 12 }, // Loading Date
     { wch: 14 }, // Offloading Date
-    { wch: 10 }, // On Time
+    { wch: 16 }, // Arrived Loading On Time
+    { wch: 16 }, // Departed Origin On Time
+    { wch: 18 }, // Arrived Dest/Offload On Time
+    { wch: 18 }, // Departed Dest/Offload On Time
     { wch: 22 }, // Backload Destination
     { wch: 18 }, // Backload Offloading Date
     { wch: 24 }, // Backload Quantities

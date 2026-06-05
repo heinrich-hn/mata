@@ -62,8 +62,8 @@ export default function AlertDetailPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-          <p className="text-sm text-slate-500">Loading alert details...</p>
+          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading alert details...</p>
         </div>
       </div>
     );
@@ -158,7 +158,7 @@ export default function AlertDetailPage() {
               {/* Status indicator — alerts are resolved from the main app */}
               <div className="flex items-center gap-3 shrink-0">
                 {alert.status === "active" && (
-                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-sm font-medium">
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-warning-soft text-warning border border-warning/20 text-sm font-medium">
                     <AlertCircle className="h-4 w-4" /> Pending Resolution
                   </span>
                 )}

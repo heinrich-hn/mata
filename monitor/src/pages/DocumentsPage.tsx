@@ -271,8 +271,8 @@ export default function DocumentsPage() {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-200px)]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-          <p className="text-sm text-slate-500">Loading document alerts...</p>
+          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading document alerts...</p>
         </div>
       </div>
     );
@@ -282,70 +282,70 @@ export default function DocumentsPage() {
     <div className="monitor-page">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/55 to-white">
+        <Card>
           <CardHeader className="pb-1 pt-2 px-3">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-blue-700/80">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Total Alerts
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-2 px-3">
-            <div className="text-xl font-bold text-blue-700">{stats.total}</div>
-            <p className="text-xs text-slate-500">{stats.vehicle} vehicle · {stats.driver} driver</p>
+            <div className="text-xl font-semibold text-foreground tabular-nums">{stats.total}</div>
+            <p className="text-xs text-muted-foreground">{stats.vehicle} vehicle · {stats.driver} driver</p>
           </CardContent>
         </Card>
-        <Card className="border-rose-200/80 bg-gradient-to-br from-rose-50/55 to-white">
+        <Card>
           <CardHeader className="pb-1 pt-2 px-3">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-rose-700/80">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Overdue
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-2 px-3">
-            <div className="text-xl font-bold text-rose-700">{stats.overdue}</div>
-            <p className="text-xs text-slate-500">Requires action</p>
+            <div className="text-xl font-semibold text-danger tabular-nums">{stats.overdue}</div>
+            <p className="text-xs text-muted-foreground">Requires action</p>
           </CardContent>
         </Card>
-        <Card className="border-amber-200/80 bg-gradient-to-br from-amber-50/55 to-white">
+        <Card>
           <CardHeader className="pb-1 pt-2 px-3">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-amber-700/80">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Expiring Soon
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-2 px-3">
-            <div className="text-xl font-bold text-amber-700">{stats.expiringSoon}</div>
-            <p className="text-xs text-slate-500">Within 30 days</p>
+            <div className="text-xl font-semibold text-warning tabular-nums">{stats.expiringSoon}</div>
+            <p className="text-xs text-muted-foreground">Within 30 days</p>
           </CardContent>
         </Card>
-        <Card className="border-purple-200/80 bg-gradient-to-br from-purple-50/55 to-white">
+        <Card>
           <CardHeader className="pb-1 pt-2 px-3">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-purple-700/80">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Missing
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-2 px-3">
-            <div className="text-xl font-bold text-purple-700">{stats.missing}</div>
-            <p className="text-xs text-slate-500">Not uploaded</p>
+            <div className="text-xl font-semibold text-foreground tabular-nums">{stats.missing}</div>
+            <p className="text-xs text-muted-foreground">Not uploaded</p>
           </CardContent>
         </Card>
-        <Card className="border-emerald-200/80 bg-gradient-to-br from-emerald-50/55 to-white">
+        <Card>
           <CardHeader className="pb-1 pt-2 px-3">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-emerald-700/80">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Vehicles
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-2 px-3">
-            <div className="text-xl font-bold text-emerald-700">{stats.vehicle}</div>
-            <p className="text-xs text-slate-500">With alerts</p>
+            <div className="text-xl font-semibold text-foreground tabular-nums">{stats.vehicle}</div>
+            <p className="text-xs text-muted-foreground">With alerts</p>
           </CardContent>
         </Card>
-        <Card className="border-cyan-200/80 bg-gradient-to-br from-cyan-50/55 to-white">
+        <Card>
           <CardHeader className="pb-1 pt-2 px-3">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-cyan-700/80">
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Drivers
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-2 px-3">
-            <div className="text-xl font-bold text-cyan-700">{stats.driver}</div>
-            <p className="text-xs text-slate-500">With alerts</p>
+            <div className="text-xl font-semibold text-foreground tabular-nums">{stats.driver}</div>
+            <p className="text-xs text-muted-foreground">With alerts</p>
           </CardContent>
         </Card>
       </div>
@@ -355,7 +355,7 @@ export default function DocumentsPage() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+          className="gap-1.5 text-xs"
           onClick={() => openWhatsApp(buildDocumentsWhatsAppMessage(toExportAlerts(filtered), entityFilter))}
         >
           <MessageCircle className="h-3.5 w-3.5" />
@@ -364,7 +364,7 @@ export default function DocumentsPage() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+          className="gap-1.5 text-xs"
           onClick={() => generateDocumentsPDF(toExportAlerts(filtered), entityFilter)}
         >
           <Download className="h-3.5 w-3.5" />
@@ -373,7 +373,7 @@ export default function DocumentsPage() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+          className="gap-1.5 text-xs"
           onClick={() => generateDocumentsExcel(toExportAlerts(filtered), entityFilter)}
         >
           <FileSpreadsheet className="h-3.5 w-3.5" />
@@ -382,7 +382,7 @@ export default function DocumentsPage() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+          className="gap-1.5 text-xs"
           onClick={() => exportDocumentAlerts(toExportAlerts(filtered), entityFilter, 'outlook')}
         >
           <Mail className="h-3.5 w-3.5" />
@@ -393,7 +393,7 @@ export default function DocumentsPage() {
           size="sm"
           onClick={() => refetch()}
           disabled={isRefetching}
-          className="gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+          className="gap-1.5 text-xs"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", isRefetching && "animate-spin")} />
           Refresh
@@ -402,12 +402,12 @@ export default function DocumentsPage() {
 
       {/* Tabs */}
       <Tabs value={entityFilter} onValueChange={(v) => setEntityFilter(v as EntityType)} className="w-full">
-        <TabsList className="w-full sm:w-auto bg-slate-100 border border-slate-200 p-0.5">
-          <TabsTrigger value="vehicle" className="gap-1.5 flex-1 sm:flex-none text-xs border-b-2 border-transparent data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:border-emerald-500">
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="vehicle" className="gap-1.5 flex-1 sm:flex-none text-xs">
             <Truck className="h-3.5 w-3.5" />
             Vehicles ({stats.vehicle})
           </TabsTrigger>
-          <TabsTrigger value="driver" className="gap-1.5 flex-1 sm:flex-none text-xs border-b-2 border-transparent data-[state=active]:bg-cyan-50 data-[state=active]:text-cyan-700 data-[state=active]:border-cyan-500">
+          <TabsTrigger value="driver" className="gap-1.5 flex-1 sm:flex-none text-xs">
             <User className="h-3.5 w-3.5" />
             Drivers ({stats.driver})
           </TabsTrigger>
@@ -419,16 +419,16 @@ export default function DocumentsPage() {
         <Card className="monitor-soft-panel">
           <CardContent className="py-12">
             <div className="flex flex-col items-center text-center">
-              <FileText className="h-12 w-12 text-slate-300 mb-3" />
-              <h3 className="text-sm font-medium text-slate-700 mb-1">No document alerts</h3>
-              <p className="text-xs text-slate-500">
+              <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
+              <h3 className="text-sm font-medium text-foreground mb-1">No document alerts</h3>
+              <p className="text-xs text-muted-foreground">
                 All {entityFilter} documents are up to date.
               </p>
             </div>
           </CardContent>
         </Card>
       ) : (
-        <div className="monitor-soft-panel rounded-lg divide-y divide-slate-100 overflow-hidden">
+        <div className="monitor-soft-panel rounded divide-y divide-border overflow-hidden">
           {filtered.map((row) => {
             const exportAlert: DocumentAlert = {
               entityType: row.entityType,
@@ -444,35 +444,35 @@ export default function DocumentsPage() {
             return (
               <div
                 key={row.id}
-                className={`flex items-center gap-3 px-4 py-3 transition-colors ${row.isMissing ? 'hover:bg-purple-50/40' : row.isOverdue ? 'hover:bg-rose-50/40' : 'hover:bg-amber-50/40'}`}
+                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted"
               >
                 {/* Document info */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-sm font-medium text-slate-900">{row.entityName}</span>
+                    <span className="text-sm font-medium text-foreground">{row.entityName}</span>
                     {row.entityDetail && (
-                      <span className="text-xs text-slate-500">{row.entityDetail}</span>
+                      <span className="text-xs text-muted-foreground">{row.entityDetail}</span>
                     )}
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 border-blue-200 text-blue-700 bg-blue-50">
+                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 border-info/20 text-info bg-info-soft">
                       {formatDocumentType(row.documentType)}
                     </Badge>
                   </div>
                   {row.documentNumber && (
-                    <span className="text-xs text-slate-500 font-mono">{row.documentNumber}</span>
+                    <span className="text-xs text-muted-foreground font-mono">{row.documentNumber}</span>
                   )}
                 </div>
 
                 {/* Expiry info */}
                 <div className="shrink-0 text-right">
                   {row.isMissing ? (
-                    <span className="text-xs font-medium text-purple-600">Not uploaded</span>
+                    <span className="text-xs font-medium text-muted-foreground">Not uploaded</span>
                   ) : (
                     <>
-                      <div className="text-xs font-medium text-slate-700 flex items-center gap-1 justify-end">
-                        <CalendarDays className="h-3 w-3 text-slate-400" />
+                      <div className="text-xs font-medium text-foreground flex items-center gap-1 justify-end">
+                        <CalendarDays className="h-3 w-3 text-muted-foreground" />
                         {format(new Date(row.expiryDate), "dd MMM yyyy")}
                       </div>
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-muted-foreground">
                         {row.isOverdue
                           ? `${Math.abs(row.daysUntilExpiry)}d overdue`
                           : `${row.daysUntilExpiry}d remaining`}
@@ -484,10 +484,10 @@ export default function DocumentsPage() {
                 {/* Status badge */}
                 <div className="shrink-0">
                   <Badge className={`text-xs px-1.5 py-0.5 ${row.isMissing
-                      ? 'bg-purple-100 text-purple-700 border-purple-200'
-                      : row.isOverdue
-                        ? 'bg-rose-100 text-rose-700 border-rose-200'
-                        : 'bg-amber-100 text-amber-700 border-amber-200'
+                    ? 'border-border bg-muted text-muted-foreground'
+                    : row.isOverdue
+                      ? 'border-danger/20 bg-danger-soft text-danger'
+                      : 'border-warning/20 bg-warning-soft text-warning'
                     }`}>
                     {row.isMissing ? "MISSING" : row.isOverdue ? "OVERDUE" : "EXPIRING"}
                   </Badge>

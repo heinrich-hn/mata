@@ -17,8 +17,8 @@ const Skeleton = React.forwardRef<HTMLDivElement, SkeletonProps>(
           "bg-muted",
           // Variants
           variant === "circular" && "rounded-full",
-          variant === "text" && "rounded h-4",
-          variant === "card" && "rounded-lg",
+          variant === "text" && "rounded-[2px] h-4",
+          variant === "card" && "rounded",
           // Animations
           animation === "pulse" && "animate-pulse",
           animation === "shimmer" && "animate-shimmer",
@@ -36,7 +36,7 @@ Skeleton.displayName = "Skeleton";
  */
 function AlertCardSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn("bg-card border border-border rounded-lg p-4", className)}>
+    <div className={cn("bg-card border border-border rounded p-4", className)}>
       <div className="flex gap-3">
         {/* Severity indicator skeleton */}
         <Skeleton variant="circular" className="h-10 w-10 flex-shrink-0" />
@@ -68,7 +68,7 @@ function AlertCardSkeleton({ className }: { className?: string }) {
  */
 function KPICardSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn("bg-card border border-border rounded-xl p-5", className)}>
+    <div className={cn("bg-card border border-border rounded p-5", className)}>
       <div className="flex items-center justify-between mb-3">
         <Skeleton variant="circular" className="h-8 w-8" />
         <Skeleton variant="text" className="w-12 h-4" />
@@ -84,7 +84,7 @@ function KPICardSkeleton({ className }: { className?: string }) {
  */
 function ChartSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn("bg-card border border-border rounded-xl p-5", className)}>
+    <div className={cn("bg-card border border-border rounded p-5", className)}>
       <div className="flex items-center justify-between mb-4">
         <Skeleton variant="text" className="w-32 h-5" />
         <Skeleton variant="text" className="w-16 h-4" />

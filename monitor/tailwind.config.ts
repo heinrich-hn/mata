@@ -36,6 +36,26 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+          soft: "hsl(var(--success-soft))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+          soft: "hsl(var(--warning-soft))",
+        },
+        danger: {
+          DEFAULT: "hsl(var(--danger))",
+          foreground: "hsl(var(--danger-foreground))",
+          soft: "hsl(var(--danger-soft))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+          soft: "hsl(var(--info-soft))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -43,18 +63,16 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        /* Professional shadow scale */
-        'subtle': '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-        'card': '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-        'elevated': '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-        'dropdown': '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-        'dialog': '0 25px 50px -12px rgb(0 0 0 / 0.25)',
-        /* Professional glow effect */
-        'glow-primary': '0 0 20px -5px hsl(217 91% 60% / 0.3)',
+        /* Professional shadow scale — soft, low-elevation */
+        'subtle': '0 1px 2px 0 rgb(15 23 42 / 0.04)',
+        'card': '0 1px 2px 0 rgb(15 23 42 / 0.05)',
+        'elevated': '0 2px 4px -1px rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.05)',
+        'dropdown': '0 8px 16px -4px rgb(15 23 42 / 0.1), 0 2px 4px -2px rgb(15 23 42 / 0.06)',
+        'dialog': '0 16px 40px -12px rgb(15 23 42 / 0.18)',
       },
       fontFamily: {
         sans: [
-          'Inter',
+          'Inter Tight',
           'system-ui',
           '-apple-system',
           'BlinkMacSystemFont',
@@ -63,6 +81,12 @@ const config: Config = {
           'Helvetica Neue',
           'Arial',
           'sans-serif',
+        ],
+        serif: [
+          'Source Serif 4',
+          'Georgia',
+          'Times New Roman',
+          'serif',
         ],
       },
       fontSize: {

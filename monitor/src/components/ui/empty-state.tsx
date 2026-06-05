@@ -43,16 +43,16 @@ export function EmptyState({
       iconColor: "text-muted-foreground",
     },
     success: {
-      iconBg: "bg-green-500/10",
-      iconColor: "text-green-500",
+      iconBg: "bg-success-soft",
+      iconColor: "text-success",
     },
     warning: {
-      iconBg: "bg-yellow-500/10",
-      iconColor: "text-yellow-500",
+      iconBg: "bg-warning-soft",
+      iconColor: "text-warning",
     },
     error: {
-      iconBg: "bg-red-500/10",
-      iconColor: "text-red-500",
+      iconBg: "bg-danger-soft",
+      iconColor: "text-danger",
     },
   };
 
@@ -68,19 +68,19 @@ export function EmptyState({
       {/* Icon */}
       <div
         className={cn(
-          "w-16 h-16 rounded-full flex items-center justify-center mb-4",
+          "w-12 h-12 rounded flex items-center justify-center mb-4",
           styles.iconBg
         )}
       >
-        <Icon className={cn("w-8 h-8", styles.iconColor)} />
+        <Icon className={cn("w-5 h-5", styles.iconColor)} />
       </div>
 
       {/* Title */}
-      <h3 className="text-base font-semibold text-slate-900 mb-1.5">{title}</h3>
+      <h3 className="text-base font-semibold text-foreground mb-1.5">{title}</h3>
 
       {/* Description */}
       {description && (
-        <p className="text-[0.8125rem] text-slate-500 max-w-md mb-6">
+        <p className="text-[0.8125rem] text-muted-foreground max-w-md mb-6">
           {description}
         </p>
       )}

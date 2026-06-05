@@ -123,8 +123,8 @@ export default function FaultsPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-          <p className="text-sm text-slate-500">Loading faults & maintenance...</p>
+          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading faults & maintenance...</p>
         </div>
       </div>
     );
@@ -134,63 +134,63 @@ export default function FaultsPage() {
     <div className="monitor-page">
       {/* Page header */}
       <div>
-        <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Faults & Maintenance</h1>
-        <p className="text-sm text-slate-500 mt-1">Vehicle issues, overdue maintenance, and breakdowns</p>
+        <h1 className="page-title text-2xl text-foreground">Faults & Maintenance</h1>
+        <p className="text-sm text-muted-foreground mt-1">Vehicle issues, overdue maintenance, and breakdowns</p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-blue-200/60 bg-gradient-to-br from-blue-50/40 to-white">
-          <CardContent className="p-5">
+        <Card>
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Total Issues</p>
-                <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.total}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Total Issues</p>
+                <p className="text-xl font-semibold text-foreground mt-0.5 tabular-nums">{stats.total}</p>
               </div>
-              <div className="p-2 rounded-lg bg-blue-100">
-                <Wrench className="h-5 w-5 text-blue-600" />
+              <div className="p-2 rounded bg-info-soft text-info">
+                <Wrench className="h-5 w-5" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-rose-200/60 bg-gradient-to-br from-rose-50/40 to-white">
-          <CardContent className="p-5">
+        <Card>
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Active Faults</p>
-                <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.faults}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Active Faults</p>
+                <p className="text-xl font-semibold text-foreground mt-0.5 tabular-nums">{stats.faults}</p>
               </div>
-              <div className="p-2 rounded-lg bg-rose-100">
-                <Wrench className="h-5 w-5 text-rose-600" />
+              <div className="p-2 rounded bg-danger-soft text-danger">
+                <Wrench className="h-5 w-5" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-amber-200/60 bg-gradient-to-br from-amber-50/40 to-white">
-          <CardContent className="p-5">
+        <Card>
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Maintenance Overdue</p>
-                <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.maintenance}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Maintenance Overdue</p>
+                <p className="text-xl font-semibold text-foreground mt-0.5 tabular-nums">{stats.maintenance}</p>
               </div>
-              <div className="p-2 rounded-lg bg-amber-100">
-                <CalendarDays className="h-5 w-5 text-amber-600" />
+              <div className="p-2 rounded bg-warning-soft text-warning">
+                <CalendarDays className="h-5 w-5" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-violet-200/60 bg-gradient-to-br from-violet-50/40 to-white">
-          <CardContent className="p-5">
+        <Card>
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Breakdowns</p>
-                <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.breakdowns}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Breakdowns</p>
+                <p className="text-xl font-semibold text-foreground mt-0.5 tabular-nums">{stats.breakdowns}</p>
               </div>
-              <div className="p-2 rounded-lg bg-violet-100">
-                <AlertTriangle className="h-5 w-5 text-violet-600" />
+              <div className="p-2 rounded bg-secondary text-primary">
+                <AlertTriangle className="h-5 w-5" />
               </div>
             </div>
           </CardContent>
@@ -201,14 +201,14 @@ export default function FaultsPage() {
       <div className="flex items-center justify-between">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="w-full">
           <div className="flex items-center justify-between">
-            <TabsList className="w-auto bg-slate-100 border border-slate-200 p-0.5">
-              <TabsTrigger value="faults" className="flex-none text-xs border-b-2 border-transparent data-[state=active]:bg-rose-50 data-[state=active]:text-rose-700 data-[state=active]:border-rose-500">
+            <TabsList className="w-auto">
+              <TabsTrigger value="faults" className="flex-none text-xs">
                 Faults ({stats.faults})
               </TabsTrigger>
-              <TabsTrigger value="maintenance" className="flex-none text-xs border-b-2 border-transparent data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700 data-[state=active]:border-amber-500">
+              <TabsTrigger value="maintenance" className="flex-none text-xs">
                 Maintenance ({stats.maintenance})
               </TabsTrigger>
-              <TabsTrigger value="breakdowns" className="flex-none text-xs border-b-2 border-transparent data-[state=active]:bg-violet-50 data-[state=active]:text-violet-700 data-[state=active]:border-violet-500">
+              <TabsTrigger value="breakdowns" className="flex-none text-xs">
                 Breakdowns ({stats.breakdowns})
               </TabsTrigger>
             </TabsList>
@@ -261,9 +261,9 @@ function VehicleGroup({
   const [open, setOpen] = useState(count === 1);
 
   const colors = {
-    rose: { bg: 'bg-rose-50', text: 'text-rose-700', icon: 'text-rose-500', badge: 'bg-rose-100 text-rose-700 border-rose-200' },
-    amber: { bg: 'bg-amber-50', text: 'text-amber-700', icon: 'text-amber-500', badge: 'bg-amber-100 text-amber-700 border-amber-200' },
-    violet: { bg: 'bg-violet-50', text: 'text-violet-700', icon: 'text-violet-500', badge: 'bg-violet-100 text-violet-700 border-violet-200' },
+    rose: { bg: 'bg-danger-soft', text: 'text-danger', icon: 'text-danger', badge: 'border-danger/20 bg-danger-soft text-danger' },
+    amber: { bg: 'bg-warning-soft', text: 'text-warning', icon: 'text-warning', badge: 'border-warning/20 bg-warning-soft text-warning' },
+    violet: { bg: 'bg-info-soft', text: 'text-info', icon: 'text-info', badge: 'border-info/20 bg-info-soft text-info' },
   }[accentColor];
 
   return (
@@ -273,27 +273,27 @@ function VehicleGroup({
         onClick={() => setOpen(!open)}
         className={cn(
           'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
-          open ? colors.bg : 'hover:bg-slate-50'
+          open ? colors.bg : 'hover:bg-muted'
         )}
       >
-        <div className={cn('p-1.5 rounded-md', colors.bg)}>
+        <div className={cn('p-1.5 rounded', colors.bg)}>
           <Truck className={cn('h-4 w-4', colors.icon)} />
         </div>
-        <span className="font-semibold text-[0.8125rem] text-slate-900">{fleetNumber}</span>
+        <span className="font-semibold text-[0.8125rem] text-foreground">{fleetNumber}</span>
         {vehicleInfo && (
-          <span className="text-xs text-slate-400">{vehicleInfo}</span>
+          <span className="text-xs text-muted-foreground">{vehicleInfo}</span>
         )}
         <Badge className={cn('ml-auto text-[0.6875rem]', colors.badge)}>
           {count} {count === 1 ? 'item' : 'items'}
         </Badge>
         <ChevronDown className={cn(
-          'h-4 w-4 text-slate-400 transition-transform duration-200 flex-shrink-0',
+          'h-4 w-4 text-muted-foreground transition-transform duration-200 flex-shrink-0',
           open && 'rotate-180'
         )} />
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 divide-y divide-slate-50">
+        <div className="border-t border-border divide-y divide-border/60">
           {children}
         </div>
       )}
@@ -412,7 +412,7 @@ function renderMaintenanceList(
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <CalendarDays className="h-3 w-3 text-slate-400 flex-shrink-0" />
                       <span className="font-medium text-[0.8125rem] text-slate-700">{issue.title}</span>
-                      <Badge className="text-[0.6875rem] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-200">
+                      <Badge className="text-[0.6875rem] px-1.5 py-0 border-warning/20 bg-warning-soft text-warning">
                         {overdueLabel}
                       </Badge>
                     </div>
@@ -474,28 +474,28 @@ function renderBreakdownsList(breakdowns: FleetBreakdown[]) {
     switch (severity) {
       case 'critical':
       case 'high':
-        return 'bg-rose-100 text-rose-700 border-rose-200';
+        return 'border-danger/20 bg-danger-soft text-danger';
       case 'medium':
-        return 'bg-amber-100 text-amber-700 border-amber-200';
+        return 'border-warning/20 bg-warning-soft text-warning';
       default:
-        return 'bg-slate-100 text-slate-600 border-slate-200';
+        return 'border-border bg-muted text-muted-foreground';
     }
   };
 
   const statusConfig = (status: string) => {
     switch (status) {
       case 'pending_review':
-        return { label: 'Pending Review', cls: 'bg-amber-100 text-amber-700 border-amber-200' };
+        return { label: 'Pending Review', cls: 'border-warning/20 bg-warning-soft text-warning' };
       case 'scheduled_for_inspection':
-        return { label: 'Scheduled', cls: 'bg-blue-100 text-blue-700 border-blue-200' };
+        return { label: 'Scheduled', cls: 'border-info/20 bg-info-soft text-info' };
       case 'inspection_created':
-        return { label: 'Inspection Created', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
+        return { label: 'Inspection Created', cls: 'border-info/20 bg-info-soft text-info' };
       case 'resolved':
-        return { label: 'Resolved', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+        return { label: 'Resolved', cls: 'border-success/20 bg-success-soft text-success' };
       case 'dismissed':
-        return { label: 'Dismissed', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
+        return { label: 'Dismissed', cls: 'border-border bg-muted text-muted-foreground' };
       default:
-        return { label: status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+        return { label: status, cls: 'border-border bg-muted text-muted-foreground' };
     }
   };
 

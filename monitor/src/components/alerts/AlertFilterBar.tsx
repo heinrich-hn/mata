@@ -231,7 +231,7 @@ export default function AlertFilterBar(props: FilterBarReturn) {
             key={sev.value}
             onClick={() => toggleSeverity(sev.value)}
             className={cn(
-              "text-xs px-2.5 py-1 rounded-full border font-medium transition-all",
+              "text-xs px-2.5 py-1 rounded border font-medium transition-colors",
               filters.severities.includes(sev.value)
                 ? sev.color + " opacity-100"
                 : "text-muted-foreground bg-transparent border-border opacity-60 hover:opacity-100"
@@ -247,11 +247,11 @@ export default function AlertFilterBar(props: FilterBarReturn) {
             key={st.value}
             onClick={() => toggleStatus(st.value)}
             className={cn(
-              "text-xs px-2.5 py-1 rounded-full border font-medium transition-all",
+              "text-xs px-2.5 py-1 rounded border font-medium transition-colors",
               filters.statuses.includes(st.value)
                 ? st.value === "active"
                   ? "bg-destructive/10 text-destructive border-destructive/20"
-                  : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400"
+                  : "bg-success-soft text-success border-success/20"
                 : "text-muted-foreground bg-transparent border-border opacity-60 hover:opacity-100"
             )}
           >

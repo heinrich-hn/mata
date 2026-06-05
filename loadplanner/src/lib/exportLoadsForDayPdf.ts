@@ -39,6 +39,50 @@ function loadOnTimeLabel(load: Load): "Yes" | "No" | "—" {
     return hasData ? "Yes" : "—";
 }
 
+type LegLabel = "Yes" | "No" | "N/A";
+
+/**
+ * On-time status for a single leg. Returns "N/A" when no actual time has been
+ * recorded yet (i.e. it has not been confirmed through location monitoring /
+ * tracking), "No" if the actual time is more than 15 minutes late, otherwise
+ * "Yes".
+ */
+function legOnTimeLabel(
+    planned: string | null | undefined,
+    actual: string | null | undefined,
+): LegLabel {
+    const v = computeTimeVariance(planned, actual);
+    if (v.diffMin === null) return "N/A";
+    return v.diffMin > 15 ? "No" : "Yes";
+}
+
+/**
+ * Per-leg on-time labels for a load, in column order:
+ * [loading/depot arrival, origin departure, destination/offload arrival,
+ * destination/offload departure].
+ */
+function loadLegOnTimeLabels(load: Load): [LegLabel, LegLabel, LegLabel, LegLabel] {
+    const tw = parseTimeWindow(load.time_window);
+    return [
+        legOnTimeLabel(
+            tw.origin?.plannedArrival,
+            load.actual_loading_arrival || tw.origin?.actualArrival,
+        ),
+        legOnTimeLabel(
+            tw.origin?.plannedDeparture,
+            load.actual_loading_departure || tw.origin?.actualDeparture,
+        ),
+        legOnTimeLabel(
+            tw.destination?.plannedArrival,
+            load.actual_offloading_arrival || tw.destination?.actualArrival,
+        ),
+        legOnTimeLabel(
+            tw.destination?.plannedDeparture,
+            load.actual_offloading_departure || tw.destination?.actualDeparture,
+        ),
+    ];
+}
+
 const statusLabels: Record<string, string> = {
     scheduled: "Scheduled",
     "in-transit": "In Transit",
@@ -383,8 +427,11 @@ export function exportLoadsForDayPdf(
 
 /**
  * On-Time daily PDF — same layout as `exportLoadsForDayPdf` but with the
- * Notes column replaced by an "On Time" Yes/No column. A load is considered
- * on time when no leg is more than 15 minutes late.
+ * Notes column replaced by four per-leg on-time columns (loading/depot
+ * arrival, origin departure, destination/offload arrival and destination/
+ * offload departure). Each shows "Yes" if within 15 minutes of plan, "No" if
+ * more than 15 minutes late, or "N/A" until the actual time is confirmed
+ * through location monitoring / tracking.
  */
 export function exportLoadsForDayOnTimePdf(
     loads: Load[],
@@ -509,7 +556,10 @@ export function exportLoadsForDayOnTimePdf(
         "Destination",
         "Offload",
         "Cargo",
-        "On Time",
+        "Arrived\nLoading",
+        "Departed\nOrigin",
+        "Arrived\nDest/Offload",
+        "Departed\nDest/Offload",
     ]];
 
     const body: string[][] = [];
@@ -519,6 +569,7 @@ export function exportLoadsForDayOnTimePdf(
             const plannedArr = tw.origin?.plannedArrival || "";
             const status = statusLabels[load.status] || load.status;
             const statusCell = plannedArr ? `${status}\nLoad ${plannedArr}` : status;
+            const [arrLoading, depOrigin, arrDest, depDest] = loadLegOnTimeLabels(load);
             body.push([
                 section.label,
                 section.sublabel,
@@ -528,7 +579,10 @@ export function exportLoadsForDayOnTimePdf(
                 load.destination,
                 formatDateShort(load.offloading_date),
                 cargoLabels[load.cargo_type] || load.cargo_type,
-                loadOnTimeLabel(load),
+                arrLoading,
+                depOrigin,
+                arrDest,
+                depDest,
             ]);
         });
     });
@@ -561,18 +615,21 @@ export function exportLoadsForDayOnTimePdf(
         },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
-            0: { cellWidth: 32, fontStyle: "bold" },
-            1: { cellWidth: 36 },
-            2: { cellWidth: 26, fontStyle: "bold" },
-            3: { cellWidth: 28 },
-            4: { cellWidth: 42 },
-            5: { cellWidth: 42 },
-            6: { cellWidth: 18, halign: "center" },
-            7: { cellWidth: 30 },
-            8: { cellWidth: "auto", halign: "center", fontStyle: "bold" },
+            0: { cellWidth: 26, fontStyle: "bold" },
+            1: { cellWidth: 28 },
+            2: { cellWidth: 22, fontStyle: "bold" },
+            3: { cellWidth: 22 },
+            4: { cellWidth: 30 },
+            5: { cellWidth: 30 },
+            6: { cellWidth: 14, halign: "center" },
+            7: { cellWidth: 21 },
+            8: { cellWidth: 20, halign: "center", fontStyle: "bold" },
+            9: { cellWidth: 20, halign: "center", fontStyle: "bold" },
+            10: { cellWidth: 20, halign: "center", fontStyle: "bold" },
+            11: { cellWidth: "auto", halign: "center", fontStyle: "bold" },
         },
         didParseCell: (data: CellHookData) => {
-            if (data.section === "body" && data.column.index === 8) {
+            if (data.section === "body" && data.column.index >= 8 && data.column.index <= 11) {
                 const v = String(data.cell.raw ?? "").trim();
                 if (v === "Yes") {
                     data.cell.styles.fillColor = [220, 252, 231]; // green-100
@@ -580,6 +637,8 @@ export function exportLoadsForDayOnTimePdf(
                 } else if (v === "No") {
                     data.cell.styles.fillColor = [254, 226, 226]; // red-100
                     data.cell.styles.textColor = [185, 28, 28];   // red-700
+                } else if (v === "N/A") {
+                    data.cell.styles.textColor = [148, 163, 184]; // slate-400
                 }
             }
         },

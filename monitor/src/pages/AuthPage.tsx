@@ -15,25 +15,25 @@ export default function AuthPage() {
   }, [session, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-8">
-        {/* Professional Logo */}
+        {/* Logo */}
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center shadow-md">
-            <Shield className="h-6 w-6 text-white" />
+          <div className="w-12 h-12 bg-primary rounded flex items-center justify-center">
+            <Shield className="h-6 w-6 text-primary-foreground" />
           </div>
           <div className="text-center">
-            <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
+            <h1 className="page-title text-xl text-foreground">
               MATA Monitor
             </h1>
-            <p className="text-[0.8125rem] text-slate-400 mt-1 font-medium">
+            <p className="text-[0.8125rem] text-muted-foreground mt-1 font-medium">
               Fleet Command Center
             </p>
           </div>
         </div>
 
         {/* Auth form */}
-        <div className="bg-white border border-slate-200/60 rounded-xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="bg-card border border-border rounded p-6 shadow-card">
           <Auth
             supabaseClient={supabase}
             appearance={{
@@ -41,14 +41,14 @@ export default function AuthPage() {
               variables: {
                 default: {
                   colors: {
-                    brand: "hsl(222 47% 35%)",
-                    brandAccent: "hsl(222 47% 25%)",
+                    brand: "hsl(217 33% 17%)",
+                    brandAccent: "hsl(217 33% 12%)",
                     inputBackground: "hsl(0 0% 100%)",
-                    inputBorder: "hsl(220 13% 88%)",
+                    inputBorder: "hsl(220 13% 91%)",
                     inputText: "hsl(222 47% 11%)",
-                    inputPlaceholder: "hsl(220 9% 60%)",
+                    inputPlaceholder: "hsl(215 16% 47%)",
                     messageText: "hsl(222 47% 11%)",
-                    anchorTextColor: "hsl(222 47% 35%)",
+                    anchorTextColor: "hsl(217 33% 17%)",
                   },
                 },
               },
@@ -56,11 +56,11 @@ export default function AuthPage() {
                 container: { background: "transparent" },
                 label: { color: "hsl(222 47% 11%)", fontSize: "13px", fontWeight: "500" },
                 button: {
-                  borderRadius: "6px",
+                  borderRadius: "4px",
                   fontWeight: "600",
                 },
                 input: {
-                  borderRadius: "6px",
+                  borderRadius: "4px",
                   fontSize: "14px",
                 },
               },
@@ -70,7 +70,7 @@ export default function AuthPage() {
           />
         </div>
 
-        <p className="text-center text-xs text-slate-400">
+        <p className="text-center text-xs text-muted-foreground">
           Use your MATA dashboard credentials to sign in.
         </p>
       </div>

@@ -39,16 +39,14 @@ const SOURCE_ICONS: Record<string, React.ElementType> = {
   fuel_anomaly: Fuel,
 };
 
-/* Enhanced severity border colors with glow effects */
-const SEVERITY_STYLES: Record<string, { border: string; glow?: string; bgIcon: string }> = {
+/* Severity border colors (flat, no glow) */
+const SEVERITY_STYLES: Record<string, { border: string; bgIcon: string }> = {
   critical: {
     border: "border-l-destructive",
-    glow: "severity-critical-glow",
     bgIcon: "bg-destructive/10",
   },
   high: {
     border: "border-l-severity-high",
-    glow: "severity-high-glow",
     bgIcon: "bg-severity-high/10",
   },
   medium: {
@@ -142,10 +140,8 @@ export default function AlertCard({ alert }: AlertCardProps) {
   return (
     <div
       className={cn(
-        "bg-card border border-border border-l-[3px] rounded-lg overflow-hidden transition-all duration-200 hover:shadow-card hover-lift",
-        SEVERITY_STYLES[alert.severity]?.border ?? "border-l-severity-info",
-        SEVERITY_STYLES[alert.severity]?.glow,
-        alert.severity === "critical" && isActive && "critical-pulse"
+        "bg-card border border-border border-l-[3px] rounded overflow-hidden transition-colors duration-200 hover:bg-muted/40",
+        SEVERITY_STYLES[alert.severity]?.border ?? "border-l-severity-info"
       )}
     >
       <div className="p-4">
@@ -153,7 +149,7 @@ export default function AlertCard({ alert }: AlertCardProps) {
         <div className="flex items-start gap-3">
           {/* Source icon - colored by severity */}
           <div className={cn(
-            "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 transition-transform duration-200",
+            "w-10 h-10 rounded flex items-center justify-center flex-shrink-0 mt-0.5",
             SEVERITY_STYLES[alert.severity]?.bgIcon ?? "bg-muted",
             "border border-border"
           )}>
@@ -172,7 +168,7 @@ export default function AlertCard({ alert }: AlertCardProps) {
             <div className="flex items-center gap-2 flex-wrap mb-1.5">
               <SeverityBadge severity={alert.severity} dot />
               {alert.status !== "active" && alert.status === "resolved" && (
-                <span className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400 text-[10px] font-semibold px-2 py-0.5 rounded border uppercase tracking-wide">
+                <span className="bg-success-soft text-success border-success/20 text-[10px] font-semibold px-2 py-0.5 rounded border uppercase tracking-wide">
                   RESOLVED
                 </span>
               )}
@@ -327,7 +323,7 @@ export default function AlertCard({ alert }: AlertCardProps) {
             <button
               onClick={handleResolve}
               disabled={resolve.isPending}
-              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 font-medium border border-emerald-500/20 dark:text-emerald-400"
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-success-soft text-success hover:bg-success/20 transition-colors disabled:opacity-50 font-medium border border-success/20"
             >
               <CheckCheck className="h-3.5 w-3.5" />
               Resolve
@@ -335,7 +331,7 @@ export default function AlertCard({ alert }: AlertCardProps) {
           )}
           <Link
             to={`/alerts/${alert.id}`}
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent transition-colors font-medium border border-border"
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent transition-colors font-medium border border-border"
           >
             <MessageSquare className="h-3.5 w-3.5" />
             Details

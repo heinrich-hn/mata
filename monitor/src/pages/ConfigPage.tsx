@@ -78,24 +78,24 @@ interface RuleCardProps {
 function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardProps) {
   return (
     <div className={cn(
-      "monitor-soft-entry rounded-xl p-4 space-y-3 transition-opacity",
+      "monitor-soft-entry rounded p-4 space-y-3 transition-opacity",
       !config.is_active && "opacity-60"
     )}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
               {CATEGORIES.find((c) => c.value === config.category)?.label ?? config.category}
             </span>
             {!config.is_active && (
-              <span className="text-xs text-slate-500 border border-slate-200 px-2 py-0.5 rounded">
+              <span className="text-xs text-muted-foreground border border-border px-2 py-0.5 rounded">
                 DISABLED
               </span>
             )}
           </div>
-          <p className="text-sm font-medium text-slate-900">{config.name}</p>
+          <p className="text-sm font-medium text-foreground">{config.name}</p>
           {config.description && (
-            <p className="text-xs text-slate-500 mt-1">{config.description}</p>
+            <p className="text-xs text-muted-foreground mt-1">{config.description}</p>
           )}
         </div>
 
@@ -103,17 +103,17 @@ function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardPr
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => onToggle(config)}
-            className="p-1.5 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title={config.is_active ? "Disable rule" : "Enable rule"}
           >
             {config.is_active
-              ? <ToggleRight className="h-4 w-4 text-slate-700" />
+              ? <ToggleRight className="h-4 w-4 text-foreground" />
               : <ToggleLeft className="h-4 w-4" />
             }
           </button>
           <button
             onClick={() => onEdit(config)}
-            className="p-1.5 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title="Edit rule"
           >
             <Pencil className="h-4 w-4" />
@@ -121,7 +121,7 @@ function RuleCard({ config, onEdit, onToggle, onDelete, isDeleting }: RuleCardPr
           <button
             onClick={() => onDelete(config.id)}
             disabled={isDeleting}
-            className="p-1.5 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+            className="p-1.5 rounded text-muted-foreground hover:text-danger hover:bg-danger-soft transition-colors disabled:opacity-50"
             title="Delete rule"
           >
             <Trash2 className="h-4 w-4" />
@@ -167,10 +167,10 @@ interface FormModalProps {
 
 function FormModal({ form, editingId, onFieldChange, onSubmit, onCancel, isSaving }: FormModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="monitor-soft-panel rounded-2xl w-full max-w-lg shadow-2xl overflow-y-auto max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40">
+      <div className="monitor-soft-panel rounded w-full max-w-lg shadow-dialog overflow-y-auto max-h-[90vh]">
         <div className="p-6 space-y-5">
-          <h2 className="text-base font-bold text-slate-900">
+          <h2 className="text-base font-semibold text-foreground">
             {editingId ? "Edit Alert Rule" : "New Alert Rule"}
           </h2>
 
@@ -385,7 +385,7 @@ export default function ConfigPage() {
           <div className="flex items-center gap-3">
             <Settings className="h-5 w-5 text-slate-600" />
             <div>
-              <h1 className="text-lg font-bold text-slate-900">Alert Rules</h1>
+              <h1 className="page-title text-2xl text-foreground">Alert Rules</h1>
               <p className="text-xs text-slate-500">
                 {activeCount} active · {disabledCount} disabled
               </p>
@@ -401,7 +401,7 @@ export default function ConfigPage() {
         </div>
 
         {/* Info banner */}
-        <div className="monitor-soft-panel rounded-xl p-4 text-sm text-slate-600">
+        <div className="monitor-soft-panel rounded p-4 text-sm text-slate-600">
           <p className="font-medium text-slate-900 mb-1">How alert rules work</p>
           <p>
             Rules define how alerts are categorized and who gets notified. They are evaluated by the{" "}
@@ -414,11 +414,11 @@ export default function ConfigPage() {
         {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-28 bg-slate-100 animate-pulse rounded-xl" />
+              <div key={i} className="h-28 bg-muted animate-pulse rounded" />
             ))}
           </div>
         ) : configs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-4 monitor-soft-panel border-dashed rounded-xl">
+          <div className="flex flex-col items-center justify-center py-16 gap-4 monitor-soft-panel border-dashed rounded">
             <Settings className="h-8 w-8 text-slate-300" />
             <div className="text-center">
               <p className="text-sm font-medium text-slate-900">No alert rules yet</p>

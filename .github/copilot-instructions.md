@@ -6,6 +6,66 @@ The MATA monorepo houses multiple production applications built around a shared 
 
 ---
 
+## App Directory Map
+
+Each app is a standalone Vite project (own `package.json`, `node_modules`, dev port). **Always `cd` into the app directory before running any `npm` command.** The friendly names used throughout this document map to directories as follows:
+
+| Name | Directory | Dev port | Notes / README |
+| --- | --- | --- | --- |
+| **Dashboard** | `/` (repo root, code in `src/`) | 5173 (Vite default) | Root app, package `vite_react_shadcn_ts` |
+| **Load Planner** | `loadplanner/` | 8089 | [README](../loadplanner/README.md); has its own `supabase/` tree |
+| **Workshop Mobile** | `mobile/` | 5173 (Vite default) | package `matanuska-workshop` |
+| **Driver App** | `drivermobileapp/` | 5175 | [README](../drivermobileapp/README.md), [SOP](../drivermobileapp/DRIVER_APP_SOP.md) |
+| **Monitor** | `monitor/` | 6214 | [README](../monitor/README.md) |
+
+---
+
+## Build, Test & Validate
+
+Run from inside the relevant app directory. Not every app defines every script — check its `package.json` first.
+
+| Task | Dashboard (root) | Load Planner | Driver App | Workshop / Monitor |
+| --- | --- | --- | --- | --- |
+| Dev server | `npm run dev` | `npm run dev` | `npm run dev` | `npm run dev` |
+| Build | `npm run build` | `npm run build` | `npm run build` | `npm run build` |
+| Lint | `npm run lint` | `npm run lint` | `npm run lint` | `npm run lint` |
+| Typecheck | `npm run typecheck` | `tsc --noEmit -p tsconfig.app.json` | `npm run type-check` | `tsc --noEmit` |
+| Test | — | `npm run test` (Vitest) | — | — |
+
+- Only **Load Planner** has automated tests (`npm run test`, Vitest). After changing Load Planner code, run them.
+- Each app ships an `audit-typescript.sh` helper for a fuller type audit.
+- Dashboard build raises the Node heap (`--max-old-space-size=8192`); don't strip that flag.
+- After any change, validate with the app's lint + typecheck before considering it done.
+
+---
+
+## Cross-App Integration Map
+
+There are **two primary apps**: **Load Planner** (`loadplanner/`) and the **Main Dashboard** (root `src/`). The Main Dashboard is the hub of a tightly-coupled cluster — it is most closely integrated with three satellite apps that read/write the **same Supabase tables**:
+
+- **Workshop Mobile** (`mobile/`) — workshop/maintenance operations
+- **Driver App** (`drivermobileapp/`) — used by drivers in the field
+- **Monitor** (`monitor/`) — used for QA, alerting, and reports
+
+> **Golden rule:** When you change the Main Dashboard in a way that touches a **shared contract** — a shared table's schema/columns, a shared RPC, an `investigation_status`/alert field, a Realtime payload shape, or shared Supabase types — you **must update the affected integrated app(s) in the same change**. Never ship a Dashboard schema/contract change that leaves Workshop Mobile, Driver App, or Monitor stale.
+
+### How the integrations work
+
+| Integration | Mechanism | Shared surface | Breaks if… |
+| --- | --- | --- | --- |
+| **Dashboard ↔ Monitor** (tightest) | Supabase Realtime `postgres_changes` on `trips`, `cost_entries`; shared `investigation_status` field on `cost_entries`/`alerts` | Monitor resolves alerts by writing `investigation_status`; Dashboard reads it on trip detail | Renaming/dropping `cost_entries`, `trips`, or `investigation_status`; changing core `trips` fields |
+| **Dashboard ↔ Driver App** | Realtime on `driver_vehicle_assignments`, `loads`, `diesel_records` | Driver writes diesel/expenses/trip updates; Dashboard reads them | Renaming `driver_vehicle_assignments`, dropping `diesel_records.debrief_signed`, changing `loads` shape |
+| **Dashboard ↔ Workshop Mobile** | Shared `vehicles`/`drivers` reference data + workshop tables (`job_cards`, `vehicle_faults`, `tyres`) | Workshop reads fleet data, manages maintenance records | Renaming/dropping shared fleet or workshop tables |
+
+### Key facts
+
+- **Auth session sharing:** Only **Monitor** shares a session with the Main Dashboard (both use `storageKey: "sb-mat-auth-token"` on the same origin). Dashboard, Load Planner, Workshop Mobile, and Driver App otherwise maintain isolated auth contexts.
+- **Shared tables** Dashboard writes that satellites depend on: `trips`, `cost_entries`, `diesel_records`, `drivers`, `vehicles`, `driver_vehicle_assignments`, `loads`, plus `alerts`/`investigation_status`.
+- **Each app keeps its own Supabase types** (`<app>/src/integrations/supabase/types.ts`). After a shared-schema change, **regenerate types for every app that uses the changed table**, not just the Dashboard — stale type files cause silent runtime data bugs.
+- **Load Planner** is the other primary app but is largely **decoupled** from the Dashboard cluster (only shares `vehicles`/`drivers`/`loads` reference data and has its own `supabase/` tree). It does not need to move in lockstep with Dashboard UI changes.
+
+---
+
 ## Repository Structure
 
 - Organize each app in a top-level directory:
@@ -96,11 +156,11 @@ The MATA monorepo houses multiple production applications built around a shared 
 
 1. **Module imports:** Always use `@/` for all code/images; configure all tooling (TS, Vite, Jest) for alias resolution
 2. **Supabase types:**  
-    - After schema changes, run Supabase type generation for Dashboard:
+    - After schema changes, regenerate the typed client (project id `wxvhkljrbcpcgpgdqhsp`):
+      ```sh
+      npx supabase gen types typescript --project-id wxvhkljrbcpcgpgdqhsp > src/integrations/supabase/types.ts
       ```
-      npm run supabase:gen
-      ```
-    - For other apps, update type files manually or as prescribed by tooling
+    - For other apps, point the output at that app's `src/integrations/supabase/types.ts`
 3. **TanStack Query:**  
     - Always include *all* filter params in query keys to avoid stale data and bugs in state sync/UI
 4. **Subscriptions:**  
@@ -142,9 +202,9 @@ The MATA monorepo houses multiple production applications built around a shared 
 
 ## Example CLI and Config Snippets
 
-- **Supabase types generation (Dashboard):**
+- **Supabase types generation (per app):**
   ```sh
-  npm run supabase:gen
+  npx supabase gen types typescript --project-id wxvhkljrbcpcgpgdqhsp > src/integrations/supabase/types.ts
   ```
 - **Key environment variables (example .env):**
   ```env
