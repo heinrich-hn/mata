@@ -371,10 +371,18 @@ const DieselManagement = () => {
     .reduce((sum, record) => sum + (record.total_cost || 0), 0);
 
   // Helper: Calculate km per litre for a record
+  // Prefers the reconciled stored value (km_per_litre) so the banner reflects
+  // the corrected consumption after a cascade fix; falls back to recomputing
+  // from distance / litres, using vehicle_litres_only when present to stay
+  // consistent with how the value is stored.
   const calculateKmPerLitre = (record: DieselConsumptionRecord): number | null => {
     if (isReeferFleet(record.fleet_number)) return null;
+    if (record.km_per_litre != null && record.km_per_litre > 0) return record.km_per_litre;
     if (!record.distance_travelled || !record.litres_filled) return null;
-    return record.distance_travelled / record.litres_filled;
+    const litres = record.vehicle_litres_only && record.vehicle_litres_only > 0
+      ? record.vehicle_litres_only
+      : record.litres_filled;
+    return record.distance_travelled / litres;
   };
 
   // Helper: Get norm for a fleet number

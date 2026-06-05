@@ -912,6 +912,87 @@ export function exportPunctualityToPdf(
   doc.setLineWidth(0.5);
   doc.line(6, 23, pageWidth - 6, 23);
 
+  // Weekly report: trimmed single-table export with only the requested columns.
+  if (view === "week") {
+    const weekHead = [[
+      { content: "Weekly", styles: { halign: "left" as const } },
+      { content: "Loads", styles: { halign: "center" as const } },
+      { content: "On-Time", styles: { halign: "center" as const } },
+      { content: "Late", styles: { halign: "center" as const } },
+      { content: "% On-Time", styles: { halign: "center" as const } },
+      { content: "% Late", styles: { halign: "center" as const } },
+      { content: "% Late @ Loading", styles: { halign: "center" as const } },
+      { content: "% Late Dep Origin", styles: { halign: "center" as const } },
+      { content: "% Late @ Dest", styles: { halign: "center" as const } },
+      { content: "% Late Dep Dest", styles: { halign: "center" as const } },
+    ]];
+    const weekBody: (string | number)[][] = buckets.map((b) => [
+      b.label,
+      b.count,
+      b.onTime,
+      b.late,
+      fmtPct(b.daOnTime, b.daMeasured),
+      fmtPct(b.daLate, b.daMeasured),
+      fmtPct(b.oaLate, b.oaMeasured),
+      fmtPct(b.odLate, b.odMeasured),
+      fmtPct(b.daLate, b.daMeasured),
+      fmtPct(b.ddLate, b.ddMeasured),
+    ]);
+    weekBody.push([
+      "TOTAL",
+      totals.count,
+      totals.onTime,
+      totals.late,
+      fmtPct(totals.daOnTime, totals.daMeasured),
+      fmtPct(totals.daLate, totals.daMeasured),
+      fmtPct(totals.oaLate, totals.oaMeasured),
+      fmtPct(totals.odLate, totals.odMeasured),
+      fmtPct(totals.daLate, totals.daMeasured),
+      fmtPct(totals.ddLate, totals.ddMeasured),
+    ]);
+
+    autoTable(doc, {
+      startY: 28,
+      head: weekHead,
+      body: weekBody,
+      theme: "grid",
+      headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8, halign: "center", cellPadding: 2 },
+      bodyStyles: { textColor: text, fontSize: 8, cellPadding: 1.8 },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { cellWidth: 70, fontStyle: "bold" },
+        1: { halign: "center" },
+        2: { halign: "center", textColor: [21, 128, 61], fontStyle: "bold" },
+        3: { halign: "center", textColor: [185, 28, 28], fontStyle: "bold" },
+        4: { halign: "center" },
+        5: { halign: "center" },
+        6: { halign: "center" },
+        7: { halign: "center" },
+        8: { halign: "center" },
+        9: { halign: "center" },
+      },
+      didParseCell: (data) => {
+        if (data.section === "body" && data.row.index === weekBody.length - 1) {
+          data.cell.styles.fillColor = [229, 231, 235];
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+      margin: { left: 6, right: 6 },
+      tableWidth: pageWidth - 12,
+    });
+
+    const weekPageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= weekPageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(...pdfColors.textMuted);
+      doc.text(`Page ${i} of ${weekPageCount} | ${SYSTEM_NAME}`, pageWidth / 2, pageHeight - 6, { align: "center" });
+    }
+
+    doc.save(`Matanuska_Punctuality_${viewSlug(view)}_${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    return;
+  }
+
   // KPI summary block (always shown)
   autoTable(doc, {
     startY: 28,

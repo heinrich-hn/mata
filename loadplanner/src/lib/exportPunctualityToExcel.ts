@@ -51,6 +51,87 @@ export function exportPunctualityToExcel(
   const wb = XLSX.utils.book_new();
   const totals = computeTotals(loads);
 
+  // Weekly report: trimmed single-sheet export with only the requested columns.
+  if (view === "week") {
+    const buckets = bucketPunctuality(loads, view);
+    const headerRow = [
+      "Weekly",
+      "Loads",
+      "On-Time",
+      "Late",
+      "% On-Time",
+      "% Late",
+      "% Late @ Loading",
+      "% Late Dep Origin",
+      "% Late @ Dest",
+      "% Late Dep Dest",
+    ];
+    const aoa: (string | number)[][] = [
+      [`${COMPANY_NAME} — Punctuality ${viewLabel(view)} (${timeRange})`],
+      [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`],
+      [],
+      headerRow,
+    ];
+    for (const b of buckets) {
+      aoa.push([
+        b.label,
+        b.count,
+        b.onTime,
+        b.late,
+        fmtPct(b.daOnTime, b.daMeasured),
+        fmtPct(b.daLate, b.daMeasured),
+        fmtPct(b.oaLate, b.oaMeasured),
+        fmtPct(b.odLate, b.odMeasured),
+        fmtPct(b.daLate, b.daMeasured),
+        fmtPct(b.ddLate, b.ddMeasured),
+      ]);
+    }
+    aoa.push([
+      "TOTAL",
+      totals.count,
+      totals.onTime,
+      totals.late,
+      fmtPct(totals.daOnTime, totals.daMeasured),
+      fmtPct(totals.daLate, totals.daMeasured),
+      fmtPct(totals.oaLate, totals.oaMeasured),
+      fmtPct(totals.odLate, totals.odMeasured),
+      fmtPct(totals.daLate, totals.daMeasured),
+      fmtPct(totals.ddLate, totals.ddMeasured),
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    applyTitleRows(ws, headerRow.length, []);
+    applyHeaderStyle(ws, 3, headerRow.length);
+    const totalRowIdx = aoa.length - 1;
+    for (let c = 0; c < headerRow.length; c++) {
+      const ref = encodeCell(totalRowIdx, c);
+      const cell = ws[ref];
+      if (cell) cell.s = xlTotalRow;
+    }
+    ws["!cols"] = [
+      { wch: 38 },
+      { wch: 8 },
+      { wch: 10 }, { wch: 10 },
+      { wch: 12 }, { wch: 12 },
+      { wch: 18 }, { wch: 18 },
+      { wch: 16 }, { wch: 16 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, viewLabel(view));
+
+    const weekLabel = format(new Date(), "yyyyMMdd-HHmm");
+    const weekFilename = `Punctuality-${viewSlug(view)}-${timeRange}-${weekLabel}.xlsx`;
+    const weekBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    const weekBlob = new Blob([weekBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const weekUrl = URL.createObjectURL(weekBlob);
+    const weekLink = document.createElement("a");
+    weekLink.href = weekUrl;
+    weekLink.download = weekFilename;
+    document.body.appendChild(weekLink);
+    weekLink.click();
+    document.body.removeChild(weekLink);
+    URL.revokeObjectURL(weekUrl);
+    return;
+  }
+
   // -- Summary sheet --
   const summaryAoa: (string | number)[][] = [
     [`${COMPANY_NAME} — Punctuality ${viewLabel(view)} (${timeRange})`],

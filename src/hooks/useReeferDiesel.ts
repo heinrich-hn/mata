@@ -72,11 +72,13 @@ interface UseReeferDieselRecordsOptions {
 
 const getReeferTable = () => supabase.from('reefer_diesel_records');
 
-// Verifies that the DB cascade trigger correctly updated the chronological
-// predecessor and successor of an edited reefer row. Logs a clear console
-// warning when an expected propagation did not happen, so silent failures
-// (missing trigger, stale data, RLS, etc.) are easy to spot.
-const verifyReeferCascade = async (
+// Reconciles the derived consumption fields (previous_operating_hours,
+// hours_operated, litres_per_hour) of an edited reefer row and its
+// chronological successor. The DB cascade trigger normally does this, but when
+// it is missing or did not fire, editing one reefer fill's operating hours
+// would leave the NEXT fill's hours_operated / litres_per_hour stale. This
+// function self-heals that case by writing the corrected values directly.
+const reconcileReeferConsumption = async (
   saved: ReeferDieselRecordRow,
   changed: { hoursChanged: boolean; litresChanged: boolean },
 ) => {
@@ -105,58 +107,71 @@ const verifyReeferCascade = async (
       .limit(1)
       .maybeSingle();
 
-    const issues: string[] = [];
+    const corrections: string[] = [];
 
-    const expectedPrev = prev?.operating_hours ?? null;
-    if (Number(saved.previous_operating_hours ?? NaN) !== Number(expectedPrev ?? NaN)
-        && !(saved.previous_operating_hours == null && expectedPrev == null)) {
-      issues.push(
-        `Edited row's previous_operating_hours=${saved.previous_operating_hours} does not match predecessor operating_hours=${expectedPrev}`,
-      );
+    // Helper: compute the derived fields a reefer row should have given the
+    // operating_hours of its chronological predecessor.
+    const deriveFields = (
+      row: { operating_hours: number | null; litres_filled: number | null },
+      prevHours: number | null,
+    ) => {
+      const hours = row.operating_hours != null ? Number(row.operating_hours) : null;
+      const hoursOp = (prevHours != null && hours != null && hours > prevHours) ? hours - prevHours : null;
+      const lph = (hoursOp != null && hoursOp > 0 && Number(row.litres_filled) > 0)
+        ? Number(row.litres_filled) / hoursOp
+        : null;
+      return { previous_operating_hours: prevHours, hours_operated: hoursOp, litres_per_hour: lph };
+    };
+
+    // Helper: returns true when stored derived fields differ from expected.
+    const needsFix = (
+      stored: { previous_operating_hours?: number | null; hours_operated?: number | null; litres_per_hour?: number | null },
+      expected: { previous_operating_hours: number | null; hours_operated: number | null; litres_per_hour: number | null },
+    ) => {
+      const prevDiff = Number(stored.previous_operating_hours ?? NaN) !== Number(expected.previous_operating_hours ?? NaN)
+        && !(stored.previous_operating_hours == null && expected.previous_operating_hours == null);
+      const hoursDiff = Number(stored.hours_operated ?? NaN) !== Number(expected.hours_operated ?? NaN)
+        && !(stored.hours_operated == null && expected.hours_operated == null);
+      const lphDiff = expected.litres_per_hour == null
+        ? stored.litres_per_hour != null
+        : !(Number.isFinite(Number(stored.litres_per_hour)) && Math.abs(Number(stored.litres_per_hour) - expected.litres_per_hour) < 0.01);
+      return prevDiff || hoursDiff || lphDiff;
+    };
+
+    // 1. Correct the edited row itself based on its real predecessor.
+    const savedExpected = deriveFields(saved, prev?.operating_hours ?? null);
+    if (needsFix(saved, savedExpected)) {
+      const { error } = await getReeferTable().update(savedExpected).eq('id', saved.id);
+      if (error) {
+        console.error('[reefer-diesel cascade] Failed to correct edited row', saved.id, error);
+      } else {
+        corrections.push(`edited row ${saved.id}`);
+      }
     }
 
+    // 2. Correct the next transaction, whose previous_operating_hours must
+    //    equal the edited row's operating_hours.
     if (next) {
-      const expectedNextPrev = saved.operating_hours;
-      if (Number(next.previous_operating_hours ?? NaN) !== Number(expectedNextPrev ?? NaN)) {
-        issues.push(
-          `Next transaction (${next.id} on ${next.date}) previous_operating_hours=${next.previous_operating_hours} did not update to ${expectedNextPrev}`,
-        );
-      }
-      if (expectedNextPrev != null && next.operating_hours != null) {
-        const expectedHoursOp = Number(next.operating_hours) > Number(expectedNextPrev)
-          ? Number(next.operating_hours) - Number(expectedNextPrev)
-          : null;
-        if (expectedHoursOp != null && Number(next.hours_operated ?? NaN) !== expectedHoursOp) {
-          issues.push(
-            `Next transaction (${next.id}) hours_operated=${next.hours_operated} did not recalculate to ${expectedHoursOp}`,
-          );
-        }
-        if (expectedHoursOp && Number(next.litres_filled) > 0) {
-          const expectedLph = Number(next.litres_filled) / expectedHoursOp;
-          const actualLph = Number(next.litres_per_hour ?? NaN);
-          if (!Number.isFinite(actualLph) || Math.abs(actualLph - expectedLph) > 0.01) {
-            issues.push(
-              `Next transaction (${next.id}) litres_per_hour=${next.litres_per_hour} did not recalculate to ${expectedLph.toFixed(2)}`,
-            );
-          }
+      const nextExpected = deriveFields(next, saved.operating_hours != null ? Number(saved.operating_hours) : null);
+      if (needsFix(next, nextExpected)) {
+        const { error } = await getReeferTable().update(nextExpected).eq('id', next.id);
+        if (error) {
+          console.error('[reefer-diesel cascade] Failed to correct next row', next.id, error);
+        } else {
+          corrections.push(`next row ${next.id}`);
         }
       }
     }
 
-    if (issues.length > 0) {
-      console.error(
-        '[reefer-diesel cascade] Edit to reefer %s on %s did not propagate as expected. ' +
-        'Verify migration 20260527000002_recalc_reefer_consumption.sql is applied.',
+    if (corrections.length > 0) {
+      console.info(
+        '[reefer-diesel cascade] Auto-corrected consumption for reefer %s on %s (%s). ' +
+        'The DB trigger (migration 20260527000002_recalc_reefer_consumption.sql) ' +
+        'did not propagate; client reconciliation applied.',
         saved.reefer_unit,
         saved.date,
-        {
-          editedId: saved.id,
-          hoursChanged: changed.hoursChanged,
-          litresChanged: changed.litresChanged,
-          predecessor: prev,
-          successor: next,
-          issues,
-        },
+        corrections.join(', '),
+        { editedId: saved.id, hoursChanged: changed.hoursChanged, litresChanged: changed.litresChanged },
       );
     }
   } catch (err) {
@@ -272,7 +287,7 @@ export const useReeferDieselRecords = (options: UseReeferDieselRecordsOptions = 
         before && Number(before.litres_filled) !== Number(saved.litres_filled);
 
       if (hoursChanged || litresChanged) {
-        await verifyReeferCascade(saved, { hoursChanged: !!hoursChanged, litresChanged: !!litresChanged });
+        await reconcileReeferConsumption(saved, { hoursChanged: !!hoursChanged, litresChanged: !!litresChanged });
       }
 
       return saved;

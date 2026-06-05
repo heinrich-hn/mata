@@ -476,11 +476,14 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
     return data.id;
   };
 
-  // Verifies that the DB cascade trigger correctly updated the chronological
-  // predecessor and successor of an edited horse/truck diesel row. Logs a
-  // clear console error when an expected propagation did not happen so silent
-  // failures (missing trigger, RLS, etc.) are easy to spot.
-  const verifyDieselCascade = async (
+  // Reconciles the derived consumption fields (previous_km_reading,
+  // distance_travelled, km_per_litre) of an edited horse/truck diesel row and
+  // its chronological successor. The DB cascade trigger normally does this, but
+  // when the trigger is missing or did not fire, an edit to one transaction's
+  // odometer reading would leave the NEXT transaction's distance / km_per_litre
+  // stale (showing the wrong consumption until the row is re-edited). This
+  // function self-heals that case by writing the correct values directly.
+  const reconcileDieselConsumption = async (
     editedId: string,
     changed: { kmChanged: boolean; litresChanged: boolean },
   ) => {
@@ -514,60 +517,73 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
         .limit(1)
         .maybeSingle();
 
-      const issues: string[] = [];
+      const corrections: string[] = [];
 
-      const expectedPrev = prev?.km_reading ?? null;
-      if (Number(saved.previous_km_reading ?? NaN) !== Number(expectedPrev ?? NaN)
-        && !(saved.previous_km_reading == null && expectedPrev == null)) {
-        issues.push(
-          `Edited row's previous_km_reading=${saved.previous_km_reading} does not match predecessor km_reading=${expectedPrev}`,
-        );
+      // Helper: compute the derived fields a horse/truck row should have given
+      // the km_reading of its chronological predecessor.
+      const deriveFields = (
+        row: { km_reading: number | null; litres_filled: number | null; vehicle_litres_only?: number | null },
+        prevKm: number | null,
+      ) => {
+        const km = row.km_reading != null ? Number(row.km_reading) : null;
+        const litres = row.vehicle_litres_only && Number(row.vehicle_litres_only) > 0
+          ? Number(row.vehicle_litres_only)
+          : Number(row.litres_filled);
+        const distance = (prevKm != null && km != null && km > prevKm) ? km - prevKm : null;
+        const kmpl = (distance != null && litres > 0) ? distance / litres : null;
+        return { previous_km_reading: prevKm, distance_travelled: distance, km_per_litre: kmpl };
+      };
+
+      // Helper: returns true when stored derived fields differ from expected.
+      const needsFix = (
+        stored: { previous_km_reading?: number | null; distance_travelled?: number | null; km_per_litre?: number | null },
+        expected: { previous_km_reading: number | null; distance_travelled: number | null; km_per_litre: number | null },
+      ) => {
+        const prevDiff = Number(stored.previous_km_reading ?? NaN) !== Number(expected.previous_km_reading ?? NaN)
+          && !(stored.previous_km_reading == null && expected.previous_km_reading == null);
+        const distDiff = Number(stored.distance_travelled ?? NaN) !== Number(expected.distance_travelled ?? NaN)
+          && !(stored.distance_travelled == null && expected.distance_travelled == null);
+        const kmplDiff = expected.km_per_litre == null
+          ? stored.km_per_litre != null
+          : !(Number.isFinite(Number(stored.km_per_litre)) && Math.abs(Number(stored.km_per_litre) - expected.km_per_litre) < 0.01);
+        return prevDiff || distDiff || kmplDiff;
+      };
+
+      // 1. Correct the edited row itself based on its real predecessor.
+      const savedExpected = deriveFields(saved, prev?.km_reading ?? null);
+      if (needsFix(saved, savedExpected)) {
+        const { error } = await supabase.from('diesel_records').update(savedExpected).eq('id', saved.id);
+        if (error) {
+          console.error('[diesel cascade] Failed to correct edited row', saved.id, error);
+        } else {
+          corrections.push(`edited row ${saved.id}`);
+        }
       }
 
+      // 2. Correct the next transaction, whose previous_km_reading must equal
+      //    the edited row's km_reading. This is the case the user reported:
+      //    editing one fill must update the following fill's consumption.
       if (next) {
-        if (Number(next.previous_km_reading ?? NaN) !== Number(saved.km_reading ?? NaN)) {
-          issues.push(
-            `Next transaction (${next.id} on ${next.date}) previous_km_reading=${next.previous_km_reading} did not update to ${saved.km_reading}`,
-          );
-        }
-        if (saved.km_reading != null && next.km_reading != null) {
-          const expectedDist = Number(next.km_reading) > Number(saved.km_reading)
-            ? Number(next.km_reading) - Number(saved.km_reading)
-            : null;
-          if (expectedDist != null && Number(next.distance_travelled ?? NaN) !== expectedDist) {
-            issues.push(
-              `Next transaction (${next.id}) distance_travelled=${next.distance_travelled} did not recalculate to ${expectedDist}`,
-            );
-          }
-          const litresForCalc = next.vehicle_litres_only && Number(next.vehicle_litres_only) > 0
-            ? Number(next.vehicle_litres_only)
-            : Number(next.litres_filled);
-          if (expectedDist && litresForCalc > 0) {
-            const expectedKmpl = expectedDist / litresForCalc;
-            const actualKmpl = Number(next.km_per_litre ?? NaN);
-            if (!Number.isFinite(actualKmpl) || Math.abs(actualKmpl - expectedKmpl) > 0.01) {
-              issues.push(
-                `Next transaction (${next.id}) km_per_litre=${next.km_per_litre} did not recalculate to ${expectedKmpl.toFixed(3)}`,
-              );
-            }
+        const nextExpected = deriveFields(next, saved.km_reading != null ? Number(saved.km_reading) : null);
+        if (needsFix(next, nextExpected)) {
+          const { error } = await supabase.from('diesel_records').update(nextExpected).eq('id', next.id);
+          if (error) {
+            console.error('[diesel cascade] Failed to correct next row', next.id, error);
+          } else {
+            corrections.push(`next row ${next.id}`);
           }
         }
       }
 
-      if (issues.length > 0) {
-        console.error(
-          '[diesel cascade] Edit to fleet %s on %s did not propagate as expected. ' +
-          'Verify migration 20260527000003_recalc_diesel_consumption.sql is applied.',
+      if (corrections.length > 0) {
+        console.info(
+          '[diesel cascade] Auto-corrected consumption for fleet %s on %s (%s). ' +
+          'The DB trigger (migration 20260527000003_recalc_diesel_consumption.sql) ' +
+          'did not propagate; client reconciliation applied.',
           saved.fleet_number,
           saved.date,
-          {
-            editedId: saved.id,
-            kmChanged: changed.kmChanged,
-            litresChanged: changed.litresChanged,
-            predecessor: prev,
-            successor: next,
-            issues,
-          },
+          corrections.join(', '),
+          { editedId: saved.id, kmChanged: changed.kmChanged, litresChanged: changed.litresChanged },
         );
       }
     } catch (err) {
@@ -615,7 +631,7 @@ export const OperationsProvider = ({ children }: { children: ReactNode }) => {
       && (Number(beforeRow.litres_filled) !== Number(enrichedRecord.litres_filled)
         || Number(beforeRow.vehicle_litres_only ?? NaN) !== Number(enrichedRecord.vehicle_litres_only ?? NaN));
     if (kmChanged || litresChanged) {
-      await verifyDieselCascade(record.id, { kmChanged: !!kmChanged, litresChanged: !!litresChanged });
+      await reconcileDieselConsumption(record.id, { kmChanged: !!kmChanged, litresChanged: !!litresChanged });
     }
 
     // Sync reefer diesel records for linked trailers
