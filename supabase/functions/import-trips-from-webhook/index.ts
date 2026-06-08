@@ -239,8 +239,7 @@ serve(async (req) => {
 
             if (driver) {
               tripData.driver_name = `${driver.first_name} ${driver.last_name}`.trim();
-              tripData.driver_id = driver.auth_user_id || driver.id;
-              console.log(`✅ Found driver: ${tripData.driver_name} (id: ${tripData.driver_id})`);
+              console.log(`✅ Found driver: ${tripData.driver_name}`);
             } else {
               console.log(`⚠️ No driver found for name: ${trip.driverName}, storing as-is`);
               tripData.driver_name = trip.driverName;
