@@ -59,6 +59,32 @@ interface GeofenceMonitorContextType {
 const GeofenceMonitorContext = createContext<GeofenceMonitorContextType | undefined>(undefined);
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Resolve the GPS fix time for an asset — i.e. when the device was physically
+ * at its reported position. This is what we want to RECORD as an actual
+ * arrival/departure, instead of the browser wall-clock at the moment we happen
+ * to process a poll.
+ *
+ * Prefers `lastPositionUtc` (the GPS position fix) and falls back to
+ * `lastConnectedUtc` (the cellular check-in, which lags for parked vehicles).
+ * Returns `null` when no usable fix time is available so callers can fall back
+ * to wall-clock time explicitly.
+ */
+function getAssetFixTime(asset: TelematicsAsset): Date | null {
+  const raw = asset.lastPositionUtc || asset.lastConnectedUtc;
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return null;
+  // Guard against bad device/clock data: reject timestamps more than 2 minutes
+  // in the future so we never record an arrival/departure "ahead of now".
+  if (d.getTime() > Date.now() + 120_000) return null;
+  return d;
+}
+
+// ============================================================================
 // PROVIDER
 // ============================================================================
 
@@ -87,11 +113,14 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
   // Dwell-time tracking: records when a vehicle was first observed inside a geofence zone.
   // If the vehicle stays inside for 10+ minutes without a transition-based entry event firing,
   // this fallback auto-triggers the appropriate arrival event.
-  const dwellTrackingRef = useRef<Map<string, Date>>(new Map());
+  // `wall` is the processing clock used to measure dwell duration (always advances);
+  // `fix` is the GPS fix time of that first-inside observation, which is what we RECORD
+  // as the actual arrival so the stored time isn't biased late by the dwell window.
+  const dwellTrackingRef = useRef<Map<string, { wall: Date; fix: Date }>>(new Map());
   // Exit-dwell tracking: records when a vehicle was first observed OUTSIDE a geofence zone
   // after an arrival was recorded. If the vehicle stays outside for 10+ min without a
   // transition-based exit event firing, this fallback auto-triggers the departure event.
-  const exitDwellTrackingRef = useRef<Map<string, Date>>(new Map());
+  const exitDwellTrackingRef = useRef<Map<string, { wall: Date; fix: Date }>>(new Map());
   const geofenceUpdateMutation = useGeofenceLoadUpdate();
 
   const [organisationId, setOrganisationId] = useState<number | null>(() => {
@@ -395,8 +424,20 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
           ? isWithinDepot(previousPos.lat, previousPos.lon, destinationDepot)
           : null;
 
-        const timestamp = new Date();
-        const dateKey = timestamp.toISOString().slice(0, 10);
+        // Wall-clock instant — used ONLY for dwell/stationary DURATION math,
+        // de-dup keys and ref bookkeeping. It must always advance even when the
+        // device stops emitting fresh GPS fixes, otherwise the dwell-time
+        // fallbacks (which exist precisely for sparse-reporting devices) would
+        // stop firing.
+        const nowTs = new Date();
+        // GPS fix time of the position we are evaluating. This is what we
+        // RECORD as the actual arrival/departure so the stored timestamp
+        // reflects when the truck was physically there — not when our browser
+        // processed the poll. Falls back to wall-clock only when the device
+        // provides no usable fix time.
+        const fixTs = getAssetFixTime(asset) ?? nowTs;
+        const timestamp = fixTs;
+        const dateKey = nowTs.toISOString().slice(0, 10);
         const originEntryKey = `${load.id}-origin-entry`;
         const destEntryKey = `${load.id}-dest-entry`;
 
@@ -442,18 +483,18 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
             const scheduledEventKey = `${load.id}-pending-scheduled-${dateKey}`;
             if (!processedEventsRef.current.has(scheduledEventKey)) {
               if (!dwellTrackingRef.current.has(originDwellKey)) {
-                dwellTrackingRef.current.set(originDwellKey, timestamp);
+                dwellTrackingRef.current.set(originDwellKey, { wall: nowTs, fix: fixTs });
               } else {
                 const dwellStart = dwellTrackingRef.current.get(originDwellKey)!;
-                const dwellMinutes = (timestamp.getTime() - dwellStart.getTime()) / (1000 * 60);
+                const dwellMinutes = (nowTs.getTime() - dwellStart.wall.getTime()) / (1000 * 60);
                 if (dwellMinutes >= 10) {
                   processedEventsRef.current.add(scheduledEventKey);
-                  geofenceEntryRef.current.set(originEntryKey, dwellStart);
+                  geofenceEntryRef.current.set(originEntryKey, dwellStart.wall);
                   console.log(`[Geofence Dwell] Pending load ${load.load_id}: vehicle inside origin ${originDepot.name} for ${dwellMinutes.toFixed(1)}min — auto-transitioning to scheduled`);
                   geofenceUpdateMutation.mutate({
                     loadId: load.id,
                     eventType: "loading_arrival" as GeofenceEventType,
-                    timestamp: dwellStart,
+                    timestamp: dwellStart.fix,
                     ...eventCtx,
                     geofenceName: originDepot.name,
                   });
@@ -502,20 +543,20 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
           const arrivalEventKey = `${load.id}-loading_arrival-${dateKey}`;
           if (!processedEventsRef.current.has(arrivalEventKey)) {
             if (!dwellTrackingRef.current.has(originDwellKey)) {
-              dwellTrackingRef.current.set(originDwellKey, timestamp);
+              dwellTrackingRef.current.set(originDwellKey, { wall: nowTs, fix: fixTs });
             } else {
               const dwellStart = dwellTrackingRef.current.get(originDwellKey)!;
-              const dwellMinutes = (timestamp.getTime() - dwellStart.getTime()) / (1000 * 60);
+              const dwellMinutes = (nowTs.getTime() - dwellStart.wall.getTime()) / (1000 * 60);
               if (dwellMinutes >= 10) {
                 processedEventsRef.current.add(arrivalEventKey);
                 if (!geofenceEntryRef.current.has(originEntryKey)) {
-                  geofenceEntryRef.current.set(originEntryKey, dwellStart);
+                  geofenceEntryRef.current.set(originEntryKey, dwellStart.wall);
                 }
                 console.log(`[Geofence Dwell] Scheduled load ${load.load_id}: vehicle inside origin ${originDepot.name} for ${dwellMinutes.toFixed(1)}min — auto-firing loading_arrival`);
                 geofenceUpdateMutation.mutate({
                   loadId: load.id,
                   eventType: "loading_arrival" as GeofenceEventType,
-                  timestamp: dwellStart,
+                  timestamp: dwellStart.fix,
                   ...eventCtx,
                   geofenceName: originDepot.name,
                 });
@@ -568,17 +609,17 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
             const depEventKey = `${load.id}-loading_departure-${dateKey}`;
             if (!processedEventsRef.current.has(depEventKey)) {
               if (!exitDwellTrackingRef.current.has(originExitDwellKey)) {
-                exitDwellTrackingRef.current.set(originExitDwellKey, timestamp);
+                exitDwellTrackingRef.current.set(originExitDwellKey, { wall: nowTs, fix: fixTs });
               } else {
                 const exitStart = exitDwellTrackingRef.current.get(originExitDwellKey)!;
-                const exitMinutes = (timestamp.getTime() - exitStart.getTime()) / (1000 * 60);
+                const exitMinutes = (nowTs.getTime() - exitStart.wall.getTime()) / (1000 * 60);
                 if (exitMinutes >= 10) {
                   processedEventsRef.current.add(depEventKey);
                   console.log(`[Geofence ExitDwell] Scheduled load ${load.load_id}: vehicle outside origin ${originDepot.name} for ${exitMinutes.toFixed(1)}min — auto-firing loading_departure`);
                   geofenceUpdateMutation.mutate({
                     loadId: load.id,
                     eventType: "loading_departure" as GeofenceEventType,
-                    timestamp: exitStart,
+                    timestamp: exitStart.fix,
                     ...eventCtx,
                     geofenceName: originDepot.name,
                   });
@@ -629,21 +670,21 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
           const destArrivalEventKey = `${load.id}-offloading_arrival-${dateKey}`;
           if (!processedEventsRef.current.has(destArrivalEventKey)) {
             if (!dwellTrackingRef.current.has(destDwellKey)) {
-              dwellTrackingRef.current.set(destDwellKey, timestamp);
+              dwellTrackingRef.current.set(destDwellKey, { wall: nowTs, fix: fixTs });
             } else {
               const dwellStart = dwellTrackingRef.current.get(destDwellKey)!;
-              const dwellMinutes = (timestamp.getTime() - dwellStart.getTime()) / (1000 * 60);
+              const dwellMinutes = (nowTs.getTime() - dwellStart.wall.getTime()) / (1000 * 60);
               if (dwellMinutes >= 10) {
                 processedEventsRef.current.add(destArrivalEventKey);
                 if (!geofenceEntryRef.current.has(destEntryKey)) {
-                  geofenceEntryRef.current.set(destEntryKey, dwellStart);
-                  stationaryTrackingRef.current.set(destEntryKey, { entryTime: dwellStart, stationaryStartTime: null });
+                  geofenceEntryRef.current.set(destEntryKey, dwellStart.wall);
+                  stationaryTrackingRef.current.set(destEntryKey, { entryTime: dwellStart.wall, stationaryStartTime: null });
                 }
                 console.log(`[Geofence Dwell] In-transit load ${load.load_id}: vehicle inside destination ${destinationDepot.name} for ${dwellMinutes.toFixed(1)}min — auto-firing offloading_arrival`);
                 geofenceUpdateMutation.mutate({
                   loadId: load.id,
                   eventType: "offloading_arrival" as GeofenceEventType,
-                  timestamp: dwellStart,
+                  timestamp: dwellStart.fix,
                   ...eventCtx,
                   geofenceName: destinationDepot.name,
                 });
@@ -661,9 +702,9 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
             const isStationary = (asset.speedKmH ?? 0) < 1;
             if (isStationary) {
               if (!tracking.stationaryStartTime) {
-                stationaryTrackingRef.current.set(destEntryKey, { ...tracking, stationaryStartTime: timestamp });
+                stationaryTrackingRef.current.set(destEntryKey, { ...tracking, stationaryStartTime: nowTs });
               } else {
-                const stationaryDurationMs = timestamp.getTime() - tracking.stationaryStartTime.getTime();
+                const stationaryDurationMs = nowTs.getTime() - tracking.stationaryStartTime.getTime();
                 const stationaryDurationMinutes = stationaryDurationMs / (1000 * 60);
 
                 if (stationaryDurationMinutes >= 5 && !load.actual_offloading_arrival) {
@@ -749,17 +790,17 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
             const depEventKey = `${load.id}-offloading_departure-${dateKey}`;
             if (!processedEventsRef.current.has(depEventKey)) {
               if (!exitDwellTrackingRef.current.has(destExitDwellKey)) {
-                exitDwellTrackingRef.current.set(destExitDwellKey, timestamp);
+                exitDwellTrackingRef.current.set(destExitDwellKey, { wall: nowTs, fix: fixTs });
               } else {
                 const exitStart = exitDwellTrackingRef.current.get(destExitDwellKey)!;
-                const exitMinutes = (timestamp.getTime() - exitStart.getTime()) / (1000 * 60);
+                const exitMinutes = (nowTs.getTime() - exitStart.wall.getTime()) / (1000 * 60);
                 if (exitMinutes >= 10) {
                   processedEventsRef.current.add(depEventKey);
                   console.log(`[Geofence ExitDwell] In-transit load ${load.load_id}: vehicle outside destination ${destinationDepot.name} for ${exitMinutes.toFixed(1)}min — auto-firing offloading_departure`);
                   geofenceUpdateMutation.mutate({
                     loadId: load.id,
                     eventType: "offloading_departure" as GeofenceEventType,
-                    timestamp: exitStart,
+                    timestamp: exitStart.fix,
                     ...eventCtx,
                     geofenceName: destinationDepot.name,
                     onDeliveryComplete: () => {
@@ -829,7 +870,10 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
       mutareInsideRef.current.set(vehicleKey, isInside);
 
       const eventType = isInside ? "depot_entry" : "depot_exit";
-      const timestamp = new Date();
+      const timestamp = new Date(); // wall clock — dedupe only
+      // Record the GPS fix time (falls back to wall clock) so the logged event
+      // time reflects when the vehicle was physically at the depot.
+      const eventTimeTs = getAssetFixTime(asset) ?? timestamp;
       const vehicleReg = asset.registrationNumber || asset.name || vehicleKey;
       // Dedupe across re-renders within the same minute (telematics poll runs every 10s)
       const dedupeKey = `${vehicleKey}-${eventType}-${timestamp.toISOString().slice(0, 16)}`;
@@ -848,7 +892,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
           geofence_name: mutareDepot.name,
           latitude: asset.lastLatitude,
           longitude: asset.lastLongitude,
-          event_time: timestamp.toISOString(),
+          event_time: eventTimeTs.toISOString(),
           source: "auto-depot-monitor",
         })
         .then(({ error }: { error: unknown }) => {
@@ -859,11 +903,11 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
 
       if (isInside) {
         toast.success(`${vehicleReg} entered Mutare Depot`, {
-          description: `Arrived at ${timestamp.toLocaleTimeString()}`,
+          description: `Arrived at ${eventTimeTs.toLocaleTimeString()}`,
         });
       } else {
         toast.info(`${vehicleReg} left Mutare Depot`, {
-          description: `Departed at ${timestamp.toLocaleTimeString()}`,
+          description: `Departed at ${eventTimeTs.toLocaleTimeString()}`,
         });
       }
     }

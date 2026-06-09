@@ -626,7 +626,12 @@ serve(async (req: Request) => {
           speedKmH: assetPosition.SpeedKmH ?? assetPosition.speedKmH ?? 0,
           inTrip: assetPosition.InTrip ?? assetPosition.inTrip ?? false,
           isEnabled: assetPosition.IsEnabled ?? assetPosition.isEnabled ?? true,
-          lastConnectedUtc: assetPosition.LastConnectedUtc || assetPosition.lastConnectedUtc || new Date().toISOString(),
+          // Preserve the real device timestamps so downstream geofence logic can
+          // stamp arrivals/departures from the GPS fix time. Do NOT default these
+          // to `now` — a null tells the consumer there is no usable fix time so it
+          // can fall back explicitly instead of silently recording the wrong time.
+          lastPositionUtc: assetPosition.LastPositionUtc ?? assetPosition.lastPositionUtc ?? null,
+          lastConnectedUtc: assetPosition.LastConnectedUtc ?? assetPosition.lastConnectedUtc ?? null,
         };
 
         return sendSuccess(normalizedAsset);

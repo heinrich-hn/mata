@@ -45,10 +45,10 @@ async function getSystemToken(): Promise<string | null> {
     }
 
     const data = await response.json();
-    
+
     systemToken = data.access_token;
     systemTokenExpiry = Date.now() + ((data.expires_in || 3600) * 1000) - 60000;
-    
+
     return systemToken;
   } catch (error) {
     console.error('System auth error:', error);
@@ -60,23 +60,40 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   const R = 6371; // Earth's radius in km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+/**
+ * Resolve the GPS fix time for an asset position. Prefers the position fix time,
+ * falls back to the cellular check-in time, and only then to processing time.
+ * Rejects unparseable values and timestamps more than 2 minutes in the future
+ * (bad device/clock data) so we never record an event "ahead of now".
+ */
+function resolveFixTime(positionUtc?: string, connectedUtc?: string): string {
+  for (const raw of [positionUtc, connectedUtc]) {
+    if (!raw) continue;
+    const t = Date.parse(raw);
+    if (isNaN(t)) continue;
+    if (t > Date.now() + 120_000) continue;
+    return new Date(t).toISOString();
+  }
+  return new Date().toISOString();
 }
 
 async function checkAssetGeofenceStatus(
   assetId: number,
   geofences: any[],
   supabase: any
-): Promise<Array<{ geofenceId: number; geofenceName: string; event: 'entry' | 'exit' }>> {
+): Promise<Array<{ geofenceId: number; geofenceName: string; event: 'entry' | 'exit'; fixTime: string }>> {
   const token = await getSystemToken();
   if (!token) return [];
 
-  const events: Array<{ geofenceId: number; geofenceName: string; event: 'entry' | 'exit' }> = [];
+  const events: Array<{ geofenceId: number; geofenceName: string; event: 'entry' | 'exit'; fixTime: string }> = [];
 
   try {
     // Get current asset position
@@ -91,11 +108,20 @@ async function checkAssetGeofenceStatus(
 
     const data = await response.json();
     const asset = data.Assets?.[0] || data;
-    
+
     const currentLat = asset.LastLatitude ?? asset.lastLatitude;
     const currentLng = asset.LastLongitude ?? asset.lastLongitude;
-    
+
     if (!currentLat || !currentLng) return [];
+
+    // Resolve the GPS fix time for this position. Prefer the position fix time,
+    // fall back to the cellular check-in, and only then to processing time. This
+    // is recorded as the actual arrival/departure so it reflects when the truck
+    // was physically there, not when this monitor ran.
+    const fixTime = resolveFixTime(
+      asset.LastPositionUtc ?? asset.lastPositionUtc,
+      asset.LastConnectedUtc ?? asset.lastConnectedUtc
+    );
 
     // Get last known position from database
     const { data: lastPosData } = await supabase
@@ -125,7 +151,7 @@ async function checkAssetGeofenceStatus(
       const geofenceLat = geofence.Latitude ?? geofence.latitude ?? geofence.centerLatitude;
       const geofenceLng = geofence.Longitude ?? geofence.longitude ?? geofence.centerLongitude;
       const radius = geofence.Radius ?? geofence.radius ?? 500; // Default 500m
-      
+
       if (!geofenceLat || !geofenceLng) continue;
 
       // Calculate current distance
@@ -146,9 +172,9 @@ async function checkAssetGeofenceStatus(
 
       // Detect transitions
       if (!wasInside && isInside) {
-        events.push({ geofenceId, geofenceName, event: 'entry' });
+        events.push({ geofenceId, geofenceName, event: 'entry', fixTime });
       } else if (wasInside && !isInside) {
-        events.push({ geofenceId, geofenceName, event: 'exit' });
+        events.push({ geofenceId, geofenceName, event: 'exit', fixTime });
       }
     }
 
@@ -166,7 +192,7 @@ serve(async (req: Request) => {
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    
+
     // Get all active loads with vehicles that have telematics asset IDs
     const { data: loads, error: loadsError } = await supabase
       .from('loads')
@@ -236,6 +262,7 @@ serve(async (req: Request) => {
       geofenceId: number;
       geofenceName: string;
       event: 'entry' | 'exit';
+      fixTime: string;
     }> = [];
 
     for (const load of loads) {
@@ -243,14 +270,15 @@ serve(async (req: Request) => {
       if (isNaN(assetId)) continue;
 
       const assetEvents = await checkAssetGeofenceStatus(assetId, geofences, supabase);
-      
+
       for (const event of assetEvents) {
         allEvents.push({
           loadId: load.id,
           assetId,
           geofenceId: event.geofenceId,
           geofenceName: event.geofenceName,
-          event: event.event
+          event: event.event,
+          fixTime: event.fixTime
         });
       }
     }
@@ -266,49 +294,51 @@ serve(async (req: Request) => {
       if (event.event === 'entry') {
         // Check if this is origin or destination
         const isOrigin = load.origin?.toLowerCase().includes(event.geofenceName.toLowerCase()) ||
-                        event.geofenceName.toLowerCase().includes(load.origin?.toLowerCase() || '');
+          event.geofenceName.toLowerCase().includes(load.origin?.toLowerCase() || '');
         const isDestination = load.destination?.toLowerCase().includes(event.geofenceName.toLowerCase()) ||
-                             event.geofenceName.toLowerCase().includes(load.destination?.toLowerCase() || '');
+          event.geofenceName.toLowerCase().includes(load.destination?.toLowerCase() || '');
 
         if (isOrigin && load.status !== 'loading') {
           await supabase
             .from('loads')
-            .update({ 
+            .update({
               status: 'loading',
               updated_at: new Date().toISOString()
             })
             .eq('id', load.id);
-          
+
           console.log(`Load ${load.load_id} arrived at origin: ${event.geofenceName}`);
         } else if (isDestination && load.status !== 'offloading') {
           await supabase
             .from('loads')
-            .update({ 
+            .update({
               status: 'offloading',
               updated_at: new Date().toISOString()
             })
             .eq('id', load.id);
-          
+
           console.log(`Load ${load.load_id} arrived at destination: ${event.geofenceName}`);
         }
       } else if (event.event === 'exit') {
         // Special handling for BV origin
-        if (event.geofenceName.includes('BV') && 
-            load.origin?.includes('BV') && 
-            load.status === 'loading') {
+        if (event.geofenceName.includes('BV') &&
+          load.origin?.includes('BV') &&
+          load.status === 'loading') {
           await supabase
             .from('loads')
-            .update({ 
+            .update({
               status: 'in-transit',
               updated_at: new Date().toISOString()
             })
             .eq('id', load.id);
-          
+
           console.log(`Load ${load.load_id} departed from BV origin, now in-transit`);
         }
       }
 
-      // Record the event
+      // Record the event. `timestamp` is the GPS fix time (when the truck was
+      // physically at the geofence), while `updated_at` on loads stays as the
+      // processing time since it is row-update metadata, not the event time.
       await supabase
         .from('geofence_events')
         .insert({
@@ -317,16 +347,16 @@ serve(async (req: Request) => {
           geofence_id: event.geofenceId,
           geofence_name: event.geofenceName,
           event_type: event.event,
-          timestamp: new Date().toISOString(),
-          metadata: { detected_by: 'monitor' }
+          timestamp: event.fixTime,
+          metadata: { detected_by: 'monitor', fix_time: event.fixTime }
         });
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         loads_checked: loads.length,
-        events_detected: allEvents.length 
+        events_detected: allEvents.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
