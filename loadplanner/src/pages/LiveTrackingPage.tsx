@@ -1,5 +1,6 @@
 import { TripHistoryDialog } from "@/components/tracking/TripHistoryDialog";
 import { MovementReportDialog } from "@/components/tracking/MovementReportDialog";
+import { FleetAnalyticsDialog } from "@/components/tracking/FleetAnalyticsDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -507,6 +508,7 @@ export default function LiveTrackingPage() {
   const trailsRef = useRef<Map<number, { lat: number; lng: number; speed: number }[]>>(new Map());
   const [showRouteCalculator, setShowRouteCalculator] = useState(false);
   const [showReportDialog, setShowReportDialog] = useState(false);
+  const [showAnalyticsDialog, setShowAnalyticsDialog] = useState(false);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(
     null,
@@ -628,6 +630,55 @@ export default function LiveTrackingPage() {
     }
   }, [assets]);
 
+  // -------------------------------------------------------------------------
+  // Geofence entry/exit alerts — compares each vehicle's inside-geofence set
+  // between refreshes and toasts on changes. First poll only establishes the
+  // baseline so we don't spam alerts on page load.
+  // -------------------------------------------------------------------------
+  const insideGeofencesRef = useRef<Map<number, Set<number>> | null>(null);
+  useEffect(() => {
+    if (assets.length === 0 || geofences.length === 0) return;
+
+    const current = new Map<number, Set<number>>();
+    for (const a of assets) {
+      if (a.lastLatitude == null || a.lastLongitude == null) continue;
+      const inside = new Set<number>();
+      for (const g of geofences) {
+        const lat = g.latitude ?? g.centerLatitude ?? g.lat;
+        const lng = g.longitude ?? g.centerLongitude ?? g.lng;
+        if (!lat || !lng) continue;
+        const radiusKm = (g.radius || 500) / 1000;
+        if (calculateDistance(a.lastLatitude, a.lastLongitude, lat, lng) <= radiusKm) {
+          inside.add(g.id);
+        }
+      }
+      current.set(a.id, inside);
+    }
+
+    const prev = insideGeofencesRef.current;
+    if (prev) {
+      for (const a of assets) {
+        const before = prev.get(a.id);
+        const now = current.get(a.id);
+        if (!before || !now) continue;
+        const name = a.name || a.code || `Vehicle ${a.id}`;
+        for (const gid of now) {
+          if (!before.has(gid)) {
+            const g = geofences.find((x) => x.id === gid);
+            if (g) toast.info(`🟢 ${name} entered ${g.name}`);
+          }
+        }
+        for (const gid of before) {
+          if (!now.has(gid)) {
+            const g = geofences.find((x) => x.id === gid);
+            if (g) toast.info(`🔴 ${name} left ${g.name}`);
+          }
+        }
+      }
+    }
+    insideGeofencesRef.current = current;
+  }, [assets, geofences]);
+
   const assetToLoadMap = useMemo(() => {
     const map = new Map<string | number, ActiveLoadForTracking>();
     activeLoads.forEach((load) => {
@@ -744,6 +795,28 @@ export default function LiveTrackingPage() {
     () => geofences.find((g) => g.id === selectedGeofenceId),
     [geofences, selectedGeofenceId],
   );
+
+  // Proximity search: rank online vehicles by distance to the selected
+  // destination geofence.
+  const nearestVehicles = useMemo(() => {
+    if (!selectedGeofence) return [];
+    const lat = selectedGeofence.latitude ?? selectedGeofence.centerLatitude ?? selectedGeofence.lat;
+    const lng = selectedGeofence.longitude ?? selectedGeofence.centerLongitude ?? selectedGeofence.lng;
+    if (!lat || !lng) return [];
+    return assets
+      .filter(
+        (a) =>
+          a.lastLatitude != null &&
+          a.lastLongitude != null &&
+          getVehicleStatus(a) !== "offline",
+      )
+      .map((a) => ({
+        asset: a,
+        distance: calculateDistance(a.lastLatitude!, a.lastLongitude!, lat, lng),
+      }))
+      .sort((x, y) => x.distance - y.distance)
+      .slice(0, 5);
+  }, [assets, selectedGeofence]);
 
   useEffect(() => {
     if (!selectedVehicle || !selectedGeofence) {
@@ -911,6 +984,18 @@ export default function LiveTrackingPage() {
                     Report
                   </Button>
                   <Button
+                    variant="outline"
+                    onClick={() => setShowAnalyticsDialog(true)}
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    title="Fleet utilization & dwell-time analytics"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6m4 6V9m4 10V5M5 19h14" />
+                    </svg>
+                    Analytics
+                  </Button>
+                  <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => setShowSettingsDialog(true)}
@@ -1031,6 +1116,45 @@ export default function LiveTrackingPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Proximity search — nearest vehicles to selected destination */}
+                {selectedGeofence && !selectedVehicleId && nearestVehicles.length > 0 && (
+                  <div className="mt-4 rounded-lg border bg-muted/20 p-3">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      Nearest vehicles to {selectedGeofence.name}
+                    </div>
+                    <div className="space-y-1">
+                      {nearestVehicles.map(({ asset, distance }, i) => {
+                        const status = getVehicleStatus(asset);
+                        return (
+                          <button
+                            key={asset.id}
+                            onClick={() => {
+                              setSelectedVehicleId(asset.id);
+                              handleVehicleClick(asset);
+                            }}
+                            className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md hover:bg-background border border-transparent hover:border-border text-left transition-colors"
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <span className="text-[10px] font-bold text-muted-foreground w-4">#{i + 1}</span>
+                              <span
+                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                style={{ background: STATUS_COLOR[status] }}
+                              />
+                              <span className="text-xs font-medium truncate">
+                                {asset.name || asset.code || `Vehicle ${asset.id}`}
+                              </span>
+                            </span>
+                            <span className="text-xs tabular-nums text-muted-foreground whitespace-nowrap">
+                              {formatDistance(distance)}
+                              {status === "moving" && ` · ${Math.round(asset.speedKmH)} km/h`}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {(selectedVehicleId || selectedGeofenceId) && (
                   <div className="mt-4 flex justify-end">
@@ -1704,6 +1828,13 @@ export default function LiveTrackingPage() {
           open={showReportDialog}
           onOpenChange={setShowReportDialog}
           geofences={geofences}
+        />
+
+        {/* Fleet Analytics Dialog */}
+        <FleetAnalyticsDialog
+          open={showAnalyticsDialog}
+          onOpenChange={setShowAnalyticsDialog}
+          organisationId={organisationId ? parseInt(organisationId) : null}
         />
       </div>
     </>
