@@ -79,16 +79,22 @@ function createVehicleIcon(asset: TelematicsAsset): L.DivIcon {
     const html = `
       <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;position:relative;">
         <div style="
-          position:absolute;width:32px;height:32px;background:rgba(22,163,74,0.3);
+          position:absolute;width:32px;height:32px;background:rgba(16,185,129,0.3);
           border-radius:50%;animation:pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         "></div>
         <div style="
           width:36px;height:36px;display:flex;align-items:center;justify-content:center;
           transform:rotate(${rotation}deg);transform-origin:center;
-          filter:drop-shadow(0 4px 6px rgba(0,0,0,0.3));z-index:10;
+          filter:drop-shadow(0 3px 6px rgba(5,150,105,0.45));z-index:10;
         ">
           <svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L21 21L12 17L3 21Z" fill="#16a34a" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="vtd-moving-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#34d399"/>
+                <stop offset="100%" stop-color="#059669"/>
+              </linearGradient>
+            </defs>
+            <path d="M12 2L21 21L12 17L3 21Z" fill="url(#vtd-moving-grad)" stroke="white" stroke-width="2" stroke-linejoin="round"/>
           </svg>
         </div>
         <style>
@@ -105,12 +111,14 @@ function createVehicleIcon(asset: TelematicsAsset): L.DivIcon {
     });
   }
 
-  // Stationary: solid red dot with subtle white border
+  // Stationary: gradient red dot with soft glow ring
   const html = `
     <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
       <div style="
-        width:18px;height:18px;border-radius:50%;background:#ef4444;
-        border:3px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.4);
+        width:18px;height:18px;border-radius:50%;
+        background:linear-gradient(135deg,#f87171,#dc2626);
+        border:3px solid white;
+        box-shadow:0 0 0 2px rgba(220,38,38,0.18), 0 3px 8px rgba(15,23,42,0.3);
       "></div>
     </div>
   `;
@@ -375,46 +383,46 @@ export function VehicleTrackingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 gap-0 overflow-hidden shadow-2xl">
+      <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl shadow-2xl">
         {/* Header Section */}
-        <DialogHeader className="p-6 pb-4 border-b bg-muted/20">
+        <DialogHeader className="p-5 pb-4 border-b bg-gradient-to-r from-primary/5 via-background to-background">
           <div className="flex items-start gap-3 pr-8">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/20 shadow-sm">
               <Radio className="w-5 h-5 animate-pulse" />
             </div>
             <div className="space-y-1 text-left">
-              <DialogTitle className="text-xl">
+              <DialogTitle className="text-lg font-semibold tracking-tight">
                 Live Tracking: {load?.load_id}
               </DialogTitle>
-              <DialogDescription className="text-base font-medium">
+              <DialogDescription className="text-sm font-medium">
                 {load?.fleet_vehicle?.vehicle_id || 'Unknown Vehicle'} • {load?.origin} → {load?.destination}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="flex-1 flex flex-col p-6 bg-background gap-5 overflow-y-auto">
+        <div className="flex-1 flex flex-col p-5 bg-background gap-4 overflow-y-auto">
           {/* Controls & Status Bar */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               {asset ? (
-                <div className="flex items-center gap-3 px-3 py-1.5 bg-background border rounded-lg shadow-sm">
+                <div className="flex items-center gap-3 px-3.5 py-1.5 bg-background border rounded-full shadow-sm">
                   <div className="relative flex h-3 w-3 items-center justify-center">
                     {isMoving && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     )}
-                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isMoving ? 'bg-green-600' : 'bg-red-500'}`}></span>
+                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isMoving ? 'bg-gradient-to-br from-emerald-400 to-emerald-600' : 'bg-gradient-to-br from-red-400 to-red-600'}`}></span>
                   </div>
                   <span className="text-sm font-semibold tracking-tight text-foreground">
                     {isMoving ? 'In Transit' : 'Stationary'}
                   </span>
                   <div className="flex items-center gap-2 pl-3 border-l text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">{asset.speedKmH} km/h</span>
+                    <span className="font-medium text-foreground tabular-nums">{asset.speedKmH} km/h</span>
                     {isMoving && <span>• {getHeadingDirection(asset.heading || 0)}</span>}
                   </div>
                 </div>
               ) : (
-                <div className="h-9 w-48 bg-muted rounded-lg animate-pulse" />
+                <div className="h-9 w-48 bg-muted rounded-full animate-pulse" />
               )}
 
               {lastUpdate && (
@@ -507,7 +515,7 @@ export function VehicleTrackingDialog({
           </div>
 
           {/* Map Container */}
-          <div className="flex-1 rounded-xl overflow-hidden border shadow-inner relative z-0 min-h-[300px]">
+          <div className="flex-1 rounded-xl overflow-hidden border shadow-md relative z-0 min-h-[380px]">
             {!telematicsAssetId ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/40 z-10">
                 <div className="bg-background p-6 rounded-lg shadow-sm border text-center max-w-sm">
@@ -533,7 +541,7 @@ export function VehicleTrackingDialog({
             >
               <TileLayer
                 url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                attribution='&copy; <a href="https://carto.com/">Carto</a>'
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">Carto</a>'
               />
               {asset?.lastLatitude && asset?.lastLongitude && (
                 <Marker position={[asset.lastLatitude, asset.lastLongitude]} icon={createVehicleIcon(asset)}>
@@ -548,7 +556,7 @@ export function VehicleTrackingDialog({
                         <div className="flex justify-between items-center"><span className="text-muted-foreground">Speed:</span> <span className="font-medium">{asset.speedKmH} km/h</span></div>
                         <div className="flex justify-between items-center"><span className="text-muted-foreground">Heading:</span> <span className="font-medium">{getHeadingDirection(asset.heading || 0)}</span></div>
                         <div className="flex justify-between items-center"><span className="text-muted-foreground">Status:</span>
-                          <span className={isMoving ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold'}>
+                          <span className={isMoving ? 'text-emerald-600 font-semibold' : 'text-red-500 font-semibold'}>
                             {isMoving ? 'Moving' : 'Stationary'}
                           </span>
                         </div>
@@ -566,10 +574,10 @@ export function VehicleTrackingDialog({
 
           {/* Footer Details */}
           {load && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-sm bg-muted/40 border rounded-lg px-4 py-3 gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-sm bg-gradient-to-r from-muted/50 to-muted/30 border rounded-xl px-4 py-3 gap-3">
               <div className="flex items-center gap-3 font-medium">
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-green-600" />
+                  <MapPin className="w-4 h-4 text-emerald-600" />
                   <span className="truncate max-w-[150px] sm:max-w-[200px]">{getLocationDisplayName(load.origin)}</span>
                 </div>
                 <Navigation className="w-3.5 h-3.5 text-muted-foreground/50 rotate-90" />
@@ -578,7 +586,7 @@ export function VehicleTrackingDialog({
                   <span className="truncate max-w-[150px] sm:max-w-[200px]">{getLocationDisplayName(load.destination)}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1 bg-background rounded-md border shadow-sm text-xs font-semibold text-muted-foreground">
+              <div className="flex items-center gap-2 px-3 py-1 bg-background rounded-full border shadow-sm text-xs font-semibold text-muted-foreground">
                 <Truck className="w-3.5 h-3.5" />
                 Driver: <span className="text-foreground">{load.driver?.name || 'Unassigned'}</span>
               </div>

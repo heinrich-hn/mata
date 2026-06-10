@@ -1037,6 +1037,110 @@
   }
 }
 
+/* Soft expanding pulse ring rendered behind moving-vehicle markers */
+.fleet-marker-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  pointer-events: none;
+  animation: fleet-pulse 2s ease-out infinite;
+}
+
+/* Selection halo behind the active vehicle marker */
+.fleet-marker-halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46px;
+  height: 46px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  border: 2px solid rgba(79, 70, 229, 0.65);
+  background: rgba(79, 70, 229, 0.12);
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.35);
+  pointer-events: none;
+}
+
+/* Glide vehicle markers between position updates (disabled mid-zoom so
+   Leaflet's zoom transforms aren't animated) */
+.leaflet-marker-icon.fleet-vehicle-marker-wrapper {
+  transition: transform 1s linear;
+}
+
+.leaflet-zoom-anim .leaflet-marker-icon.fleet-vehicle-marker-wrapper {
+  transition: none;
+}
+
+/* Popup entrance animation (on the inner wrapper — Leaflet positions the
+   outer .leaflet-popup with its own transform) */
+.leaflet-popup-content-wrapper {
+  animation: fleet-popup-in 0.18s ease-out;
+}
+
+@keyframes fleet-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Flowing dashed route line + marching active geofence border */
+.fleet-route-flow {
+  animation: fleet-route-dash 1.2s linear infinite;
+}
+
+.fleet-geofence-active {
+  animation: fleet-route-dash 2.4s linear infinite;
+}
+
+@keyframes fleet-route-dash {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+/* Shimmering map skeleton while first tiles/assets load */
+.fleet-map-skeleton {
+  background: linear-gradient(110deg, #e2e8f0 8%, #f1f5f9 18%, #e2e8f0 33%);
+  background-size: 200% 100%;
+  animation: fleet-shimmer 1.4s linear infinite;
+}
+
+@keyframes fleet-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fleet-marker-pulse {
+    animation: none;
+    opacity: 0;
+  }
+
+  .fleet-route-flow,
+  .fleet-geofence-active,
+  .fleet-map-skeleton {
+    animation: none;
+  }
+
+  .leaflet-marker-icon.fleet-vehicle-marker-wrapper {
+    transition: none;
+  }
+
+  .leaflet-popup-content-wrapper {
+    animation: none;
+  }
+}
+
 /* Leaflet popup refinements */
 .leaflet-popup-content-wrapper {
   border-radius: 10px !important;

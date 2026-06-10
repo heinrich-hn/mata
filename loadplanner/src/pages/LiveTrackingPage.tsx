@@ -1,7 +1,7 @@
 import { TripHistoryDialog } from "@/components/tracking/TripHistoryDialog";
 import { MovementReportDialog } from "@/components/tracking/MovementReportDialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -55,6 +55,7 @@ import {
   TileLayer,
   Tooltip,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import { toast } from "sonner";
 
@@ -202,6 +203,8 @@ function createVehicleIcon(
   hasActiveLoad = false,
   fleetNumber?: string | null,
   driverName?: string | null,
+  labelMode: "full" | "compact" = "full",
+  selected = false,
 ): L.DivIcon {
   const status = getVehicleStatus(asset);
   const rotation = asset.heading || 0;
@@ -212,70 +215,92 @@ function createVehicleIcon(
   let glyphW = 28;
   let glyphH = 28;
 
+  // Unique gradient id per asset — duplicate SVG ids across markers break
+  // gradient rendering in some browsers.
+  const gradId = `fleet-vg-${asset.id}`;
+
   if (status === "moving") {
-    // Green triangle pointing in direction of travel
+    // Emerald gradient triangle pointing in direction of travel, with a
+    // soft expanding pulse ring behind it.
     inner = `
       <div style="
-        width:30px;height:30px;
+        position:relative;
+        width:32px;height:32px;
         display:flex;align-items:center;justify-content:center;
-        transform:rotate(${rotation}deg);
-        transform-origin:center;
-        filter:drop-shadow(0 1px 2px rgba(0,0,0,0.18));
       ">
-        <svg viewBox="0 0 24 24" width="26" height="26" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2 L21 21 L12 17 L3 21 Z" fill="${STATUS_COLOR.moving}" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>
-        </svg>
+        <span class="fleet-marker-pulse" style="background:${STATUS_COLOR.moving};"></span>
+        <div style="
+          width:30px;height:30px;
+          display:flex;align-items:center;justify-content:center;
+          transform:rotate(${rotation}deg);
+          transform-origin:center;
+          filter:drop-shadow(0 2px 4px rgba(5,150,105,0.45));
+        ">
+          <svg viewBox="0 0 24 24" width="27" height="27" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#34d399"/>
+                <stop offset="100%" stop-color="#059669"/>
+              </linearGradient>
+            </defs>
+            <path d="M12 2 L21 21 L12 17 L3 21 Z" fill="url(#${gradId})" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </div>
       </div>`;
-    glyphW = 30;
-    glyphH = 30;
+    glyphW = 32;
+    glyphH = 32;
   } else if (status === "idle") {
-    // Orange parallel bars
+    // Amber gradient parallel bars
     inner = `
       <div style="
         width:24px;height:24px;
         display:flex;align-items:center;justify-content:center;gap:3px;
-        filter:drop-shadow(0 1px 2px rgba(0,0,0,0.18));
+        filter:drop-shadow(0 2px 3px rgba(217,119,6,0.4));
       ">
-        <span style="display:block;width:5px;height:18px;background:${STATUS_COLOR.idle};border-radius:1.5px;border:1px solid rgba(255,255,255,0.85);"></span>
-        <span style="display:block;width:5px;height:18px;background:${STATUS_COLOR.idle};border-radius:1.5px;border:1px solid rgba(255,255,255,0.85);"></span>
+        <span style="display:block;width:6px;height:18px;background:linear-gradient(180deg,#fbbf24,#d97706);border-radius:3px;border:1px solid rgba(255,255,255,0.9);"></span>
+        <span style="display:block;width:6px;height:18px;background:linear-gradient(180deg,#fbbf24,#d97706);border-radius:3px;border:1px solid rgba(255,255,255,0.9);"></span>
       </div>`;
   } else {
-    // Offline: solid gray square
+    // Offline: muted slate gradient rounded square
     inner = `
       <div style="
         width:18px;height:18px;
-        background:${STATUS_COLOR.offline};
-        border:2px solid white;border-radius:2px;
-        box-shadow:0 1px 3px rgba(0,0,0,0.18);
+        background:linear-gradient(180deg,#94a3b8,#64748b);
+        border:2px solid white;border-radius:5px;
+        box-shadow:0 2px 4px rgba(15,23,42,0.25);
       "></div>`;
     glyphW = 22;
     glyphH = 22;
   }
 
-  // Always-on label: "Fleet # · Driver". Falls back gracefully when either
-  // piece of data is missing so we don't render an empty pill.
+  // Always-on label: "Fleet # · Driver" when zoomed in, fleet number only
+  // when zoomed out (compact mode) to reduce clutter. Falls back gracefully
+  // when either piece of data is missing so we don't render an empty pill.
   const truncate = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
   const fleetLabel = fleetNumber
     ? truncate(fleetNumber.trim(), 10)
     : truncate((asset.name || asset.code || `#${asset.id}`).trim(), 10);
-  const driverLabel = driverName ? truncate(driverName.trim(), 18) : "";
+  const driverLabel = labelMode === "full" && driverName ? truncate(driverName.trim(), 18) : "";
   const labelText = driverLabel ? `${fleetLabel} · ${driverLabel}` : fleetLabel;
   const labelHtml = `
     <div style="
-      margin-top:2px;
-      max-width:160px;
-      padding:1px 5px;
-      background:rgba(15,23,42,0.78);
+      margin-top:3px;
+      max-width:${labelMode === "full" ? 160 : 96}px;
+      padding:2px 8px;
+      background:linear-gradient(135deg,rgba(30,41,59,0.92),rgba(15,23,42,0.86));
+      backdrop-filter:blur(4px);
       color:white;
       font-size:10px;
       font-weight:600;
+      letter-spacing:0.01em;
       line-height:1.25;
-      border-radius:3px;
+      border-radius:9999px;
+      border:1px solid rgba(255,255,255,0.14);
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
       font-family:system-ui,-apple-system,sans-serif;
-      box-shadow:0 1px 2px rgba(0,0,0,0.18);
+      box-shadow:0 2px 6px rgba(15,23,42,0.3);
       pointer-events:none;
     ">${escapeHtml(labelText)}</div>
   `;
@@ -283,9 +308,10 @@ function createVehicleIcon(
   // Marker total size: glyph width vs label max width (160px), plus label
   // height + spacing below the glyph. Anchor stays on the glyph centre so
   // the position pin stays accurate regardless of label length.
-  const labelHeight = 16; // 10px font + 1px*2 padding + small breathing room
-  const labelGap = 2;
-  const totalW = Math.max(glyphW, 160);
+  const labelHeight = 19; // 10px font + 2px*2 padding + border + breathing room
+  const labelGap = 3;
+  const labelMaxW = labelMode === "full" ? 160 : 96;
+  const totalW = Math.max(glyphW, labelMaxW);
   const totalH = glyphH + labelGap + labelHeight;
   const anchorX = totalW / 2;
   const anchorY = glyphH / 2;
@@ -297,13 +323,15 @@ function createVehicleIcon(
       display:flex;flex-direction:column;align-items:center;
     ">
       <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+        ${selected ? '<span class="fleet-marker-halo"></span>' : ""}
         ${inner}
         ${hasActiveLoad ? `
           <div style="
             position:absolute;top:-2px;right:-2px;
-            width:9px;height:9px;border-radius:50%;
-            background:#4f46e5;border:1.5px solid white;
-            box-shadow:0 0 0 1px rgba(79,70,229,0.3);
+            width:10px;height:10px;border-radius:50%;
+            background:linear-gradient(135deg,#818cf8,#4f46e5);
+            border:1.5px solid white;
+            box-shadow:0 0 0 2px rgba(79,70,229,0.25), 0 1px 3px rgba(79,70,229,0.4);
             z-index:5;
           "></div>` : ''}
       </div>
@@ -325,19 +353,24 @@ function createVehicleIcon(
 // identical on the map; the `type` argument is preserved for the call site
 // signature but no longer changes the visual.
 const PIN_SVG = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="32" viewBox="0 0 22 32" fill="none">
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 22 32" fill="none">
     <defs>
-      <linearGradient id="pinFill" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#3b82f6"/>
+      <linearGradient id="pinFill" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#60a5fa"/>
+        <stop offset="55%" stop-color="#3b82f6"/>
         <stop offset="100%" stop-color="#1d4ed8"/>
       </linearGradient>
+      <radialGradient id="pinDot" cx="0.35" cy="0.35" r="1">
+        <stop offset="0%" stop-color="#ffffff"/>
+        <stop offset="100%" stop-color="#dbeafe"/>
+      </radialGradient>
     </defs>
     <path d="M11 1 C5.477 1 1 5.477 1 11 c0 7.5 10 20 10 20 s10 -12.5 10 -20 C21 5.477 16.523 1 11 1 z"
           fill="url(#pinFill)"
           stroke="#ffffff"
           stroke-width="1.4"
           stroke-linejoin="round"/>
-    <circle cx="11" cy="11" r="3.6" fill="#ffffff"/>
+    <circle cx="11" cy="11" r="3.6" fill="url(#pinDot)"/>
   </svg>
 `;
 
@@ -346,15 +379,15 @@ function createPinIcon(): L.DivIcon {
     html: `
       <div class="fleet-location-pin" style="
         position:relative;display:flex;flex-direction:column;align-items:center;
-        filter:drop-shadow(0 2px 3px rgba(0,0,0,0.25));
+        filter:drop-shadow(0 3px 5px rgba(29,78,216,0.35));
       ">
         ${PIN_SVG}
       </div>
     `,
     className: "fleet-location-pin-wrapper",
-    iconSize: [22, 32],
-    iconAnchor: [11, 32], // tip of the pin
-    popupAnchor: [0, -28],
+    iconSize: [24, 34],
+    iconAnchor: [12, 34], // tip of the pin
+    popupAnchor: [0, -30],
   });
 }
 
@@ -405,6 +438,42 @@ function FlyToVehicle({ target }: { target: { lat: number; lng: number } | null 
   return null;
 }
 
+// Reports the current zoom level so markers can hide labels when zoomed out.
+function ZoomWatcher({ onZoom }: { onZoom: (zoom: number) => void }) {
+  const map = useMapEvents({
+    zoomend: () => onZoom(map.getZoom()),
+  });
+  useEffect(() => {
+    onZoom(map.getZoom());
+  }, [map, onZoom]);
+  return null;
+}
+
+// Below this zoom the marker label collapses to fleet number only.
+const LABEL_MIN_ZOOM = 8;
+
+// Basemap options for the in-map layer switcher.
+const BASEMAPS = {
+  voyager: {
+    label: "Map",
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">Carto</a>',
+  },
+  dark: {
+    label: "Dark",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">Carto</a>',
+  },
+  satellite: {
+    label: "Satellite",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+  },
+} as const;
+type BasemapKey = keyof typeof BASEMAPS;
+
 type SidebarFilter = "all" | "moving" | "idle" | "offline" | "loaded";
 
 // ============================================================================
@@ -427,6 +496,15 @@ export default function LiveTrackingPage() {
   const [showDepots, setShowDepots] = useState(true);
   const { data: customLocations = [] } = useCustomLocations();
   const [maximizeMap, setMaximizeMap] = useState(false);
+  const [basemap, setBasemap] = useState<BasemapKey>(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "voyager",
+  );
+  const [zoomLevel, setZoomLevel] = useState(7);
+  const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null);
+  // Short client-side breadcrumb history per vehicle (position + speed).
+  const trailsRef = useRef<Map<number, { lat: number; lng: number; speed: number }[]>>(new Map());
   const [showRouteCalculator, setShowRouteCalculator] = useState(false);
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
@@ -535,6 +613,21 @@ export default function LiveTrackingPage() {
     }
   }, [authenticated, organisationId]);
 
+  // Accumulate breadcrumb trails so we can draw recent movement and speed
+  // sparklines without needing a history API.
+  useEffect(() => {
+    for (const a of assets) {
+      if (a.lastLatitude == null || a.lastLongitude == null) continue;
+      const hist = trailsRef.current.get(a.id) ?? [];
+      const last = hist[hist.length - 1];
+      if (!last || last.lat !== a.lastLatitude || last.lng !== a.lastLongitude) {
+        hist.push({ lat: a.lastLatitude, lng: a.lastLongitude, speed: a.speedKmH || 0 });
+        if (hist.length > 30) hist.shift();
+        trailsRef.current.set(a.id, hist);
+      }
+    }
+  }, [assets]);
+
   const assetToLoadMap = useMemo(() => {
     const map = new Map<string | number, ActiveLoadForTracking>();
     activeLoads.forEach((load) => {
@@ -601,6 +694,7 @@ export default function LiveTrackingPage() {
 
   // Fly to vehicle on sidebar click, then open popup
   const handleVehicleClick = useCallback((asset: TelematicsAsset) => {
+    setSelectedAssetId(asset.id);
     if (asset.lastLatitude != null && asset.lastLongitude != null) {
       setFlyTarget({ lat: asset.lastLatitude, lng: asset.lastLongitude });
       // Open popup after fly animation
@@ -773,7 +867,7 @@ export default function LiveTrackingPage() {
 
   return (
     <>
-      <div className="p-6 space-y-6">
+      <div className="p-4 space-y-4">
         {/* Connect prompt when not authenticated */}
         {!authenticated && (
           <div className="flex items-center justify-end">
@@ -786,13 +880,10 @@ export default function LiveTrackingPage() {
         {/* ETA Calculator Card - Professional Design */}
         {authenticated && !maximizeMap && (
           <Card className="border shadow-sm">
-            <CardHeader className="pb-3">
+            <CardHeader className="py-2.5 px-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base font-medium">Route & ETA Calculator</CardTitle>
-                  <CardDescription className="text-xs">
-                    Calculate estimated arrival time for vehicles to destinations
-                  </CardDescription>
+                  <CardTitle className="text-sm font-medium">Route & ETA Calculator</CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -977,12 +1068,25 @@ export default function LiveTrackingPage() {
             className={
               maximizeMap
                 ? "fixed inset-0 z-[60] bg-white"
-                : "relative h-[calc(100vh-180px)] min-h-[640px] rounded-xl overflow-hidden border shadow-sm bg-slate-100"
+                : "relative h-[calc(100vh-120px)] min-h-[720px] rounded-2xl overflow-hidden border shadow-lg bg-slate-100"
             }
           >
             {/* Floating top-right map controls */}
             <div className="absolute top-4 right-4 z-[1000] flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white rounded-lg border shadow-sm px-1 py-1">
+              <div className="flex items-center gap-1 bg-white/85 backdrop-blur-md rounded-lg border shadow-sm px-1 py-1">
+                {(Object.keys(BASEMAPS) as BasemapKey[]).map((key) => (
+                  <Button
+                    key={key}
+                    variant={basemap === key ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setBasemap(key)}
+                    className="h-7 px-2.5 text-xs"
+                  >
+                    {BASEMAPS[key].label}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 bg-white/85 backdrop-blur-md rounded-lg border shadow-sm px-1 py-1">
                 <Button
                   variant={showDepots ? "default" : "ghost"}
                   size="sm"
@@ -1006,7 +1110,7 @@ export default function LiveTrackingPage() {
                 variant="outline"
                 size="icon"
                 onClick={() => setMaximizeMap((v) => !v)}
-                className="h-9 w-9 bg-white shadow-sm"
+                className="h-9 w-9 bg-white/85 backdrop-blur-md shadow-sm"
                 title={maximizeMap ? "Exit Full Screen" : "Full Screen"}
               >
                 {maximizeMap ? (
@@ -1021,6 +1125,26 @@ export default function LiveTrackingPage() {
               </Button>
             </div>
 
+            {/* Status legend — bottom, clear of the sidebar */}
+            <div className={`absolute bottom-4 ${assets.length > 0 ? "left-[372px]" : "left-4"} z-[1000] hidden sm:flex items-center gap-3 bg-white/85 backdrop-blur-md rounded-full border shadow-sm px-3 py-1.5 text-[11px] font-medium text-slate-600`}>
+              <span className="flex items-center gap-1.5">
+                <svg viewBox="0 0 24 24" width="11" height="11"><path d="M12 2 L21 21 L12 17 L3 21 Z" fill="#10b981" stroke="white" strokeWidth="1.4" strokeLinejoin="round" /></svg>
+                Moving
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-flex gap-[2px]"><span className="w-[3px] h-2.5 bg-amber-500 rounded-sm" /><span className="w-[3px] h-2.5 bg-amber-500 rounded-sm" /></span>
+                Idle
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 bg-slate-500 rounded-sm" />
+                Offline
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 ring-1 ring-indigo-200" />
+                On load
+              </span>
+            </div>
+
             {/* Last refresh stamp — bottom-right */}
             {lastRefresh && (
               <div className="absolute bottom-4 right-4 z-[1000] text-[11px] text-slate-600 bg-white/90 backdrop-blur rounded-md border shadow-sm px-2 py-1">
@@ -1029,9 +1153,7 @@ export default function LiveTrackingPage() {
             )}
 
             {loading && assets.length === 0 ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              </div>
+              <div className="absolute inset-0 fleet-map-skeleton" />
             ) : (
               <div className="absolute inset-0">
                 <MapContainer
@@ -1041,9 +1163,11 @@ export default function LiveTrackingPage() {
                   scrollWheelZoom
                 >
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://carto.com/">Carto</a>'
+                    key={basemap}
+                    url={BASEMAPS[basemap].url}
+                    attribution={BASEMAPS[basemap].attribution}
                   />
+                  <ZoomWatcher onZoom={setZoomLevel} />
 
                   {/* Geofences */}
                   {showGeofences &&
@@ -1052,12 +1176,28 @@ export default function LiveTrackingPage() {
                       const lng = geofence.longitude ?? geofence.centerLongitude ?? geofence.lng;
                       const radius = geofence.radius || 500;
                       if (!lat || !lng) return null;
+                      const isActiveDest = geofence.id === selectedGeofenceId;
                       return (
                         <Circle
                           key={geofence.id}
                           center={[lat, lng]}
                           radius={radius}
-                          pathOptions={{ color: "#7c3aed", fillColor: "#8b5cf6", fillOpacity: 0.06, weight: 1, dashArray: "4,4" }}
+                          pathOptions={{
+                            color: isActiveDest ? "#4f46e5" : "#7c3aed",
+                            fillColor: isActiveDest ? "#6366f1" : "#8b5cf6",
+                            fillOpacity: isActiveDest ? 0.12 : 0.06,
+                            weight: isActiveDest ? 2 : 1,
+                            dashArray: "4,4",
+                            className: isActiveDest ? "fleet-geofence-active" : undefined,
+                          }}
+                          eventHandlers={{
+                            mouseover: (e) => (e.target as L.Circle).setStyle({ fillOpacity: 0.18, weight: 2 }),
+                            mouseout: (e) =>
+                              (e.target as L.Circle).setStyle({
+                                fillOpacity: isActiveDest ? 0.12 : 0.06,
+                                weight: isActiveDest ? 2 : 1,
+                              }),
+                          }}
                         >
                           <Tooltip permanent={false} direction="top">
                             <div className="text-xs font-semibold tracking-tight">{geofence.name}</div>
@@ -1118,11 +1258,11 @@ export default function LiveTrackingPage() {
                     <>
                       <Polyline
                         positions={routeCoords}
-                        pathOptions={{ color: "#818cf8", weight: 5, opacity: 0.2, lineCap: "round", lineJoin: "round" }}
+                        pathOptions={{ color: "#818cf8", weight: 8, opacity: 0.18, lineCap: "round", lineJoin: "round" }}
                       />
                       <Polyline
                         positions={routeCoords}
-                        pathOptions={{ color: "#4f46e5", weight: 3, opacity: 0.8, dashArray: "8,6", lineCap: "round", lineJoin: "round" }}
+                        pathOptions={{ color: "#4f46e5", weight: 3.5, opacity: 0.85, dashArray: "8,6", lineCap: "round", lineJoin: "round", className: "fleet-route-flow" }}
                       >
                         <Tooltip permanent direction="center">
                           <div className="fleet-route-tooltip">
@@ -1140,6 +1280,18 @@ export default function LiveTrackingPage() {
 
                   <FlyToVehicle target={flyTarget} />
 
+                  {/* Breadcrumb trail for the selected vehicle */}
+                  {selectedAssetId != null && (() => {
+                    const hist = trailsRef.current.get(selectedAssetId) ?? [];
+                    if (hist.length < 2) return null;
+                    return (
+                      <Polyline
+                        positions={hist.map((p) => [p.lat, p.lng] as [number, number])}
+                        pathOptions={{ color: "#0ea5e9", weight: 3, opacity: 0.5, dashArray: "1,7", lineCap: "round", lineJoin: "round" }}
+                      />
+                    );
+                  })()}
+
                   {/* Vehicle Markers */}
                   {assets.map((asset) => {
                     const load = getLoadForAsset(asset);
@@ -1156,7 +1308,15 @@ export default function LiveTrackingPage() {
                       <Marker
                         key={asset.id}
                         position={[asset.lastLatitude, asset.lastLongitude]}
-                        icon={createVehicleIcon(asset, !!load, fleetNumber, driverName)}
+                        icon={createVehicleIcon(
+                          asset,
+                          !!load,
+                          fleetNumber,
+                          driverName,
+                          zoomLevel >= LABEL_MIN_ZOOM ? "full" : "compact",
+                          selectedAssetId === asset.id,
+                        )}
+                        eventHandlers={{ click: () => setSelectedAssetId(asset.id) }}
                         ref={(ref) => {
                           if (ref) markerRefs.current.set(asset.id, ref);
                         }}
@@ -1232,6 +1392,27 @@ export default function LiveTrackingPage() {
                               <span>{formatLastConnected(asset.lastConnectedUtc)}</span>
                             </div>
 
+                            {/* Speed sparkline from client-side breadcrumb history */}
+                            {(() => {
+                              const hist = trailsRef.current.get(asset.id) ?? [];
+                              if (hist.length < 3) return null;
+                              const speeds = hist.map((h) => h.speed);
+                              const max = Math.max(...speeds, 10);
+                              const pts = speeds
+                                .map((s, i) => `${(i / (speeds.length - 1)) * 100},${23 - (s / max) * 20}`)
+                                .join(" ");
+                              return (
+                                <div className="mb-3">
+                                  <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">
+                                    Speed trend
+                                  </div>
+                                  <svg viewBox="0 0 100 24" className="w-full h-6" preserveAspectRatio="none">
+                                    <polyline points={pts} fill="none" stroke="#10b981" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+                                  </svg>
+                                </div>
+                              );
+                            })()}
+
                             {/* Action link */}
                             <div className="pt-2 border-t border-slate-100">
                               <button
@@ -1256,7 +1437,7 @@ export default function LiveTrackingPage() {
 
             {/* Floating Sidebar Overlay (Samsara/Motive style) */}
             {assets.length > 0 && (
-              <aside className="absolute top-4 left-4 z-[1000] w-[340px] h-[calc(100%-32px)] max-h-[calc(100%-32px)] flex flex-col bg-white dark:bg-slate-900 rounded-xl shadow-xl border overflow-hidden">
+              <aside className="absolute top-4 left-4 z-[1000] w-[340px] h-[calc(100%-32px)] max-h-[calc(100%-32px)] flex flex-col bg-white/85 dark:bg-slate-900/85 backdrop-blur-md rounded-xl shadow-xl border overflow-hidden">
                 {/* Header: title + search + status filter */}
                 <div className="px-4 pt-4 pb-3 border-b space-y-2.5">
                   <div className="flex items-center justify-between">
