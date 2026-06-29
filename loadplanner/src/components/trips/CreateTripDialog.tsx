@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { WaypointsSection } from "@/components/trips/WaypointsSection";
 import loadFormConfig from "@/constants/tripFormConfig";
 import { useClients } from "@/hooks/useClients";
 import { useCustomLocations } from "@/hooks/useCustomLocations";
@@ -37,10 +38,11 @@ import { useDrivers } from "@/hooks/useDrivers";
 import { useFleetVehicles } from "@/hooks/useFleetVehicles";
 import { generateLoadId, useCreateLoad } from "@/hooks/useTrips";
 import { cn } from "@/lib/utils";
+import type { Waypoint } from "@/types/Trips";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { CalendarIcon, Clock, MapPin, Package, Truck } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -128,6 +130,8 @@ export function CreateLoadDialog({
     },
   });
 
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+
   const selectedOrigin = form.watch("origin");
   const selectedDestination = form.watch("destination");
   const selectedCargoType = form.watch("cargoType");
@@ -188,6 +192,7 @@ export function CreateLoadDialog({
         };
         notes?: string;
       };
+      waypoints?: Waypoint[];
     } = {
       origin: {
         plannedArrival: data.originPlannedArrival,
@@ -198,6 +203,12 @@ export function CreateLoadDialog({
         plannedDeparture: data.destPlannedDeparture,
       },
     };
+
+    // Persist intermediate stops in the order they were entered
+    const enteredWaypoints = waypoints.filter((wp) => wp.placeName);
+    if (enteredWaypoints.length > 0) {
+      timeData.waypoints = enteredWaypoints;
+    }
 
     // Add backload info if enabled
     if (
@@ -243,6 +254,7 @@ export function CreateLoadDialog({
       {
         onSuccess: () => {
           form.reset();
+          setWaypoints([]);
           onOpenChange(false);
         },
       },
@@ -658,6 +670,15 @@ export function CreateLoadDialog({
                 </div>
               </CardContent>
             </Card>
+
+            {/* Intermediate Stops */}
+            <WaypointsSection
+              waypoints={waypoints}
+              onChange={setWaypoints}
+              customLocations={customLocations}
+              origin={selectedOrigin}
+              destination={selectedDestination}
+            />
 
             {/* Assignment */}
             <div className="space-y-4">

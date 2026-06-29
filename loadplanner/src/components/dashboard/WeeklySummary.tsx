@@ -57,16 +57,12 @@ interface WeekData {
 }
 
 function calculateWeekData(loads: Load[], weekStart: Date, weekEnd: Date, today: Date): Omit<WeekData, 'weekNumber' | 'weekStart' | 'weekEnd'> {
-  // Normalize week boundaries to start/end of day for accurate comparison
   const weekStartNormalized = startOfDay(weekStart);
   const weekEndNormalized = endOfWeek(weekStart, { weekStartsOn: 1 });
 
-  // Filter loads for this week based on loading_date
-  // A load belongs to a week if its loading_date falls within that week
   const weekLoads = loads.filter((load) => {
     try {
       const loadDate = startOfDay(parseISO(load.loading_date));
-      // Check if load date is >= week start AND <= week end
       return (
         (loadDate >= weekStartNormalized && loadDate <= weekEndNormalized) ||
         loadDate.getTime() === weekStartNormalized.getTime() ||
@@ -77,16 +73,13 @@ function calculateWeekData(loads: Load[], weekStart: Date, weekEnd: Date, today:
     }
   });
 
-  // Status breakdown
   const scheduled = weekLoads.filter((l) => l.status === 'scheduled');
   const inTransit = weekLoads.filter((l) => l.status === 'in-transit');
   const delivered = weekLoads.filter((l) => l.status === 'delivered');
   const pending = weekLoads.filter((l) => l.status === 'pending');
 
-  // Normalize today for date-only comparisons
   const todayNormalized = startOfDay(today);
 
-  // Upcoming loads (scheduled for future days within this week)
   const upcomingLoads = weekLoads.filter((load) => {
     try {
       const loadDate = startOfDay(parseISO(load.loading_date));
@@ -96,7 +89,6 @@ function calculateWeekData(loads: Load[], weekStart: Date, weekEnd: Date, today:
     }
   });
 
-  // Overdue loads (scheduled for past days but not delivered)
   const overdueLoads = weekLoads.filter((load) => {
     try {
       const loadDate = startOfDay(parseISO(load.loading_date));
@@ -106,7 +98,6 @@ function calculateWeekData(loads: Load[], weekStart: Date, weekEnd: Date, today:
     }
   });
 
-  // Route analysis
   const routeMap = new Map<string, RouteSummary>();
   weekLoads.forEach((load) => {
     const routeKey = `${load.origin} → ${load.destination}`;
@@ -127,17 +118,14 @@ function calculateWeekData(loads: Load[], weekStart: Date, weekEnd: Date, today:
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  // Unique drivers
   const uniqueDrivers = new Set(
     weekLoads.filter((l) => l.driver?.name).map((l) => l.driver!.name)
   );
 
-  // Unique trucks
   const uniqueTrucks = new Set(
     weekLoads.filter((l) => l.fleet_vehicle?.vehicle_id).map((l) => l.fleet_vehicle!.vehicle_id)
   );
 
-  // Completion rate
   const completionRate =
     weekLoads.length > 0
       ? Math.round((delivered.length / weekLoads.length) * 100)
@@ -161,22 +149,17 @@ function calculateWeekData(loads: Load[], weekStart: Date, weekEnd: Date, today:
 export function WeeklySummary({ loads }: WeeklySummaryProps) {
   const { currentWeek, nextWeek } = useMemo(() => {
     const today = new Date();
-
-    // Week options: Monday start, ISO week numbering (first week contains Jan 4)
     const weekOptions = { weekStartsOn: 1 as const, firstWeekContainsDate: 4 as const };
 
-    // Current week - determined by today's date
     const currentWeekStart = startOfWeek(today, weekOptions);
     const currentWeekEnd = endOfWeek(today, weekOptions);
     const currentWeekNumber = getWeek(today, weekOptions);
 
-    // Next week - one week after current
     const nextWeekDate = addWeeks(today, 1);
     const nextWeekStart = startOfWeek(nextWeekDate, weekOptions);
     const nextWeekEnd = endOfWeek(nextWeekDate, weekOptions);
     const nextWeekNumber = getWeek(nextWeekDate, weekOptions);
 
-    // Calculate data for each week based on load dates
     const currentWeekData = calculateWeekData(loads, currentWeekStart, currentWeekEnd, today);
     const nextWeekData = calculateWeekData(loads, nextWeekStart, nextWeekEnd, today);
 
@@ -198,7 +181,6 @@ export function WeeklySummary({ loads }: WeeklySummaryProps) {
 
   const renderWeekContent = (weekData: WeekData, isCurrentWeek: boolean) => (
     <div className="space-y-6">
-      {/* Week Header */}
       <div className="rounded-xl border bg-card p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
           <div className={cn(
@@ -222,7 +204,6 @@ export function WeeklySummary({ loads }: WeeklySummaryProps) {
           </div>
         </div>
 
-        {/* Status Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="rounded-lg bg-muted/50 p-4 text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
@@ -266,9 +247,7 @@ export function WeeklySummary({ loads }: WeeklySummaryProps) {
         </div>
       </div>
 
-      {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Completion Rate */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -307,7 +286,6 @@ export function WeeklySummary({ loads }: WeeklySummaryProps) {
           </CardContent>
         </Card>
 
-        {/* Resources */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -337,7 +315,6 @@ export function WeeklySummary({ loads }: WeeklySummaryProps) {
           </CardContent>
         </Card>
 
-        {/* Alerts */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -417,7 +394,6 @@ export function WeeklySummary({ loads }: WeeklySummaryProps) {
         </Card>
       </div>
 
-      {/* Top Routes */}
       {weekData.topRoutes.length > 0 && (
         <Card>
           <CardHeader>

@@ -32,6 +32,142 @@ const extractFleetNumberFromName = (name: string | null): string | null => {
   return name; // fallback to full name if pattern doesn't match
 };
 
+// Raw `trips` row shape (selected columns plus vehicle joins) used by enrichTrip.
+type RawTripRow = Record<string, unknown> & {
+  id: string;
+  departure_date?: string | null;
+  payment_status?: string | null;
+  status?: string | null;
+  revenue_currency?: string | null;
+  wialon_vehicles?: { id: string; fleet_number: string | null; name: string } | null;
+  vehicles?: { id: string; fleet_number: string | null; registration_number: string } | null;
+};
+
+interface TripCostEntryRow {
+  id: string;
+  trip_id?: string | null;
+  amount: number;
+  currency?: string;
+  category?: string;
+  sub_category?: string;
+  is_flagged?: boolean;
+  investigation_status?: string;
+  flag_reason?: string;
+}
+
+const TRIP_SELECT_WITH_VEHICLES = `
+  *,
+  wialon_vehicles:vehicle_id(id, fleet_number, name),
+  vehicles:fleet_vehicle_id(id, fleet_number, registration_number)
+`;
+
+// Fetch cost entries for a set of trip IDs, grouped by trip_id.
+// Batches the `.in()` filter to stay under Supabase URL length limits.
+const fetchCostEntriesMap = async (tripIds: string[]): Promise<Record<string, TripCostEntryRow[]>> => {
+  const costEntriesMap: Record<string, TripCostEntryRow[]> = {};
+  if (tripIds.length === 0) return costEntriesMap;
+
+  const BATCH_SIZE = 50;
+  const batches: string[][] = [];
+  for (let i = 0; i < tripIds.length; i += BATCH_SIZE) {
+    batches.push(tripIds.slice(i, i + BATCH_SIZE));
+  }
+
+  const batchResults = await Promise.all(
+    batches.map(batch =>
+      supabase
+        .from('cost_entries')
+        .select('id, trip_id, amount, currency, category, sub_category, is_flagged, investigation_status, flag_reason')
+        .in('trip_id', batch)
+    )
+  );
+
+  batchResults.forEach(({ data: costData }) => {
+    (costData || []).forEach(cost => {
+      if (cost.trip_id) {
+        if (!costEntriesMap[cost.trip_id]) costEntriesMap[cost.trip_id] = [];
+        costEntriesMap[cost.trip_id].push(cost);
+      }
+    });
+  });
+
+  return costEntriesMap;
+};
+
+// Transform a raw trips row (+ its cost entries) into the enriched shape the UI consumes.
+const enrichTrip = (trip: RawTripRow, costEntries: TripCostEntryRow[]) => {
+  // Extract fleet_number - prefer vehicles table (fleet_vehicle_id), fallback to wialon_vehicles
+  const fleetVehicle = trip.vehicles;
+  const wialonVehicle = trip.wialon_vehicles;
+
+  let displayFleetNumber: string | null = null;
+  if (fleetVehicle?.fleet_number) {
+    displayFleetNumber = fleetVehicle.fleet_number;
+  } else if (wialonVehicle?.fleet_number) {
+    displayFleetNumber = wialonVehicle.fleet_number;
+  } else if (wialonVehicle?.name) {
+    // Extract just the first part before " - " (e.g., "31H" from "31H - AGZ 1963 (Int sim)")
+    displayFleetNumber = extractFleetNumberFromName(wialonVehicle.name);
+  }
+
+  // Compute warning/validation stats
+  const flaggedCosts = costEntries.filter(ce => ce.is_flagged);
+  const pendingCosts = costEntries.filter(ce =>
+    ce.investigation_status === 'pending' || ce.investigation_status === 'in_progress'
+  );
+  const hasCosts = costEntries.length > 0;
+
+  // Calculate days since trip started (for "in progress" indicator)
+  const departureDate = trip.departure_date ? new Date(trip.departure_date) : null;
+  const daysInProgress = departureDate ? Math.floor((Date.now() - departureDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+
+  return {
+    ...trip,
+    fleet_number: displayFleetNumber,
+    payment_status: trip.payment_status || 'unpaid',
+    status: trip.status || 'active',
+    revenue_currency: trip.revenue_currency || 'USD',
+    // Warning/validation computed fields
+    hasFlaggedCosts: flaggedCosts.length > 0,
+    flaggedCostCount: flaggedCosts.length,
+    hasPendingCosts: pendingCosts.length > 0,
+    pendingCostCount: pendingCosts.length,
+    hasNoCosts: !hasCosts,
+    daysInProgress,
+    // Map cost_entries to the costs array format expected by ActiveTrips
+    costs: costEntries.map(ce => ({
+      amount: ce.amount,
+      currency: ce.currency,
+      description: ce.sub_category || ce.category,
+      is_flagged: ce.is_flagged,
+      investigation_status: ce.investigation_status,
+      flag_reason: ce.flag_reason
+    }))
+  };
+};
+
+type EnrichedTrip = ReturnType<typeof enrichTrip>;
+
+// Fetch fully-enriched trips for a specific set of IDs (used by targeted realtime updates).
+const fetchEnrichedTripsByIds = async (ids: string[]): Promise<EnrichedTrip[]> => {
+  if (ids.length === 0) return [];
+
+  const BATCH_SIZE = 50;
+  const rows: RawTripRow[] = [];
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabase
+      .from('trips')
+      .select(TRIP_SELECT_WITH_VEHICLES)
+      .in('id', batch);
+    if (error) throw error;
+    rows.push(...((data || []) as unknown as RawTripRow[]));
+  }
+
+  const costMap = await fetchCostEntriesMap(rows.map(r => r.id));
+  return rows.map(r => enrichTrip(r, costMap[r.id] || []));
+};
+
 const TripManagement = () => {
   const [activeTab, setActiveTab] = useState("active");
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
@@ -43,8 +179,10 @@ const TripManagement = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  // Track pending refetch to debounce real-time updates during dialog animations
-  const pendingRefetchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Buffers for coalescing realtime trip changes into a single targeted cache update.
+  const pendingChangedIdsRef = useRef<Set<string>>(new Set());
+  const pendingDeletedIdsRef = useRef<Set<string>>(new Set());
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     missedLoads,
     addMissedLoad,
@@ -61,119 +199,29 @@ const TripManagement = () => {
   } = useQuery({
     queryKey: ["trips"],
     queryFn: async () => {
-      // First, fetch trips with vehicle relations
-      const { data: tripsData, error: tripsError } = await supabase
-        .from('trips')
-        .select(`
-          *,
-          wialon_vehicles:vehicle_id(id, fleet_number, name),
-          vehicles:fleet_vehicle_id(id, fleet_number, registration_number)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (tripsError) {
-        throw tripsError;
+      // Fetch trips with vehicle relations.
+      // Paginate so we are not silently capped at Supabase's 1000-row limit —
+      // otherwise completed trips beyond the cap would intermittently disappear
+      // from the list as new trips shift the result window.
+      const PAGE_SIZE = 1000;
+      const tripsData: RawTripRow[] = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data: page, error } = await supabase
+          .from('trips')
+          .select(TRIP_SELECT_WITH_VEHICLES)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        if (!page || page.length === 0) break;
+        tripsData.push(...(page as unknown as RawTripRow[]));
+        if (page.length < PAGE_SIZE) break;
       }
 
       // Then fetch cost entries for all trips (including validation status fields)
-      const tripIds = (tripsData || []).map(t => t.id);
-      const costEntriesMap: Record<string, Array<{
-        id: string;
-        amount: number;
-        currency?: string;
-        category?: string;
-        sub_category?: string;
-        is_flagged?: boolean;
-        investigation_status?: string;
-        flag_reason?: string;
-      }>> = {};
+      const costEntriesMap = await fetchCostEntriesMap(tripsData.map(t => t.id));
 
-      if (tripIds.length > 0) {
-        // Batch to avoid Supabase URL length limits with many trip IDs.
-        // Run batches in parallel to cut latency from N*roundtrip down to ~1 roundtrip.
-        const BATCH_SIZE = 50;
-        const batches: string[][] = [];
-        for (let i = 0; i < tripIds.length; i += BATCH_SIZE) {
-          batches.push(tripIds.slice(i, i + BATCH_SIZE));
-        }
-
-        const batchResults = await Promise.all(
-          batches.map(batch =>
-            supabase
-              .from('cost_entries')
-              .select('id, trip_id, amount, currency, category, sub_category, is_flagged, investigation_status, flag_reason')
-              .in('trip_id', batch)
-          )
-        );
-
-        // Group costs by trip_id
-        batchResults.forEach(({ data: costData }) => {
-          (costData || []).forEach(cost => {
-            if (cost.trip_id) {
-              if (!costEntriesMap[cost.trip_id]) {
-                costEntriesMap[cost.trip_id] = [];
-              }
-              costEntriesMap[cost.trip_id].push(cost);
-            }
-          });
-        });
-      }
-
-      return (tripsData || []).map(trip => {
-        // Extract fleet_number - prefer vehicles table (fleet_vehicle_id), fallback to wialon_vehicles
-        // Note: fleet_vehicle_id join - cast needed until types are regenerated after migration
-        const fleetVehicle = (trip as unknown as { vehicles?: { id: string; fleet_number: string | null; registration_number: string } | null }).vehicles;
-        const wialonVehicle = trip.wialon_vehicles as { id: string; fleet_number: string | null; name: string } | null;
-
-        // Determine the display fleet number - extract from name if needed
-        let displayFleetNumber = null;
-        if (fleetVehicle?.fleet_number) {
-          displayFleetNumber = fleetVehicle.fleet_number;
-        } else if (wialonVehicle?.fleet_number) {
-          displayFleetNumber = wialonVehicle.fleet_number;
-        } else if (wialonVehicle?.name) {
-          // Extract just the first part before " - " (e.g., "31H" from "31H - AGZ 1963 (Int sim)")
-          displayFleetNumber = extractFleetNumberFromName(wialonVehicle.name);
-        }
-
-        // Get cost entries for this trip
-        const costEntries = costEntriesMap[trip.id] || [];
-
-        // Compute warning/validation stats
-        const flaggedCosts = costEntries.filter(ce => ce.is_flagged);
-        const pendingCosts = costEntries.filter(ce =>
-          ce.investigation_status === 'pending' || ce.investigation_status === 'in_progress'
-        );
-        const hasCosts = costEntries.length > 0;
-
-        // Calculate days since trip started (for "in progress" indicator)
-        const departureDate = trip.departure_date ? new Date(trip.departure_date) : null;
-        const daysInProgress = departureDate ? Math.floor((Date.now() - departureDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-
-        return {
-          ...trip,
-          fleet_number: displayFleetNumber,
-          payment_status: trip.payment_status || 'unpaid',
-          status: trip.status || 'active',
-          revenue_currency: trip.revenue_currency || 'USD',
-          // Warning/validation computed fields
-          hasFlaggedCosts: flaggedCosts.length > 0,
-          flaggedCostCount: flaggedCosts.length,
-          hasPendingCosts: pendingCosts.length > 0,
-          pendingCostCount: pendingCosts.length,
-          hasNoCosts: !hasCosts,
-          daysInProgress,
-          // Map cost_entries to the costs array format expected by ActiveTrips
-          costs: costEntries.map(ce => ({
-            amount: ce.amount,
-            currency: ce.currency,
-            description: ce.sub_category || ce.category,
-            is_flagged: ce.is_flagged,
-            investigation_status: ce.investigation_status,
-            flag_reason: ce.flag_reason
-          }))
-        };
-      });
+      return tripsData.map(trip => enrichTrip(trip, costEntriesMap[trip.id] || []));
     },
     // Realtime subscription handles live updates — no polling needed
     // Keep previous data while refetching to prevent UI flicker
@@ -194,17 +242,57 @@ const TripManagement = () => {
     [allTrips]
   );
 
-  // Debounced refetch function that coalesces rapid updates
-  const debouncedRefetch = useCallback(() => {
-    // Clear any pending refetch to coalesce rapid-fire events
-    if (pendingRefetchRef.current) {
-      clearTimeout(pendingRefetchRef.current);
-    }
-    // Always debounce real-time events by 1.5s to avoid redundant refetches
-    // after manual invalidateQueries (edit/save already invalidates immediately)
-    pendingRefetchRef.current = setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ['trips'] });
-    }, 1500);
+  // Coalesce buffered realtime changes into one targeted cache update instead of
+  // re-downloading the entire trips dataset on every change.
+  const flushRealtimeChanges = useCallback(() => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    // Debounce briefly so rapid-fire events (and our own post-save invalidations)
+    // collapse into a single update.
+    flushTimerRef.current = setTimeout(async () => {
+      const changedIds = Array.from(pendingChangedIdsRef.current);
+      const deletedIds = Array.from(pendingDeletedIdsRef.current);
+      pendingChangedIdsRef.current = new Set();
+      pendingDeletedIdsRef.current = new Set();
+
+      // Deletes are exact — remove them from the cache without any fetch.
+      if (deletedIds.length > 0) {
+        const deletedSet = new Set(deletedIds);
+        queryClient.setQueryData<EnrichedTrip[]>(['trips'], (old) =>
+          old ? old.filter(t => !deletedSet.has(t.id)) : old
+        );
+      }
+
+      if (changedIds.length === 0) return;
+
+      // Guard against pathological bursts (e.g. bulk import of hundreds of rows):
+      // fall back to a single full refetch rather than many targeted fetches.
+      if (changedIds.length > 200) {
+        queryClient.invalidateQueries({ queryKey: ['trips'] });
+        return;
+      }
+
+      try {
+        const enriched = await fetchEnrichedTripsByIds(changedIds);
+        const enrichedById = new Map(enriched.map(t => [t.id, t]));
+        // Any requested id missing from the result no longer exists (or is RLS-hidden).
+        const missing = new Set(changedIds.filter(id => !enrichedById.has(id)));
+
+        queryClient.setQueryData<EnrichedTrip[]>(['trips'], (old) => {
+          if (!old) return old;
+          const existingIds = new Set(old.map(t => t.id));
+          // Replace updated rows in place; drop rows that no longer exist.
+          const next = old
+            .filter(t => !missing.has(t.id))
+            .map(t => enrichedById.get(t.id) ?? t);
+          // Prepend brand-new rows (newest first, matching created_at desc ordering).
+          const inserts = enriched.filter(t => !existingIds.has(t.id));
+          return inserts.length > 0 ? [...inserts, ...next] : next;
+        });
+      } catch {
+        // On any failure, stay correct by doing a full refetch.
+        queryClient.invalidateQueries({ queryKey: ['trips'] });
+      }
+    }, 400);
   }, [queryClient]);
 
   // Real-time subscription for instant updates
@@ -218,20 +306,28 @@ const TripManagement = () => {
           schema: 'public',
           table: 'trips',
         },
-        () => {
-          // Use debounced refetch to prevent DOM conflicts
-          debouncedRefetch();
+        (payload) => {
+          const newId = (payload.new as { id?: string } | null)?.id;
+          const oldId = (payload.old as { id?: string } | null)?.id;
+          if (payload.eventType === 'DELETE') {
+            if (oldId) pendingDeletedIdsRef.current.add(oldId);
+          } else if (newId) {
+            // INSERT or UPDATE — re-fetch just this row (with joins + costs).
+            pendingChangedIdsRef.current.add(newId);
+            pendingDeletedIdsRef.current.delete(newId);
+          }
+          flushRealtimeChanges();
         }
       )
       .subscribe();
 
     return () => {
-      if (pendingRefetchRef.current) {
-        clearTimeout(pendingRefetchRef.current);
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
       }
       supabase.removeChannel(channel);
     };
-  }, [debouncedRefetch]);
+  }, [flushRealtimeChanges]);
 
   const handleEdit = useCallback((trip: Trip) => {
     setEditingTrip(trip);

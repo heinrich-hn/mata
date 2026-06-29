@@ -5,9 +5,11 @@ import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 
 
 interface WeeklyChartProps {
   loads: Load[];
+  /** Optional callback when a bar (day) is clicked – receives the ISO date string (yyyy-MM-dd) */
+  onBarClick?: (isoDate: string) => void;
 }
 
-export function WeeklyChart({ loads }: WeeklyChartProps) {
+export function WeeklyChart({ loads, onBarClick }: WeeklyChartProps) {
   const weeklyDistribution = useMemo(() => {
     const today = new Date();
     const weekStart = startOfWeek(today, { weekStartsOn: 1 });
@@ -24,7 +26,8 @@ export function WeeklyChart({ loads }: WeeklyChartProps) {
       });
 
       return {
-        day: format(day, 'EEE'),
+        day: format(day, 'EEE'),         // Mon, Tue …
+        iso: format(day, 'yyyy-MM-dd'),   // drill‑down key
         loads: dayLoads.length,
       };
     });
@@ -36,12 +39,24 @@ export function WeeklyChart({ loads }: WeeklyChartProps) {
     <div className="rounded-xl border bg-card p-6 shadow-sm">
       <div className="mb-6">
         <h3 className="text-base font-semibold text-foreground">Weekly Load Distribution</h3>
-        <p className="text-sm text-muted-foreground">Loads scheduled per day this week</p>
+        <p className="text-sm text-muted-foreground">
+          Loads scheduled per day this week — click a bar to see details
+        </p>
       </div>
 
       <div className="h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={weeklyDistribution} barSize={40}>
+          <BarChart
+            data={weeklyDistribution}
+            barSize={40}
+            onClick={(data) => {
+              if (data?.activePayload?.length) {
+                const payload = data.activePayload[0].payload;
+                onBarClick?.(payload.iso);
+              }
+            }}
+            style={{ cursor: onBarClick ? 'pointer' : 'default' }}
+          >
             <XAxis
               dataKey="day"
               axisLine={false}
@@ -68,9 +83,10 @@ export function WeeklyChart({ loads }: WeeklyChartProps) {
               {weeklyDistribution.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={entry.loads === maxLoads && entry.loads > 0
-                    ? 'hsl(var(--accent))'
-                    : entry.loads === 0
+                  fill={
+                    entry.loads === maxLoads && entry.loads > 0
+                      ? 'hsl(var(--accent))'
+                      : entry.loads === 0
                       ? 'hsl(var(--muted))'
                       : 'hsl(var(--primary) / 0.7)'
                   }

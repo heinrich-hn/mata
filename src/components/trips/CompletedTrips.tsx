@@ -153,14 +153,26 @@ const CompletedTrips = ({ trips, onView, onRefresh, isLoading = false }: Complet
     queryKey: ['completed-previous-ending-km', vehicleIds.join(',')],
     queryFn: async () => {
       if (vehicleIds.length === 0) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
-      const { data, error } = await supabase
-        .from('trips')
-        .select('id, fleet_vehicle_id, trip_number, ending_km')
-        .in('fleet_vehicle_id', vehicleIds)
-        .not('ending_km', 'is', null)
-        .not('trip_number', 'is', null);
 
-      if (error) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
+      // Paginate so we are not silently capped at Supabase's 1000-row limit —
+      // otherwise KM-gap warnings would be computed from an incomplete trip set.
+      const PAGE_SIZE = 1000;
+      const data: { id: string; fleet_vehicle_id: string | null; trip_number: string; ending_km: number }[] = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data: page, error } = await supabase
+          .from('trips')
+          .select('id, fleet_vehicle_id, trip_number, ending_km')
+          .in('fleet_vehicle_id', vehicleIds)
+          .not('ending_km', 'is', null)
+          .not('trip_number', 'is', null)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
+        if (!page || page.length === 0) break;
+        data.push(...(page as typeof data));
+        if (page.length < PAGE_SIZE) break;
+      }
 
       const map = new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
       for (const row of data || []) {

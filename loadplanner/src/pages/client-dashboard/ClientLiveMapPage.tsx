@@ -8,6 +8,8 @@ import { useCustomLocations } from '@/hooks/useCustomLocations';
 import type { Load } from '@/hooks/useTrips';
 import { DEPOTS, customLocationToDepot, isWithinDepot, type Depot } from '@/lib/depots';
 import { calculateRoute, decodePolyline } from '@/lib/routing';
+import { parseTimeWindow } from '@/lib/timeWindow';
+import { findWaypointByName } from '@/lib/waypoints';
 import {
   formatLastConnected,
   getAssetsForPortal,
@@ -113,10 +115,9 @@ function createVehicleIcon(asset: TelematicsAsset, isSelected: boolean = false, 
 }
 
 // Depot pin icon for route endpoints
-function createDepotPinIcon(name: string, type: 'origin' | 'destination'): L.DivIcon {
-  const isOrigin = type === 'origin';
-  const bg = isOrigin ? '#3b82f6' : '#10b981';
-  const letter = isOrigin ? 'A' : 'B';
+function createDepotPinIcon(name: string, type: 'origin' | 'destination' | 'stop'): L.DivIcon {
+  const bg = type === 'origin' ? '#3b82f6' : type === 'stop' ? '#f59e0b' : '#10b981';
+  const letter = type === 'origin' ? 'A' : type === 'stop' ? '•' : 'B';
 
   return L.divIcon({
     html: `
@@ -489,9 +490,21 @@ export default function ClientLiveMapPage() {
                   const originDepot = allDepots.find((d) => d.name === originName);
                   const destDepot = allDepots.find((d) => d.name === destName);
 
-                  // Only show the remaining route: vehicle position → destination
+                  // Resolve any intermediate stops, preserving the entered order
+                  const stops = (parseTimeWindow(load.time_window).waypoints ?? [])
+                    .map((wp) => {
+                      const depot = allDepots.find((d) => d.name === wp.placeName);
+                      if (depot) return { name: wp.placeName, latitude: depot.latitude, longitude: depot.longitude };
+                      const found = findWaypointByName(wp.placeName);
+                      if (found) return { name: wp.placeName, latitude: found.latitude, longitude: found.longitude };
+                      return null;
+                    })
+                    .filter((s): s is { name: string; latitude: number; longitude: number } => s !== null);
+
+                  // Remaining route: vehicle position → intermediate stops (in order) → destination
                   const routeWaypoints: { latitude: number; longitude: number }[] = [];
                   routeWaypoints.push({ latitude: asset.lastLatitude!, longitude: asset.lastLongitude! });
+                  stops.forEach((s) => routeWaypoints.push({ latitude: s.latitude, longitude: s.longitude }));
                   if (destDepot) routeWaypoints.push({ latitude: destDepot.latitude, longitude: destDepot.longitude });
 
                   return (
@@ -502,6 +515,13 @@ export default function ClientLiveMapPage() {
                           icon={createDepotPinIcon(originName, 'origin')}
                         />
                       )}
+                      {stops.map((s, i) => (
+                        <Marker
+                          key={`stop-${i}-${s.name}`}
+                          position={[s.latitude, s.longitude]}
+                          icon={createDepotPinIcon(`${i + 1}. ${s.name}`, 'stop')}
+                        />
+                      ))}
                       {destDepot && (
                         <Marker
                           position={[destDepot.latitude, destDepot.longitude]}

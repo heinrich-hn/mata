@@ -319,6 +319,11 @@ export function EditLoadDialog({
       timeData.backload = currentTimes.backload;
     }
 
+    // Preserve intermediate stops (waypoints) so editing a load never wipes them
+    if (Array.isArray(currentTimes.waypoints) && currentTimes.waypoints.length > 0) {
+      timeData.waypoints = currentTimes.waypoints;
+    }
+
     // Carry forward existing date-change history and append any new entries
     const previousHistory = Array.isArray(currentTimes.dateChangeHistory)
       ? currentTimes.dateChangeHistory

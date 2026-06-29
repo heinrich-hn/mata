@@ -1,4 +1,4 @@
-# MATA Monorepo Structure & Engineering Handbook
+## MATA Monorepo Structure & Engineering Handbook
 
 ## Overview
 

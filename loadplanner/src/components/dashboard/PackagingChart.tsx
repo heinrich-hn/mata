@@ -24,6 +24,8 @@ import {
 
 interface PackagingChartProps {
   loads: Load[];
+  /** Called when a chart segment is clicked: packaging type (Bins, Crates, Pallets) or destination name */
+  onSegmentClick?: (segment: string) => void;
 }
 
 interface PackagingByDestination {
@@ -42,13 +44,12 @@ interface PackagingTotal {
 }
 
 const COLORS = {
-  bins: "#22c55e", // Green
-  crates: "#3b82f6", // Blue
-  pallets: "#f59e0b", // Amber
+  bins: "#22c55e",
+  crates: "#3b82f6",
+  pallets: "#f59e0b",
 };
 
-export function PackagingChart({ loads }: PackagingChartProps) {
-  // Get current week date range
+export function PackagingChart({ loads, onSegmentClick }: PackagingChartProps) {
   const { weekStart, weekEnd, weekLabel } = useMemo(() => {
     const today = new Date();
     const start = startOfWeek(today, { weekStartsOn: 1 });
@@ -60,20 +61,17 @@ export function PackagingChart({ loads }: PackagingChartProps) {
     };
   }, []);
 
-  // Aggregate packaging data by destination (current week only)
   const { byDestination, totals, grandTotal } = useMemo(() => {
     const destinationMap = new Map<string, PackagingByDestination>();
     let totalBins = 0;
     let totalCrates = 0;
     let totalPallets = 0;
 
-    // Filter loads to current week based on offloading_date (when backload is delivered)
     const weeklyLoads = loads.filter((load) => {
       try {
         const backload = parseBackloadInfo(load.time_window);
         if (!backload?.enabled) return false;
 
-        // Use backload offloading date if available, otherwise use load's offloading date
         const dateToCheck = backload.offloadingDate || load.offloading_date;
         if (!dateToCheck) return false;
 
@@ -115,18 +113,8 @@ export function PackagingChart({ loads }: PackagingChartProps) {
 
     const totals: PackagingTotal[] = [
       { name: "Bins", value: totalBins, color: COLORS.bins, icon: Package },
-      {
-        name: "Crates",
-        value: totalCrates,
-        color: COLORS.crates,
-        icon: Container,
-      },
-      {
-        name: "Pallets",
-        value: totalPallets,
-        color: COLORS.pallets,
-        icon: Boxes,
-      },
+      { name: "Crates", value: totalCrates, color: COLORS.crates, icon: Container },
+      { name: "Pallets", value: totalPallets, color: COLORS.pallets, icon: Boxes },
     ];
 
     return {
@@ -157,7 +145,7 @@ export function PackagingChart({ loads }: PackagingChartProps) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Packaging Totals Card with Donut Chart */}
+      {/* Donut Chart */}
       <div className="rounded-xl border bg-card p-6 shadow-sm">
         <div className="mb-4">
           <h3 className="text-base font-semibold text-foreground">
@@ -167,7 +155,6 @@ export function PackagingChart({ loads }: PackagingChartProps) {
         </div>
 
         <div className="flex items-center gap-6">
-          {/* Donut Chart */}
           <div className="w-[160px] h-[160px] relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -180,6 +167,12 @@ export function PackagingChart({ loads }: PackagingChartProps) {
                   paddingAngle={3}
                   dataKey="value"
                   strokeWidth={0}
+                  onClick={(data) => {
+                    if (data?.payload) {
+                      onSegmentClick?.(data.payload.name);
+                    }
+                  }}
+                  style={{ cursor: onSegmentClick ? "pointer" : "default" }}
                 >
                   {totals.map((entry, index) => (
                     <Cell
@@ -203,7 +196,6 @@ export function PackagingChart({ loads }: PackagingChartProps) {
                 />
               </PieChart>
             </ResponsiveContainer>
-            {/* Center text */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-2xl font-bold text-foreground">
                 {grandTotal.toLocaleString()}
@@ -212,14 +204,12 @@ export function PackagingChart({ loads }: PackagingChartProps) {
             </div>
           </div>
 
-          {/* Legend with Stats */}
           <div className="flex-1 space-y-3">
             {totals.map((item) => {
               const Icon = item.icon;
-              const percentage =
-                grandTotal > 0
-                  ? ((item.value / grandTotal) * 100).toFixed(1)
-                  : "0";
+              const percentage = grandTotal > 0
+                ? ((item.value / grandTotal) * 100).toFixed(1)
+                : "0";
               return (
                 <div
                   key={item.name}
@@ -262,7 +252,7 @@ export function PackagingChart({ loads }: PackagingChartProps) {
         </div>
       </div>
 
-      {/* Packaging by Destination Bar Chart */}
+      {/* Destination Bar Chart */}
       <div className="rounded-xl border bg-card p-6 shadow-sm">
         <div className="mb-4">
           <h3 className="text-base font-semibold text-foreground">
@@ -280,6 +270,13 @@ export function PackagingChart({ loads }: PackagingChartProps) {
                 data={byDestination}
                 layout="vertical"
                 margin={{ top: 5, right: 20, left: 40, bottom: 5 }}
+                onClick={(data) => {
+                  if (data?.activePayload?.length) {
+                    const payload = data.activePayload[0].payload;
+                    onSegmentClick?.(payload.destination);
+                  }
+                }}
+                style={{ cursor: onSegmentClick ? "pointer" : "default" }}
               >
                 <XAxis
                   type="number"
