@@ -26,6 +26,11 @@ import { safeFormatDate } from "@/lib/utils";
 import { exportReportsToPdf, exportVarianceToPdf } from "@/lib/exportReportsToPdf";
 import { exportVarianceToExcel } from "@/lib/exportVarianceToExcel";
 import { DistributionTab } from "@/components/reports/DistributionTab";
+import { OriginDestinationTab } from "@/components/reports/OriginDestinationTab";
+import {
+  exportOriginDestinationToPdf,
+  exportOriginDestinationToExcel,
+} from "@/lib/exportOriginDestinationReport";
 import { TimeAnalysisTab } from "@/components/reports/TimeAnalysisTab";
 import { BackloadAnalyticsTab } from "@/components/reports/BackloadAnalyticsTab";
 import { ClientFeedbackTab } from "@/components/reports/ClientFeedbackTab";
@@ -1155,6 +1160,25 @@ export default function ReportsPage() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  onClick={() =>
+                    exportOriginDestinationToPdf(loads, timeRange, "monthly")
+                  }
+                  className="gap-2 cursor-pointer"
+                >
+                  <MapPin className="h-4 w-4 text-blue-500" />
+                  <span>Origin &amp; Destination (PDF)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    exportOriginDestinationToExcel(loads, timeRange, "monthly")
+                  }
+                  className="gap-2 cursor-pointer"
+                >
+                  <Download className="h-4 w-4 text-blue-600" />
+                  <span>Origin &amp; Destination (Excel)</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
                   onClick={() => exportVarianceToPdf(loads, timeRange)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1240,6 +1264,13 @@ export default function ReportsPage() {
               <MapPin className="h-4 w-4" />
               Mutare Depot
             </TabsTrigger>
+            <TabsTrigger
+              value="origin-destination"
+              className="data-[state=active]:bg-background gap-2"
+            >
+              <MapPin className="h-4 w-4" />
+              Origin &amp; Destination
+            </TabsTrigger>
           </TabsList>
 
           <DistributionTab
@@ -1280,6 +1311,11 @@ export default function ReportsPage() {
           <ClientFeedbackTab granularity={granularity} timeRange={timeRange} />
 
           <MutareDepotTab timeRange={timeRange} />
+
+          <OriginDestinationTab
+            loads={loads}
+            timeRange={timeRange}
+          />
         </Tabs>
       </div>
     </>
