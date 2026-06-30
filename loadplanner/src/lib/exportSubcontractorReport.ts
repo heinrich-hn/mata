@@ -30,20 +30,24 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import XLSX from "xlsx-js-style";
 
+export type Currency = "USD" | "ZAR";
+
 /** Subcontractor info extracted from a load's time_window. */
 export interface SubcontractorLoadInfo {
     supplierName: string;
     cargoDescription: string;
     cost: number;
+    currency: Currency;
 }
 
-/** Pull subcontractor name / cargo / cost from a load's time_window. */
+/** Pull subcontractor name / cargo / cost / currency from a load's time_window. */
 export function getSubcontractorInfo(load: Load): SubcontractorLoadInfo {
     const sc = parseTimeWindow(load.time_window).subcontractor;
     return {
         supplierName: sc?.supplierName?.trim() || "Unassigned",
         cargoDescription: sc?.cargoDescription?.trim() || "",
         cost: typeof sc?.cost === "number" && !isNaN(sc.cost) ? sc.cost : 0,
+        currency: sc?.costCurrency === "ZAR" ? "ZAR" : "USD",
     };
 }
 
@@ -61,8 +65,33 @@ function monthKey(iso: string | null | undefined): { key: string; label: string 
     return { key: format(d, "yyyy-MM"), label: format(d, "MMM yyyy") };
 }
 
-const currencyFmt = (n: number) =>
-    `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const currencySymbol = (currency: Currency) => (currency === "ZAR" ? "R" : "$");
+
+const currencyFmt = (n: number, currency: Currency = "USD") =>
+    `${currencySymbol(currency)}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const USD_FMT = NUMBER_FORMATS.currency;
+const ZAR_FMT = '"R"#,##0.00_);[Red]("R"#,##0.00)';
+const costNumFmt = (currency: Currency) => (currency === "ZAR" ? ZAR_FMT : USD_FMT);
+
+const CURRENCY_ORDER: Currency[] = ["USD", "ZAR"];
+
+/** Group a list of {currency, cost} entries into per-currency totals, sorted USD first. */
+function sumByCurrency(
+    items: { currency: Currency; cost: number }[],
+): { currency: Currency; loadCount: number; total: number }[] {
+    const map = new Map<Currency, { currency: Currency; loadCount: number; total: number }>();
+    for (const it of items) {
+        let e = map.get(it.currency);
+        if (!e) {
+            e = { currency: it.currency, loadCount: 0, total: 0 };
+            map.set(it.currency, e);
+        }
+        e.loadCount += 1;
+        e.total += it.cost;
+    }
+    return CURRENCY_ORDER.filter((c) => map.has(c)).map((c) => map.get(c)!);
+}
 
 const timestamp = () => format(new Date(), "yyyy-MM-dd");
 
@@ -80,6 +109,7 @@ interface DetailRow {
     cargo: string;
     status: string;
     cost: number;
+    currency: Currency;
 }
 
 function buildDetailRows(loads: Load[]): DetailRow[] {
@@ -96,6 +126,7 @@ function buildDetailRows(loads: Load[]): DetailRow[] {
                 cargo: sc.cargoDescription,
                 status: load.status || "—",
                 cost: sc.cost,
+                currency: sc.currency,
                 _sortName: sc.supplierName.toLowerCase(),
                 _sortDate: load.loading_date || "",
             };
@@ -112,16 +143,32 @@ function buildDetailRows(loads: Load[]): DetailRow[] {
         });
 }
 
-interface MonthlyGroup {
-    monthKey: string;
-    monthLabel: string;
-    suppliers: { supplierName: string; loadCount: number; totalCost: number }[];
+interface MonthlySupplierRow {
+    supplierName: string;
+    currency: Currency;
     loadCount: number;
     totalCost: number;
 }
 
+interface CurrencyTotal {
+    currency: Currency;
+    loadCount: number;
+    total: number;
+}
+
+interface MonthlyGroup {
+    monthKey: string;
+    monthLabel: string;
+    rows: MonthlySupplierRow[];
+    subtotals: CurrencyTotal[];
+    loadCount: number;
+}
+
 function buildMonthlyGroups(loads: Load[]): MonthlyGroup[] {
-    const months = new Map<string, MonthlyGroup>();
+    const months = new Map<
+        string,
+        { monthKey: string; monthLabel: string; map: Map<string, MonthlySupplierRow>; loadCount: number }
+    >();
 
     for (const load of loads) {
         const { key, label } = monthKey(load.loading_date);
@@ -129,32 +176,65 @@ function buildMonthlyGroups(loads: Load[]): MonthlyGroup[] {
 
         let group = months.get(key);
         if (!group) {
-            group = {
-                monthKey: key,
-                monthLabel: label,
-                suppliers: [],
-                loadCount: 0,
-                totalCost: 0,
-            };
+            group = { monthKey: key, monthLabel: label, map: new Map(), loadCount: 0 };
             months.set(key, group);
         }
 
-        let supplier = group.suppliers.find((s) => s.supplierName === sc.supplierName);
-        if (!supplier) {
-            supplier = { supplierName: sc.supplierName, loadCount: 0, totalCost: 0 };
-            group.suppliers.push(supplier);
+        const rowKey = `${sc.supplierName}||${sc.currency}`;
+        let row = group.map.get(rowKey);
+        if (!row) {
+            row = { supplierName: sc.supplierName, currency: sc.currency, loadCount: 0, totalCost: 0 };
+            group.map.set(rowKey, row);
         }
-        supplier.loadCount += 1;
-        supplier.totalCost += sc.cost;
+        row.loadCount += 1;
+        row.totalCost += sc.cost;
         group.loadCount += 1;
-        group.totalCost += sc.cost;
     }
 
-    const groups = Array.from(months.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    return Array.from(months.values())
+        .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+        .map((g) => {
+            const rows = Array.from(g.map.values()).sort((a, b) =>
+                a.supplierName !== b.supplierName
+                    ? a.supplierName.localeCompare(b.supplierName)
+                    : CURRENCY_ORDER.indexOf(a.currency) - CURRENCY_ORDER.indexOf(b.currency),
+            );
+            const subMap = new Map<Currency, CurrencyTotal>();
+            for (const r of rows) {
+                let e = subMap.get(r.currency);
+                if (!e) {
+                    e = { currency: r.currency, loadCount: 0, total: 0 };
+                    subMap.set(r.currency, e);
+                }
+                e.loadCount += r.loadCount;
+                e.total += r.totalCost;
+            }
+            const subtotals = CURRENCY_ORDER.filter((c) => subMap.has(c)).map((c) => subMap.get(c)!);
+            return {
+                monthKey: g.monthKey,
+                monthLabel: g.monthLabel,
+                rows,
+                subtotals,
+                loadCount: g.loadCount,
+            };
+        });
+}
+
+/** Sum the per-month subtotals into per-currency grand totals across all groups. */
+function grandByCurrency(groups: MonthlyGroup[]): CurrencyTotal[] {
+    const map = new Map<Currency, CurrencyTotal>();
     for (const g of groups) {
-        g.suppliers.sort((a, b) => b.totalCost - a.totalCost);
+        for (const s of g.subtotals) {
+            let e = map.get(s.currency);
+            if (!e) {
+                e = { currency: s.currency, loadCount: 0, total: 0 };
+                map.set(s.currency, e);
+            }
+            e.loadCount += s.loadCount;
+            e.total += s.total;
+        }
     }
-    return groups;
+    return CURRENCY_ORDER.filter((c) => map.has(c)).map((c) => map.get(c)!);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -175,9 +255,11 @@ export function exportSubcontractorLoadsToExcel(loads: Load[]): void {
         "Offloading Date",
         "Cargo",
         "Status",
-        "Cost (USD)",
+        "Currency",
+        "Cost",
     ];
     const colCount = header.length;
+    const currencyCol = colCount - 2;
     const costCol = colCount - 1;
 
     const ws = XLSX.utils.aoa_to_sheet([[], ["Subcontractor Loads"], [subtitle], [], header]);
@@ -190,11 +272,23 @@ export function exportSubcontractorLoadsToExcel(loads: Load[]): void {
         r.offloadingDate,
         r.cargo,
         r.status,
+        r.currency,
         r.cost,
     ]);
-    const totalCost = rows.reduce((s, r) => s + r.cost, 0);
-    const totalRow = ["TOTAL", "", "", "", "", "", "", "", totalCost];
-    XLSX.utils.sheet_add_aoa(ws, [...body, totalRow], { origin: "A6" });
+    const totals = sumByCurrency(rows);
+    const totalRows = totals.map((t) => [
+        totals.length > 1 ? `TOTAL (${t.currency})` : "TOTAL",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        t.currency,
+        t.total,
+    ]);
+    XLSX.utils.sheet_add_aoa(ws, [...body, ...totalRows], { origin: "A6" });
 
     const merges: XLSX.Range[] = [];
     applyTitleRows(ws, colCount, merges);
@@ -204,12 +298,13 @@ export function exportSubcontractorLoadsToExcel(loads: Load[]): void {
     const firstBodyRow = 5;
     const lastBodyRow = firstBodyRow + body.length - 1;
     for (let r = firstBodyRow; r <= lastBodyRow; r++) {
+        const rowCurrency = rows[r - firstBodyRow].currency;
         for (let c = 0; c < colCount; c++) {
             const ref = XLSX.utils.encode_cell({ r, c });
             if (!ws[ref]) continue;
             ws[ref].s =
                 c === costCol
-                    ? { ...xlNumericCell, numFmt: NUMBER_FORMATS.currency }
+                    ? { ...xlNumericCell, numFmt: costNumFmt(rowCurrency) }
                     : { ...xlDataCell };
         }
     }
@@ -217,10 +312,12 @@ export function exportSubcontractorLoadsToExcel(loads: Load[]): void {
         applyAlternatingRowColors(ws, firstBodyRow, lastBodyRow, 0, colCount - 1);
     }
 
-    const totalRowIdx = firstBodyRow + body.length;
-    applyTotalRow(ws, totalRowIdx, 0, colCount - 1);
-    const totalRef = XLSX.utils.encode_cell({ r: totalRowIdx, c: costCol });
-    if (ws[totalRef]) ws[totalRef].s = { ...ws[totalRef].s, numFmt: NUMBER_FORMATS.currency };
+    totalRows.forEach((_, k) => {
+        const totalRowIdx = firstBodyRow + body.length + k;
+        applyTotalRow(ws, totalRowIdx, 0, colCount - 1);
+        const totalRef = XLSX.utils.encode_cell({ r: totalRowIdx, c: costCol });
+        if (ws[totalRef]) ws[totalRef].s = { ...ws[totalRef].s, numFmt: costNumFmt(totals[k].currency) };
+    });
 
     applyAutoFilter(ws, 4, colCount);
     freezeHeaderRow(ws, 5, 1);
@@ -233,9 +330,11 @@ export function exportSubcontractorLoadsToExcel(loads: Load[]): void {
         { wch: 14 },
         { wch: 26 },
         { wch: 12 },
+        { wch: 10 },
         { wch: 14 },
     ];
     ws["!rows"] = [{ hpt: 18 }, { hpt: 22 }, { hpt: 16 }, { hpt: 6 }, { hpt: 22 }];
+    void currencyCol;
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Subcontractor Loads");
@@ -251,10 +350,10 @@ export function exportSubcontractorMonthlyReportToExcel(loads: Load[]): void {
     const generated = format(new Date(), "dd/MM/yyyy HH:mm");
     const subtitle = `${SYSTEM_NAME}  |  Monthly Subcontractor Cost Report  |  Generated: ${generated}`;
 
-    const header = ["Month", "Subcontractor", "# Loads", "Total Cost (USD)"];
+    const header = ["Month", "Subcontractor", "Currency", "# Loads", "Total Cost"];
     const colCount = header.length;
-    const costCol = 3;
-    const countCol = 2;
+    const countCol = 3;
+    const costCol = 4;
 
     const ws = XLSX.utils.aoa_to_sheet([
         [],
@@ -264,25 +363,42 @@ export function exportSubcontractorMonthlyReportToExcel(loads: Load[]): void {
         header,
     ]);
 
-    type BodyRow = { cells: (string | number)[]; kind: "data" | "subtotal" };
+    type BodyRow = { cells: (string | number)[]; kind: "data" | "subtotal"; currency: Currency };
     const bodyRows: BodyRow[] = [];
     for (const g of groups) {
-        for (const s of g.suppliers) {
+        for (const s of g.rows) {
             bodyRows.push({
-                cells: [g.monthLabel, s.supplierName, s.loadCount, s.totalCost],
+                cells: [g.monthLabel, s.supplierName, s.currency, s.loadCount, s.totalCost],
                 kind: "data",
+                currency: s.currency,
             });
         }
-        bodyRows.push({
-            cells: [`${g.monthLabel} Subtotal`, "", g.loadCount, g.totalCost],
-            kind: "subtotal",
-        });
+        for (const sub of g.subtotals) {
+            bodyRows.push({
+                cells: [
+                    g.subtotals.length > 1
+                        ? `${g.monthLabel} Subtotal (${sub.currency})`
+                        : `${g.monthLabel} Subtotal`,
+                    "",
+                    sub.currency,
+                    sub.loadCount,
+                    sub.total,
+                ],
+                kind: "subtotal",
+                currency: sub.currency,
+            });
+        }
     }
-    const grandLoads = groups.reduce((s, g) => s + g.loadCount, 0);
-    const grandCost = groups.reduce((s, g) => s + g.totalCost, 0);
-    const grandRow = ["GRAND TOTAL", "", grandLoads, grandCost];
+    const grand = grandByCurrency(groups);
+    const grandRows = grand.map((t) => [
+        grand.length > 1 ? `GRAND TOTAL (${t.currency})` : "GRAND TOTAL",
+        "",
+        t.currency,
+        t.loadCount,
+        t.total,
+    ]);
 
-    XLSX.utils.sheet_add_aoa(ws, [...bodyRows.map((r) => r.cells), grandRow], { origin: "A6" });
+    XLSX.utils.sheet_add_aoa(ws, [...bodyRows.map((r) => r.cells), ...grandRows], { origin: "A6" });
 
     const merges: XLSX.Range[] = [];
     applyTitleRows(ws, colCount, merges);
@@ -297,7 +413,7 @@ export function exportSubcontractorMonthlyReportToExcel(loads: Load[]): void {
             if (!ws[ref]) continue;
             const base =
                 c === costCol
-                    ? { ...xlNumericCell, numFmt: NUMBER_FORMATS.currency }
+                    ? { ...xlNumericCell, numFmt: costNumFmt(row.currency) }
                     : c === countCol
                         ? { ...xlNumericCell, numFmt: NUMBER_FORMATS.integer }
                         : { ...xlDataCell };
@@ -313,16 +429,19 @@ export function exportSubcontractorMonthlyReportToExcel(loads: Load[]): void {
         }
     });
 
-    const grandIdx = firstBodyRow + bodyRows.length;
-    applyTotalRow(ws, grandIdx, 0, colCount - 1);
-    const grandCostRef = XLSX.utils.encode_cell({ r: grandIdx, c: costCol });
-    if (ws[grandCostRef]) ws[grandCostRef].s = { ...ws[grandCostRef].s, numFmt: NUMBER_FORMATS.currency };
-    const grandCountRef = XLSX.utils.encode_cell({ r: grandIdx, c: countCol });
-    if (ws[grandCountRef]) ws[grandCountRef].s = { ...ws[grandCountRef].s, numFmt: NUMBER_FORMATS.integer };
+    const grandStart = firstBodyRow + bodyRows.length;
+    grand.forEach((t, k) => {
+        const r = grandStart + k;
+        applyTotalRow(ws, r, 0, colCount - 1);
+        const grandCostRef = XLSX.utils.encode_cell({ r, c: costCol });
+        if (ws[grandCostRef]) ws[grandCostRef].s = { ...ws[grandCostRef].s, numFmt: costNumFmt(t.currency) };
+        const grandCountRef = XLSX.utils.encode_cell({ r, c: countCol });
+        if (ws[grandCountRef]) ws[grandCountRef].s = { ...ws[grandCountRef].s, numFmt: NUMBER_FORMATS.integer };
+    });
 
     applyAutoFilter(ws, 4, colCount);
     freezeHeaderRow(ws, 5, 1);
-    ws["!cols"] = [{ wch: 22 }, { wch: 28 }, { wch: 10 }, { wch: 18 }];
+    ws["!cols"] = [{ wch: 22 }, { wch: 28 }, { wch: 10 }, { wch: 10 }, { wch: 18 }];
     ws["!rows"] = [{ hpt: 18 }, { hpt: 22 }, { hpt: 16 }, { hpt: 6 }, { hpt: 22 }];
 
     const wb = XLSX.utils.book_new();
@@ -424,12 +543,29 @@ export function exportSubcontractorLoadsToPdf(loads: Load[]): void {
         `Subcontractor Loads  •  Generated ${generated}`,
     );
 
-    const totalCost = rows.reduce((s, r) => s + r.cost, 0);
+    const totals = sumByCurrency(rows);
     const supplierCount = new Set(rows.map((r) => r.supplierName)).size;
+    const totalCostLabel =
+        totals.length === 0
+            ? currencyFmt(0)
+            : totals.map((t) => currencyFmt(t.total, t.currency)).join("  /  ");
     const yPos = pdfKpiStrip(doc, yStart, [
         { label: "Total Loads", value: rows.length.toLocaleString() },
         { label: "Subcontractors", value: supplierCount.toLocaleString() },
-        { label: "Total Cost", value: currencyFmt(totalCost) },
+        { label: "Total Cost", value: totalCostLabel },
+    ]);
+
+    const totalBodyRows = totals.map((t) => [
+        totals.length > 1 ? `TOTAL (${t.currency})` : "TOTAL",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        t.currency,
+        currencyFmt(t.total, t.currency),
     ]);
 
     autoTable(doc, {
@@ -444,7 +580,8 @@ export function exportSubcontractorLoadsToPdf(loads: Load[]): void {
                 "Offloading",
                 "Cargo",
                 "Status",
-                "Cost (USD)",
+                "Currency",
+                "Cost",
             ],
         ],
         body: [
@@ -457,9 +594,10 @@ export function exportSubcontractorLoadsToPdf(loads: Load[]): void {
                 r.offloadingDate,
                 r.cargo,
                 r.status,
-                currencyFmt(r.cost),
+                r.currency,
+                currencyFmt(r.cost, r.currency),
             ]),
-            ["TOTAL", "", "", "", "", "", "", "", currencyFmt(totalCost)],
+            ...totalBodyRows,
         ],
         theme: "grid",
         margin: { left: 12, right: 12 },
@@ -481,11 +619,12 @@ export function exportSubcontractorLoadsToPdf(loads: Load[]): void {
         },
         alternateRowStyles: { fillColor: pdfColors.offWhite },
         columnStyles: {
-            0: { fontStyle: "bold", textColor: pdfColors.navy, cellWidth: 36 },
-            8: { halign: "right", cellWidth: 24 },
+            0: { fontStyle: "bold", textColor: pdfColors.navy, cellWidth: 34 },
+            8: { halign: "center", cellWidth: 16 },
+            9: { halign: "right", cellWidth: 24 },
         },
         didParseCell: (hook) => {
-            if (hook.section === "body" && hook.row.index === rows.length) {
+            if (hook.section === "body" && hook.row.index >= rows.length) {
                 hook.cell.styles.fillColor = pdfColors.lightBlue;
                 hook.cell.styles.fontStyle = "bold";
                 hook.cell.styles.textColor = pdfColors.navy;
@@ -512,40 +651,68 @@ export function exportSubcontractorMonthlyReportToPdf(loads: Load[]): void {
         `Subcontractor Costs  •  Generated ${generated}`,
     );
 
+    const grand = grandByCurrency(groups);
     const grandLoads = groups.reduce((s, g) => s + g.loadCount, 0);
-    const grandCost = groups.reduce((s, g) => s + g.totalCost, 0);
     const supplierCount = new Set(
-        groups.flatMap((g) => g.suppliers.map((s) => s.supplierName)),
+        groups.flatMap((g) => g.rows.map((s) => s.supplierName)),
     ).size;
+    const totalCostLabel =
+        grand.length === 0
+            ? currencyFmt(0)
+            : grand.map((t) => currencyFmt(t.total, t.currency)).join("  /  ");
     const yPos = pdfKpiStrip(doc, yStart, [
         { label: "Months", value: groups.length.toLocaleString() },
         { label: "Subcontractors", value: supplierCount.toLocaleString() },
         { label: "Total Loads", value: grandLoads.toLocaleString() },
-        { label: "Total Cost", value: currencyFmt(grandCost) },
+        { label: "Total Cost", value: totalCostLabel },
     ]);
 
-    type Row = { cells: string[]; kind: "data" | "subtotal" };
+    type Row = { cells: string[]; kind: "data" | "subtotal" | "grand" };
     const tableRows: Row[] = [];
     for (const g of groups) {
-        for (const s of g.suppliers) {
+        for (const s of g.rows) {
             tableRows.push({
-                cells: [g.monthLabel, s.supplierName, String(s.loadCount), currencyFmt(s.totalCost)],
+                cells: [
+                    g.monthLabel,
+                    s.supplierName,
+                    s.currency,
+                    String(s.loadCount),
+                    currencyFmt(s.totalCost, s.currency),
+                ],
                 kind: "data",
             });
         }
+        for (const sub of g.subtotals) {
+            tableRows.push({
+                cells: [
+                    g.subtotals.length > 1
+                        ? `${g.monthLabel} Subtotal (${sub.currency})`
+                        : `${g.monthLabel} Subtotal`,
+                    "",
+                    sub.currency,
+                    String(sub.loadCount),
+                    currencyFmt(sub.total, sub.currency),
+                ],
+                kind: "subtotal",
+            });
+        }
+    }
+    for (const t of grand) {
         tableRows.push({
-            cells: [`${g.monthLabel} Subtotal`, "", String(g.loadCount), currencyFmt(g.totalCost)],
-            kind: "subtotal",
+            cells: [
+                grand.length > 1 ? `GRAND TOTAL (${t.currency})` : "GRAND TOTAL",
+                "",
+                t.currency,
+                String(t.loadCount),
+                currencyFmt(t.total, t.currency),
+            ],
+            kind: "grand",
         });
     }
-    tableRows.push({
-        cells: ["GRAND TOTAL", "", String(grandLoads), currencyFmt(grandCost)],
-        kind: "subtotal",
-    });
 
     autoTable(doc, {
         startY: yPos,
-        head: [["Month", "Subcontractor", "# Loads", "Total Cost (USD)"]],
+        head: [["Month", "Subcontractor", "Currency", "# Loads", "Total Cost"]],
         body: tableRows.map((r) => r.cells),
         theme: "grid",
         margin: { left: 12, right: 12 },
@@ -568,16 +735,17 @@ export function exportSubcontractorMonthlyReportToPdf(loads: Load[]): void {
         alternateRowStyles: { fillColor: pdfColors.offWhite },
         columnStyles: {
             0: { fontStyle: "bold", textColor: pdfColors.navy },
-            2: { halign: "right", cellWidth: 24 },
-            3: { halign: "right", cellWidth: 34 },
+            2: { halign: "center", cellWidth: 20 },
+            3: { halign: "right", cellWidth: 20 },
+            4: { halign: "right", cellWidth: 32 },
         },
         didParseCell: (hook) => {
             if (hook.section !== "body") return;
             const row = tableRows[hook.row.index];
             if (!row) return;
-            const isGrand = hook.row.index === tableRows.length - 1;
-            if (row.kind === "subtotal") {
-                hook.cell.styles.fillColor = isGrand ? pdfColors.lightBlue : pdfColors.offWhite;
+            if (row.kind === "subtotal" || row.kind === "grand") {
+                hook.cell.styles.fillColor =
+                    row.kind === "grand" ? pdfColors.lightBlue : pdfColors.offWhite;
                 hook.cell.styles.fontStyle = "bold";
                 hook.cell.styles.textColor = pdfColors.navy;
             }

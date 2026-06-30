@@ -101,6 +101,7 @@ const formSchema = z.object({
   notes: z.string(),
   status: z.enum(["pending", "scheduled", "in-transit", "delivered"]),
   subcontractorCost: z.string().optional(),
+  subcontractorCostCurrency: z.enum(["USD", "ZAR"]).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -242,6 +243,7 @@ export function EditThirdPartyLoadDialog({
       notes: "",
       status: "scheduled",
       subcontractorCost: "",
+      subcontractorCostCurrency: "USD",
     },
   });
 
@@ -270,6 +272,8 @@ export function EditThirdPartyLoadDialog({
         status: load.status as FormData["status"],
         subcontractorCost:
           times.subcontractor?.cost != null ? String(times.subcontractor.cost) : "",
+        subcontractorCostCurrency:
+          (times.subcontractor?.costCurrency as "USD" | "ZAR") || "USD",
       });
 
       setWaypoints(times.waypoints ?? []);
@@ -296,7 +300,7 @@ export function EditThirdPartyLoadDialog({
     // parseTimeWindow strips unknown keys; pull `subcontractor` directly from
     // the raw JSON so we can preserve it for subcontractor-variant edits.
     let existingSubcontractor:
-      | { supplierId?: string; supplierName?: string; cargoDescription?: string; cost?: number | null }
+      | { supplierId?: string; supplierName?: string; cargoDescription?: string; cost?: number | null; costCurrency?: "ZAR" | "USD" | null }
       | undefined;
     try {
       const raw =
@@ -352,6 +356,9 @@ export function EditThirdPartyLoadDialog({
               ? Number(data.subcontractorCost)
               : null)
             : existingSubcontractor.cost,
+          costCurrency: isSubcontractor
+            ? (data.subcontractorCostCurrency || "USD")
+            : existingSubcontractor.costCurrency,
         }
         : existingSubcontractor,
       backload: existingTimeData.backload,
@@ -766,32 +773,53 @@ export function EditThirdPartyLoadDialog({
                   )}
                 />
                 {isSubcontractor && (
-                  <FormField
-                    control={form.control}
-                    name="subcontractorCost"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Subcontractor Cost (USD)</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              $
-                            </span>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              className="bg-white dark:bg-gray-900 pl-7"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium leading-none">Subcontractor Cost</p>
+                    <div className="flex gap-2">
+                      <FormField
+                        control={form.control}
+                        name="subcontractorCostCurrency"
+                        render={({ field }) => (
+                          <FormItem className="w-28">
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="bg-white dark:bg-gray-900">
+                                  <SelectValue placeholder="Currency" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="USD">USD ($)</SelectItem>
+                                <SelectItem value="ZAR">ZAR (R)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="subcontractorCost"
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormControl>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                className="bg-white dark:bg-gray-900"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
                 )}
                 <div className="grid grid-cols-2 gap-4">
                   {!isSubcontractor && (

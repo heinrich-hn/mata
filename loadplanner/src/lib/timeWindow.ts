@@ -32,8 +32,10 @@ export interface SubcontractorInfo {
   supplierId?: string;
   supplierName?: string;
   cargoDescription?: string;
-  /** Agreed subcontractor cost for this load, in USD. */
+  /** Agreed subcontractor cost for this load, in `costCurrency` (defaults to USD). */
   cost?: number | null;
+  /** Currency of the agreed cost. Defaults to USD for legacy records. */
+  costCurrency?: "ZAR" | "USD" | null;
 }
 
 export interface TimeWindowDataFull extends TimeWindowData {
