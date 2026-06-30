@@ -32,6 +32,8 @@ export interface SubcontractorInfo {
   supplierId?: string;
   supplierName?: string;
   cargoDescription?: string;
+  /** Agreed subcontractor cost for this load, in USD. */
+  cost?: number | null;
 }
 
 export interface TimeWindowDataFull extends TimeWindowData {

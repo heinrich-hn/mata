@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       host: "0.0.0.0",
-      port: 8089,
+      port: 5173,
       strictPort: true,
       allowedHosts: true,
       cors: {
@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => {
       hmr: {
         clientPort: 443,
         protocol: 'wss',
+        host: 'localhost'
       },
       headers: {
         'Access-Control-Allow-Origin': '*',
@@ -52,9 +53,42 @@ export default defineConfig(({ mode }) => {
       manifest: false,
       rollupOptions: {
         output: {
-          manualChunks: undefined,
-        },
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom', 'react-hook-form'],
+            'vendor-ui': [
+              '@radix-ui/react-accordion',
+              '@radix-ui/react-alert-dialog',
+              '@radix-ui/react-checkbox',
+              '@radix-ui/react-dialog',
+              '@radix-ui/react-dropdown-menu',
+              '@radix-ui/react-label',
+              '@radix-ui/react-popover',
+              '@radix-ui/react-select',
+              '@radix-ui/react-separator',
+              '@radix-ui/react-slider',
+              '@radix-ui/react-slot',
+              '@radix-ui/react-switch',
+              '@radix-ui/react-tabs',
+              '@radix-ui/react-toast',
+              '@radix-ui/react-tooltip'
+            ],
+            'vendor-data': [
+              'date-fns', 
+              'zod',
+              '@hookform/resolvers',
+              '@tanstack/react-query',
+              'clsx',
+              'tailwind-merge',
+              'class-variance-authority'
+            ],
+            'vendor-maps': ['leaflet', 'react-leaflet'],
+            'vendor-charts': ['recharts'],
+            'vendor-api': ['@supabase/supabase-js'],
+            'vendor-utils': ['xlsx', 'jspdf', 'jspdf-autotable']
+          }
+        }
       },
+      chunkSizeWarningLimit: 1000,
     },
     optimizeDeps: {
       esbuildOptions: {
@@ -62,6 +96,15 @@ export default defineConfig(({ mode }) => {
           global: "globalThis"
         },
       },
+      include: [
+        'react',
+        'react-dom',
+        'react-router-dom',
+        'leaflet',
+        'recharts',
+        '@supabase/supabase-js',
+        'xlsx'
+      ]
     },
   };
 });

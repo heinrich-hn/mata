@@ -100,6 +100,7 @@ const formSchema = z.object({
   driverId: z.string().optional(),
   notes: z.string(),
   status: z.enum(["pending", "scheduled", "in-transit", "delivered"]),
+  subcontractorCost: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -240,6 +241,7 @@ export function EditThirdPartyLoadDialog({
       driverId: "none",
       notes: "",
       status: "scheduled",
+      subcontractorCost: "",
     },
   });
 
@@ -266,6 +268,8 @@ export function EditThirdPartyLoadDialog({
         driverId: load.driver_id || "none",
         notes: load.notes || "",
         status: load.status as FormData["status"],
+        subcontractorCost:
+          times.subcontractor?.cost != null ? String(times.subcontractor.cost) : "",
       });
 
       setWaypoints(times.waypoints ?? []);
@@ -292,7 +296,7 @@ export function EditThirdPartyLoadDialog({
     // parseTimeWindow strips unknown keys; pull `subcontractor` directly from
     // the raw JSON so we can preserve it for subcontractor-variant edits.
     let existingSubcontractor:
-      | { supplierId?: string; supplierName?: string; cargoDescription?: string }
+      | { supplierId?: string; supplierName?: string; cargoDescription?: string; cost?: number | null }
       | undefined;
     try {
       const raw =
@@ -343,6 +347,11 @@ export function EditThirdPartyLoadDialog({
           cargoDescription: isSubcontractor
             ? data.cargoDescription
             : existingSubcontractor.cargoDescription,
+          cost: isSubcontractor
+            ? (data.subcontractorCost && data.subcontractorCost.trim() !== ""
+              ? Number(data.subcontractorCost)
+              : null)
+            : existingSubcontractor.cost,
         }
         : existingSubcontractor,
       backload: existingTimeData.backload,
@@ -756,6 +765,34 @@ export function EditThirdPartyLoadDialog({
                     </FormItem>
                   )}
                 />
+                {isSubcontractor && (
+                  <FormField
+                    control={form.control}
+                    name="subcontractorCost"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Subcontractor Cost (USD)</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                              $
+                            </span>
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              className="bg-white dark:bg-gray-900 pl-7"
+                              {...field}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   {!isSubcontractor && (
                     <FormField

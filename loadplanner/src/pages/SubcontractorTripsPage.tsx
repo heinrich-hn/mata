@@ -15,6 +15,8 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -49,6 +51,12 @@ import {
     type Load,
 } from "@/hooks/useTrips";
 import {
+    exportSubcontractorLoadsToExcel,
+    exportSubcontractorLoadsToPdf,
+    exportSubcontractorMonthlyReportToExcel,
+    exportSubcontractorMonthlyReportToPdf,
+} from "@/lib/exportSubcontractorReport";
+import {
     exportLoadsToExcel,
     exportLoadsToExcelSimplified,
 } from "@/lib/exportTripsToExcel";
@@ -62,6 +70,7 @@ import {
     ChevronsUpDown,
     Clock,
     FileSpreadsheet,
+    FileText,
     Loader2,
     MapPin,
     Plus,
@@ -309,6 +318,22 @@ export default function SubcontractorTripsPage() {
         }
     };
 
+    const handleExportSubcontractorLoadsExcel = () => {
+        exportSubcontractorLoadsToExcel(filteredLoads);
+    };
+
+    const handleExportSubcontractorLoadsPdf = () => {
+        exportSubcontractorLoadsToPdf(filteredLoads);
+    };
+
+    const handleExportMonthlyReportExcel = () => {
+        exportSubcontractorMonthlyReportToExcel(filteredLoads);
+    };
+
+    const handleExportMonthlyReportPdf = () => {
+        exportSubcontractorMonthlyReportToPdf(filteredLoads);
+    };
+
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -431,16 +456,39 @@ export default function SubcontractorTripsPage() {
                                     disabled={filteredLoads.length === 0}
                                 >
                                     <FileSpreadsheet className="h-4 w-4" />
-                                    Export to Excel
+                                    Export
                                     <ChevronDown className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="w-64">
+                                <DropdownMenuLabel>Trip List</DropdownMenuLabel>
                                 <DropdownMenuItem onClick={() => handleExportExcel(false)}>
+                                    <FileSpreadsheet className="mr-2 h-4 w-4" />
                                     Full Export (All Columns)
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleExportExcel(true)}>
+                                    <FileSpreadsheet className="mr-2 h-4 w-4" />
                                     Simplified Export
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>Subcontractor Costs</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={handleExportSubcontractorLoadsExcel}>
+                                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                    Subcontractor Loads (Excel)
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleExportSubcontractorLoadsPdf}>
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Subcontractor Loads (PDF)
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>Monthly Cost Report</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={handleExportMonthlyReportExcel}>
+                                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                    Monthly Report (Excel)
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleExportMonthlyReportPdf}>
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Monthly Report (PDF)
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
