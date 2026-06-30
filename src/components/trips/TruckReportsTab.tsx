@@ -6,16 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import { CostEntry, Trip } from '@/types/operations';
-import
-  {
-    endOfWeek,
-    format,
-    getISOWeek,
-    getISOWeekYear,
-    parseISO,
-    startOfWeek,
-    subWeeks,
-  } from 'date-fns';
+import {
+endOfWeek,
+format,
+getISOWeek,
+getISOWeekYear,
+parseISO,
+startOfWeek,
+subWeeks,
+} from 'date-fns';
 import { Calendar, ChevronDown, ChevronRight, TrendingUp, Truck } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -437,9 +436,9 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card className="border-0 shadow-sm bg-gradient-to-br from-background to-muted/20">
-        <CardContent className="space-y-4 pt-6">
+        <CardContent className="space-y-3 pt-4">
           {(Object.keys(DEPOT_CONFIG) as DepotKey[]).map((depotKey) => {
             const depot = DEPOT_CONFIG[depotKey];
             const colors = getDepotColorClasses(depot.color);
@@ -456,42 +455,42 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
                   <CollapsibleTrigger asChild>
                     <div
                       className={cn(
-                        'flex items-center justify-between p-5 cursor-pointer hover:brightness-[0.98] dark:hover:brightness-110 transition-all duration-200',
+                        'flex items-center justify-between p-3.5 cursor-pointer hover:brightness-[0.98] dark:hover:brightness-110 transition-all duration-200',
                         colors.bg
                       )}
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <div
                           className={cn(
-                            'h-11 w-11 rounded-xl flex items-center justify-center shadow-sm',
+                            'h-8 w-8 rounded-md flex items-center justify-center shadow-sm',
                             colors.icon
                           )}
                         >
-                          <Truck className="h-5 w-5" />
+                          <Truck className="h-4 w-4" />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-base tracking-tight">{depot.name}</h3>
-                          <p className="text-sm text-muted-foreground/80 font-medium">
+                          <h3 className="font-semibold text-sm tracking-tight">{depot.name}</h3>
+                          <p className="text-xs text-muted-foreground/80 font-medium">
                             {depot.trucks.length} trucks • {depotTotals.tripCount.toLocaleString()} trips
                           </p>
                         </div>
                       </div>
                       <div className={cn(
-                          'h-8 w-8 rounded-lg flex items-center justify-center transition-transform duration-200',
-                          'bg-background/50 border shadow-sm',
-                          isExpanded && 'rotate-0'
-                        )}>
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </div>
+                        'h-8 w-8 rounded-lg flex items-center justify-center transition-transform duration-200',
+                        'bg-background/50 border shadow-sm',
+                        isExpanded && 'rotate-0'
+                      )}>
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
                     </div>
                   </CollapsibleTrigger>
 
                   <CollapsibleContent>
-                    <div className="p-4 border-t space-y-4">
+                    <div className="border-t p-3 space-y-3">
                       {/* Individual Trucks */}
                       <div className="space-y-3">
                         {trucksData.map((truck) => {
@@ -505,26 +504,26 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
                             <div
                               key={truck.fleetNumber}
                               className={cn(
-                                'group p-5 rounded-xl border bg-card/50 backdrop-blur-sm transition-all duration-200',
+                                'group p-3.5 rounded-lg border bg-card/50 backdrop-blur-sm transition-all duration-200',
                                 hasData
                                   ? 'hover:shadow-md hover:border-primary/20 hover:bg-card'
                                   : 'opacity-50 grayscale-[30%]'
                               )}
                             >
                               {/* Truck header with week dropdown */}
-                              <div className="flex flex-col gap-4">
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex flex-col gap-3">
+                                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
                                   <div className="flex items-center gap-3">
                                     <Badge
                                       variant="outline"
                                       className={cn(
-                                        'px-3 py-1.5 text-sm font-bold tracking-wide border shadow-sm',
+                                        'border px-2.5 py-1 text-xs font-bold tracking-wide shadow-sm',
                                         colors.badge
                                       )}
                                     >
                                       {getTruckDisplayName(truck.fleetNumber)}
                                     </Badge>
-                                    <Badge variant="secondary" className="text-xs font-medium">
+                                    <Badge variant="secondary" className="text-[11px] font-medium">
                                       {truck.tripCount} trips
                                     </Badge>
                                   </div>
@@ -534,15 +533,15 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
                                     value={truck.selectedWeek}
                                     onValueChange={(value) => setTruckWeekFilter(truck.fleetNumber, value)}
                                   >
-                                    <SelectTrigger className="w-[160px] h-10 px-3 text-sm font-semibold rounded-lg bg-gradient-to-r from-background to-muted/30 border-2 border-primary/20 hover:border-primary/50 hover:shadow-md shadow-sm transition-all duration-200 focus:ring-2 focus:ring-primary/30 focus:border-primary/60">
+                                    <SelectTrigger className="h-8 w-[150px] rounded-md border border-primary/25 bg-background px-2.5 text-xs font-medium transition-colors duration-150 hover:border-primary/45 focus:ring-2 focus:ring-primary/25 focus:border-primary/60">
                                       <div className="flex items-center gap-2">
-                                        <Calendar className="h-4 w-4 text-primary/70" />
+                                        <Calendar className="h-3.5 w-3.5 text-primary/70" />
                                         <SelectValue placeholder="Select week" />
                                       </div>
                                     </SelectTrigger>
                                     <SelectContent
                                       align="end"
-                                      className="w-[180px] rounded-xl border-2 border-primary/20 shadow-xl bg-background/98 backdrop-blur-lg"
+                                      className="w-[180px] rounded-lg border border-primary/20 bg-background/98 shadow-lg backdrop-blur-lg"
                                     >
                                       <div className="p-1">
                                         {weekOptions.map((option, index) => (
@@ -550,7 +549,7 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
                                             key={option.value}
                                             value={option.value}
                                             className={cn(
-                                              "text-sm cursor-pointer rounded-lg my-0.5 px-3 py-2.5 transition-all duration-150",
+                                              "my-0.5 cursor-pointer rounded-md px-2.5 py-2 text-xs transition-all duration-150",
                                               "hover:bg-primary/10 focus:bg-primary/15",
                                               option.value === getCurrentWeekKey() && "bg-primary/5 font-bold",
                                               index === 0 && "border-b border-muted mb-1 pb-2"
@@ -579,7 +578,7 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
 
                               {/* Profit margin progress bar - Modern styling */}
                               {hasData && truck.revenue.USD > 0 && (
-                                <div className="mt-4 pt-4 border-t border-muted/50">
+                                <div className="mt-3 border-t border-muted/50 pt-3">
                                   <div className="flex justify-between items-center text-xs mb-2">
                                     <span className="text-muted-foreground/70 font-medium flex items-center gap-1.5">
                                       <TrendingUp className="h-3 w-3" />
@@ -606,41 +605,41 @@ const TruckReportsTab = ({ trips, costEntries }: TruckReportsTabProps) => {
 
                               {/* Weekly breakdown */}
                               {truck.filteredWeeklySummaries.length > 0 && (
-                                  <div className="mt-3 space-y-2">
-                                    {truck.filteredWeeklySummaries.map((week) => (
-                                      <div
-                                        key={week.weekKey}
-                                        className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-3 text-sm p-3 rounded-lg bg-muted/30 border border-muted/40"
-                                      >
-                                        <div>
-                                          <span className="font-semibold text-xs">W{week.weekNumber}</span>
-                                          <span className="text-muted-foreground text-xs ml-1.5">
-                                            {week.startDate} – {week.endDate}
-                                          </span>
-                                        </div>
-                                        <Badge variant="secondary" className="text-[10px] font-medium">
-                                          {week.tripCount} trips
-                                        </Badge>
-                                        <div className="text-right min-w-[70px]">
-                                          <p className="text-[9px] uppercase text-muted-foreground/60">KM</p>
-                                          <p className="text-xs font-bold tabular-nums text-primary">{week.totalKm.toLocaleString()}</p>
-                                        </div>
-                                        <div className="text-right min-w-[80px]">
-                                          <p className="text-[9px] uppercase text-muted-foreground/60">Revenue</p>
-                                          <CurrencyDisplay amounts={week.revenue} type="revenue" />
-                                        </div>
-                                        <div className="text-right min-w-[80px]">
-                                          <p className="text-[9px] uppercase text-muted-foreground/60">Expenses</p>
-                                          <CurrencyDisplay amounts={week.expenses} type="expense" />
-                                        </div>
-                                        <div className="text-right min-w-[80px]">
-                                          <p className="text-[9px] uppercase text-muted-foreground/60">Profit</p>
-                                          <CurrencyDisplay amounts={week.profit} type="profit" />
-                                        </div>
+                                <div className="mt-3 space-y-1.5">
+                                  {truck.filteredWeeklySummaries.map((week) => (
+                                    <div
+                                      key={week.weekKey}
+                                      className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-2 rounded-md border border-muted/35 bg-muted/30 p-2.5 text-xs"
+                                    >
+                                      <div>
+                                        <span className="font-semibold text-xs">W{week.weekNumber}</span>
+                                        <span className="text-muted-foreground text-xs ml-1.5">
+                                          {week.startDate} – {week.endDate}
+                                        </span>
                                       </div>
-                                    ))}
-                                  </div>
-                                )}
+                                      <Badge variant="secondary" className="text-[10px] font-medium">
+                                        {week.tripCount} trips
+                                      </Badge>
+                                      <div className="text-right min-w-[70px]">
+                                        <p className="text-[9px] uppercase text-muted-foreground/60">KM</p>
+                                        <p className="text-xs font-bold tabular-nums text-primary">{week.totalKm.toLocaleString()}</p>
+                                      </div>
+                                      <div className="text-right min-w-[80px]">
+                                        <p className="text-[9px] uppercase text-muted-foreground/60">Revenue</p>
+                                        <CurrencyDisplay amounts={week.revenue} type="revenue" />
+                                      </div>
+                                      <div className="text-right min-w-[80px]">
+                                        <p className="text-[9px] uppercase text-muted-foreground/60">Expenses</p>
+                                        <CurrencyDisplay amounts={week.expenses} type="expense" />
+                                      </div>
+                                      <div className="text-right min-w-[80px]">
+                                        <p className="text-[9px] uppercase text-muted-foreground/60">Profit</p>
+                                        <CurrencyDisplay amounts={week.profit} type="profit" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
                         })}

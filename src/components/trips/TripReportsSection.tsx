@@ -1,5 +1,13 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,10 +27,7 @@ import {
   startOfWeek,
   subMonths,
 } from 'date-fns';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import {
-  BarChart3,
   Building,
   BadgeCheck,
   Calendar,
@@ -30,7 +35,6 @@ import {
   CircleAlert,
   DollarSign,
   Download,
-  FileText,
   MapPin,
   Receipt,
   TrendingDown,
@@ -42,7 +46,6 @@ import { useCallback, useMemo, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import TruckReportsTab from './TruckReportsTab';
-import ReportExportToolbar from './ReportExportToolbar';
 import {
   generateReportExcel,
   generateReportPDF,
@@ -128,6 +131,27 @@ interface TruckSummary {
   totalKm: number;
 }
 
+type ReportTabKey =
+  | "monthly"
+  | "weekly"
+  | "trucks"
+  | "drivers"
+  | "clients"
+  | "routes"
+  | "revenue-types"
+  | "expenses";
+
+const REPORT_TAB_LABELS: Record<ReportTabKey, string> = {
+  monthly: 'Monthly report',
+  weekly: 'Weekly report',
+  trucks: 'Trucks report',
+  drivers: 'Drivers report',
+  clients: 'Clients report',
+  routes: 'Routes report',
+  'revenue-types': 'Revenue Types report',
+  expenses: 'Expenses report',
+};
+
 // Helper to display currency amounts
 const CurrencyDisplay = ({ amounts, type = 'default' }: { amounts: CurrencyAmounts; type?: 'revenue' | 'expense' | 'profit' | 'default' }) => {
   if (amounts.USD === 0) {
@@ -149,11 +173,12 @@ const CurrencyDisplay = ({ amounts, type = 'default' }: { amounts: CurrencyAmoun
 };
 
 const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('3months');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const today = format(new Date(), 'yyyy-MM-dd');
   const thirtyDaysAgo = format(subMonths(new Date(), 1), 'yyyy-MM-dd');
   const [customFrom, setCustomFrom] = useState(thirtyDaysAgo);
   const [customTo, setCustomTo] = useState(today);
+  const [activeReportTab, setActiveReportTab] = useState<ReportTabKey>('monthly');
   const { toast } = useToast();
 
   // Human-readable period label for exports
@@ -912,284 +937,12 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
     }
   }, [periodLabel, overallStats, weeklySummaries, monthlySummaries, driverSummaries, clientSummaries, routeSummaries, truckSummaries, toast]);
 
-  // Export expenses to Excel
-  const exportExpensesToExcel = useCallback(async () => {
-    try {
-      const wb = new ExcelJS.Workbook();
-      wb.creator = 'Car Craft Co Fleet Management';
-      wb.created = new Date();
-
-      const hFill: ExcelJS.FillPattern = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1F3864' } };
-      const hFont: Partial<ExcelJS.Font> = { bold: true, color: { argb: 'FFFFFF' }, size: 10, name: 'Calibri' };
-      const hAlign: Partial<ExcelJS.Alignment> = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      const cFmt = '#,##0.00';
-      const bdr: Partial<ExcelJS.Borders> = {
-        top: { style: 'thin', color: { argb: 'D9D9D9' } },
-        bottom: { style: 'thin', color: { argb: 'D9D9D9' } },
-        left: { style: 'thin', color: { argb: 'D9D9D9' } },
-        right: { style: 'thin', color: { argb: 'D9D9D9' } },
-      };
-      const zFill: ExcelJS.FillPattern = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F6FC' } };
-      const bodyFont: Partial<ExcelJS.Font> = { size: 9, name: 'Calibri' };
-
-      const styleH = (ws: ExcelJS.Worksheet, r: number) => {
-        const row = ws.getRow(r);
-        row.eachCell(c => { c.fill = hFill; c.font = hFont; c.alignment = hAlign; c.border = bdr; });
-        row.height = 28;
-      };
-      const styleD = (ws: ExcelJS.Worksheet, start: number, count: number, cc: number[]) => {
-        for (let i = 0; i < count; i++) {
-          const r = ws.getRow(start + i);
-          r.eachCell(c => { c.border = bdr; c.font = bodyFont; c.alignment = { vertical: 'middle' }; });
-          if (i % 2 === 1) r.eachCell(c => { c.fill = zFill; });
-          cc.forEach(col => { r.getCell(col).numFmt = cFmt; });
-        }
-      };
-      const autoW = (ws: ExcelJS.Worksheet) => {
-        ws.columns.forEach(col => { let m = 12; col.eachCell?.({ includeEmpty: false }, c => { const l = c.value ? String(c.value).length + 2 : 0; if (l > m) m = l; }); col.width = Math.min(m, 40); });
-      };
-
-      // Summary
-      const sWs = wb.addWorksheet('Summary');
-      sWs.mergeCells('A1:D1');
-      sWs.getCell('A1').value = 'EXPENSE REPORT';
-      sWs.getCell('A1').font = { bold: true, size: 16, color: { argb: '1F3864' }, name: 'Calibri' };
-      sWs.getRow(1).height = 32;
-      sWs.mergeCells('A2:D2');
-      sWs.getCell('A2').value = `Period: ${periodLabel} \u2022 Generated: ${format(new Date(), 'dd MMMM yyyy, HH:mm')}`;
-      sWs.getCell('A2').font = { italic: true, size: 9, color: { argb: '666666' }, name: 'Calibri' };
-      sWs.getRow(4).values = ['Metric', 'Value'];
-      styleH(sWs, 4);
-      const sRows: [string, number][] = [
-        ['Total Entries', expenseSummaries.totalEntries],
-        ['Total (USD)', expenseSummaries.totals.USD],
-      ];
-      sRows.forEach((row, i) => {
-        const r = sWs.getRow(5 + i);
-        r.values = [row[0], row[1]];
-        r.getCell(1).font = { bold: true, size: 10, name: 'Calibri' };
-        r.getCell(2).numFmt = cFmt; r.getCell(2).font = bodyFont;
-        r.eachCell(c => { c.border = bdr; });
-        if (i % 2 === 1) r.eachCell(c => { c.fill = zFill; });
-      });
-      sWs.getColumn(1).width = 22;
-      sWs.getColumn(2).width = 20;
-
-      // By Category
-      const catWs = wb.addWorksheet('By Category');
-      catWs.getRow(1).values = ['Category', 'Entries', 'Amount (USD)'];
-      styleH(catWs, 1);
-      expenseSummaries.byCategory.forEach((c, i) => {
-        catWs.getRow(i + 2).values = [c.category, c.count, c.amounts.USD];
-      });
-      styleD(catWs, 2, expenseSummaries.byCategory.length, [3, 4]);
-      catWs.views = [{ state: 'frozen', ySplit: 1 }];
-      autoW(catWs);
-
-      // By Sub-Category
-      const subWs = wb.addWorksheet('By Sub-Category');
-      subWs.getRow(1).values = ['Category', 'Sub-Category', 'Entries', 'Amount (USD)'];
-      styleH(subWs, 1);
-      expenseSummaries.bySubCategory.forEach((s, i) => {
-        subWs.getRow(i + 2).values = [s.category, s.subCategory, s.count, s.amounts.USD];
-      });
-      styleD(subWs, 2, expenseSummaries.bySubCategory.length, [4, 5]);
-      subWs.views = [{ state: 'frozen', ySplit: 1 }];
-      autoW(subWs);
-
-      // By Vehicle
-      const vWs = wb.addWorksheet('By Vehicle');
-      vWs.getRow(1).values = ['Vehicle', 'Entries', 'Amount (USD)'];
-      styleH(vWs, 1);
-      expenseSummaries.byVehicle.forEach((v, i) => {
-        vWs.getRow(i + 2).values = [v.vehicle, v.count, v.amounts.USD];
-      });
-      styleD(vWs, 2, expenseSummaries.byVehicle.length, [3, 4]);
-      vWs.views = [{ state: 'frozen', ySplit: 1 }];
-      autoW(vWs);
-
-      // All detail
-      const aWs = wb.addWorksheet('All Expenses');
-      aWs.getRow(1).values = ['Date', 'Category', 'Sub-Category', 'Vehicle', 'Amount', 'Currency', 'Reference', 'Notes', 'Flagged'];
-      styleH(aWs, 1);
-      expenseSummaries.rawCosts.forEach((c, i) => {
-        aWs.getRow(i + 2).values = [
-          c.date ? format(parseISO(c.date), 'yyyy-MM-dd') : '',
-          c.category || '', c.sub_category || '', c.vehicle_identifier || '',
-          Number(c.amount || 0), c.currency || 'USD', c.reference_number || '',
-          c.notes || '', c.is_flagged ? 'Yes' : 'No',
-        ];
-      });
-      styleD(aWs, 2, expenseSummaries.rawCosts.length, [5]);
-      aWs.autoFilter = { from: 'A1', to: `I${expenseSummaries.rawCosts.length + 1}` };
-      aWs.views = [{ state: 'frozen', ySplit: 1 }];
-      autoW(aWs);
-
-      const buffer = await wb.xlsx.writeBuffer();
-      saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `Expense_Report_${periodLabel}_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-      toast({
-        title: 'Export Successful',
-        description: 'Expense report has been exported to Excel.',
-      });
-    } catch (error) {
-      console.error('Expense export failed:', error);
-      toast({
-        title: 'Export Failed',
-        description: 'Unable to export expense report. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  }, [periodLabel, expenseSummaries, toast]);
-
-  // Export expenses to PDF
-  const exportExpensesToPDF = useCallback(() => {
-    try {
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pageWidth = doc.internal.pageSize.getWidth();
-
-      // Title
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Expense Report', 14, 18);
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Period: ${periodLabel} | Generated: ${new Date().toLocaleDateString()}`, 14, 25);
-      doc.text(`Total entries: ${expenseSummaries.totalEntries}`, 14, 31);
-
-      // Summary totals
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Summary', 14, 40);
-
-      autoTable(doc, {
-        startY: 43,
-        head: [['Currency', 'Total Expenses']],
-        body: [
-          ['USD', formatCurrency(expenseSummaries.totals.USD)],
-        ],
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246], fontSize: 9 },
-        bodyStyles: { fontSize: 9 },
-        margin: { left: 14, right: 14 },
-        tableWidth: 120,
-      });
-
-      // Expenses by Category
-      const catStartY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY + 10 || 75;
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Expenses by Category', 14, catStartY);
-
-      autoTable(doc, {
-        startY: catStartY + 3,
-        head: [['Category', 'Entries', 'Amount (USD)']],
-        body: expenseSummaries.byCategory.map(c => [
-          c.category,
-          c.count.toString(),
-          formatCurrency(c.amounts.USD),
-        ]),
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246], fontSize: 9 },
-        bodyStyles: { fontSize: 9 },
-        margin: { left: 14, right: 14 },
-      });
-
-      // Expenses by Vehicle
-      const vehStartY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY + 10 || 130;
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Expenses by Vehicle', 14, vehStartY);
-
-      autoTable(doc, {
-        startY: vehStartY + 3,
-        head: [['Vehicle', 'Entries', 'Amount (USD)']],
-        body: expenseSummaries.byVehicle.map(v => [
-          v.vehicle,
-          v.count.toString(),
-          formatCurrency(v.amounts.USD),
-        ]),
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246], fontSize: 9 },
-        bodyStyles: { fontSize: 9 },
-        margin: { left: 14, right: 14 },
-      });
-
-      // Detailed expenses on new page
-      doc.addPage();
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Detailed Expenses', 14, 18);
-
-      autoTable(doc, {
-        startY: 23,
-        head: [['Date', 'Category', 'Sub-Category', 'Vehicle', 'Amount', 'Currency', 'Reference', 'Flagged']],
-        body: expenseSummaries.rawCosts.map(c => [
-          c.date ? format(parseISO(c.date), 'yyyy-MM-dd') : '-',
-          c.category || '-',
-          c.sub_category || '-',
-          c.vehicle_identifier || '-',
-          Number(c.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-          c.currency || 'USD',
-          c.reference_number || '-',
-          c.is_flagged ? 'Yes' : 'No',
-        ]),
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246], fontSize: 8 },
-        bodyStyles: { fontSize: 8 },
-        margin: { left: 14, right: 14 },
-        styles: { overflow: 'linebreak', cellWidth: 'wrap' },
-        columnStyles: {
-          0: { cellWidth: 25 },
-          4: { halign: 'right' },
-        },
-      });
-
-      // Footer
-      const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        doc.text(
-          `Page ${i} of ${pageCount} | Car Craft Co Fleet Management`,
-          pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 8,
-          { align: 'center' }
-        );
-      }
-
-      doc.save(`Expense_Report_${periodLabel}_${new Date().toISOString().split('T')[0]}.pdf`);
-
-      toast({
-        title: 'PDF Generated',
-        description: 'Expense report has been exported as PDF.',
-      });
-    } catch (error) {
-      console.error('PDF export failed:', error);
-      toast({
-        title: 'Export Failed',
-        description: 'Unable to generate PDF. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  }, [periodLabel, expenseSummaries, toast]);
-
   // ──────────────────────────────────────────────────────────────────────
   // Per-tab report builders → ReportSpec for tripReportExports
   // ──────────────────────────────────────────────────────────────────────
   const buildReportSpec = useCallback(
     (
-      tabKey:
-        | "monthly"
-        | "weekly"
-        | "trucks"
-        | "drivers"
-        | "clients"
-        | "routes"
-        | "revenue-types"
-        | "expenses",
+      tabKey: ReportTabKey,
       from: string,
       to: string,
     ): ReportSpec | null => {
@@ -1777,15 +1530,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
   const runReportExport = useCallback(
     async (
-      tabKey:
-        | "monthly"
-        | "weekly"
-        | "trucks"
-        | "drivers"
-        | "clients"
-        | "routes"
-        | "revenue-types"
-        | "expenses",
+      tabKey: ReportTabKey,
       formatType: "pdf" | "excel",
       from: string,
       to: string,
@@ -1810,22 +1555,97 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
   return (
     <div className="space-y-5">
-      {/* Page Header + Period Filter */}
-      <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-        <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-slate-900 via-slate-700 to-slate-400 dark:from-slate-100 dark:via-slate-300 dark:to-slate-600" />
-        <div className="flex flex-col gap-3 px-5 py-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                <BarChart3 className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Reports Overview</p>
-                <p className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  Performance insights for <span className="tabular-nums">{filteredTrips.length.toLocaleString()}</span> trips
-                </p>
-              </div>
+      {/* Overall Summary Cards */}
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-blue-500/70" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+              <Truck className="h-4 w-4" />
             </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Total Trips</p>
+              <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{overallStats.totalTrips.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-emerald-500/70" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
+              <DollarSign className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Revenue</p>
+              <p className="mt-0.5 text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{formatCurrency(overallStats.revenue.USD)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-rose-500/70" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400">
+              <TrendingDown className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Expenses</p>
+              <p className="mt-0.5 text-base font-semibold tabular-nums text-rose-700 dark:text-rose-400">{formatCurrency(overallStats.expenses.USD)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+          <div className={cn(
+            "absolute inset-x-0 top-0 h-[2px]",
+            overallStats.profit.USD >= 0 ? "bg-emerald-500/70" : "bg-orange-500/70"
+          )} />
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-md",
+              overallStats.profit.USD >= 0
+                ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                : "bg-orange-50 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400"
+            )}>
+              {overallStats.profit.USD >= 0 ? (
+                <TrendingUp className="h-4 w-4" />
+              ) : (
+                <TrendingDown className="h-4 w-4" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Net Profit (USD)</p>
+              <p className={cn(
+                "mt-0.5 text-base font-semibold tabular-nums",
+                overallStats.profit.USD >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-orange-700 dark:text-orange-400"
+              )}>{formatCurrency(overallStats.profit.USD)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-violet-500/70" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-violet-50 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400">
+              <MapPin className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Total KM</p>
+              <p className="mt-0.5 text-base font-semibold tabular-nums text-slate-900 dark:text-slate-100">{overallStats.totalKm.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Reports Tabs */}
+      <Tabs
+        value={activeReportTab}
+        onValueChange={(value) => setActiveReportTab(value as ReportTabKey)}
+        className="space-y-4"
+      >
+        <div className="rounded-xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                 <SelectTrigger className="h-9 w-[180px] rounded-lg border-slate-200 bg-slate-50/60 text-sm font-medium text-slate-800 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">
@@ -1846,25 +1666,9 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={exportToExcel}
-                className="h-9 gap-2 border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-slate-900"
-              >
-                <Download className="h-4 w-4" />
-                Export All
-              </Button>
             </div>
-          </div>
 
-          {/* Custom Date Range Inputs */}
-          {selectedPeriod === 'custom' && (
-            <div className="flex flex-col items-start gap-3 border-t border-slate-200/70 pt-3 dark:border-slate-800 sm:flex-row sm:items-end">
-              <div className="flex items-center gap-2">
-                <CalendarRange className="h-4 w-4 shrink-0 text-slate-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Date Range</span>
-              </div>
+            {selectedPeriod === 'custom' && (
               <div className="flex items-center gap-2">
                 <div className="space-y-1">
                   <Label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">From</Label>
@@ -1888,116 +1692,57 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                   />
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Overall Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-blue-500/70" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
-              <Truck className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Total Trips</p>
-              <p className="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{overallStats.totalTrips.toLocaleString()}</p>
-            </div>
+            )}
           </div>
         </div>
 
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-emerald-500/70" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
-              <DollarSign className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Revenue</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{formatCurrency(overallStats.revenue.USD)}</p>
-            </div>
-          </div>
-        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <TabsList className="inline-flex h-auto rounded-xl border border-slate-200/80 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+            <TabsTrigger value="monthly" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Monthly</TabsTrigger>
+            <TabsTrigger value="weekly" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Weekly</TabsTrigger>
+            <TabsTrigger value="trucks" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Trucks</TabsTrigger>
+            <TabsTrigger value="drivers" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Drivers</TabsTrigger>
+            <TabsTrigger value="clients" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Clients</TabsTrigger>
+            <TabsTrigger value="routes" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Routes</TabsTrigger>
+            <TabsTrigger value="revenue-types" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Revenue Types</TabsTrigger>
+            <TabsTrigger value="expenses" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Expenses</TabsTrigger>
+          </TabsList>
 
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-rose-500/70" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400">
-              <TrendingDown className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Expenses</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-rose-700 dark:text-rose-400">{formatCurrency(overallStats.expenses.USD)}</p>
-            </div>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200 dark:hover:bg-slate-900"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>{REPORT_TAB_LABELS[activeReportTab]}</DropdownMenuLabel>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void runReportExport(activeReportTab, 'pdf', effectiveFrom, effectiveTo);
+                }}
+              >
+                Export Current Report as PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void runReportExport(activeReportTab, 'excel', effectiveFrom, effectiveTo);
+                }}
+              >
+                Export Current Report as Excel
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={exportToExcel}>Export All Reports (Excel)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className={cn(
-            "absolute inset-x-0 top-0 h-[2px]",
-            overallStats.profit.USD >= 0 ? "bg-emerald-500/70" : "bg-orange-500/70"
-          )} />
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-lg",
-              overallStats.profit.USD >= 0
-                ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
-                : "bg-orange-50 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400"
-            )}>
-              {overallStats.profit.USD >= 0 ? (
-                <TrendingUp className="h-5 w-5" />
-              ) : (
-                <TrendingDown className="h-5 w-5" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Net Profit (USD)</p>
-              <p className={cn(
-                "mt-0.5 text-lg font-semibold tabular-nums",
-                overallStats.profit.USD >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-orange-700 dark:text-orange-400"
-              )}>{formatCurrency(overallStats.profit.USD)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-violet-500/70" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400">
-              <MapPin className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Total KM</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100">{overallStats.totalKm.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Detailed Reports Tabs */}
-      <Tabs defaultValue="monthly" className="space-y-4">
-        <TabsList className="inline-flex h-auto rounded-xl border border-slate-200/80 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <TabsTrigger value="monthly" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Monthly</TabsTrigger>
-          <TabsTrigger value="weekly" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Weekly</TabsTrigger>
-          <TabsTrigger value="trucks" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Trucks</TabsTrigger>
-          <TabsTrigger value="drivers" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Drivers</TabsTrigger>
-          <TabsTrigger value="clients" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Clients</TabsTrigger>
-          <TabsTrigger value="routes" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Routes</TabsTrigger>
-          <TabsTrigger value="revenue-types" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Revenue Types</TabsTrigger>
-          <TabsTrigger value="expenses" className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-100 dark:data-[state=active]:text-slate-900">Expenses</TabsTrigger>
-        </TabsList>
 
         {/* Monthly Summary Tab */}
         <TabsContent value="monthly" className="space-y-4">
-          <ReportExportToolbar
-            defaultFrom={effectiveFrom}
-            defaultTo={effectiveTo}
-            onExportPdf={(f, t) => runReportExport('monthly', 'pdf', f, t)}
-            onExportExcel={(f, t) => runReportExport('monthly', 'excel', f, t)}
-            label="Monthly report"
-          />
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
             <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
@@ -2009,20 +1754,20 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Revenue, expenses and profit breakdown by month</p>
               </div>
             </div>
-            <div className="p-5">
+            <div className="p-4">
               {monthlySummaries.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-2.5">
                   {monthlySummaries.map((month) => {
                     return (
-                      <div key={month.monthKey} className="p-4 rounded-xl border border-border/50 bg-card/60 hover:bg-accent/50 transition-colors">
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                          <div className="flex items-center gap-4">
-                            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                              <Calendar className="h-6 w-6 text-primary" />
+                      <div key={month.monthKey} className="rounded-xl border border-border/50 bg-card/60 p-3 transition-colors hover:bg-accent/50">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10">
+                              <Calendar className="h-4 w-4 text-primary" />
                             </div>
                             <div>
-                              <h3 className="font-semibold text-lg">{month.monthName} {month.year}</h3>
-                              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <h3 className="text-base font-semibold">{month.monthName} {month.year}</h3>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <span>{month.tripCount} trips</span>
                                 <Badge variant="outline" className="text-xs">{month.completedTrips} completed</Badge>
                                 <span className="flex items-center gap-1">
@@ -2032,7 +1777,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                               </div>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-6">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
                             <div className="text-center lg:text-right">
                               <p className="text-xs text-muted-foreground">Distance</p>
                               <p className="font-semibold tabular-nums">{month.totalKm.toLocaleString()} km</p>
@@ -2068,13 +1813,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
         {/* Weekly Summary Tab */}
         <TabsContent value="weekly" className="space-y-4">
-          <ReportExportToolbar
-            defaultFrom={effectiveFrom}
-            defaultTo={effectiveTo}
-            onExportPdf={(f, t) => runReportExport('weekly', 'pdf', f, t)}
-            onExportExcel={(f, t) => runReportExport('weekly', 'excel', f, t)}
-            label="Weekly report"
-          />
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
             <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
@@ -2123,25 +1861,11 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
         {/* Trucks Tab */}
         <TabsContent value="trucks" className="space-y-4">
-          <ReportExportToolbar
-            defaultFrom={effectiveFrom}
-            defaultTo={effectiveTo}
-            onExportPdf={(f, t) => runReportExport('trucks', 'pdf', f, t)}
-            onExportExcel={(f, t) => runReportExport('trucks', 'excel', f, t)}
-            label="Trucks report"
-          />
           <TruckReportsTab trips={filteredTrips} costEntries={costEntries} />
         </TabsContent>
 
         {/* Drivers Tab */}
         <TabsContent value="drivers" className="space-y-4">
-          <ReportExportToolbar
-            defaultFrom={effectiveFrom}
-            defaultTo={effectiveTo}
-            onExportPdf={(f, t) => runReportExport('drivers', 'pdf', f, t)}
-            onExportExcel={(f, t) => runReportExport('drivers', 'excel', f, t)}
-            label="Drivers report"
-          />
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
             <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
@@ -2153,25 +1877,25 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Revenue and profit contribution by driver</p>
               </div>
             </div>
-            <div className="p-5">
+            <div className="p-4">
               {driverSummaries.length > 0 ? (
                 <div className="space-y-3">
                   {driverSummaries.map((driver, index) => (
-                    <div key={driver.driverName} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl border border-border/50 hover:bg-accent/50 transition-colors gap-3">
-                      <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-primary tabular-nums">
+                    <div key={driver.driverName} className="flex flex-col gap-3 rounded-xl border border-border/50 p-3 transition-colors hover:bg-accent/50 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 font-bold text-primary tabular-nums">
                           {index + 1}
                         </div>
                         <div>
                           <p className="font-semibold">{driver.driverName}</p>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span>{driver.tripCount} trips</span>
                             <span>•</span>
                             <span>{driver.totalKm.toLocaleString()} km</span>
                           </div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 sm:gap-6">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-4">
                         <div className="text-center sm:text-right">
                           <p className="text-xs text-muted-foreground">Revenue</p>
                           <CurrencyDisplay amounts={driver.revenue} type="revenue" />
@@ -2200,13 +1924,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
         {/* Clients Tab */}
         <TabsContent value="clients" className="space-y-4">
-          <ReportExportToolbar
-            defaultFrom={effectiveFrom}
-            defaultTo={effectiveTo}
-            onExportPdf={(f, t) => runReportExport('clients', 'pdf', f, t)}
-            onExportExcel={(f, t) => runReportExport('clients', 'excel', f, t)}
-            label="Clients report"
-          />
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
             <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
@@ -2274,14 +1991,14 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                     };
 
                     const renderClientRow = (client: ClientSummary) => (
-                      <div key={client.clientName} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl border border-border/50 hover:bg-accent/50 transition-colors gap-3">
-                        <div className="flex items-center gap-4">
-                          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                            <Building className="h-5 w-5 text-primary" />
+                      <div key={client.clientName} className="flex flex-col gap-3 rounded-xl border border-border/50 p-3 transition-colors hover:bg-accent/50 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                            <Building className="h-4 w-4 text-primary" />
                           </div>
                           <div>
                             <p className="font-semibold">{client.clientName}</p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <span>{client.tripCount} trips</span>
                               <span>•</span>
                               <span>{client.totalKm.toLocaleString()} km</span>
@@ -2300,7 +2017,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 sm:gap-6">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
                           <div className="text-center sm:text-right">
                             <p className="text-xs text-muted-foreground">Revenue</p>
                             <CurrencyDisplay amounts={client.revenue} type="revenue" />
@@ -2364,13 +2081,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
         {/* Routes Tab */}
         <TabsContent value="routes" className="space-y-4">
-          <ReportExportToolbar
-            defaultFrom={effectiveFrom}
-            defaultTo={effectiveTo}
-            onExportPdf={(f, t) => runReportExport('routes', 'pdf', f, t)}
-            onExportExcel={(f, t) => runReportExport('routes', 'excel', f, t)}
-            label="Routes report"
-          />
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
             <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
@@ -2382,19 +2092,19 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Performance analysis by route</p>
               </div>
             </div>
-            <div className="p-5">
+            <div className="p-4">
               {routeSummaries.length > 0 ? (
                 <div className="space-y-3">
                   {routeSummaries.slice(0, 15).map((route) => (
-                    <div key={route.route} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-xl border border-border/50 hover:bg-accent/50 transition-colors gap-3">
+                    <div key={route.route} className="flex flex-col gap-3 rounded-xl border border-border/50 p-3 transition-colors hover:bg-accent/50 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
-                        <MapPin className="h-5 w-5 text-muted-foreground shrink-0" />
+                        <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <div>
                           <p className="font-semibold">{route.route}</p>
-                          <p className="text-sm text-muted-foreground">{route.tripCount} trips</p>
+                          <p className="text-xs text-muted-foreground">{route.tripCount} trips</p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 sm:gap-6">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-4">
                         <div className="text-center sm:text-right">
                           <p className="text-xs text-muted-foreground">Revenue</p>
                           <CurrencyDisplay amounts={route.revenue} type="revenue" />
@@ -2423,13 +2133,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
         {/* Revenue Types Tab */}
         <TabsContent value="revenue-types" className="space-y-4">
-          <ReportExportToolbar
-            defaultFrom={effectiveFrom}
-            defaultTo={effectiveTo}
-            onExportPdf={(f, t) => runReportExport('revenue-types', 'pdf', f, t)}
-            onExportExcel={(f, t) => runReportExport('revenue-types', 'excel', f, t)}
-            label="Revenue Types report"
-          />
           {/* Real Money banner */}
           <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
             <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-emerald-500 to-emerald-700" />
@@ -2483,50 +2186,23 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
         {/* Expenses Tab */}
         <TabsContent value="expenses" className="space-y-4">
-          <ReportExportToolbar
-            defaultFrom={effectiveFrom}
-            defaultTo={effectiveTo}
-            onExportPdf={(f, t) => runReportExport('expenses', 'pdf', f, t)}
-            onExportExcel={(f, t) => runReportExport('expenses', 'excel', f, t)}
-            label="Expenses report"
-          />
-          {/* Export buttons */}
-          <div className="flex flex-col gap-2 rounded-xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40 sm:flex-row sm:items-center sm:justify-between">
+          <div className="rounded-xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
               <span className="tabular-nums text-slate-700 dark:text-slate-200">{expenseSummaries.totalEntries}</span> expense entries across <span className="tabular-nums text-slate-700 dark:text-slate-200">{expenseSummaries.byCategory.length}</span> categories
             </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={exportExpensesToExcel}
-                className="h-9 gap-2 border-emerald-200 bg-emerald-50 font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
-              >
-                <Download className="h-4 w-4" />
-                Excel
-              </Button>
-              <Button
-                size="sm"
-                onClick={exportExpensesToPDF}
-                className="h-9 gap-2 bg-slate-900 font-medium text-white shadow-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-              >
-                <FileText className="h-4 w-4" />
-                PDF
-              </Button>
-            </div>
           </div>
 
           {/* Totals summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
               <div className="absolute inset-x-0 top-0 h-[2px] bg-rose-500/70" />
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Total Expenses (USD)</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{formatCurrency(expenseSummaries.totals.USD)}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{formatCurrency(expenseSummaries.totals.USD)}</p>
             </div>
-            <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
               <div className="absolute inset-x-0 top-0 h-[2px] bg-slate-500/70" />
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Expense Entries</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{expenseSummaries.totalEntries.toLocaleString()}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{expenseSummaries.totalEntries.toLocaleString()}</p>
             </div>
           </div>
 
@@ -2542,7 +2218,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Cost breakdown across expense categories</p>
               </div>
             </div>
-            <div className="p-5">
+            <div className="p-4">
               {expenseSummaries.byCategory.length > 0 ? (
                 <div className="space-y-3">
                   {expenseSummaries.byCategory.map((cat) => {
@@ -2550,15 +2226,15 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                     const catTotal = cat.amounts.USD;
                     const pct = totalAll > 0 ? (catTotal / totalAll) * 100 : 0;
                     return (
-                      <div key={cat.category} className="p-4 rounded-xl border border-border/50 bg-card/60 hover:bg-accent/50 transition-colors">
+                      <div key={cat.category} className="rounded-xl border border-border/50 bg-card/60 p-3 transition-colors hover:bg-accent/50">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                              <DollarSign className="h-5 w-5 text-primary" />
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                              <DollarSign className="h-4 w-4 text-primary" />
                             </div>
                             <div className="min-w-0">
                               <p className="font-semibold truncate">{cat.category}</p>
-                              <p className="text-sm text-muted-foreground">{cat.count} entries • {pct.toFixed(1)}% of total</p>
+                              <p className="text-xs text-muted-foreground">{cat.count} entries • {pct.toFixed(1)}% of total</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -2591,7 +2267,7 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Cost allocation per fleet vehicle</p>
               </div>
             </div>
-            <div className="p-5">
+            <div className="p-4">
               {expenseSummaries.byVehicle.length > 0 ? (
                 <div className="space-y-3">
                   {expenseSummaries.byVehicle.map((veh) => {
@@ -2599,15 +2275,15 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                     const vehTotal = veh.amounts.USD;
                     const pct = totalAll > 0 ? (vehTotal / totalAll) * 100 : 0;
                     return (
-                      <div key={veh.vehicle} className="p-4 rounded-xl border border-border/50 bg-card/60 hover:bg-accent/50 transition-colors">
+                      <div key={veh.vehicle} className="rounded-xl border border-border/50 bg-card/60 p-3 transition-colors hover:bg-accent/50">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                              <Truck className="h-5 w-5 text-blue-600" />
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
+                              <Truck className="h-4 w-4 text-blue-600" />
                             </div>
                             <div>
                               <p className="font-semibold">{veh.vehicle}</p>
-                              <p className="text-sm text-muted-foreground">{veh.count} entries • {pct.toFixed(1)}% of total</p>
+                              <p className="text-xs text-muted-foreground">{veh.count} entries • {pct.toFixed(1)}% of total</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -2640,39 +2316,38 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Granular expense breakdown by category and sub-category</p>
               </div>
             </div>
-            <div className="p-5">
+            <div className="p-4">
               {expenseSummaries.bySubCategory.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/40">
-                        <th className="py-2.5 px-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Category</th>
-                        <th className="py-2.5 px-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Sub-Category</th>
-                        <th className="py-2.5 px-3 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Entries</th>
-                        <th className="py-2.5 px-3 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">USD</th>
-                        <th className="py-2.5 px-3 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">USD</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {expenseSummaries.bySubCategory.map((row, idx) => (
-                        <tr key={`${row.category}-${row.subCategory}`} className={cn("border-b border-slate-200/70 dark:border-slate-800", idx % 2 === 0 && "bg-slate-50/40 dark:bg-slate-900/20")}>
-                          <td className="py-2.5 px-3 font-medium text-slate-800 dark:text-slate-200">{row.category}</td>
-                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">{row.subCategory}</td>
-                          <td className="py-2.5 px-3 text-center tabular-nums text-slate-700 dark:text-slate-200">{row.count}</td>
-                          <td className="py-2.5 px-3 text-right tabular-nums text-slate-800 dark:text-slate-100">{formatCurrency(row.amounts.USD)}</td>
-                          <td className="py-2.5 px-3 text-right tabular-nums text-slate-800 dark:text-slate-100">{formatCurrency(row.amounts.USD, 'USD')}</td>
+                <div className="overflow-x-auto rounded-lg border border-slate-200/70 dark:border-slate-800">
+                  <div className="max-h-[420px] overflow-auto">
+                    <table className="w-full text-xs sm:text-sm">
+                      <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm dark:bg-slate-900/90">
+                        <tr className="border-b border-slate-200/70 dark:border-slate-800">
+                          <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Category</th>
+                          <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Sub-Category</th>
+                          <th className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Entries</th>
+                          <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Amount (USD)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 border-slate-300 bg-slate-50/60 font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">
-                        <td className="py-2.5 px-3" colSpan={2}>Total</td>
-                        <td className="py-2.5 px-3 text-center tabular-nums">{expenseSummaries.totalEntries}</td>
-                        <td className="py-2.5 px-3 text-right tabular-nums">{formatCurrency(expenseSummaries.totals.USD)}</td>
-                        <td className="py-2.5 px-3 text-right tabular-nums">{formatCurrency(expenseSummaries.totals.USD, 'USD')}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {expenseSummaries.bySubCategory.map((row, idx) => (
+                          <tr key={`${row.category}-${row.subCategory}`} className={cn("border-b border-slate-200/50 dark:border-slate-800/80", idx % 2 === 0 && "bg-slate-50/30 dark:bg-slate-900/20")}>
+                            <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{row.category}</td>
+                            <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{row.subCategory}</td>
+                            <td className="px-3 py-2 text-center tabular-nums text-slate-700 dark:text-slate-200">{row.count}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-800 dark:text-slate-100">{formatCurrency(row.amounts.USD)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t border-slate-300 bg-slate-50/60 font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100">
+                          <td className="px-3 py-2" colSpan={2}>Total</td>
+                          <td className="px-3 py-2 text-center tabular-nums">{expenseSummaries.totalEntries}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(expenseSummaries.totals.USD)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-12 text-muted-foreground">
