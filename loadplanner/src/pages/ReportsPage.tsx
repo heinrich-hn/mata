@@ -1161,7 +1161,7 @@ export default function ReportsPage() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() =>
-                    exportOriginDestinationToPdf(loads, timeRange, "monthly")
+                    exportOriginDestinationToPdf(loads, "all", "monthly")
                   }
                   className="gap-2 cursor-pointer"
                 >
@@ -1170,7 +1170,7 @@ export default function ReportsPage() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
-                    exportOriginDestinationToExcel(loads, timeRange, "monthly")
+                    exportOriginDestinationToExcel(loads, "all", "monthly")
                   }
                   className="gap-2 cursor-pointer"
                 >

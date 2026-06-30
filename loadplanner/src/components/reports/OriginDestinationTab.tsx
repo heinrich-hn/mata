@@ -15,7 +15,17 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { ArrowDownTrayIcon, MapPinIcon, TruckIcon } from "@heroicons/react/24/outline";
+import { ArrowDownTrayIcon, ChartBarIcon, MapPinIcon } from "@heroicons/react/24/outline";
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Legend,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts";
 import {
     aggregate,
     buildBuckets,
@@ -23,6 +33,7 @@ import {
     filterLoads,
     exportOriginDestinationToExcel,
     exportOriginDestinationToPdf,
+    type LocationBreakdown,
     type TimeRange,
 } from "@/lib/exportOriginDestinationReport";
 import type { Load } from "@/hooks/useTrips";
@@ -32,88 +43,55 @@ interface OriginDestinationTabProps {
     timeRange: TimeRange;
 }
 
-function BreakdownTable({
-    locationHeader,
-    buckets,
-    rows,
-}: {
-    locationHeader: string;
-    buckets: { key: string; label: string }[];
-    rows: { location: string; counts: number[]; total: number }[];
-}) {
-    const bucketTotals = buckets.map((_, i) => rows.reduce((s, r) => s + r.counts[i], 0));
-    const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+// Locations to chart, by role.
+const ORIGIN_SERIES = ["BV", "CBC"] as const;
+const DESTINATION_SERIES = ["Rezende Depot", "Bulawayo Depot"] as const;
 
-    return (
-        <div className="overflow-x-auto">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead className="sticky left-0 bg-background font-semibold">
-                            {locationHeader}
-                        </TableHead>
-                        {buckets.map((b) => (
-                            <TableHead key={b.key} className="text-right whitespace-nowrap">
-                                {b.label}
-                            </TableHead>
-                        ))}
-                        <TableHead className="text-right font-semibold">Total</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {rows.length === 0 ? (
-                        <TableRow>
-                            <TableCell colSpan={buckets.length + 2} className="text-center text-muted-foreground">
-                                No loads in selected period
-                            </TableCell>
-                        </TableRow>
-                    ) : (
-                        rows.map((r) => (
-                            <TableRow key={r.location}>
-                                <TableCell className="sticky left-0 bg-background font-medium">
-                                    {r.location}
-                                </TableCell>
-                                {r.counts.map((c, i) => (
-                                    <TableCell key={i} className="text-right">
-                                        {c || ""}
-                                    </TableCell>
-                                ))}
-                                <TableCell className="text-right font-semibold">{r.total}</TableCell>
-                            </TableRow>
-                        ))
-                    )}
-                </TableBody>
-                {rows.length > 0 && (
-                    <tfoot>
-                        <TableRow className="bg-muted/50 font-semibold">
-                            <TableCell className="sticky left-0 bg-muted/50">TOTAL</TableCell>
-                            {bucketTotals.map((t, i) => (
-                                <TableCell key={i} className="text-right">
-                                    {t}
-                                </TableCell>
-                            ))}
-                            <TableCell className="text-right">{grandTotal}</TableCell>
-                        </TableRow>
-                    </tfoot>
-                )}
-            </Table>
-        </div>
-    );
+// Bar colours per series.
+const SERIES_COLORS: Record<string, string> = {
+    BV: "#6366f1",
+    CBC: "#8b5cf6",
+    "Rezende Depot": "#22c55e",
+    "Bulawayo Depot": "#0ea5e9",
+};
+
+const normalize = (value: string) => value.trim().toLowerCase();
+
+/** Return the per-bucket counts for a named location, or zeros if absent. */
+function countsFor(rows: LocationBreakdown[], name: string, bucketCount: number): number[] {
+    const match = rows.find((r) => normalize(r.location) === normalize(name));
+    return match ? match.counts : new Array(bucketCount).fill(0);
 }
 
 export function OriginDestinationTab({
     loads,
     timeRange,
 }: OriginDestinationTabProps) {
-    const { buckets, origins, destinations, routes } = useMemo(() => {
+    const { chartData, routes } = useMemo(() => {
         const data = filterLoads(loads, timeRange);
         const bks = buildBuckets(timeRange, "monthly");
-        return {
-            buckets: bks,
-            origins: aggregate(data, bks, "origin"),
-            destinations: aggregate(data, bks, "destination"),
-            routes: buildRoutes(data).slice(0, 15),
-        };
+        const origins = aggregate(data, bks, "origin");
+        const destinations = aggregate(data, bks, "destination");
+
+        const series: Record<string, number[]> = {};
+        for (const name of ORIGIN_SERIES) series[name] = countsFor(origins, name, bks.length);
+        for (const name of DESTINATION_SERIES)
+            series[name] = countsFor(destinations, name, bks.length);
+
+        const rows = bks.map((b, i) => {
+            const row: Record<string, string | number> = { month: b.label };
+            for (const name of [...ORIGIN_SERIES, ...DESTINATION_SERIES]) {
+                row[name] = series[name][i];
+            }
+            return row;
+        });
+
+        // Only routes shipped from BV or CBC.
+        const filteredRoutes = buildRoutes(data).filter((r) =>
+            ORIGIN_SERIES.some((o) => normalize(o) === normalize(r.origin)),
+        );
+
+        return { chartData: rows, routes: filteredRoutes };
     }, [loads, timeRange]);
 
     return (
@@ -121,7 +99,7 @@ export function OriginDestinationTab({
             <div className="flex justify-end gap-2">
                 <button
                     type="button"
-                    onClick={() => exportOriginDestinationToExcel(loads, timeRange, "monthly")}
+                    onClick={() => exportOriginDestinationToExcel(loads, "all", "monthly")}
                     className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
                 >
                     <ArrowDownTrayIcon className="h-4 w-4 text-emerald-600" />
@@ -129,7 +107,7 @@ export function OriginDestinationTab({
                 </button>
                 <button
                     type="button"
-                    onClick={() => exportOriginDestinationToPdf(loads, timeRange, "monthly")}
+                    onClick={() => exportOriginDestinationToPdf(loads, "all", "monthly")}
                     className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
                 >
                     <ArrowDownTrayIcon className="h-4 w-4 text-rose-600" />
@@ -140,30 +118,39 @@ export function OriginDestinationTab({
             <Card className="overflow-hidden">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                        <TruckIcon className="h-5 w-5 text-indigo-500" />
-                        Loads Shipped by Origin
+                        <ChartBarIcon className="h-5 w-5 text-indigo-500" />
+                        Loads by Origin &amp; Destination
                     </CardTitle>
                     <CardDescription>
-                        Number of loads dispatched from each origin per month
+                        Monthly loads from origins BV and CBC, and to destinations Rezende Depot and
+                        Bulawayo Depot
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <BreakdownTable locationHeader="Origin" buckets={buckets} rows={origins} />
-                </CardContent>
-            </Card>
-
-            <Card className="overflow-hidden">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                        <MapPinIcon className="h-5 w-5 text-emerald-500" />
-                        Loads Delivered by Destination
-                    </CardTitle>
-                    <CardDescription>
-                        Number of loads delivered to each destination per month
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <BreakdownTable locationHeader="Destination" buckets={buckets} rows={destinations} />
+                    <div className="h-[400px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.4} vertical={false} />
+                                <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
+                                <YAxis stroke="#6b7280" fontSize={12} allowDecimals={false} />
+                                <Tooltip
+                                    contentStyle={{
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #e5e7eb",
+                                    }}
+                                />
+                                <Legend />
+                                {[...ORIGIN_SERIES, ...DESTINATION_SERIES].map((name) => (
+                                    <Bar
+                                        key={name}
+                                        dataKey={name}
+                                        fill={SERIES_COLORS[name]}
+                                        radius={[4, 4, 0, 0]}
+                                    />
+                                ))}
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </CardContent>
             </Card>
 
@@ -173,7 +160,7 @@ export function OriginDestinationTab({
                         <MapPinIcon className="h-5 w-5 text-amber-500" />
                         Top Origin → Destination Routes
                     </CardTitle>
-                    <CardDescription>Loads grouped by origin and destination</CardDescription>
+                    <CardDescription>Loads shipped from BV and CBC, by destination</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="overflow-x-auto">
@@ -186,18 +173,26 @@ export function OriginDestinationTab({
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {routes.map((r) => (
-                                    <TableRow key={`${r.origin}-${r.destination}`}>
-                                        <TableCell className="font-medium">{r.origin}</TableCell>
-                                        <TableCell>{r.destination}</TableCell>
-                                        <TableCell className="text-right font-semibold">{r.loads}</TableCell>
+                                {routes.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center text-muted-foreground">
+                                            No loads from BV or CBC in selected period
+                                        </TableCell>
                                     </TableRow>
-                                ))}
+                                ) : (
+                                    routes.map((r) => (
+                                        <TableRow key={`${r.origin}-${r.destination}`}>
+                                            <TableCell className="font-medium">{r.origin}</TableCell>
+                                            <TableCell>{r.destination}</TableCell>
+                                            <TableCell className="text-right font-semibold">{r.loads}</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
                             </TableBody>
                         </Table>
                     </div>
                 </CardContent>
             </Card>
-        </TabsContent >
+        </TabsContent>
     );
 }

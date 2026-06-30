@@ -248,6 +248,15 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
         departureNote: data.destDepartureNote || '',
       },
       backload: currentTimes.backload, // Preserve existing backload data
+      // Preserve third-party / subcontractor / waypoint / history metadata so
+      // confirming delivery doesn't strip the load's subcontractor assignment
+      // (which would make it revert to "unassigned" and drop off the
+      // Subcontractor Trips page).
+      thirdParty: currentTimes.thirdParty,
+      subcontractor: currentTimes.subcontractor,
+      waypoints: currentTimes.waypoints,
+      dateChangeHistory: currentTimes.dateChangeHistory,
+      questions: currentTimes.questions,
       // Build combined varianceReason for backward compat with Google Sheets
       varianceReason: [data.originArrivalNote, data.originDepartureNote, data.destArrivalNote, data.destDepartureNote].filter(Boolean).join(' | '),
     };
@@ -376,6 +385,13 @@ export function DeliveryConfirmationDialog({ open, onOpenChange, load, verificat
         departureNote: data.destDepartureNote || '',
       },
       backload: currentTimes.backload, // Preserve existing backload data
+      // Preserve third-party / subcontractor / waypoint / history metadata so
+      // saving times doesn't strip the load's subcontractor assignment.
+      thirdParty: currentTimes.thirdParty,
+      subcontractor: currentTimes.subcontractor,
+      waypoints: currentTimes.waypoints,
+      dateChangeHistory: currentTimes.dateChangeHistory,
+      questions: currentTimes.questions,
       varianceReason: [data.originArrivalNote, data.originDepartureNote, data.destArrivalNote, data.destDepartureNote].filter(Boolean).join(' | '),
     };
 
