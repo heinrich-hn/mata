@@ -15,7 +15,7 @@ import {
 import React, { Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import ClientsPage from "./pages/ClientsPage";
-import DieselOrdersPage from "./pages/DieselOrdersPage";
+import OrdersPage from "./pages/OrdersPage";
 import DriversPage from "./pages/DriversPage";
 import FleetPage from "./pages/FleetPage";
 import Index from "./pages/Index";
@@ -209,11 +209,11 @@ const App = () => (
                     }
                   />
                   <Route
-                    path="/diesel-orders"
+                    path="/orders"
                     element={
                       <ProtectedRoute>
                         <MainLayout>
-                          <DieselOrdersPage />
+                          <OrdersPage />
                         </MainLayout>
                       </ProtectedRoute>
                     }

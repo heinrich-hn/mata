@@ -35,7 +35,7 @@ const mainNavItems = [
   { title: "Load Planning", url: "/loads", icon: Package },
   { title: "Third-Party Loads", url: "/third-party", icon: Building2 },
   { title: "Subcontractor Trips", url: "/subcontractor-trips", icon: Handshake },
-  { title: "Diesel Orders", url: "/diesel-orders", icon: Fuel },
+  { title: "Orders", url: "/orders", icon: Fuel },
   { title: "Calendar", url: "/calendar", icon: Calendar },
   { title: "Live Tracking", url: "/live-tracking", icon: MapPin },
   { title: "Deliveries", url: "/deliveries", icon: Route },

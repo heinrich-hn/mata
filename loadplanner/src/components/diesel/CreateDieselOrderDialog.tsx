@@ -10,6 +10,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  DIESEL_ORDER_REASON_THRESHOLD_LITERS,
   fuelStations,
   generateDieselOrderNumber,
   useCreateDieselOrder,
@@ -50,6 +52,18 @@ const formSchema = z.object({
   driver_id: z.string().min(1, "Please select a driver"),
   fleet_vehicle_id: z.string().min(1, "Please select a fleet vehicle"),
   notes: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (
+    data.fleet_vehicle_id &&
+    data.quantity_liters > DIESEL_ORDER_REASON_THRESHOLD_LITERS &&
+    !data.notes?.trim()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["notes"],
+      message: `Reason is required when quantity exceeds ${DIESEL_ORDER_REASON_THRESHOLD_LITERS}L.`,
+    });
+  }
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -89,6 +103,9 @@ export function CreateDieselOrderDialog({
   const watchedFuelStation = form.watch("fuel_station");
   const watchedLoadId = form.watch("load_id");
   const _watchedDriverId = form.watch("driver_id");
+  const watchedQuantityLiters = form.watch("quantity_liters");
+  const reasonRequired =
+    watchedQuantityLiters > DIESEL_ORDER_REASON_THRESHOLD_LITERS;
 
   // Update selected load when load_id changes
   useEffect(() => {
@@ -149,8 +166,8 @@ export function CreateDieselOrderDialog({
         fleet_vehicle_id: data.fleet_vehicle_id,
         recipient_name: selectedDriver?.name || null,
         recipient_phone: selectedDriver?.contact || null,
-        notes: data.notes || null,
-        status: "pending",
+        notes: data.notes?.trim() || null,
+        status: "approved",
       },
       {
         onSuccess: () => {
@@ -439,15 +456,21 @@ export function CreateDieselOrderDialog({
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes</FormLabel>
+                  <FormLabel>
+                    Reason / Notes {reasonRequired ? "*" : ""}
+                  </FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Additional instructions or notes..."
+                      placeholder="Additional instructions or reason..."
                       className="resize-none"
                       rows={3}
                       {...field}
                     />
                   </FormControl>
+                  <FormDescription>
+                    Required when quantity exceeds {" "}
+                    {DIESEL_ORDER_REASON_THRESHOLD_LITERS}L.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

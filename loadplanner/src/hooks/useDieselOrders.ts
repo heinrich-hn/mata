@@ -9,6 +9,8 @@ export type DieselOrderStatus =
   | "fulfilled"
   | "cancelled";
 
+export const DIESEL_ORDER_REASON_THRESHOLD_LITERS = 200;
+
 export interface DieselOrderDriver {
   id: string;
   name: string;
@@ -151,10 +153,27 @@ export function useCreateDieselOrder() {
 
   return useMutation({
     mutationFn: async (order: DieselOrderInsert) => {
+      const normalizedNotes = order.notes?.trim() || null;
+
+      if (
+        order.fleet_vehicle_id &&
+        order.quantity_liters > DIESEL_ORDER_REASON_THRESHOLD_LITERS &&
+        !normalizedNotes
+      ) {
+        throw new Error(
+          `A reason is required for diesel orders above ${DIESEL_ORDER_REASON_THRESHOLD_LITERS}L.`,
+        );
+      }
+
+      const payload: DieselOrderInsert = {
+        ...order,
+        notes: normalizedNotes,
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from("diesel_orders")
-        .insert(order)
+        .insert(payload)
         .select()
         .single();
 

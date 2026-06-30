@@ -19,7 +19,6 @@ import {
   type DieselOrder,
   useApproveDieselOrder,
   useDeleteDieselOrder,
-  useFulfillDieselOrder,
 } from "@/hooks/useDieselOrders";
 import {
   exportDieselOrderToPdf,
@@ -61,7 +60,6 @@ export function DieselOrdersTable({
   onEditOrder,
 }: DieselOrdersTableProps) {
   const approveDieselOrder = useApproveDieselOrder();
-  const fulfillDieselOrder = useFulfillDieselOrder();
   const deleteDieselOrder = useDeleteDieselOrder();
 
   const handleExportPdf = (order: DieselOrder) => {
@@ -79,10 +77,6 @@ export function DieselOrdersTable({
 
   const handleApprove = (order: DieselOrder) => {
     approveDieselOrder.mutate(order.id);
-  };
-
-  const handleFulfill = (order: DieselOrder) => {
-    fulfillDieselOrder.mutate(order.id);
   };
 
   const handleDelete = (order: DieselOrder) => {
@@ -248,12 +242,6 @@ export function DieselOrdersTable({
                       <DropdownMenuItem onClick={() => handleApprove(order)}>
                         <CheckCircle className="mr-2 h-4 w-4" />
                         Approve Order
-                      </DropdownMenuItem>
-                    )}
-                    {order.status === "approved" && (
-                      <DropdownMenuItem onClick={() => handleFulfill(order)}>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Mark Fulfilled
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
