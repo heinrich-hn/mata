@@ -30,12 +30,14 @@ import {
     aggregate,
     buildBuckets,
     buildRoutes,
+    buildRouteLoadTypeBreakdown,
     filterLoads,
     exportOriginDestinationToExcel,
     exportOriginDestinationToPdf,
     type LocationBreakdown,
     type TimeRange,
 } from "@/lib/exportOriginDestinationReport";
+import { cargoLabels } from "@/constants/tripFormConfig";
 import type { Load } from "@/hooks/useTrips";
 
 interface OriginDestinationTabProps {
@@ -68,7 +70,7 @@ export function OriginDestinationTab({
     loads,
     timeRange,
 }: OriginDestinationTabProps) {
-    const { chartData, routes } = useMemo(() => {
+    const { chartData, routes, routeLoadTypeBreakdown, loadTypeColumns, loadTypeTotals } = useMemo(() => {
         const data = filterLoads(loads, timeRange);
         const bks = buildBuckets(timeRange, "monthly");
         const origins = aggregate(data, bks, "origin");
@@ -92,7 +94,19 @@ export function OriginDestinationTab({
             ORIGIN_SERIES.some((o) => normalize(o) === normalize(r.origin)),
         );
 
-        return { chartData: rows, routes: filteredRoutes };
+        const {
+            rows: routeBreakdown,
+            loadTypeColumns: loadTypeCols,
+            loadTypeTotals,
+        } = buildRouteLoadTypeBreakdown(data);
+
+        return {
+            chartData: rows,
+            routes: filteredRoutes,
+            routeLoadTypeBreakdown: routeBreakdown,
+            loadTypeColumns: loadTypeCols,
+            loadTypeTotals,
+        };
     }, [loads, timeRange]);
 
     return (
@@ -188,6 +202,74 @@ export function OriginDestinationTab({
                                             <TableCell className="text-right font-semibold">{r.loads}</TableCell>
                                         </TableRow>
                                     ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                        <ChartBarIcon className="h-5 w-5 text-blue-500" />
+                        Load Type by Origin → Destination
+                    </CardTitle>
+                    <CardDescription>
+                        Number of transported loads by route and load type for the selected period
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Origin</TableHead>
+                                    <TableHead>Destination</TableHead>
+                                    {loadTypeColumns.map((loadType) => (
+                                        <TableHead key={loadType} className="text-right whitespace-nowrap">
+                                            {cargoLabels[loadType] || loadType}
+                                        </TableHead>
+                                    ))}
+                                    <TableHead className="text-right">Total</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {routeLoadTypeBreakdown.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell
+                                            colSpan={loadTypeColumns.length + 3}
+                                            className="text-center text-muted-foreground"
+                                        >
+                                            No loads available in selected period
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    routeLoadTypeBreakdown.map((row) => (
+                                        <TableRow key={`${row.origin}-${row.destination}`}>
+                                            <TableCell className="font-medium">{row.origin}</TableCell>
+                                            <TableCell>{row.destination}</TableCell>
+                                            {loadTypeColumns.map((loadType) => (
+                                                <TableCell key={`${row.origin}-${row.destination}-${loadType}`} className="text-right">
+                                                    {row.loadTypeCounts[loadType] || 0}
+                                                </TableCell>
+                                            ))}
+                                            <TableCell className="text-right font-semibold">{row.totalLoads}</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                                {routeLoadTypeBreakdown.length > 0 && (
+                                    <TableRow className="bg-muted/40">
+                                        <TableCell className="font-semibold" colSpan={2}>Total</TableCell>
+                                        {loadTypeColumns.map((loadType) => (
+                                            <TableCell key={`total-${loadType}`} className="text-right font-semibold">
+                                                {loadTypeTotals[loadType] || 0}
+                                            </TableCell>
+                                        ))}
+                                        <TableCell className="text-right font-semibold">
+                                            {routeLoadTypeBreakdown.reduce((sum, row) => sum + row.totalLoads, 0)}
+                                        </TableCell>
+                                    </TableRow>
                                 )}
                             </TableBody>
                         </Table>

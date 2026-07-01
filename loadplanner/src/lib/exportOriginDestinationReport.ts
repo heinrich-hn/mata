@@ -9,6 +9,7 @@
  */
 
 import type { Load } from "@/hooks/useTrips";
+import { cargoLabels } from "@/constants/tripFormConfig";
 import {
     COMPANY_NAME,
     SYSTEM_NAME,
@@ -185,6 +186,61 @@ export function buildRoutes(loads: Load[]): { origin: string; destination: strin
         .sort((a, b) => b.loads - a.loads);
 }
 
+/** One origin → destination route, broken down by load (cargo) type. */
+export interface RouteLoadTypeBreakdown {
+    origin: string;
+    destination: string;
+    totalLoads: number;
+    loadTypeCounts: Record<string, number>;
+}
+
+/**
+ * Aggregate loads into origin → destination routes with per-load-type counts.
+ * Returns the route rows, the ordered load-type columns (most frequent first),
+ * and the per-load-type grand totals.
+ */
+export function buildRouteLoadTypeBreakdown(loads: Load[]): {
+    rows: RouteLoadTypeBreakdown[];
+    loadTypeColumns: string[];
+    loadTypeTotals: Record<string, number>;
+} {
+    const routeMap = new Map<string, RouteLoadTypeBreakdown>();
+    const totalsMap = new Map<string, number>();
+
+    for (const load of loads) {
+        const origin = load.origin?.trim() || "Unknown";
+        const destination = load.destination?.trim() || "Unknown";
+        const loadType = load.cargo_type?.trim() || "Unknown";
+        const routeKey = `${origin}|||${destination}`;
+
+        if (!routeMap.has(routeKey)) {
+            routeMap.set(routeKey, { origin, destination, totalLoads: 0, loadTypeCounts: {} });
+        }
+        const route = routeMap.get(routeKey)!;
+        route.totalLoads += 1;
+        route.loadTypeCounts[loadType] = (route.loadTypeCounts[loadType] || 0) + 1;
+        totalsMap.set(loadType, (totalsMap.get(loadType) || 0) + 1);
+    }
+
+    const rows = Array.from(routeMap.values()).sort(
+        (a, b) =>
+            b.totalLoads - a.totalLoads ||
+            a.origin.localeCompare(b.origin) ||
+            a.destination.localeCompare(b.destination),
+    );
+    const loadTypeColumns = Array.from(totalsMap.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([loadType]) => loadType);
+    const loadTypeTotals = Object.fromEntries(totalsMap.entries()) as Record<string, number>;
+
+    return { rows, loadTypeColumns, loadTypeTotals };
+}
+
+/** Display label for a load (cargo) type key. */
+function loadTypeLabel(loadType: string): string {
+    return cargoLabels[loadType] || loadType;
+}
+
 function fileSlug(timeRange: TimeRange, granularity: Granularity): string {
     return `Origin-Destination-${granularity}-${timeRange}-${format(new Date(), "yyyy-MM-dd")}`;
 }
@@ -318,6 +374,60 @@ export function exportOriginDestinationToExcel(
     wsRoutes["!cols"] = [{ wch: 30 }, { wch: 30 }, { wch: 12 }];
     wsRoutes["!rows"] = titleRowHeights;
     XLSX.utils.book_append_sheet(wb, wsRoutes, "Routes");
+
+    // Load Type by Route sheet
+    const { rows: ltRows, loadTypeColumns, loadTypeTotals } = buildRouteLoadTypeBreakdown(data);
+    const ltHeader = [
+        "Origin",
+        "Destination",
+        ...loadTypeColumns.map((lt) => loadTypeLabel(lt)),
+        "Total",
+    ];
+    const ltColCount = ltHeader.length;
+    const wsLoadType = XLSX.utils.aoa_to_sheet([
+        [],
+        ["Load Type by Origin → Destination"],
+        [subtitle],
+        [],
+        ltHeader,
+    ]);
+    const ltBody = ltRows.map((r) => [
+        r.origin,
+        r.destination,
+        ...loadTypeColumns.map((lt) => r.loadTypeCounts[lt] || 0),
+        r.totalLoads,
+    ]);
+    const ltTotalsRow = [
+        "TOTAL",
+        "",
+        ...loadTypeColumns.map((lt) => loadTypeTotals[lt] || 0),
+        ltRows.reduce((sum, r) => sum + r.totalLoads, 0),
+    ];
+    XLSX.utils.sheet_add_aoa(wsLoadType, [...ltBody, ltTotalsRow], { origin: "A6" });
+
+    const ltMerges: XLSX.Range[] = [];
+    applyTitleRows(wsLoadType, ltColCount, ltMerges);
+    wsLoadType["!merges"] = ltMerges;
+    applyHeaderStyle(wsLoadType, 4, ltColCount);
+    styleBody(wsLoadType, 5, ltBody.length, ltColCount, 2);
+
+    const ltTotalIdx = 5 + ltBody.length;
+    applyTotalRow(wsLoadType, ltTotalIdx, 0, ltColCount - 1);
+    for (let c = 2; c < ltColCount; c++) {
+        const ref = XLSX.utils.encode_cell({ r: ltTotalIdx, c });
+        if (wsLoadType[ref]) wsLoadType[ref].s = { ...wsLoadType[ref].s, numFmt: NUMBER_FORMATS.integer };
+    }
+
+    applyAutoFilter(wsLoadType, 4, ltColCount);
+    freezeHeaderRow(wsLoadType, 5, 2);
+    wsLoadType["!cols"] = [
+        { wch: 30 },
+        { wch: 30 },
+        ...loadTypeColumns.map(() => ({ wch: 14 })),
+        { wch: 11 },
+    ];
+    wsLoadType["!rows"] = titleRowHeights;
+    XLSX.utils.book_append_sheet(wb, wsLoadType, "Load Type by Route");
 
     XLSX.writeFile(wb, `${fileSlug(timeRange, granularity)}.xlsx`);
 }
@@ -513,6 +623,65 @@ export function exportOriginDestinationToPdf(
             0: { halign: "center", cellWidth: 14, textColor: pdfColors.textMuted },
             1: { fontStyle: "bold", textColor: pdfColors.navy },
             3: { halign: "right", cellWidth: 30 },
+        },
+    });
+
+    // ── Load Type by Origin → Destination ────────────────────────────────
+    const { rows: ltRows, loadTypeColumns, loadTypeTotals } = buildRouteLoadTypeBreakdown(data);
+    yPos = (doc as jsPDFWithAutoTable).lastAutoTable.finalY + 11;
+    sectionTitle("Load Type by Origin → Destination");
+
+    const ltHead = [["Origin", "Destination", ...loadTypeColumns.map((lt) => loadTypeLabel(lt)), "Total"]];
+    const ltBody = ltRows.map((r) => [
+        r.origin,
+        r.destination,
+        ...loadTypeColumns.map((lt) => (r.loadTypeCounts[lt] || 0).toLocaleString()),
+        r.totalLoads.toLocaleString(),
+    ]);
+    ltBody.push([
+        "TOTAL",
+        "",
+        ...loadTypeColumns.map((lt) => (loadTypeTotals[lt] || 0).toLocaleString()),
+        ltRows.reduce((sum, r) => sum + r.totalLoads, 0).toLocaleString(),
+    ]);
+    const ltNumericCols: Record<number, { halign: "right" }> = {};
+    for (let c = 2; c <= loadTypeColumns.length + 2; c++) ltNumericCols[c] = { halign: "right" };
+    autoTable(doc, {
+        startY: yPos,
+        head: ltHead,
+        body: ltBody,
+        theme: "grid",
+        margin: { left: 12, right: 12 },
+        tableLineColor: pdfColors.lightGray,
+        tableLineWidth: 0.1,
+        headStyles: {
+            fillColor: pdfColors.navy,
+            textColor: pdfColors.white,
+            fontSize: 7,
+            fontStyle: "bold",
+            halign: "center",
+            valign: "middle",
+            lineColor: pdfColors.navy,
+            lineWidth: 0.1,
+        },
+        bodyStyles: {
+            fontSize: 7,
+            textColor: pdfColors.textPrimary,
+            lineColor: pdfColors.lightGray,
+            lineWidth: 0.1,
+        },
+        alternateRowStyles: { fillColor: pdfColors.offWhite },
+        columnStyles: {
+            0: { fontStyle: "bold", textColor: pdfColors.navy, cellWidth: 34 },
+            1: { cellWidth: 34 },
+            ...ltNumericCols,
+        },
+        didParseCell: (hook) => {
+            if (hook.section === "body" && hook.row.index === ltBody.length - 1) {
+                hook.cell.styles.fillColor = pdfColors.lightBlue;
+                hook.cell.styles.fontStyle = "bold";
+                hook.cell.styles.textColor = pdfColors.navy;
+            }
         },
     });
 
