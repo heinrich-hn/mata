@@ -5,6 +5,17 @@ import XLSX from "xlsx-js-style";
 
 import type { BulkDieselOrder, BulkDieselPriceEntry, BulkDieselSupplier } from "@/hooks/useSupplierPrices";
 
+/** Returns the ISO week label and Monday–Sunday range for an order date string. */
+function getOrderWeek(dateStr: string): { label: string; range: string } {
+    const d = new Date(`${dateStr.split("T")[0]}T00:00:00`);
+    const { year, week } = getISOWeek(d);
+    const weekStart = getWeekStartDate(year, week);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+    const range = `${format(weekStart, "dd MMM")} – ${format(weekEnd, "dd MMM yyyy")}`;
+    return { label: `Week ${week}`, range };
+}
+
 // ── Shared Cell Styles ─────────────────────────────────
 
 const HEADER_FILL = { fgColor: { rgb: "1F2937" } }; // dark gray
@@ -149,26 +160,29 @@ export function generateOrdersPDF(orders: BulkDieselOrder[], suppliers: BulkDies
     // Table
     const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name || "Unknown";
 
-    const tableData = orders.map((o) => [
-        format(new Date(o.order_date), "dd/MM/yyyy"),
-        o.supplier?.name || supplierName(o.supplier_id),
-        o.quantity_liters.toLocaleString(),
-        `$${o.price_per_liter.toFixed(2)}`,
-        `$${(o.total_cost || o.quantity_liters * o.price_per_liter).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-        o.reference_number || "—",
-        o.delivery_date ? format(new Date(o.delivery_date), "dd/MM/yyyy") : "—",
-        o.notes || "—",
-    ]);
+    const tableData = orders.map((o) => {
+        const week = getOrderWeek(o.order_date);
+        return [
+            `${week.label}\n${week.range}`,
+            o.supplier?.name || supplierName(o.supplier_id),
+            o.quantity_liters.toLocaleString(),
+            `$${o.price_per_liter.toFixed(2)}`,
+            `$${(o.total_cost || o.quantity_liters * o.price_per_liter).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            o.reference_number || "—",
+            o.delivery_date ? format(new Date(o.delivery_date), "dd/MM/yyyy") : "—",
+            o.notes || "—",
+        ];
+    });
 
     autoTable(doc, {
         startY: yPos,
-        head: [["Date", "Supplier", "Quantity (L)", "Price/L", "Total Cost", "Reference", "Delivery", "Notes"]],
+        head: [["Week Ordered", "Supplier", "Quantity (L)", "Price/L", "Total Cost", "Reference", "Delivery", "Notes"]],
         body: tableData,
         theme: "grid",
         headStyles: { fillColor: [66, 66, 66], textColor: [255, 255, 255], fontSize: 8, fontStyle: "bold" },
         bodyStyles: { fontSize: 8 },
         columnStyles: {
-            0: { cellWidth: 22 },
+            0: { cellWidth: 32 },
             2: { halign: "right", cellWidth: 25 },
             3: { halign: "right", cellWidth: 22 },
             4: { halign: "right", cellWidth: 28 },
@@ -419,19 +433,22 @@ export function generateOrdersExcel(orders: BulkDieselOrder[], suppliers: BulkDi
     const wb = XLSX.utils.book_new();
 
     // ── Sheet 1: Orders ────────────────────────────────
-    const headers = ["Order Date", "Supplier", "Quantity (L)", "Price/L ($)", "Total Cost ($)", "Reference", "Delivery Date", "Notes"];
+    const headers = ["Week Ordered", "Supplier", "Quantity (L)", "Price/L ($)", "Total Cost ($)", "Reference", "Delivery Date", "Notes"];
     const colCount = headers.length;
 
-    const rows: (string | number)[][] = orders.map((o) => [
-        format(new Date(o.order_date), "yyyy-MM-dd"),
-        o.supplier?.name || supplierName(o.supplier_id),
-        o.quantity_liters,
-        o.price_per_liter,
-        o.total_cost || o.quantity_liters * o.price_per_liter,
-        o.reference_number || "",
-        o.delivery_date ? format(new Date(o.delivery_date), "yyyy-MM-dd") : "",
-        o.notes || "",
-    ]);
+    const rows: (string | number)[][] = orders.map((o) => {
+        const week = getOrderWeek(o.order_date);
+        return [
+            `${week.label} (${week.range})`,
+            o.supplier?.name || supplierName(o.supplier_id),
+            o.quantity_liters,
+            o.price_per_liter,
+            o.total_cost || o.quantity_liters * o.price_per_liter,
+            o.reference_number || "",
+            o.delivery_date ? format(new Date(o.delivery_date), "yyyy-MM-dd") : "",
+            o.notes || "",
+        ];
+    });
 
     // Totals
     const totalLiters = orders.reduce((s, o) => s + o.quantity_liters, 0);
@@ -474,7 +491,7 @@ export function generateOrdersExcel(orders: BulkDieselOrder[], suppliers: BulkDi
     ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: totalsRowIdx, c: colCount - 1 } });
 
     ws["!cols"] = [
-        { wch: 12 }, // Date
+        { wch: 26 }, // Week Ordered
         { wch: 24 }, // Supplier
         { wch: 14 }, // Quantity
         { wch: 14 }, // Price/L

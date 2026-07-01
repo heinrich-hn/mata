@@ -779,7 +779,7 @@ export default function SupplierPriceTracker() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Date</TableHead>
+                                        <TableHead>Week Ordered</TableHead>
                                         <TableHead>Supplier</TableHead>
                                         <TableHead className="text-right">Quantity (L)</TableHead>
                                         <TableHead className="text-right">Price / L</TableHead>
@@ -791,34 +791,41 @@ export default function SupplierPriceTracker() {
                                 </TableHeader>
                                 <TableBody>
                                     {orders.length > 0 ? (
-                                        orders.map((order) => (
-                                            <TableRow key={order.id}>
-                                                <TableCell className="font-medium">
-                                                    {new Date(order.order_date).toLocaleDateString("en-ZA")}
-                                                </TableCell>
-                                                <TableCell>{order.supplier?.name || "—"}</TableCell>
-                                                <TableCell className="text-right">
-                                                    {order.quantity_liters.toLocaleString("en-ZA")}
-                                                </TableCell>
-                                                <TableCell className="text-right font-semibold">
-                                                    ${order.price_per_liter.toFixed(2)}
-                                                </TableCell>
-                                                <TableCell className="text-right font-semibold">
-                                                    ${(order.total_cost || order.quantity_liters * order.price_per_liter).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground">
-                                                    {order.reference_number || "—"}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground">
-                                                    {order.delivery_date
-                                                        ? new Date(order.delivery_date).toLocaleDateString("en-ZA")
-                                                        : "—"}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                                                    {order.notes || "—"}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
+                                        orders.map((order) => {
+                                            const weekInfo = getISOWeekInfo(order.order_date);
+                                            const weekRange = `${weekInfo.weekStart.toLocaleDateString("en-ZA", { day: "numeric", month: "short" })} – ${weekInfo.weekEnd.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`;
+                                            return (
+                                                <TableRow key={order.id}>
+                                                    <TableCell className="font-medium">
+                                                        <div className="flex flex-col">
+                                                            <span>Week {weekInfo.week}</span>
+                                                            <span className="text-xs font-normal text-muted-foreground">{weekRange}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>{order.supplier?.name || "—"}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        {order.quantity_liters.toLocaleString("en-ZA")}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-semibold">
+                                                        ${order.price_per_liter.toFixed(2)}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-semibold">
+                                                        ${(order.total_cost || order.quantity_liters * order.price_per_liter).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground">
+                                                        {order.reference_number || "—"}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground">
+                                                        {order.delivery_date
+                                                            ? new Date(order.delivery_date).toLocaleDateString("en-ZA")
+                                                            : "—"}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground max-w-[200px] truncate">
+                                                        {order.notes || "—"}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
                                     ) : (
                                         <TableRow>
                                             <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
