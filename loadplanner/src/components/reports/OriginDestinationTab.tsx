@@ -45,7 +45,7 @@ interface OriginDestinationTabProps {
 
 // Locations to chart, by role.
 const ORIGIN_SERIES = ["BV", "CBC"] as const;
-const DESTINATION_SERIES = ["Rezende Depot", "Bulawayo Depot"] as const;
+const DESTINATION_SERIES = ["Rezende Depot", "Bulawayo Depot", "Chitanda - Harare"] as const;
 
 // Bar colours per series.
 const SERIES_COLORS: Record<string, string> = {
@@ -53,6 +53,7 @@ const SERIES_COLORS: Record<string, string> = {
     CBC: "#8b5cf6",
     "Rezende Depot": "#22c55e",
     "Bulawayo Depot": "#0ea5e9",
+    "Chitanda - Harare": "#f97316",
 };
 
 const normalize = (value: string) => value.trim().toLowerCase();

@@ -19,6 +19,7 @@ export interface TruckStopOrderFleetVehicle {
     id: string;
     vehicle_id: string;
     type: string;
+    telematics_asset_id?: string | null;
 }
 
 export interface TruckStopOrder {
@@ -89,10 +90,10 @@ export function useTruckStopOrders() {
             offloading_date,
             status,
             driver:drivers!loads_driver_id_fkey(id, name, contact),
-            fleet_vehicle:fleet_vehicles(id, vehicle_id, type)
+            fleet_vehicle:fleet_vehicles(id, vehicle_id, type, telematics_asset_id)
           ),
           driver:drivers(id, name, contact),
-          fleet_vehicle:fleet_vehicles(id, vehicle_id, type)
+          fleet_vehicle:fleet_vehicles(id, vehicle_id, type, telematics_asset_id)
         `,
                 )
                 .order("created_at", { ascending: false });

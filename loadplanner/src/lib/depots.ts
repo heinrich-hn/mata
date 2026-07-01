@@ -106,6 +106,15 @@ export const DEPOTS: Depot[] = [
     radius: 500,
   },
   {
+    id: "chitanda-harare",
+    name: "Chitanda - Harare",
+    latitude: -17.8749116,
+    longitude: 31.0337783,
+    type: "depot",
+    country: "Zimbabwe",
+    radius: 500,
+  },
+  {
     id: "mutare-depot",
     name: "Mutare Depot",
     latitude: -19.00251415,

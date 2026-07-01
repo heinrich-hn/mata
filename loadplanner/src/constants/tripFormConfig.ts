@@ -14,6 +14,7 @@ export const origins = ["BV", "CBC"] as const;
 export const destinations = [
   "Bulawayo Depot",
   "Rezende Depot",
+  "Chitanda - Harare",
   "Mutare Depot",
 ] as const;
 
@@ -55,6 +56,7 @@ export const destinationDefaults: Record<
 > = {
   "Bulawayo Depot": { arrival: "08:00", departure: "11:00" },
   "Rezende Depot": { arrival: "05:00", departure: "07:00" },
+  "Chitanda - Harare": { arrival: "05:00", departure: "07:00" },
   "Mutare Depot": { arrival: "06:00", departure: "09:00" },
   "Freshmark Centurion": { arrival: "06:00", departure: "09:00" },
   "Freshmark Polokwane": { arrival: "07:00", departure: "10:00" },

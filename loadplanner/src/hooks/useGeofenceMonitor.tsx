@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useAuth } from "@/hooks/useAuth";
 import { useCustomLocations } from "@/hooks/useCustomLocations";
+import { useTruckStopFulfillment } from "@/hooks/useTruckStopFulfillment";
+import { useTruckStopOrders } from "@/hooks/useTruckStopOrders";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -93,6 +95,7 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
   const { data: loads = [] } = useLoads();
   useLoadsRealtimeSync(); // Instant cache invalidation on any loads table change
   const { data: customLocations = [] } = useCustomLocations();
+  const { data: truckStopOrders = [] } = useTruckStopOrders();
 
   const extraDepots = useMemo(
     () => customLocations.map(customLocationToDepot),
@@ -137,11 +140,39 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
     return loads.some((l) => l.status === "pending" || l.status === "scheduled" || l.status === "in-transit");
   }, [loads]);
 
+  // Check if there are any open truck stop orders awaiting fulfilment. Keeps the
+  // telematics poll running for truck-stop dwell detection even when there are
+  // no active loads.
+  const hasActiveTruckStopOrders = useMemo(() => {
+    return truckStopOrders.some(
+      (o) => o.status !== "fulfilled" && o.status !== "cancelled"
+    );
+  }, [truckStopOrders]);
+
   // Fetch telematics data
   const fetchTelematicsData = useCallback(async () => {
     if (!isAuthenticated()) {
-      const username = localStorage.getItem("telematics_username");
-      const password = localStorage.getItem("telematics_password");
+      // Reuse the same saved credentials the Live Tracking page persists
+      // (tg_username / base64 tg_password when "remember me" is enabled) so the
+      // background monitor can self-authenticate on app load WITHOUT the user
+      // first having to open the Live Tracking page. Falls back to the legacy
+      // telematics_username / telematics_password keys for backward compat.
+      let username = localStorage.getItem("telematics_username");
+      let password = localStorage.getItem("telematics_password");
+
+      if ((!username || !password) && localStorage.getItem("tg_remember") === "true") {
+        const savedUsername = localStorage.getItem("tg_username");
+        const savedPassword = localStorage.getItem("tg_password");
+        if (savedUsername && savedPassword) {
+          username = savedUsername;
+          try {
+            password = atob(savedPassword);
+          } catch {
+            password = null;
+          }
+        }
+      }
+
       if (username && password) {
         const success = await authenticate(username, password);
         if (!success) {
@@ -195,12 +226,12 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
 
   // Poll telematics every 10 seconds when user is logged in and there are active loads
   useEffect(() => {
-    if (!user || !hasActiveLoads) return;
+    if (!user || (!hasActiveLoads && !hasActiveTruckStopOrders)) return;
 
     fetchTelematicsData();
     const interval = setInterval(fetchTelematicsData, 10000);
     return () => clearInterval(interval);
-  }, [fetchTelematicsData, user, hasActiveLoads]);
+  }, [fetchTelematicsData, user, hasActiveLoads, hasActiveTruckStopOrders]);
 
   // Match loads to telematics assets
   const loadsWithAssets: LoadWithAsset[] = useMemo(() => {
@@ -247,6 +278,10 @@ export function GeofenceMonitorProvider({ children }: { children: ReactNode }) {
       };
     });
   }, [loads, telematicsAssets, extraDepots]);
+
+  // Auto-fulfil truck stop orders when the assigned vehicle dwells inside the
+  // truck stop geofence for more than 1h30m before exiting.
+  useTruckStopFulfillment(telematicsAssets, truckStopOrders, !!user);
 
   // Geofence checking effect
   useEffect(() => {
