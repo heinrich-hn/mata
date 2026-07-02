@@ -92,7 +92,7 @@ interface WeeklySectionData {
   fleets: string[];
   isReeferSection: boolean;
   data: WeeklyFleetData[];
-  sectionTotal: { totalLitres: number; totalKm: number; consumption: number | null; totalHours: number; reeferConsumption: number | null; totalCost: number; };
+  sectionTotal: { totalLitres: number; totalKm: number; consumption: number | null; simpleConsumption: number | null; totalHours: number; reeferConsumption: number | null; simpleReeferConsumption: number | null; totalCost: number; };
 }
 
 interface WeeklyReport {
@@ -630,12 +630,28 @@ const DieselReportsTab = ({
 
         const sectionConsumption = isReeferSection ? null : (sectionTotalLitres > 0 ? sectionTotalKm / sectionTotalLitres : null);
         const sectionReeferConsumption = isReeferSection && sectionTotalHours > 0 ? sectionTotalLitres / sectionTotalHours : null;
+
+        // Simple (unweighted) mean across only the fleets that have transactions.
+        // Zero-entry fleets have a null consumption and are excluded.
+        const truckConsumptions = sectionData
+          .filter(d => d.consumption !== null)
+          .map(d => d.consumption as number);
+        const simpleConsumption = !isReeferSection && truckConsumptions.length > 0
+          ? truckConsumptions.reduce((sum, v) => sum + v, 0) / truckConsumptions.length
+          : null;
+        const reeferConsumptions = sectionData
+          .filter(d => d.reeferConsumption !== null)
+          .map(d => d.reeferConsumption as number);
+        const simpleReeferConsumption = isReeferSection && reeferConsumptions.length > 0
+          ? reeferConsumptions.reduce((sum, v) => sum + v, 0) / reeferConsumptions.length
+          : null;
+
         sections.push({
           name: sectionName,
           fleets: sectionFleetList,
           isReeferSection,
           data: sectionData,
-          sectionTotal: { totalLitres: sectionTotalLitres, totalKm: sectionTotalKm, consumption: sectionConsumption, totalHours: sectionTotalHours, reeferConsumption: sectionReeferConsumption, totalCost: sectionTotalCost },
+          sectionTotal: { totalLitres: sectionTotalLitres, totalKm: sectionTotalKm, consumption: sectionConsumption, simpleConsumption, totalHours: sectionTotalHours, reeferConsumption: sectionReeferConsumption, simpleReeferConsumption, totalCost: sectionTotalCost },
         });
 
         if (!isReeferSection) {
@@ -2343,12 +2359,22 @@ const DieselReportsTab = ({
                                   {section.name}
                                   {section.isReeferSection && section.sectionTotal.reeferConsumption !== null && (
                                     <Badge variant="secondary" className="ml-2">
-                                      Avg: {formatNumber(section.sectionTotal.reeferConsumption, 2)} L/H
+                                      Weighted: {formatNumber(section.sectionTotal.reeferConsumption, 2)} L/H
+                                    </Badge>
+                                  )}
+                                  {section.isReeferSection && section.sectionTotal.simpleReeferConsumption !== null && (
+                                    <Badge variant="outline">
+                                      Simple: {formatNumber(section.sectionTotal.simpleReeferConsumption, 2)} L/H
                                     </Badge>
                                   )}
                                   {!section.isReeferSection && section.sectionTotal.consumption !== null && (
                                     <Badge variant="secondary" className="ml-2">
-                                      Avg: {formatNumber(section.sectionTotal.consumption, 2)} km/L
+                                      Weighted: {formatNumber(section.sectionTotal.consumption, 2)} km/L
+                                    </Badge>
+                                  )}
+                                  {!section.isReeferSection && section.sectionTotal.simpleConsumption !== null && (
+                                    <Badge variant="outline">
+                                      Simple: {formatNumber(section.sectionTotal.simpleConsumption, 2)} km/L
                                     </Badge>
                                   )}
                                 </h4>
@@ -2428,9 +2454,25 @@ const DieselReportsTab = ({
                                             : formatNumber(section.sectionTotal.totalKm)}
                                         </td>
                                         <td className="p-2 text-right text-primary">
-                                          {section.isReeferSection
-                                            ? (section.sectionTotal.reeferConsumption !== null ? <span className="text-cyan-600">{formatNumber(section.sectionTotal.reeferConsumption, 2)}</span> : '—')
-                                            : (section.sectionTotal.consumption !== null ? formatNumber(section.sectionTotal.consumption, 2) : '—')}
+                                          {section.isReeferSection ? (
+                                            section.sectionTotal.reeferConsumption !== null ? (
+                                              <div className="flex flex-col items-end leading-tight">
+                                                <span className="text-cyan-600">{formatNumber(section.sectionTotal.reeferConsumption, 2)}</span>
+                                                {section.sectionTotal.simpleReeferConsumption !== null && (
+                                                  <span className="text-[11px] font-normal text-muted-foreground">simple {formatNumber(section.sectionTotal.simpleReeferConsumption, 2)}</span>
+                                                )}
+                                              </div>
+                                            ) : '—'
+                                          ) : (
+                                            section.sectionTotal.consumption !== null ? (
+                                              <div className="flex flex-col items-end leading-tight">
+                                                <span>{formatNumber(section.sectionTotal.consumption, 2)}</span>
+                                                {section.sectionTotal.simpleConsumption !== null && (
+                                                  <span className="text-[11px] font-normal text-muted-foreground">simple {formatNumber(section.sectionTotal.simpleConsumption, 2)}</span>
+                                                )}
+                                              </div>
+                                            ) : '—'
+                                          )}
                                         </td>
                                         <td className="p-2 text-right">
                                           {section.sectionTotal.totalCost > 0 && <div>{formatCurrency(section.sectionTotal.totalCost)}</div>}
@@ -2462,8 +2504,8 @@ const DieselReportsTab = ({
 
 
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-w-lg flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5" />
               Export Diesel Reports
@@ -2473,7 +2515,7 @@ const DieselReportsTab = ({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2">
+          <div className="space-y-5 py-2 flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
             {/* Format selector */}
             <div>
               <p className="text-sm font-semibold mb-2">Export Format</p>
@@ -2631,7 +2673,7 @@ const DieselReportsTab = ({
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t pt-4">
             <Button variant="outline" onClick={() => setExportOpen(false)} disabled={isExporting}>Cancel</Button>
             <Button onClick={handleExport} disabled={isExporting} className="gap-2">
               {isExporting ? (
