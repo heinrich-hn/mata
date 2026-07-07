@@ -36,7 +36,7 @@ import { TRUCK_STOPS } from "@/lib/truckStops";
 import { safeFormatDate } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, MapPin } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -75,11 +75,14 @@ type FormData = z.infer<typeof formSchema>;
 interface CreateTruckStopOrderDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** When set, the dialog opens pre-filled for this trip (e.g. from the loads table actions menu). */
+    preselectedLoadId?: string;
 }
 
 export function CreateTruckStopOrderDialog({
     open,
     onOpenChange,
+    preselectedLoadId,
 }: CreateTruckStopOrderDialogProps) {
     const { data: loads = [], isLoading: loadsLoading } = useLoads();
     const { data: drivers = [], isLoading: driversLoading } = useDrivers();
@@ -161,10 +164,44 @@ export function CreateTruckStopOrderDialog({
         }
     }, [watchedLoadId, loads, form]);
 
-    // Reset to a fresh date range each time the dialog opens
+    // Reset to a fresh form each time the dialog opens. When a trip is
+    // preselected, pre-fill the vehicle/trip and widen the date range so the
+    // trip passes the relevance filter. Initialise only once per open so a
+    // background loads refetch never wipes user input.
+    const initRef = useRef(false);
     useEffect(() => {
-        if (open) {
-            const next = getDefaultDateRange();
+        if (!open) {
+            initRef.current = false;
+            return;
+        }
+        if (initRef.current) return;
+
+        const preselected = preselectedLoadId
+            ? loads.find((l) => l.id === preselectedLoadId)
+            : undefined;
+        // Wait for loads to arrive before initialising a preselected trip
+        if (preselectedLoadId && !preselected && loadsLoading) return;
+        initRef.current = true;
+
+        const next = getDefaultDateRange();
+        if (preselected) {
+            const startIso =
+                (preselected.loading_date || "").slice(0, 10) || next.from;
+            const endIso =
+                (preselected.offloading_date || preselected.loading_date || "")
+                    .slice(0, 10) || next.to;
+            form.reset({
+                truck_stop: "",
+                fleet_vehicle_id: preselected.fleet_vehicle_id || "",
+                date_from: startIso < next.from ? startIso : next.from,
+                date_to: endIso > next.to ? endIso : next.to,
+                load_id: preselected.id,
+                driver_id: preselected.driver?.id || "",
+                cost_per_night: "",
+                notes: "",
+            });
+            setSelectedLoad(preselected);
+        } else {
             form.reset({
                 truck_stop: "",
                 fleet_vehicle_id: "",
@@ -177,7 +214,7 @@ export function CreateTruckStopOrderDialog({
             });
             setSelectedLoad(null);
         }
-    }, [open, form]);
+    }, [open, preselectedLoadId, loads, loadsLoading, form]);
 
     const handleSubmit = (data: FormData) => {
         const selectedDriver = drivers.find((d) => d.id === data.driver_id);

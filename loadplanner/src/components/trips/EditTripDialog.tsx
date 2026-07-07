@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { WaypointsSection } from "@/components/trips/WaypointsSection";
 import loadFormConfig from "@/constants/tripFormConfig";
 import { useClients } from "@/hooks/useClients";
 import { useCustomLocations } from "@/hooks/useCustomLocations";
@@ -39,7 +40,7 @@ import { useFleetVehicles } from "@/hooks/useFleetVehicles";
 import { type Load, useUpdateLoad } from "@/hooks/useTrips";
 import * as timeWindowLib from "@/lib/timeWindow";
 import { cn } from "@/lib/utils";
-import type { DateChangeEntry } from "@/types/Trips";
+import type { DateChangeEntry, Waypoint } from "@/types/Trips";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, CalendarIcon, CheckCircle2, Clock, MapPin, Package, Pencil } from "lucide-react";
@@ -157,6 +158,11 @@ export function EditLoadDialog({
 
   const hasBackload = form.watch("hasBackload");
   const selectedCargoType = form.watch("cargoType");
+  const selectedOrigin = form.watch("origin");
+  const selectedDestination = form.watch("destination");
+
+  // Intermediate stops (waypoints) — editable list initialised from time_window
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
 
   // Date-change reason flow: when the user changes loadingDate or
   // offloadingDate we require a reason before persisting the update.
@@ -238,6 +244,15 @@ export function EditLoadDialog({
         backloadPallets: times.backload?.quantities?.pallets || 0,
         backloadNotes: times.backload?.notes || "",
       });
+      // Load existing intermediate stops so the user can edit or remove them.
+      // Legacy waypoints may lack an id — generate one so list edits work.
+      const existingWaypoints = timeWindowLib.parseTimeWindow(load.time_window).waypoints;
+      setWaypoints(
+        existingWaypoints.map((wp) => ({
+          ...wp,
+          id: wp.id || crypto.randomUUID(),
+        })),
+      );
     }
   }, [load, open, form]);
 
@@ -319,9 +334,11 @@ export function EditLoadDialog({
       timeData.backload = currentTimes.backload;
     }
 
-    // Preserve intermediate stops (waypoints) so editing a load never wipes them
-    if (Array.isArray(currentTimes.waypoints) && currentTimes.waypoints.length > 0) {
-      timeData.waypoints = currentTimes.waypoints;
+    // Persist intermediate stops (waypoints) as edited by the user.
+    // An empty list means the user removed all stops — omit the key entirely.
+    const enteredWaypoints = waypoints.filter((wp) => wp.placeName);
+    if (enteredWaypoints.length > 0) {
+      timeData.waypoints = enteredWaypoints;
     }
 
     // Carry forward existing date-change history and append any new entries
@@ -970,6 +987,15 @@ export function EditLoadDialog({
                 </>
               </CardContent>
             </Card>
+
+            {/* Intermediate Stops (Added Stops) */}
+            <WaypointsSection
+              waypoints={waypoints}
+              onChange={setWaypoints}
+              customLocations={customLocations}
+              origin={selectedOrigin}
+              destination={selectedDestination}
+            />
 
             {/* Assignment */}
             <div className="space-y-4">

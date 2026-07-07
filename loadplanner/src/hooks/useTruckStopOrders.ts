@@ -1,5 +1,7 @@
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { parseTimeWindow, stringifyTimeWindow } from "@/lib/timeWindow";
+import { findTruckStopByName } from "@/lib/truckStops";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Load } from "./useTrips";
 
@@ -104,6 +106,59 @@ export function useTruckStopOrders() {
     });
 }
 
+/**
+ * Append the truck stop as an intermediate stop (waypoint) on the linked
+ * load's time_window so it shows up on the trip's route. Non-fatal: a
+ * failure here must never block the order itself.
+ */
+async function addTruckStopWaypointToLoad(
+    loadId: string,
+    truckStopName: string,
+    orderNumber: string,
+): Promise<boolean> {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: load, error: loadError } = await (supabase as any)
+            .from("loads")
+            .select("id, time_window")
+            .eq("id", loadId)
+            .single();
+        if (loadError || !load) return false;
+
+        const times = parseTimeWindow(load.time_window);
+        // Don't duplicate if this truck stop is already a waypoint on the trip
+        if (times.waypoints.some((wp) => wp.placeName === truckStopName)) {
+            return false;
+        }
+
+        const truckStop = findTruckStopByName(truckStopName);
+        times.waypoints = [
+            ...times.waypoints,
+            {
+                id: crypto.randomUUID(),
+                placeName: truckStopName,
+                address: truckStop?.address,
+                type: "stop",
+                notes: `Truck stop order ${orderNumber}`,
+            },
+        ];
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: updateError } = await (supabase as any)
+            .from("loads")
+            .update({ time_window: stringifyTimeWindow(times) })
+            .eq("id", loadId);
+        if (updateError) {
+            console.warn("Failed to add truck stop waypoint to load", updateError);
+            return false;
+        }
+        return true;
+    } catch (err) {
+        console.warn("Failed to add truck stop waypoint to load", err);
+        return false;
+    }
+}
+
 export function useCreateTruckStopOrder() {
     const queryClient = useQueryClient();
 
@@ -122,10 +177,19 @@ export function useCreateTruckStopOrder() {
                 .single();
 
             if (error) throw error;
-            return data as TruckStopOrder;
+
+            const created = data as TruckStopOrder;
+            // Surface the truck stop as an added stop on the linked trip
+            await addTruckStopWaypointToLoad(
+                created.load_id,
+                created.truck_stop,
+                created.order_number,
+            );
+            return created;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["truck_stop_orders"] });
+            queryClient.invalidateQueries({ queryKey: ["loads"] });
             toast({ title: "Truck stop order created successfully" });
         },
         onError: (error: Error) => {

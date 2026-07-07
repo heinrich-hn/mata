@@ -1,5 +1,6 @@
 import { LogBreakdownDialog } from "@/components/breakdowns/LogBreakdownDialog";
 import { CreateDieselOrderDialog } from "@/components/diesel/CreateDieselOrderDialog";
+import { CreateTruckStopOrderDialog } from "@/components/truckstops/CreateTruckStopOrderDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -237,6 +238,8 @@ export function LoadsTable({
   const [verificationOnly, setVerificationOnly] = useState(false);
   const [dieselOrderDialogOpen, setDieselOrderDialogOpen] = useState(false);
   const [loadForDieselOrder, setLoadForDieselOrder] = useState<Load | null>(null);
+  const [truckStopOrderDialogOpen, setTruckStopOrderDialogOpen] = useState(false);
+  const [loadForTruckStopOrder, setLoadForTruckStopOrder] = useState<Load | null>(null);
   const [breakdownDialogOpen, setBreakdownDialogOpen] = useState(false);
   const [loadForBreakdown, setLoadForBreakdown] = useState<Load | null>(null);
   const [routeExporting, setRouteExporting] = useState<string | null>(null);
@@ -972,6 +975,19 @@ export function LoadsTable({
                               </DropdownMenuItem>
                             )}
 
+                            {load.fleet_vehicle && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLoadForTruckStopOrder(load);
+                                  setTruckStopOrderDialogOpen(true);
+                                }}
+                              >
+                                <MapPin className="h-4 w-4 mr-2" />
+                                Create Truck Stop Order
+                              </DropdownMenuItem>
+                            )}
+
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1149,6 +1165,15 @@ export function LoadsTable({
           if (!open) setLoadForDieselOrder(null);
         }}
         preselectedLoadId={loadForDieselOrder?.id}
+      />
+
+      <CreateTruckStopOrderDialog
+        open={truckStopOrderDialogOpen}
+        onOpenChange={(open) => {
+          setTruckStopOrderDialogOpen(open);
+          if (!open) setLoadForTruckStopOrder(null);
+        }}
+        preselectedLoadId={loadForTruckStopOrder?.id}
       />
 
       <LogBreakdownDialog

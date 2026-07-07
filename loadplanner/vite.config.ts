@@ -19,11 +19,15 @@ export default defineConfig(({ mode }) => {
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
       },
-      hmr: {
-        clientPort: 443,
-        protocol: 'wss',
-        host: 'localhost'
-      },
+      hmr: process.env.CODESPACE_NAME
+        ? {
+          // In Codespaces the browser reaches the dev server through the
+          // forwarded HTTPS URL, so the HMR websocket must use that host.
+          protocol: "wss",
+          host: `${process.env.CODESPACE_NAME}-5173.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN ?? "app.github.dev"}`,
+          clientPort: 443,
+        }
+        : true,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
@@ -73,7 +77,7 @@ export default defineConfig(({ mode }) => {
               '@radix-ui/react-tooltip'
             ],
             'vendor-data': [
-              'date-fns', 
+              'date-fns',
               'zod',
               '@hookform/resolvers',
               '@tanstack/react-query',

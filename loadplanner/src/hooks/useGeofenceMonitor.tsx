@@ -24,6 +24,7 @@ import {
   getAssetsWithPositions,
   getOrganisations,
   isAuthenticated,
+  parseLastConnected,
   type TelematicsAsset,
 } from "@/lib/telematicsGuru";
 import { parseISO } from "date-fns";
@@ -78,8 +79,13 @@ const GeofenceMonitorContext = createContext<GeofenceMonitorContextType | undefi
 function getAssetFixTime(asset: TelematicsAsset): Date | null {
   const raw = asset.lastPositionUtc || asset.lastConnectedUtc;
   if (!raw) return null;
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return null;
+  // The telematics API returns UTC timestamps WITHOUT a timezone marker
+  // (e.g. "2026-07-07T08:15:00"). Parsing that with `new Date()` would
+  // interpret it in the browser's local timezone (SAST = UTC+2), skewing
+  // every recorded arrival/departure by the viewer's UTC offset.
+  // parseLastConnected appends "Z" when needed so the value is read as UTC.
+  const d = parseLastConnected(raw);
+  if (!d) return null;
   // Guard against bad device/clock data: reject timestamps more than 2 minutes
   // in the future so we never record an arrival/departure "ahead of now".
   if (d.getTime() > Date.now() + 120_000) return null;

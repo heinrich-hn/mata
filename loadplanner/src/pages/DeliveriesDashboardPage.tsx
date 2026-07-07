@@ -24,6 +24,7 @@ import {
 } from "@/lib/depots";
 import {
   formatLastConnected,
+  parseLastConnected,
   type TelematicsAsset,
 } from "@/lib/telematicsGuru";
 import { parseTimeWindow } from "@/lib/timeWindow";
@@ -115,7 +116,9 @@ function getGpsSignalStrength(
 ): "strong" | "medium" | "weak" | "none" {
   if (!lastConnectedUtc) return "none";
   const now = new Date();
-  const lastUpdate = new Date(lastConnectedUtc);
+  // API timestamps are UTC without a "Z" marker — parse explicitly as UTC
+  const lastUpdate = parseLastConnected(lastConnectedUtc);
+  if (!lastUpdate) return "none";
   const diffMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
   if (diffMinutes < 5) return "strong";
   if (diffMinutes < 15) return "medium";
@@ -323,8 +326,9 @@ export default function DeliveriesDashboardPage() {
         const completedToday = vehicleTodayLoads.filter((l) => l.status === "delivered").length;
 
         const lastConnectedUtc = load.telematicsAsset?.lastConnectedUtc;
-        const staleMinutes = lastConnectedUtc
-          ? Math.floor((new Date().getTime() - new Date(lastConnectedUtc).getTime()) / (1000 * 60))
+        const lastConnectedDate = parseLastConnected(lastConnectedUtc);
+        const staleMinutes = lastConnectedDate
+          ? Math.floor((new Date().getTime() - lastConnectedDate.getTime()) / (1000 * 60))
           : undefined;
         const isStale = staleMinutes !== undefined && staleMinutes > 30;
 
