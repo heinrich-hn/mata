@@ -184,32 +184,82 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
 
   const costs = calculateJobCardCosts(data);
 
-  // Color palette
+  // ── Design tokens ────────────────────────────────────────────
+  const ink: [number, number, number] = [15, 23, 42];        // slate-900
   const slate800: [number, number, number] = [30, 41, 59];
   const slate600: [number, number, number] = [71, 85, 105];
-  const blue500: [number, number, number] = [59, 130, 246];
+  const slate400: [number, number, number] = [148, 163, 184];
+  const lineC: [number, number, number] = [226, 232, 240];   // slate-200 hairlines
+  const bgSoft: [number, number, number] = [248, 250, 252];  // slate-50 panels
+  const blue500: [number, number, number] = [37, 99, 235];   // brand accent
+  const green600: [number, number, number] = [22, 163, 74];
 
-  // Helper: draw section header
-  const drawSectionHeader = (title: string, color: [number, number, number] = blue500) => {
-    if (yPos > 240) { doc.addPage(); yPos = 20; }
-    doc.setFillColor(...color);
-    doc.roundedRect(margin, yPos, contentWidth, 9, 1.5, 1.5, "F");
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(255, 255, 255);
-    doc.text(title, margin + 4, yPos + 6.5);
-    doc.setTextColor(0, 0, 0);
-    yPos += 13;
+  // Shared table look & feel — flat, subtle grid, zebra rows
+  const baseTable = {
+    theme: "grid" as const,
+    styles: { lineColor: lineC, lineWidth: 0.15 },
+    headStyles: {
+      fillColor: slate800,
+      textColor: [255, 255, 255] as [number, number, number],
+      fontStyle: "bold" as const,
+      fontSize: 7.5,
+      cellPadding: 3,
+    },
+    bodyStyles: { fontSize: 8, cellPadding: 3, textColor: ink },
+    alternateRowStyles: { fillColor: bgSoft },
+    footStyles: {
+      fillColor: [241, 245, 249] as [number, number, number],
+      textColor: slate800,
+      fontStyle: "bold" as const,
+      fontSize: 8,
+      cellPadding: 3,
+    },
+    margin: { left: margin, right: margin },
   };
 
-  // Helper: labelled field
-  const drawField = (label: string, value: string, x: number, y: number, labelW = 30) => {
+  // Helper: modern section header — accent bar + title + hairline rule
+  const drawSectionHeader = (title: string, color: [number, number, number] = blue500) => {
+    if (yPos > 240) { doc.addPage(); yPos = 20; }
+    const t = title.toUpperCase();
+    doc.setFillColor(...color);
+    doc.roundedRect(margin, yPos - 1, 1.8, 7, 0.9, 0.9, "F");
+    doc.setFontSize(10.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...ink);
+    doc.text(t, margin + 5.5, yPos + 4.2);
+    const tW = doc.getTextWidth(t);
+    doc.setDrawColor(...lineC);
+    doc.setLineWidth(0.3);
+    doc.line(margin + 5.5 + tW + 4, yPos + 2.8, margin + contentWidth, yPos + 2.8);
+    doc.setLineWidth(0.2);
+    doc.setDrawColor(0, 0, 0);
+    doc.setTextColor(0, 0, 0);
+    yPos += 12;
+  };
+
+  // Helper: smaller sub-section header
+  const drawSubHeader = (title: string, color: [number, number, number]) => {
+    doc.setFillColor(...color);
+    doc.roundedRect(margin, yPos - 0.5, 1.5, 5.5, 0.75, 0.75, "F");
+    doc.setFontSize(8.5);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...slate600);
-    doc.text(label, x, y);
-    doc.setFont("helvetica", "normal");
+    doc.text(title.toUpperCase(), margin + 4.5, yPos + 3.8);
     doc.setTextColor(0, 0, 0);
-    doc.text(value, x + labelW, y);
+    yPos += 9;
+  };
+
+  // Helper: small uppercase label with value beneath (card fields)
+  const drawLabelValue = (label: string, value: string, x: number, y: number) => {
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...slate400);
+    doc.text(label.toUpperCase(), x, y);
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...ink);
+    doc.text(value, x, y + 4.8);
+    doc.setTextColor(0, 0, 0);
   };
 
   // Helper: status color
@@ -234,100 +284,106 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
   // HEADER BAR
   // =====================
   doc.setFillColor(...slate800);
-  doc.rect(0, 0, pageWidth, 38, "F");
+  doc.rect(0, 0, pageWidth, 42, "F");
+  doc.setFillColor(...blue500);
+  doc.rect(0, 42, pageWidth, 1.4, "F");
 
-  doc.setFontSize(20);
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(...slate400);
+  doc.text("MATANUSKA FLEET MANAGEMENT", margin, 11);
+
+  doc.setFontSize(22);
   doc.setTextColor(255, 255, 255);
-  doc.text("JOB CARD", margin, 16);
+  doc.text("Job Card", margin, 23);
 
-  doc.setFontSize(13);
+  doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
-  doc.text(`#${data.jobCard.job_number}`, margin, 26);
+  doc.setTextColor(147, 197, 253); // blue-300
+  doc.text(`#${data.jobCard.job_number}`, margin, 32);
 
-  doc.setFontSize(8);
-  doc.text(`Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`, pageWidth - margin, 34, { align: "right" });
-
-  // Status + Priority pills on header
+  // Status + Priority pills (top-right)
   const statusText = data.jobCard.status.replace(/_/g, " ").toUpperCase();
   const priorityText = data.jobCard.priority.toUpperCase();
 
   const sColor = statusColor(data.jobCard.status);
   const pColor = priorityColor(data.jobCard.priority);
 
-  // Status pill
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
-  const stW = doc.getTextWidth(statusText) + 8;
-  const prW = doc.getTextWidth(priorityText) + 8;
-  const pillY = 10;
+  const stW = doc.getTextWidth(statusText) + 10;
+  const prW = doc.getTextWidth(priorityText) + 10;
+  const pillY = 11;
 
   doc.setFillColor(...sColor);
-  doc.roundedRect(pageWidth - margin - stW - prW - 6, pillY, stW, 8, 2, 2, "F");
+  doc.roundedRect(pageWidth - margin - stW - prW - 4, pillY, stW, 8, 4, 4, "F");
   doc.setTextColor(255, 255, 255);
-  doc.text(statusText, pageWidth - margin - stW - prW - 6 + 4, pillY + 5.5);
+  doc.text(statusText, pageWidth - margin - prW - 4 - stW / 2, pillY + 5.4, { align: "center" });
 
-  // Priority pill
   doc.setFillColor(...pColor);
-  doc.roundedRect(pageWidth - margin - prW, pillY, prW, 8, 2, 2, "F");
-  doc.text(priorityText, pageWidth - margin - prW + 4, pillY + 5.5);
+  doc.roundedRect(pageWidth - margin - prW, pillY, prW, 8, 4, 4, "F");
+  doc.text(priorityText, pageWidth - margin - prW / 2, pillY + 5.4, { align: "center" });
+
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...slate400);
+  doc.text(`Generated ${format(new Date(), "dd MMM yyyy HH:mm")}`, pageWidth - margin, 36, { align: "right" });
 
   doc.setTextColor(0, 0, 0);
-  yPos = 48;
+  yPos = 52;
 
   // =====================
   // JOB CARD DETAILS
   // =====================
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(margin, yPos, contentWidth, 40, 3, 3, "F");
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(margin, yPos, contentWidth, 40, 3, 3, "S");
+  const detailsH = 46;
+  doc.setDrawColor(...lineC);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(margin, yPos, contentWidth, detailsH, 2.5, 2.5, "S");
+  doc.setFillColor(...blue500);
+  doc.rect(margin, yPos + 2, 1.2, detailsH - 4, "F");
+  doc.setLineWidth(0.2);
   doc.setDrawColor(0, 0, 0);
 
-  doc.setFontSize(9);
-  const col1 = margin + 6;
+  const col1 = margin + 7;
   const col2 = margin + contentWidth / 2 + 4;
-  let fy = yPos + 8;
 
-  drawField("Title:", data.jobCard.title.substring(0, 55), col1, fy, 22);
-  fy += 8;
+  drawLabelValue("Title", data.jobCard.title.substring(0, 70), col1, yPos + 8);
 
   const vehicleText = data.vehicle
     ? `${data.vehicle.registration_number}${data.vehicle.make ? ` — ${data.vehicle.make} ${data.vehicle.model || ""}` : ""}`
     : "N/A";
-  drawField("Vehicle:", vehicleText.substring(0, 50), col1, fy, 22);
-  drawField("Assignee:", data.jobCard.assignee || "Unassigned", col2, fy, 26);
-  fy += 8;
+  drawLabelValue("Vehicle", vehicleText.substring(0, 45), col1, yPos + 21);
+  drawLabelValue("Assignee", data.jobCard.assignee || "Unassigned", col2, yPos + 21);
+  drawLabelValue("Due Date", data.jobCard.due_date ? format(new Date(data.jobCard.due_date), "dd MMM yyyy") : "Not set", col1, yPos + 34);
+  drawLabelValue("Created", data.jobCard.created_at ? format(new Date(data.jobCard.created_at), "dd MMM yyyy HH:mm") : "N/A", col2, yPos + 34);
 
-  drawField("Due Date:", data.jobCard.due_date ? format(new Date(data.jobCard.due_date), "dd MMM yyyy") : "Not set", col1, fy, 26);
-  drawField("Created:", data.jobCard.created_at ? format(new Date(data.jobCard.created_at), "dd MMM yyyy HH:mm") : "N/A", col2, fy, 26);
-  fy += 8;
-
-  // Thin accent line under details box
-  doc.setDrawColor(...blue500);
-  doc.setLineWidth(0.8);
-  doc.line(margin, yPos + 40, margin + contentWidth, yPos + 40);
-  doc.setLineWidth(0.2);
-  doc.setDrawColor(0, 0, 0);
-
-  yPos += 48;
+  yPos += detailsH + 9;
 
   // =====================
   // COST SUMMARY SECTION
   // =====================
   drawSectionHeader("COST SUMMARY");
 
-  // Grand Total Box
-  doc.setFillColor(22, 163, 74);
-  doc.roundedRect(margin, yPos, contentWidth, 18, 2, 2, "F");
-  doc.setFontSize(10);
+  // Grand Total banner
+  doc.setFillColor(...green600);
+  doc.roundedRect(margin, yPos, contentWidth, 18, 2.5, 2.5, "F");
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(220, 252, 231); // green-100
+  doc.text("GRAND TOTAL", margin + 7, yPos + 7.5);
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text(
+    `${costs.totalPartsItems} part/service item${costs.totalPartsItems === 1 ? "" : "s"}  ·  ${costs.totalLaborHours.toFixed(1)} labor hours`,
+    margin + 7,
+    yPos + 13
+  );
+  doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  doc.text("GRAND TOTAL", margin + 6, yPos + 7);
-  doc.setFontSize(15);
-  doc.text(`$${costs.grandTotal.toFixed(2)}`, pageWidth - margin - 6, yPos + 12, { align: "right" });
+  doc.text(`$${costs.grandTotal.toFixed(2)}`, pageWidth - margin - 7, yPos + 11.5, { align: "right" });
   doc.setTextColor(0, 0, 0);
-  yPos += 22;
+  yPos += 23;
 
   // Cost Breakdown Table
   const costBreakdownData = [
@@ -340,27 +396,11 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
   ];
 
   autoTable(doc, {
+    ...baseTable,
     startY: yPos,
     head: [costBreakdownData[0]],
     body: costBreakdownData.slice(1, 4),
     foot: [costBreakdownData[4], costBreakdownData[5]],
-    theme: "grid",
-    headStyles: {
-      fillColor: slate800,
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-      fontSize: 8,
-    },
-    bodyStyles: {
-      fontSize: 8,
-      cellPadding: 3,
-    },
-    footStyles: {
-      fillColor: [241, 245, 249],
-      textColor: slate800,
-      fontStyle: "bold",
-      fontSize: 8,
-    },
     columnStyles: {
       0: { cellWidth: 80 },
       1: { cellWidth: 50, halign: "center" },
@@ -385,20 +425,10 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
     ]);
 
     autoTable(doc, {
+      ...baseTable,
       startY: yPos,
       head: [["Task", "Status", "Priority"]],
       body: tasksData,
-      theme: "striped",
-      headStyles: {
-        fillColor: slate800,
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 8,
-      },
-      bodyStyles: {
-        fontSize: 8,
-        cellPadding: 3,
-      },
       columnStyles: {
         0: { cellWidth: 110 },
         1: { cellWidth: 35, halign: "center" },
@@ -457,27 +487,14 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
     ]);
 
     autoTable(doc, {
+      ...baseTable,
       startY: yPos,
       head: [["Part/Service", "Part #", "Qty", "Source", "Unit Price", "Total", "Doc"]],
       body: partsData.slice(0, -1),
       foot: [partsData[partsData.length - 1]],
-      theme: "striped",
-      headStyles: {
-        fillColor: slate800,
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 7,
-      },
-      bodyStyles: {
-        fontSize: 7,
-        cellPadding: 2.5,
-      },
-      footStyles: {
-        fillColor: [241, 245, 249],
-        textColor: slate800,
-        fontStyle: "bold",
-        fontSize: 7,
-      },
+      headStyles: { ...baseTable.headStyles, fontSize: 7 },
+      bodyStyles: { ...baseTable.bodyStyles, fontSize: 7, cellPadding: 2.5 },
+      footStyles: { ...baseTable.footStyles, fontSize: 7 },
       columnStyles: {
         0: { cellWidth: 48 },
         1: { cellWidth: 22 },
@@ -508,19 +525,11 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
       ]);
 
       autoTable(doc, {
+        ...baseTable,
         startY: yPos,
         head: [["Part/Service", "Document Name", "Amount", "URL (for reference)"]],
         body: attachmentsData,
-        theme: "striped",
-        headStyles: {
-          fillColor: [139, 92, 246],
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-          fontSize: 8,
-        },
-        bodyStyles: {
-          fontSize: 7,
-        },
+        bodyStyles: { ...baseTable.bodyStyles, fontSize: 7 },
         columnStyles: {
           0: { cellWidth: 45 },
           1: { cellWidth: 40 },
@@ -561,27 +570,14 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
     ]);
 
     autoTable(doc, {
+      ...baseTable,
       startY: yPos,
       head: [["Technician", "Description", "Date", "Hours", "Rate", "Total"]],
       body: laborData.slice(0, -1),
       foot: [laborData[laborData.length - 1]],
-      theme: "striped",
-      headStyles: {
-        fillColor: slate800,
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 7,
-      },
-      bodyStyles: {
-        fontSize: 7,
-        cellPadding: 2.5,
-      },
-      footStyles: {
-        fillColor: [241, 245, 249],
-        textColor: slate800,
-        fontStyle: "bold",
-        fontSize: 7,
-      },
+      headStyles: { ...baseTable.headStyles, fontSize: 7 },
+      bodyStyles: { ...baseTable.bodyStyles, fontSize: 7, cellPadding: 2.5 },
+      footStyles: { ...baseTable.footStyles, fontSize: 7 },
       columnStyles: {
         0: { cellWidth: 40 },
         1: { cellWidth: 50 },
@@ -605,9 +601,16 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    const descriptionLines = doc.splitTextToSize(data.jobCard.description, contentWidth - 10);
-    doc.text(descriptionLines, margin + 5, yPos);
-    yPos += descriptionLines.length * 4.5 + 10;
+    const descriptionLines = doc.splitTextToSize(data.jobCard.description, contentWidth - 14);
+    const descH = descriptionLines.length * 4.5 + 9;
+    doc.setFillColor(...bgSoft);
+    doc.setDrawColor(...lineC);
+    doc.roundedRect(margin, yPos - 3, contentWidth, descH, 2, 2, "FD");
+    doc.setDrawColor(0, 0, 0);
+    doc.setTextColor(...slate600);
+    doc.text(descriptionLines, margin + 7, yPos + 2.5);
+    doc.setTextColor(0, 0, 0);
+    yPos += descH + 7;
   }
 
   // =====================
@@ -623,20 +626,12 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
     ]);
 
     autoTable(doc, {
+      ...baseTable,
       startY: yPos,
       head: [["Date", "Author", "Note"]],
       body: notesTableData,
-      theme: "striped",
-      headStyles: {
-        fillColor: [161, 121, 0],
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 7,
-      },
-      bodyStyles: {
-        fontSize: 7,
-        cellPadding: 2.5,
-      },
+      headStyles: { ...baseTable.headStyles, fontSize: 7 },
+      bodyStyles: { ...baseTable.bodyStyles, fontSize: 7, cellPadding: 2.5 },
       columnStyles: {
         0: { cellWidth: 35 },
         1: { cellWidth: 30 },
@@ -655,25 +650,23 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
   if (data.inspection) {
     drawSectionHeader("LINKED INSPECTION", [14, 165, 233]);
 
-    // Inspection details box
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(margin, yPos, contentWidth, 22, 3, 3, "F");
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(margin, yPos, contentWidth, 22, 3, 3, "S");
+    // Inspection details card
+    doc.setFillColor(...bgSoft);
+    doc.setDrawColor(...lineC);
+    doc.roundedRect(margin, yPos, contentWidth, 30, 2.5, 2.5, "FD");
     doc.setDrawColor(0, 0, 0);
 
-    doc.setFontSize(9);
-    const insCol1 = margin + 6;
+    const insCol1 = margin + 7;
     const insCol2 = margin + contentWidth / 2 + 4;
 
-    drawField("Inspection #:", data.inspection.inspection_number, insCol1, yPos + 7, 34);
-    drawField("Type:", data.inspection.inspection_type, insCol2, yPos + 7, 20);
-    drawField("Date:", format(new Date(data.inspection.inspection_date), "dd MMM yyyy"), insCol1, yPos + 15, 20);
+    drawLabelValue("Inspection #", data.inspection.inspection_number, insCol1, yPos + 8);
+    drawLabelValue("Type", data.inspection.inspection_type, insCol2, yPos + 8);
+    drawLabelValue("Date", format(new Date(data.inspection.inspection_date), "dd MMM yyyy"), insCol1, yPos + 21);
 
     if (data.inspection.inspector_name) {
-      drawField("Inspector:", data.inspection.inspector_name, insCol2, yPos + 15, 28);
+      drawLabelValue("Inspector", data.inspection.inspector_name, insCol2, yPos + 21);
     }
-    yPos += 28;
+    yPos += 36;
 
     // Inspection notes
     if (data.inspection.notes) {
@@ -691,14 +684,7 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
     if (data.inspection.items && data.inspection.items.length > 0) {
       if (yPos > 210) { doc.addPage(); yPos = 20; }
 
-      doc.setFillColor(14, 165, 233);
-      doc.roundedRect(margin, yPos, contentWidth, 9, 1.5, 1.5, "F");
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 255, 255);
-      doc.text(`INSPECTION ITEMS (${data.inspection.items.length})`, margin + 4, yPos + 6.5);
-      doc.setTextColor(0, 0, 0);
-      yPos += 13;
+      drawSubHeader(`Inspection Items (${data.inspection.items.length})`, [14, 165, 233]);
 
       const itemsData = data.inspection.items.map((item) => [
         item.item_name,
@@ -708,17 +694,12 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
       ]);
 
       autoTable(doc, {
+        ...baseTable,
         startY: yPos,
         head: [["Item", "Status", "Severity", "Notes"]],
         body: itemsData,
-        theme: "striped",
-        headStyles: {
-          fillColor: [14, 165, 233],
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-          fontSize: 7,
-        },
-        bodyStyles: { fontSize: 7, cellPadding: 2.5 },
+        headStyles: { ...baseTable.headStyles, fontSize: 7 },
+        bodyStyles: { ...baseTable.bodyStyles, fontSize: 7, cellPadding: 2.5 },
         columnStyles: {
           0: { cellWidth: 50 },
           1: { cellWidth: 25, halign: "center" },
@@ -750,14 +731,7 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
     if (data.inspection.faults && data.inspection.faults.length > 0) {
       if (yPos > 210) { doc.addPage(); yPos = 20; }
 
-      doc.setFillColor(234, 88, 12);
-      doc.roundedRect(margin, yPos, contentWidth, 9, 1.5, 1.5, "F");
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 255, 255);
-      doc.text(`INSPECTION FAULTS (${data.inspection.faults.length})`, margin + 4, yPos + 6.5);
-      doc.setTextColor(0, 0, 0);
-      yPos += 13;
+      drawSubHeader(`Inspection Faults (${data.inspection.faults.length})`, [234, 88, 12]);
 
       const faultsData = data.inspection.faults.map((f) => [
         f.fault_description,
@@ -767,17 +741,12 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
       ]);
 
       autoTable(doc, {
+        ...baseTable,
         startY: yPos,
         head: [["Fault", "Severity", "Status", "Action Notes"]],
         body: faultsData,
-        theme: "striped",
-        headStyles: {
-          fillColor: [234, 88, 12],
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-          fontSize: 7,
-        },
-        bodyStyles: { fontSize: 7, cellPadding: 2.5 },
+        headStyles: { ...baseTable.headStyles, fontSize: 7 },
+        bodyStyles: { ...baseTable.bodyStyles, fontSize: 7, cellPadding: 2.5 },
         columnStyles: {
           0: { cellWidth: 55 },
           1: { cellWidth: 25, halign: "center" },
@@ -809,28 +778,23 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
       if (yPos > 200) { doc.addPage(); yPos = 20; }
       const ooc = data.inspection.oocReport;
 
-      doc.setFillColor(220, 38, 38);
-      doc.roundedRect(margin, yPos, contentWidth, 9, 1.5, 1.5, "F");
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 255, 255);
-      doc.text("OUT OF COMMISSION REPORT", margin + 4, yPos + 6.5);
-      doc.setTextColor(0, 0, 0);
-      yPos += 13;
+      drawSubHeader("Out of Commission Report", [220, 38, 38]);
 
-      // OOC details
+      // OOC details card
       doc.setFillColor(254, 242, 242);
-      doc.roundedRect(margin, yPos, contentWidth, 22, 3, 3, "F");
-      doc.setFontSize(9);
-      const oocCol1 = margin + 6;
+      doc.setDrawColor(254, 202, 202);
+      doc.roundedRect(margin, yPos, contentWidth, 30, 2.5, 2.5, "FD");
+      doc.setDrawColor(0, 0, 0);
+
+      const oocCol1 = margin + 7;
       const oocCol2 = margin + contentWidth / 2 + 4;
 
-      drawField("Vehicle:", ooc.vehicle_id_or_license, oocCol1, yPos + 7, 25);
-      drawField("Report Date:", format(new Date(ooc.report_date), "dd MMM yyyy"), oocCol2, yPos + 7, 34);
-      drawField("Location:", ooc.location || "N/A", oocCol1, yPos + 15, 25);
-      drawField("Mechanic:", ooc.mechanic_name, oocCol2, yPos + 15, 28);
+      drawLabelValue("Vehicle", ooc.vehicle_id_or_license, oocCol1, yPos + 8);
+      drawLabelValue("Report Date", format(new Date(ooc.report_date), "dd MMM yyyy"), oocCol2, yPos + 8);
+      drawLabelValue("Location", ooc.location || "N/A", oocCol1, yPos + 21);
+      drawLabelValue("Mechanic", ooc.mechanic_name, oocCol2, yPos + 21);
 
-      yPos += 28;
+      yPos += 36;
 
       // Reason
       doc.setFontSize(9);
@@ -878,17 +842,11 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
         ]);
 
         autoTable(doc, {
+          ...baseTable,
           startY: yPos,
           head: [["Part Name / Number", "Qty", "On Hand", "Order Needed By"]],
           body: oocPartsData,
-          theme: "striped",
-          headStyles: {
-            fillColor: [100, 100, 100],
-            textColor: [255, 255, 255],
-            fontStyle: "bold",
-            fontSize: 8,
-          },
-          bodyStyles: { fontSize: 7 },
+          bodyStyles: { ...baseTable.bodyStyles, fontSize: 7 },
           columnStyles: {
             0: { cellWidth: 65 },
             1: { cellWidth: 20, halign: "center" },
@@ -924,17 +882,20 @@ export function buildJobCardPDF(data: JobCardExportData): { doc: jsPDF; fileName
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     const pageHeight = doc.internal.pageSize.getHeight();
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, pageHeight - 16, pageWidth - margin, pageHeight - 16);
+    doc.setDrawColor(...lineC);
+    doc.setLineWidth(0.3);
+    doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+    doc.setLineWidth(0.2);
     doc.setFontSize(7);
-    doc.setTextColor(128, 128, 128);
+    doc.setTextColor(...slate400);
+    doc.text("Matanuska Fleet Management  ·  Confidential", margin, pageHeight - 10);
     doc.text(
-      `Job Card #${data.jobCard.job_number}  |  Page ${i} of ${pageCount}  |  Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`,
+      `Job Card #${data.jobCard.job_number}  ·  ${format(new Date(), "dd MMM yyyy HH:mm")}`,
       pageWidth / 2,
       pageHeight - 10,
       { align: "center" }
     );
-    doc.text("Confidential — Matanuska Fleet Management", margin, pageHeight - 10);
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 10, { align: "right" });
     doc.setTextColor(0, 0, 0);
     doc.setDrawColor(0, 0, 0);
   }
