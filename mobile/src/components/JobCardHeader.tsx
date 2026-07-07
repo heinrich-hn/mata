@@ -43,8 +43,8 @@ const JobCardHeader = ({ jobCard, onClose, onStatusChange, onPriorityChange: _on
   return (
     <div className="pb-4 border-b space-y-3 w-full">
       {/* Top row: job number, priority/status badges, close button */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
           <span className="text-sm text-muted-foreground font-mono">#{jobCard.job_number}</span>
           <Badge variant={getPriorityVariant(jobCard.priority)}>
             {jobCard.priority}
@@ -59,7 +59,7 @@ const JobCardHeader = ({ jobCard, onClose, onStatusChange, onPriorityChange: _on
       </div>
 
       {/* Title */}
-      <h2 className="text-xl sm:text-2xl font-semibold leading-tight">{jobCard.title}</h2>
+      <h2 className="text-lg sm:text-2xl font-semibold leading-tight break-words">{jobCard.title}</h2>
 
       {/* Meta info */}
       <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">

@@ -87,7 +87,7 @@ const JobCardHeader = ({ jobCard, onClose, onStatusChange, onPriorityChange: _on
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Select value={jobCard.status} onValueChange={onStatusChange}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[130px] sm:w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" sideOffset={4}>

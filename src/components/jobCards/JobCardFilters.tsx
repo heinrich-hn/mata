@@ -41,7 +41,7 @@ const JobCardFilters = ({ onFilterChange, assignees }: JobCardFiltersProps) => {
       </div>
 
       <Select defaultValue="all" onValueChange={(value) => handleChange("status", value)}>
-        <SelectTrigger className="w-[150px]">
+        <SelectTrigger className="w-full sm:w-[150px]">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectContent>
@@ -54,7 +54,7 @@ const JobCardFilters = ({ onFilterChange, assignees }: JobCardFiltersProps) => {
       </Select>
 
       <Select defaultValue="all" onValueChange={(value) => handleChange("priority", value)}>
-        <SelectTrigger className="w-[150px]">
+        <SelectTrigger className="w-full sm:w-[150px]">
           <SelectValue placeholder="Priority" />
         </SelectTrigger>
         <SelectContent>
@@ -68,7 +68,7 @@ const JobCardFilters = ({ onFilterChange, assignees }: JobCardFiltersProps) => {
 
       {assignees.length > 0 && (
         <Select defaultValue="all" onValueChange={(value) => handleChange("assignee", value)}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="Assignee" />
           </SelectTrigger>
           <SelectContent>

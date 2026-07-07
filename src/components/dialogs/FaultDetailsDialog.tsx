@@ -424,7 +424,7 @@ const FaultDetailsDialog = ({ fault: faultProp, open, onOpenChange }: FaultDetai
       </AlertDialog>
 
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="flex flex-row items-center justify-between">
             <DialogTitle>Fault Details - {fault.vehicles?.fleet_number || fault.fault_number}</DialogTitle>
             <div className="flex items-center gap-2">
@@ -482,308 +482,308 @@ const FaultDetailsDialog = ({ fault: faultProp, open, onOpenChange }: FaultDetai
                     </Badge>
                   </div>
                 </div>
-              <div>
-                <Label className="text-muted-foreground">Severity</Label>
-                <div className="mt-1">
-                  <Badge variant={getSeverityVariant(fault.severity)}>
-                    {fault.severity}
-                  </Badge>
+                <div>
+                  <Label className="text-muted-foreground">Severity</Label>
+                  <div className="mt-1">
+                    <Badge variant={getSeverityVariant(fault.severity)}>
+                      {fault.severity}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Category</Label>
+                  <p className="font-medium">{fault.fault_category}</p>
+                </div>
+                {fault.component && (
+                  <div>
+                    <Label className="text-muted-foreground">Component</Label>
+                    <p className="font-medium">{fault.component}</p>
+                  </div>
+                )}
+                <div>
+                  <Label className="text-muted-foreground">Reported By</Label>
+                  <p className="font-medium">{fault.reported_by}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Reported Date</Label>
+                  <p className="font-medium">
+                    {new Date(fault.reported_date).toLocaleDateString()}
+                  </p>
                 </div>
               </div>
+
               <div>
-                <Label className="text-muted-foreground">Category</Label>
-                <p className="font-medium">{fault.fault_category}</p>
+                <Label className="text-muted-foreground">Description</Label>
+                <p className="mt-2 p-3 bg-muted rounded-md">{fault.fault_description}</p>
               </div>
-              {fault.component && (
-                <div>
-                  <Label className="text-muted-foreground">Component</Label>
-                  <p className="font-medium">{fault.component}</p>
+
+              {/* Show inspection link if exists */}
+              {inspectionFault && (
+                <div className="p-3 bg-muted/50 rounded-lg border">
+                  <p className="text-sm font-medium mb-2">Linked to Inspection</p>
+                  <div className="text-sm space-y-1">
+                    {inspectionFault.inspection_items && (
+                      <p className="text-muted-foreground">
+                        <span className="font-medium">Item:</span> {inspectionFault.inspection_items.item_name}
+                      </p>
+                    )}
+                    <p className="text-muted-foreground">
+                      <span className="font-medium">Corrective Status:</span> {inspectionFault.corrective_action_status || "Pending"}
+                    </p>
+                  </div>
                 </div>
               )}
-              <div>
-                <Label className="text-muted-foreground">Reported By</Label>
-                <p className="font-medium">{fault.reported_by}</p>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">Reported Date</Label>
-                <p className="font-medium">
-                  {new Date(fault.reported_date).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
 
-            <div>
-              <Label className="text-muted-foreground">Description</Label>
-              <p className="mt-2 p-3 bg-muted rounded-md">{fault.fault_description}</p>
-            </div>
-
-            {/* Show inspection link if exists */}
-            {inspectionFault && (
-              <div className="p-3 bg-muted/50 rounded-lg border">
-                <p className="text-sm font-medium mb-2">Linked to Inspection</p>
-                <div className="text-sm space-y-1">
-                  {inspectionFault.inspection_items && (
-                    <p className="text-muted-foreground">
-                      <span className="font-medium">Item:</span> {inspectionFault.inspection_items.item_name}
-                    </p>
+              {fault.status !== "resolved" && fault.status !== "closed" && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t">
+                  {fault.status === "identified" && (
+                    <Button onClick={handleAcknowledge} disabled={loading}>
+                      <Clock className="h-4 w-4 mr-2" />
+                      Acknowledge Fault
+                    </Button>
                   )}
-                  <p className="text-muted-foreground">
-                    <span className="font-medium">Corrective Status:</span> {inspectionFault.corrective_action_status || "Pending"}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {fault.status !== "resolved" && fault.status !== "closed" && (
-              <div className="flex flex-wrap gap-2 pt-2 border-t">
-                {fault.status === "identified" && (
-                  <Button onClick={handleAcknowledge} disabled={loading}>
-                    <Clock className="h-4 w-4 mr-2" />
-                    Acknowledge Fault
+                  <Button variant="outline" onClick={handleOpenCreateJobCard}>
+                    <Wrench className="h-4 w-4 mr-2" />
+                    Create Job Card
                   </Button>
-                )}
-                <Button variant="outline" onClick={handleOpenCreateJobCard}>
-                  <Wrench className="h-4 w-4 mr-2" />
-                  Create Job Card
-                </Button>
-                <Button variant="outline" onClick={handleOpenCreateInspection}>
-                  <ClipboardList className="h-4 w-4 mr-2" />
-                  Create Inspection
-                </Button>
-              </div>
-            )}
-          </TabsContent>
+                  <Button variant="outline" onClick={handleOpenCreateInspection}>
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    Create Inspection
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
 
-          <TabsContent value="resolution" className="space-y-4">
-            {fault.status === "resolved" ? (
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-muted-foreground">Resolved Date</Label>
-                  <p className="font-medium">
-                    {fault.resolved_date
-                      ? new Date(fault.resolved_date).toLocaleDateString()
-                      : "N/A"}
-                  </p>
+            <TabsContent value="resolution" className="space-y-4">
+              {fault.status === "resolved" ? (
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-muted-foreground">Resolved Date</Label>
+                    <p className="font-medium">
+                      {fault.resolved_date
+                        ? new Date(fault.resolved_date).toLocaleDateString()
+                        : "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Resolution Notes</Label>
+                    <p className="mt-2 p-3 bg-muted rounded-md">
+                      {fault.resolution_notes || "No resolution notes provided."}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-muted-foreground">Resolution Notes</Label>
-                  <p className="mt-2 p-3 bg-muted rounded-md">
-                    {fault.resolution_notes || "No resolution notes provided."}
-                  </p>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="resolution-notes">Resolution Notes *</Label>
+                    <Textarea
+                      id="resolution-notes"
+                      placeholder="Enter resolution notes..."
+                      value={resolutionNotes}
+                      onChange={(e) => setResolutionNotes(e.target.value)}
+                      rows={6}
+                      className="mt-2"
+                    />
+                  </div>
+                  <Button onClick={handleResolve} disabled={loading}>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Mark as Resolved
+                  </Button>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="resolution-notes">Resolution Notes *</Label>
-                  <Textarea
-                    id="resolution-notes"
-                    placeholder="Enter resolution notes..."
-                    value={resolutionNotes}
-                    onChange={(e) => setResolutionNotes(e.target.value)}
-                    rows={6}
-                    className="mt-2"
-                  />
-                </div>
-                <Button onClick={handleResolve} disabled={loading}>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Mark as Resolved
-                </Button>
-              </div>
-            )}
-          </TabsContent>
+              )}
+            </TabsContent>
 
-          <TabsContent value="history" className="space-y-4">
-            <div className="space-y-3">
-              <div className="p-3 border rounded-md">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Fault Logged</span>
-                  <span className="text-sm text-muted-foreground">
-                    {new Date(fault.reported_date).toLocaleString()}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Logged by {fault.reported_by}
-                </p>
-              </div>
-
-              {fault.acknowledged_at && (
+            <TabsContent value="history" className="space-y-4">
+              <div className="space-y-3">
                 <div className="p-3 border rounded-md">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">Fault Acknowledged</span>
+                    <span className="font-medium">Fault Logged</span>
                     <span className="text-sm text-muted-foreground">
-                      {new Date(fault.acknowledged_at).toLocaleString()}
+                      {new Date(fault.reported_date).toLocaleString()}
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Acknowledged by {fault.acknowledged_by}
+                    Logged by {fault.reported_by}
                   </p>
                 </div>
-              )}
 
-              {fault.resolved_date && (
-                <div className="p-3 border rounded-md">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">Fault Resolved</span>
-                    <span className="text-sm text-muted-foreground">
-                      {new Date(fault.resolved_date).toLocaleString()}
-                    </span>
+                {fault.acknowledged_at && (
+                  <div className="p-3 border rounded-md">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">Fault Acknowledged</span>
+                      <span className="text-sm text-muted-foreground">
+                        {new Date(fault.acknowledged_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Acknowledged by {fault.acknowledged_by}
+                    </p>
                   </div>
-                </div>
-              )}
+                )}
+
+                {fault.resolved_date && (
+                  <div className="p-3 border rounded-md">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">Fault Resolved</span>
+                      <span className="text-sm text-muted-foreground">
+                        {new Date(fault.resolved_date).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Job Card Dialog */}
+      <Dialog open={showCreateJobCardDialog} onOpenChange={setShowCreateJobCardDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Create Job Card from Fault
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground">Creating job card for:</p>
+              <p className="font-medium">
+                {fault.fault_number} - {fault.vehicles?.fleet_number || fault.vehicles?.registration_number}
+              </p>
             </div>
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
 
-    {/* Create Job Card Dialog */}
-    <Dialog open={showCreateJobCardDialog} onOpenChange={setShowCreateJobCardDialog}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Wrench className="h-5 w-5" />
-            Create Job Card from Fault
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="p-3 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">Creating job card for:</p>
-            <p className="font-medium">
-              {fault.fault_number} - {fault.vehicles?.fleet_number || fault.vehicles?.registration_number}
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="jc-title">Job Card Title *</Label>
-            <Input
-              id="jc-title"
-              value={jobCardForm.title}
-              onChange={(e) => setJobCardForm(prev => ({ ...prev, title: e.target.value }))}
-              placeholder="Enter job card title"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="jc-assignee">Assignee</Label>
+              <Label htmlFor="jc-title">Job Card Title *</Label>
               <Input
-                id="jc-assignee"
-                value={jobCardForm.assignee}
-                onChange={(e) => setJobCardForm(prev => ({ ...prev, assignee: e.target.value }))}
-                placeholder="Technician name"
+                id="jc-title"
+                value={jobCardForm.title}
+                onChange={(e) => setJobCardForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="Enter job card title"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="jc-priority">Priority</Label>
-              <Select
-                value={jobCardForm.priority}
-                onValueChange={(value) => setJobCardForm(prev => ({ ...prev, priority: value }))}
-              >
-                <SelectTrigger id="jc-priority">
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="jc-assignee">Assignee</Label>
+                <Input
+                  id="jc-assignee"
+                  value={jobCardForm.assignee}
+                  onChange={(e) => setJobCardForm(prev => ({ ...prev, assignee: e.target.value }))}
+                  placeholder="Technician name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="jc-priority">Priority</Label>
+                <Select
+                  value={jobCardForm.priority}
+                  onValueChange={(value) => setJobCardForm(prev => ({ ...prev, priority: value }))}
+                >
+                  <SelectTrigger id="jc-priority">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="jc-description">Description</Label>
-            <Textarea
-              id="jc-description"
-              value={jobCardForm.description}
-              onChange={(e) => setJobCardForm(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Job card description"
-              rows={5}
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setShowCreateJobCardDialog(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleCreateJobCard} disabled={isCreatingJobCard}>
-            {isCreatingJobCard && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Create Job Card
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    {/* Create Inspection Dialog */}
-    <Dialog open={showCreateInspectionDialog} onOpenChange={setShowCreateInspectionDialog}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ClipboardList className="h-5 w-5" />
-            Create Inspection from Fault
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="p-3 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">Creating inspection for:</p>
-            <p className="font-medium">
-              {fault.fault_number} - {fault.vehicles?.fleet_number || fault.vehicles?.registration_number}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="insp-type">Inspection Type</Label>
-              <Select
-                value={inspectionForm.inspection_type}
-                onValueChange={(value) => setInspectionForm(prev => ({ ...prev, inspection_type: value }))}
-              >
-                <SelectTrigger id="insp-type">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fault_followup">Fault Follow-up</SelectItem>
-                  <SelectItem value="routine">Routine</SelectItem>
-                  <SelectItem value="pre_trip">Pre-Trip</SelectItem>
-                  <SelectItem value="post_trip">Post-Trip</SelectItem>
-                  <SelectItem value="safety">Safety</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="insp-inspector">Inspector Name *</Label>
-              <Input
-                id="insp-inspector"
-                value={inspectionForm.inspector_name}
-                onChange={(e) => setInspectionForm(prev => ({ ...prev, inspector_name: e.target.value }))}
-                placeholder="Your name"
+              <Label htmlFor="jc-description">Description</Label>
+              <Textarea
+                id="jc-description"
+                value={jobCardForm.description}
+                onChange={(e) => setJobCardForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Job card description"
+                rows={5}
               />
             </div>
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="insp-notes">Notes</Label>
-            <Textarea
-              id="insp-notes"
-              value={inspectionForm.notes}
-              onChange={(e) => setInspectionForm(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder="Inspection notes"
-              rows={4}
-            />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowCreateJobCardDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateJobCard} disabled={isCreatingJobCard}>
+              {isCreatingJobCard && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Create Job Card
+            </Button>
           </div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setShowCreateInspectionDialog(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleCreateInspection} disabled={isCreatingInspection}>
-            {isCreatingInspection && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Create Inspection
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Inspection Dialog */}
+      <Dialog open={showCreateInspectionDialog} onOpenChange={setShowCreateInspectionDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5" />
+              Create Inspection from Fault
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground">Creating inspection for:</p>
+              <p className="font-medium">
+                {fault.fault_number} - {fault.vehicles?.fleet_number || fault.vehicles?.registration_number}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="insp-type">Inspection Type</Label>
+                <Select
+                  value={inspectionForm.inspection_type}
+                  onValueChange={(value) => setInspectionForm(prev => ({ ...prev, inspection_type: value }))}
+                >
+                  <SelectTrigger id="insp-type">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fault_followup">Fault Follow-up</SelectItem>
+                    <SelectItem value="routine">Routine</SelectItem>
+                    <SelectItem value="pre_trip">Pre-Trip</SelectItem>
+                    <SelectItem value="post_trip">Post-Trip</SelectItem>
+                    <SelectItem value="safety">Safety</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="insp-inspector">Inspector Name *</Label>
+                <Input
+                  id="insp-inspector"
+                  value={inspectionForm.inspector_name}
+                  onChange={(e) => setInspectionForm(prev => ({ ...prev, inspector_name: e.target.value }))}
+                  placeholder="Your name"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="insp-notes">Notes</Label>
+              <Textarea
+                id="insp-notes"
+                value={inspectionForm.notes}
+                onChange={(e) => setInspectionForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Inspection notes"
+                rows={4}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowCreateInspectionDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateInspection} disabled={isCreatingInspection}>
+              {isCreatingInspection && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Create Inspection
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

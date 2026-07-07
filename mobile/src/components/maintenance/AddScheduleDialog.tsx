@@ -122,7 +122,7 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
         notification_recipients: [],
       };
 
-      const { error } = await supabase.from("maintenance_schedules").insert([submitData]);      if (error) throw error;
+      const { error } = await supabase.from("maintenance_schedules").insert([submitData]); if (error) throw error;
 
       toast({
         title: "Success",
@@ -145,7 +145,7 @@ export function AddScheduleDialog({ open, onOpenChange, onSuccess }: AddSchedule
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Maintenance Schedule</DialogTitle>
           <DialogDescription>

@@ -750,7 +750,7 @@ const TyreManagementDialog = ({
           {(mode === "install" || mode === "edit") ? (
             <div className="space-y-3">
               {/* Row 1: Brand, Model, Size, Type */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="brand" className="text-xs font-medium">Brand *</Label>
                   <Input
@@ -802,7 +802,7 @@ const TyreManagementDialog = ({
               </div>
 
               {/* Row 2: DOT Code, Serial, Condition */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="dotCode" className="text-xs font-medium">DOT Code</Label>
                   <Input
@@ -848,7 +848,7 @@ const TyreManagementDialog = ({
               </div>
 
               {/* Row 2b: Tread Depths */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="startingTreadDepth" className="text-xs font-medium">Starting Tread (mm)</Label>
                   <Input
@@ -897,7 +897,7 @@ const TyreManagementDialog = ({
               </div>
 
               {/* Row 3: Price, Starting KM, Current KM, Installer */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="purchaseCostUsd" className="text-xs font-medium">Price (USD)</Label>
                   <Input
@@ -953,7 +953,7 @@ const TyreManagementDialog = ({
               </div>
 
               {/* Row 4: Dates */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="installationDate" className="text-xs font-medium">Installation Date</Label>
                   <Input

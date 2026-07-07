@@ -43,7 +43,7 @@ const JobCardGeneralInfo = ({ jobCard, vehicle, onUpdate, initialEditMode = fals
       setIsEditingAssignee(true);
       setIsEditingVehicle(true);
     }
-     
+
   }, [initialEditMode, jobCard.id]);
 
   const handleSave = () => {
@@ -112,17 +112,17 @@ const JobCardGeneralInfo = ({ jobCard, vehicle, onUpdate, initialEditMode = fals
           ) : (
             <div
               onClick={() => setIsEditingVehicle(true)}
-              className="mt-1 p-2 border rounded cursor-pointer hover:bg-accent flex items-center justify-between group"
+              className="mt-1 p-2 border rounded cursor-pointer hover:bg-accent flex items-center justify-between gap-2 group"
             >
               {vehicle ? (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                   {vehicle.fleet_number && (
                     <Badge variant="secondary" className="font-mono text-xs">
                       {vehicle.fleet_number}
                     </Badge>
                   )}
                   <Badge variant="outline">{vehicle.registration_number}</Badge>
-                  <span className="text-sm">{vehicle.make} {vehicle.model}</span>
+                  <span className="text-sm truncate">{vehicle.make} {vehicle.model}</span>
                 </div>
               ) : (
                 <span className="text-sm text-muted-foreground">Click to assign vehicle...</span>

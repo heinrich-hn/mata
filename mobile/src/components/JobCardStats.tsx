@@ -109,17 +109,17 @@ const JobCardStats = ({ tasks, laborEntries, parts }: JobCardStatsProps) => {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
       {stats.map((stat, index) => (
         <Card key={index} className={`border-0 ${stat.bgColor}`}>
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className={`text-xs font-medium ${stat.labelColor}`}>{stat.label}</p>
-                <p className={`text-xl font-bold mt-1 ${stat.valueColor}`}>{stat.value}</p>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className={`text-xs font-medium truncate ${stat.labelColor}`}>{stat.label}</p>
+                <p className={`text-lg sm:text-xl font-bold mt-1 break-words ${stat.valueColor}`}>{stat.value}</p>
                 <p className={`text-xs mt-1 ${stat.subtextColor}`}>{stat.subtext}</p>
               </div>
-              <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
+              <stat.icon className={`h-5 w-5 sm:h-6 sm:w-6 shrink-0 ${stat.iconColor}`} />
             </div>
           </CardContent>
         </Card>

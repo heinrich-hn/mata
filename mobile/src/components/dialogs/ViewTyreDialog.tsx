@@ -164,7 +164,7 @@ const ViewTyreDialog = ({ open, onOpenChange, tyre, onInstall, onEdit }: ViewTyr
               <Gauge className="h-4 w-4" />
               Technical Specifications
             </h3>
-            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
               <div>
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Ruler className="h-3.5 w-3.5" />
@@ -195,7 +195,7 @@ const ViewTyreDialog = ({ open, onOpenChange, tyre, onInstall, onEdit }: ViewTyr
               <Box className="h-4 w-4" />
               Stock & Location
             </h3>
-            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
               <div>
                 <p className="text-sm text-muted-foreground">Current Quantity</p>
                 <p className={`font-bold text-2xl ${isLowStock ? "text-destructive" : "text-primary"}`}>

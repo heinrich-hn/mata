@@ -37,7 +37,7 @@ interface JobCardDetailsDialogProps {
   onUpdate?: () => void;
 }
 
-const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCardDetailsDialogProps) => {
+const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate, initialEditMode = false }: JobCardDetailsDialogProps) => {
   const { toast } = useToast();
   const [showLinkInspection, setShowLinkInspection] = useState(false);
 
@@ -220,7 +220,7 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-full sm:max-w-[95vw] h-full sm:h-[95vh] p-0 overflow-hidden">
+      <DialogContent className="max-w-full sm:max-w-[95vw] w-full h-[100dvh] sm:h-[95vh] p-0 overflow-hidden rounded-none sm:rounded-lg">
         <VisuallyHidden>
           <DialogHeader>
             <DialogTitle>Job Card Details - {jobCard.job_number}</DialogTitle>
@@ -228,7 +228,7 @@ const JobCardDetailsDialog = ({ open, onOpenChange, jobCard, onUpdate }: JobCard
           </DialogHeader>
         </VisuallyHidden>
         <ScrollArea className="h-full">
-          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 pb-safe">
+          <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 pb-safe">
             <JobCardHeader
               jobCard={jobCard}
               onClose={() => onOpenChange(false)}

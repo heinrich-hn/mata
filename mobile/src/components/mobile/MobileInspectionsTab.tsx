@@ -561,7 +561,7 @@ const MobileInspectionsTab = () => {
 
   // Debug info (development only)
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && inspections.length > 0) {
+    if (import.meta.env.DEV && inspections.length > 0) {
       const withFaults = inspections.filter(i => i.has_fault);
       const openFaults = inspections.filter(i => i.has_fault && !i.fault_resolved);
       console.debug('Inspections state:', {

@@ -293,14 +293,14 @@ const TyreQRCodeSystem = ({ tyreTin, tyreId, vehicleId, position, onScan }: Tyre
                       </p>
                       <Button className="w-full" onClick={() => {
                         // Generate 10 example positions
-                        const positions = Array.from({length: 10}, (_, i) => `pos${i+1}`);
+                        const positions = Array.from({ length: 10 }, (_, i) => `pos${i + 1}`);
                         setBatchPositions(positions);
                       }}>
                         Generate for All Positions
                       </Button>
 
                       {batchPositions.length > 0 && (
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                           {batchPositions.map((pos) => (
                             <div key={pos} className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg border">
                               <div id={`qr-code-batch-${pos}`}>

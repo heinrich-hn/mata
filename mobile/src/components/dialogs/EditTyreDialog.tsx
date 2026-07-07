@@ -330,7 +330,7 @@ const EditTyreDialog = ({ open, onOpenChange, tyre, onUpdate }: EditTyreDialogPr
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 Stock & Location
               </h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="quantity">Quantity</Label>
                   <Input

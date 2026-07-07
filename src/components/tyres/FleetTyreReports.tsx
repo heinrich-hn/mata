@@ -562,26 +562,28 @@ const FleetTyreReports = () => {
         </CardHeader>
         <CardContent>
           <Tabs value={reportType} onValueChange={setReportType}>
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="overview" className="px-4 py-2.5 text-sm">
-                Overview
-              </TabsTrigger>
-              <TabsTrigger value="brands" className="px-4 py-2.5 text-sm">
-                Brand Analysis
-              </TabsTrigger>
-              <TabsTrigger value="health" className="px-4 py-2.5 text-sm">
-                Health
-              </TabsTrigger>
-              <TabsTrigger value="recommendations" className="px-4 py-2.5 text-sm">
-                Recommendations
-              </TabsTrigger>
-              <TabsTrigger value="cost" className="px-4 py-2.5 text-sm">
-                Cost
-              </TabsTrigger>
-              <TabsTrigger value="rubber-audit" className="px-4 py-2.5 text-sm">
-                Rubber Audit
-              </TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto">
+              <TabsList className="grid w-full min-w-[640px] grid-cols-6">
+                <TabsTrigger value="overview" className="px-4 py-2.5 text-sm">
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="brands" className="px-4 py-2.5 text-sm">
+                  Brand Analysis
+                </TabsTrigger>
+                <TabsTrigger value="health" className="px-4 py-2.5 text-sm">
+                  Health
+                </TabsTrigger>
+                <TabsTrigger value="recommendations" className="px-4 py-2.5 text-sm">
+                  Recommendations
+                </TabsTrigger>
+                <TabsTrigger value="cost" className="px-4 py-2.5 text-sm">
+                  Cost
+                </TabsTrigger>
+                <TabsTrigger value="rubber-audit" className="px-4 py-2.5 text-sm">
+                  Rubber Audit
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* Overview Tab - KPI Summary */}
             <TabsContent value="overview" className="space-y-6 mt-4">
@@ -802,7 +804,7 @@ const FleetTyreReports = () => {
             </TabsContent>
 
             <TabsContent value="health" className="space-y-4 mt-4">
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Excellent</CardTitle>

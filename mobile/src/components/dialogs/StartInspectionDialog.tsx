@@ -164,7 +164,7 @@ const StartInspectionDialog = ({ open, onOpenChange, onInspectionCreated }: Star
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-2xl">
+      <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Start New Inspection</DialogTitle>
           <DialogDescription>

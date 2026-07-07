@@ -386,7 +386,7 @@ const RemoveTyreDialog = ({ open, onOpenChange, tyre, onRemovalComplete }: Remov
             </Card>
 
             {/* Calculated Metrics */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Card>
                 <CardContent className="pt-6">
                   <Label className="text-xs text-muted-foreground">Total KM Run</Label>
