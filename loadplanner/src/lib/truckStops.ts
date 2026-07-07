@@ -41,6 +41,9 @@ const ADDITIONAL_TRUCK_STOPS: TruckStop[] = [
     { name: "Bubi River Truck Stop", address: "Bubi River", longitude: 30.48814, latitude: -21.725955 },
     { name: "Rusape Truck Stop - Buffalo Truck Inn", address: "Rusape", longitude: 32.122242, latitude: -18.528486 },
     { name: "Chivhu Truck Stop", address: "Chivhu", longitude: 30.898199, latitude: -19.010744 },
+    { name: "Chiredzi Truck Stop", address: "Chiredzi", longitude: 31.684348777145217, latitude: -21.01796584078671 },
+    { name: "Chibi Truck Stop", address: "Chibi", longitude: 30.680036709870784, latitude: -20.401829654772634 },
+    { name: "Zvishavane Truck Stop", address: "Zvishavane", longitude: 30.055185117581185, latitude: -20.31638752883529 },
 ];
 
 const derivedTruckStops = (waypointsData as TruckStop[]).filter((waypoint) =>
