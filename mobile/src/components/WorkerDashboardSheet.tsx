@@ -40,7 +40,7 @@ interface PartRow {
     id: string;
     part_name: string | null;
     quantity: number | null;
-    total_cost: number | null;
+    total_price: number | null;
     requested_by: string | null;
     status: string | null;
 }
@@ -77,7 +77,7 @@ export default function WorkerDashboardSheet({ open, onOpenChange, jobCard }: Wo
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("parts_requests")
-                .select("id, part_name, quantity, total_cost, requested_by, status")
+                .select("id, part_name, quantity, total_price, requested_by, status")
                 .eq("job_card_id", jobCard!.id);
             if (error) throw error;
             return (data || []) as PartRow[];
@@ -110,7 +110,7 @@ export default function WorkerDashboardSheet({ open, onOpenChange, jobCard }: Wo
     const totals = useMemo(() => {
         const totalHours = labor.reduce((s, l) => s + (Number(l.hours_worked) || 0), 0);
         const totalLaborCost = labor.reduce((s, l) => s + (Number(l.total_cost) || 0), 0);
-        const totalPartsCost = parts.reduce((s, p) => s + (Number(p.total_cost) || 0), 0);
+        const totalPartsCost = parts.reduce((s, p) => s + (Number(p.total_price) || 0), 0);
         return {
             hours: totalHours,
             laborCost: totalLaborCost,

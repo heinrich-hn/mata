@@ -27,7 +27,7 @@ export function useIsMobile(): boolean {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const handleResize = () => {
       // Debounce resize events for better performance
@@ -237,7 +237,7 @@ export function useWindowSize(): { width: number; height: number } {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const handleResize = () => {
       // Debounce for performance
@@ -403,7 +403,7 @@ export function useDebouncedResize(delay: number = 200): { width: number; height
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const handleResize = () => {
       setSize({
