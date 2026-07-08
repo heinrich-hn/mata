@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Modal from '@/components/ui/modal';
 import { Separator } from '@/components/ui/separator';
+import { PROBE_VERIFICATION_ENABLED } from '@/constants/fleet';
 import { useOperations } from '@/contexts/OperationsContext';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/formatters';
 import type { DieselConsumptionRecord, Trip } from '@/types/operations';
@@ -153,7 +154,7 @@ const DieselTransactionViewModal = ({
               Trip Linked
             </Badge>
           )}
-          {record.probe_verified && (
+          {PROBE_VERIFICATION_ENABLED && record.probe_verified && (
             <Badge variant="default" className="bg-green-500">
               <CheckCircle className="h-3 w-3 mr-1" />
               Probe Verified
@@ -456,57 +457,59 @@ const DieselTransactionViewModal = ({
         )}
 
         {/* Probe Verification Section */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
+        {PROBE_VERIFICATION_ENABLED && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                {record.probe_verified ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-muted-foreground" />
+                )}
+                Probe Verification
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               {record.probe_verified ? (
-                <CheckCircle className="h-4 w-4 text-green-500" />
-              ) : (
-                <XCircle className="h-4 w-4 text-muted-foreground" />
-              )}
-              Probe Verification
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {record.probe_verified ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Probe Reading</p>
-                  <p className="font-medium">{record.probe_reading ? formatNumber(record.probe_reading) + ' L' : 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Discrepancy</p>
-                  <p className={`font-medium ${record.probe_discrepancy && Math.abs(record.probe_discrepancy) > 5 ? 'text-warning' : ''}`}>
-                    {record.probe_discrepancy ? formatNumber(record.probe_discrepancy, 1) + ' L' : 'None'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Verified By</p>
-                  <p className="font-medium">{record.probe_verified_by || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Verified At</p>
-                  <p className="font-medium">{record.probe_verified_at ? formatDate(record.probe_verified_at) : 'N/A'}</p>
-                </div>
-                {record.probe_action_taken && (
-                  <div className="col-span-full">
-                    <p className="text-muted-foreground">Action Taken</p>
-                    <p className="font-medium">{record.probe_action_taken}</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Probe Reading</p>
+                    <p className="font-medium">{record.probe_reading ? formatNumber(record.probe_reading) + ' L' : 'N/A'}</p>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground mb-2">Not yet verified</p>
-                {onVerifyProbe && (
-                  <Button size="sm" variant="outline" onClick={onVerifyProbe}>
-                    Verify Probe Reading
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <div>
+                    <p className="text-muted-foreground">Discrepancy</p>
+                    <p className={`font-medium ${record.probe_discrepancy && Math.abs(record.probe_discrepancy) > 5 ? 'text-warning' : ''}`}>
+                      {record.probe_discrepancy ? formatNumber(record.probe_discrepancy, 1) + ' L' : 'None'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Verified By</p>
+                    <p className="font-medium">{record.probe_verified_by || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Verified At</p>
+                    <p className="font-medium">{record.probe_verified_at ? formatDate(record.probe_verified_at) : 'N/A'}</p>
+                  </div>
+                  {record.probe_action_taken && (
+                    <div className="col-span-full">
+                      <p className="text-muted-foreground">Action Taken</p>
+                      <p className="font-medium">{record.probe_action_taken}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-muted-foreground mb-2">Not yet verified</p>
+                  {onVerifyProbe && (
+                    <Button size="sm" variant="outline" onClick={onVerifyProbe}>
+                      Verify Probe Reading
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Debrief Section */}
         <Card className={isOutsideNorm && !record.debrief_signed ? 'border-destructive' : ''}>

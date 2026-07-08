@@ -393,7 +393,6 @@ const ManualDieselEntryModal = ({
   ];
   const currencyOptions = [
     { label: 'USD', value: 'USD' },
-    { label: 'USD', value: 'USD' },
   ];
 
   return (

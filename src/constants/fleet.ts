@@ -20,6 +20,10 @@ export const TRUCKS_WITH_PROBES = [
   '4H', '6H', '23H', '24H', '26H', '28H', '29H', '31H'
 ] as const;
 
+// Feature flag: probe verification workflow (badges, verify actions, modal).
+// Temporarily deactivated — set to true to re-enable the full workflow.
+export const PROBE_VERIFICATION_ENABLED = false;
+
 export const REEFER_UNITS = [
   '4F', '5F', '6F', '7F', '8F', '9F'
 ] as const;

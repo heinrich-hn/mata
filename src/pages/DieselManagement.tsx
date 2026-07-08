@@ -6,6 +6,7 @@ import DieselReportsTab from '@/components/diesel/DieselReportsTab';
 import DieselTransactionViewModal from '@/components/diesel/DieselTransactionViewModal';
 import ManualDieselEntryModal from '@/components/diesel/ManualDieselEntryModal';
 import ProbeVerificationModal from '@/components/diesel/ProbeVerificationModal';
+import { PROBE_VERIFICATION_ENABLED } from '@/constants/fleet';
 import ReeferDieselEntryModal from '@/components/diesel/ReeferDieselEntryModal';
 import type { ReeferDieselRecord } from '@/components/diesel/ReeferDieselEntryModal';
 import ReeferLinkageModal from '@/components/diesel/ReeferLinkageModal';
@@ -1312,13 +1313,13 @@ const DieselManagement = () => {
                                         Debriefed
                                       </Badge>
                                     )}
-                                    {record.probe_verified && (
+                                    {PROBE_VERIFICATION_ENABLED && record.probe_verified && (
                                       <Badge variant="outline" className="text-xs whitespace-nowrap bg-sky-50 dark:bg-sky-950/20 border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300">
                                         <CheckCircle className="h-3 w-3 mr-1" />
                                         Probe OK
                                       </Badge>
                                     )}
-                                    {!record.probe_verified && (
+                                    {PROBE_VERIFICATION_ENABLED && !record.probe_verified && (
                                       <Badge variant="outline" className="text-xs whitespace-nowrap bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-300">
                                         Probe Pending
                                       </Badge>
@@ -1374,7 +1375,7 @@ const DieselManagement = () => {
                                         <Snowflake className="h-4 w-4 mr-2" />
                                         {hasLinkedReefer ? 'Manage Reefer' : 'Link Reefer'}
                                       </DropdownMenuItem>
-                                      {!record.probe_verified && (
+                                      {PROBE_VERIFICATION_ENABLED && !record.probe_verified && (
                                         <DropdownMenuItem onClick={() => openProbeVerification(record)}>
                                           <CheckCircle className="h-4 w-4 mr-2" />
                                           Verify Probe
@@ -1620,13 +1621,13 @@ const DieselManagement = () => {
                                                                 Debriefed
                                                               </Badge>
                                                             )}
-                                                            {record.probe_verified && (
+                                                            {PROBE_VERIFICATION_ENABLED && record.probe_verified && (
                                                               <Badge variant="outline" className="text-xs whitespace-nowrap bg-sky-50 dark:bg-sky-950/20 border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300">
                                                                 <CheckCircle className="h-3 w-3 mr-1" />
                                                                 Probe OK
                                                               </Badge>
                                                             )}
-                                                            {!record.probe_verified && (
+                                                            {PROBE_VERIFICATION_ENABLED && !record.probe_verified && (
                                                               <Badge variant="outline" className="text-xs whitespace-nowrap bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700 text-orange-600 dark:text-orange-300">
                                                                 Probe Pending
                                                               </Badge>
@@ -1682,7 +1683,7 @@ const DieselManagement = () => {
                                                                 <Snowflake className="h-4 w-4 mr-2" />
                                                                 {hasLinkedReefer ? 'Manage Reefer' : 'Link Reefer'}
                                                               </DropdownMenuItem>
-                                                              {!record.probe_verified && (
+                                                              {PROBE_VERIFICATION_ENABLED && !record.probe_verified && (
                                                                 <DropdownMenuItem onClick={() => openProbeVerification(record)}>
                                                                   <CheckCircle className="h-4 w-4 mr-2" />
                                                                   Verify Probe
@@ -2205,15 +2206,17 @@ const DieselManagement = () => {
         onUnlink={handleUnlinkReeferFromVehicle}
       />
 
-      <ProbeVerificationModal
-        isOpen={isProbeVerificationOpen}
-        onClose={() => {
-          setIsProbeVerificationOpen(false);
-          setSelectedRecord(null);
-        }}
-        dieselRecord={selectedRecord as unknown as ComponentProps<typeof ProbeVerificationModal>['dieselRecord']}
-        onVerify={handleProbeVerification}
-      />
+      {PROBE_VERIFICATION_ENABLED && (
+        <ProbeVerificationModal
+          isOpen={isProbeVerificationOpen}
+          onClose={() => {
+            setIsProbeVerificationOpen(false);
+            setSelectedRecord(null);
+          }}
+          dieselRecord={selectedRecord as unknown as ComponentProps<typeof ProbeVerificationModal>['dieselRecord']}
+          onVerify={handleProbeVerification}
+        />
+      )}
 
       <DieselDebriefModal
         isOpen={isDebriefOpen}
@@ -2274,10 +2277,10 @@ const DieselManagement = () => {
           setIsViewModalOpen(false);
           setIsDebriefOpen(true);
         }}
-        onVerifyProbe={() => {
+        onVerifyProbe={PROBE_VERIFICATION_ENABLED ? () => {
           setIsViewModalOpen(false);
           setIsProbeVerificationOpen(true);
-        }}
+        } : undefined}
       />
 
       <ReeferLinkageModal
