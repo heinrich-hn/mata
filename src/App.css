@@ -24,14 +24,11 @@ html {
   /* Font smoothing for better readability */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  /* Prevent text inflation on landscape */
-  -webkit-text-size-adjust: none;
 }
 
 /* Better focus outlines for keyboard navigation */
 *:focus-visible {
-  outline: 2px solid hsl(var(--primary));
+  outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
 
@@ -193,8 +190,15 @@ html {
   -webkit-backdrop-filter: blur(12px) saturate(180%);
   backdrop-filter: blur(12px) saturate(180%);
   border: 1px solid hsl(var(--border) / 0.3);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-card);
+  transition: box-shadow var(--duration-normal) var(--ease-default);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card-glass:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
 }
 
 /* Text Gradient */
@@ -390,6 +394,7 @@ html {
 /* Image loading placeholder */
 .img-loading {
   background-color: hsl(var(--muted));
+  border-radius: var(--radius);
   min-height: 200px;
 }
 
@@ -463,7 +468,7 @@ html {
   .logo-container {
     background: none !important;
     box-shadow: none !important;
-    border: 1px solid #e5e7eb !important;
+    border: 1px solid hsl(220, 13%, 91%) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }

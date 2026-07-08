@@ -22,6 +22,8 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Inter', 'SF Pro Display', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'SF Mono', 'Fira Code', 'monospace'],
       },
       /** ──────────────────────────────────────
        *  Custom soft colors (used in the UI)
@@ -45,21 +47,56 @@ export default {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
         },
+        tertiary: {
+          DEFAULT: "hsl(var(--tertiary))",
+          foreground: "hsl(var(--tertiary-foreground))",
+          light: "hsl(var(--tertiary-light))",
+          dark: "hsl(var(--tertiary-dark))",
+          muted: "hsl(var(--tertiary-muted))",
+        },
+        surface: {
+          0: "hsl(var(--surface-0))",
+          50: "hsl(var(--surface-50))",
+          100: "hsl(var(--surface-100))",
+          200: "hsl(var(--surface-200))",
+          300: "hsl(var(--surface-300))",
+          400: "hsl(var(--surface-400))",
+          500: "hsl(var(--surface-500))",
+          600: "hsl(var(--surface-600))",
+          700: "hsl(var(--surface-700))",
+          800: "hsl(var(--surface-800))",
+          900: "hsl(var(--surface-900))",
+          950: "hsl(var(--surface-950))",
+        },
+        chart: {
+          1: "hsl(var(--chart-1))",
+          2: "hsl(var(--chart-2))",
+          3: "hsl(var(--chart-3))",
+          4: "hsl(var(--chart-4))",
+          5: "hsl(var(--chart-5))",
+          6: "hsl(var(--chart-6))",
+          7: "hsl(var(--chart-7))",
+          8: "hsl(var(--chart-8))",
+        },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          muted: "hsl(var(--destructive-muted))",
         },
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+          muted: "hsl(var(--success-muted))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
+          muted: "hsl(var(--warning-muted))",
         },
         info: {
           DEFAULT: "hsl(var(--info))",
           foreground: "hsl(var(--info-foreground))",
+          muted: "hsl(var(--info-muted))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -76,6 +113,7 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+          border: "hsl(var(--card-border))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
@@ -90,30 +128,45 @@ export default {
       },
 
       /** ──────────────────────────────────────
-       *  Background gradients (optional – you can keep your CSS vars)
+       *  Background gradients (defined as CSS vars in index.css)
        *  ────────────────────────────────────── */
       backgroundImage: {
-        "gradient-workshop": "var(--gradient-workshop)",
+        "gradient-primary": "var(--gradient-primary)",
         "gradient-accent": "var(--gradient-accent)",
+        "gradient-hero": "var(--gradient-hero)",
+        "gradient-subtle": "var(--gradient-subtle)",
+        "gradient-surface": "var(--gradient-surface)",
+        "gradient-glass": "var(--gradient-glass)",
       },
 
       /** ──────────────────────────────────────
-       *  Shadows
+       *  Shadows (token-driven, adapt to dark mode)
        *  ────────────────────────────────────── */
       boxShadow: {
+        xs: "var(--shadow-xs)",
+        sm: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        xl: "var(--shadow-xl)",
+        "2xl": "var(--shadow-2xl)",
         card: "var(--shadow-card)",
+        "card-hover": "var(--shadow-card-hover)",
         elevated: "var(--shadow-elevated)",
-        // a nice xl shadow that works in both modes
-        xl: "0 10px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+        dialog: "var(--shadow-dialog)",
+        dropdown: "var(--shadow-dropdown)",
+        navigation: "var(--shadow-navigation)",
       },
 
       /** ──────────────────────────────────────
-       *  Border radius (shadcn-ui)
+       *  Border radius (shadcn-ui + extended scale)
        *  ────────────────────────────────────── */
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
+        "3xl": "var(--radius-3xl)",
       },
 
       /** ──────────────────────────────────────
