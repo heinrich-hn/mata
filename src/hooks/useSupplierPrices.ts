@@ -235,6 +235,58 @@ export function useCreateBulkDieselOrder() {
     });
 }
 
+export function useUpdateBulkDieselOrder() {
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+
+    return useMutation({
+        mutationFn: async ({ id, ...updates }: {
+            id: string;
+            supplier_id?: string;
+            order_date?: string;
+            quantity_liters?: number;
+            price_per_liter?: number;
+            delivery_date?: string | null;
+            reference_number?: string | null;
+            notes?: string | null;
+        }) => {
+            const { data, error } = await fromTable("bulk_diesel_orders")
+                .update(updates)
+                .eq("id", id)
+                .select()
+                .single();
+            if (error) throw error;
+            return data as BulkDieselOrder;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["bulk_diesel_orders"] });
+            toast({ title: "Order Updated", description: "Bulk diesel order updated successfully." });
+        },
+        onError: (error: Error) => {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        },
+    });
+}
+
+export function useDeleteBulkDieselOrder() {
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+
+    return useMutation({
+        mutationFn: async (id: string) => {
+            const { error } = await fromTable("bulk_diesel_orders").delete().eq("id", id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["bulk_diesel_orders"] });
+            toast({ title: "Order Deleted", description: "Bulk diesel order has been removed." });
+        },
+        onError: (error: Error) => {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        },
+    });
+}
+
 // ── Price Entries ──────────────────────────────────────
 
 export function useBulkDieselPriceEntries(

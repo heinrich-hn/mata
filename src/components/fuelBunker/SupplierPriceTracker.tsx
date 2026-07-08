@@ -47,8 +47,10 @@ import {
     useCreateBulkDieselOrder,
     useCreateBulkDieselPriceEntry,
     useCreateBulkDieselSupplier,
+    useDeleteBulkDieselOrder,
     useDeleteBulkDieselPriceEntry,
     useDeleteBulkDieselSupplier,
+    useUpdateBulkDieselOrder,
     useUpdateBulkDieselSupplier,
 } from "@/hooks/useSupplierPrices";
 import { useFuelBunkers } from "@/hooks/useFuelBunkers";
@@ -272,6 +274,8 @@ export default function SupplierPriceTracker() {
 
     // Order form
     const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+    const [editingOrder, setEditingOrder] = useState<BulkDieselOrder | null>(null);
+    const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
     const [orderForm, setOrderForm] = useState({
         supplier_id: "", order_date: new Date().toISOString().split("T")[0],
         quantity_liters: "", price_per_liter: "", delivery_date: "",
@@ -304,6 +308,8 @@ export default function SupplierPriceTracker() {
     const updateSupplier = useUpdateBulkDieselSupplier();
     const deleteSupplier = useDeleteBulkDieselSupplier();
     const createOrder = useCreateBulkDieselOrder();
+    const updateOrder = useUpdateBulkDieselOrder();
+    const deleteOrder = useDeleteBulkDieselOrder();
     const createPriceEntry = useCreateBulkDieselPriceEntry();
     const deletePriceEntry = useDeleteBulkDieselPriceEntry();
 
@@ -397,18 +403,51 @@ export default function SupplierPriceTracker() {
         updateSupplier.mutate({ id: supplier.id, is_active: !supplier.is_active });
     };
 
-    const openOrderDialog = () => {
-        setOrderForm({
-            supplier_id: activeSuppliers[0]?.id || "",
-            order_date: new Date().toISOString().split("T")[0],
-            quantity_liters: "", price_per_liter: "", delivery_date: "",
-            reference_number: "", bunker_id: "", notes: "",
-        });
+    const openOrderDialog = (order?: BulkDieselOrder) => {
+        if (order) {
+            setEditingOrder(order);
+            setOrderForm({
+                supplier_id: order.supplier_id,
+                order_date: order.order_date,
+                quantity_liters: String(order.quantity_liters),
+                price_per_liter: String(order.price_per_liter),
+                delivery_date: order.delivery_date || "",
+                reference_number: order.reference_number || "",
+                bunker_id: order.bunker_id || "",
+                notes: order.notes || "",
+            });
+        } else {
+            setEditingOrder(null);
+            setOrderForm({
+                supplier_id: activeSuppliers[0]?.id || "",
+                order_date: new Date().toISOString().split("T")[0],
+                quantity_liters: "", price_per_liter: "", delivery_date: "",
+                reference_number: "", bunker_id: "", notes: "",
+            });
+        }
         setOrderDialogOpen(true);
     };
 
     const handleSaveOrder = () => {
         if (!orderForm.supplier_id || !orderForm.quantity_liters || !orderForm.price_per_liter) return;
+        if (editingOrder) {
+            updateOrder.mutate({
+                id: editingOrder.id,
+                supplier_id: orderForm.supplier_id,
+                order_date: orderForm.order_date,
+                quantity_liters: parseFloat(orderForm.quantity_liters),
+                price_per_liter: parseFloat(orderForm.price_per_liter),
+                delivery_date: orderForm.delivery_date || null,
+                reference_number: orderForm.reference_number.trim() || null,
+                notes: orderForm.notes.trim() || null,
+            }, {
+                onSuccess: () => {
+                    setOrderDialogOpen(false);
+                    setEditingOrder(null);
+                },
+            });
+            return;
+        }
         createOrder.mutate({
             supplier_id: orderForm.supplier_id,
             order_date: orderForm.order_date,
@@ -483,7 +522,7 @@ export default function SupplierPriceTracker() {
                         <DollarSign className="h-4 w-4 mr-1.5" />
                         Log Price
                     </Button>
-                    <Button variant="outline" size="sm" onClick={openOrderDialog} disabled={activeSuppliers.length === 0}>
+                    <Button variant="outline" size="sm" onClick={() => openOrderDialog()} disabled={activeSuppliers.length === 0}>
                         <ShoppingCart className="h-4 w-4 mr-1.5" />
                         Record Order
                     </Button>
@@ -787,6 +826,7 @@ export default function SupplierPriceTracker() {
                                         <TableHead>Reference</TableHead>
                                         <TableHead>Delivery</TableHead>
                                         <TableHead>Notes</TableHead>
+                                        <TableHead className="w-[90px]">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -823,12 +863,32 @@ export default function SupplierPriceTracker() {
                                                     <TableCell className="text-muted-foreground max-w-[200px] truncate">
                                                         {order.notes || "—"}
                                                     </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 w-7 p-0"
+                                                                onClick={() => openOrderDialog(order)}
+                                                            >
+                                                                <Edit className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 w-7 p-0"
+                                                                onClick={() => setDeleteOrderId(order.id)}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
                                                 </TableRow>
                                             );
                                         })
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                            <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                                                 No orders recorded yet. Click "Record Order" to add your first order.
                                             </TableCell>
                                         </TableRow>
@@ -1152,9 +1212,11 @@ export default function SupplierPriceTracker() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <ShoppingCart className="h-5 w-5" />
-                            Record Bulk Diesel Order
+                            {editingOrder ? "Edit Bulk Diesel Order" : "Record Bulk Diesel Order"}
                         </DialogTitle>
-                        <DialogDescription>Log a purchase order from a supplier</DialogDescription>
+                        <DialogDescription>
+                            {editingOrder ? "Update the details of this order" : "Log a purchase order from a supplier"}
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
@@ -1219,7 +1281,11 @@ export default function SupplierPriceTracker() {
                         )}
                         <div className="grid gap-2">
                             <Label>Destination Bunker</Label>
-                            <Select value={orderForm.bunker_id} onValueChange={(v) => setOrderForm({ ...orderForm, bunker_id: v })}>
+                            <Select
+                                value={orderForm.bunker_id}
+                                onValueChange={(v) => setOrderForm({ ...orderForm, bunker_id: v })}
+                                disabled={!!editingOrder}
+                            >
                                 <SelectTrigger><SelectValue placeholder="Select bunker (optional)" /></SelectTrigger>
                                 <SelectContent>
                                     {bunkers.map((b) => (
@@ -1227,6 +1293,11 @@ export default function SupplierPriceTracker() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {editingOrder && (
+                                <p className="text-xs text-muted-foreground">
+                                    The destination bunker cannot be changed after an order is recorded.
+                                </p>
+                            )}
                         </div>
                         <div className="grid gap-2">
                             <Label>Reference Number</Label>
@@ -1250,10 +1321,10 @@ export default function SupplierPriceTracker() {
                         <Button variant="outline" onClick={() => setOrderDialogOpen(false)}>Cancel</Button>
                         <Button
                             onClick={handleSaveOrder}
-                            disabled={!orderForm.supplier_id || !orderForm.quantity_liters || !orderForm.price_per_liter || createOrder.isPending}
+                            disabled={!orderForm.supplier_id || !orderForm.quantity_liters || !orderForm.price_per_liter || createOrder.isPending || updateOrder.isPending}
                         >
-                            {createOrder.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                            Record Order
+                            {(createOrder.isPending || updateOrder.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                            {editingOrder ? "Save Changes" : "Record Order"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1324,6 +1395,37 @@ export default function SupplierPriceTracker() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Delete Order Confirmation */}
+            <AlertDialog open={!!deleteOrderId} onOpenChange={() => setDeleteOrderId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Order?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently remove this order record. Any bunker stock already added by this order will not be reversed. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (!deleteOrderId) return;
+                                deleteOrder.mutate(deleteOrderId, {
+                                    onSuccess: () => setDeleteOrderId(null),
+                                });
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {deleteOrder.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : (
+                                <Trash2 className="h-4 w-4 mr-2" />
+                            )}
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Delete Price Entry Confirmation */}
             <AlertDialog open={!!deletePriceId} onOpenChange={() => setDeletePriceId(null)}>
