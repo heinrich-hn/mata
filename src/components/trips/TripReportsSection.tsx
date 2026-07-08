@@ -1659,16 +1659,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         {/* Monthly Summary Tab */}
         <TabsContent value="monthly" className="space-y-4">
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                <Calendar className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Monthly</p>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Monthly Performance Summary</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Revenue, expenses and profit breakdown by month</p>
-              </div>
-            </div>
             <div className="p-4">
               {monthlySummaries.length > 0 ? (
                 <div className="space-y-2.5">
@@ -1729,16 +1719,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         {/* Weekly Summary Tab */}
         <TabsContent value="weekly" className="space-y-4">
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                <Calendar className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Weekly</p>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Weekly Performance Summary</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Detailed week-by-week breakdown</p>
-              </div>
-            </div>
             <div className="p-5">
               {weeklySummaries.length > 0 ? (
                 <div className="space-y-3">
@@ -1782,16 +1762,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         {/* Drivers Tab */}
         <TabsContent value="drivers" className="space-y-4">
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                <User className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Drivers</p>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Driver Performance Report</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Revenue and profit contribution by driver</p>
-              </div>
-            </div>
             <div className="p-4">
               {driverSummaries.length > 0 ? (
                 <div className="space-y-3">
@@ -1840,16 +1810,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         {/* Clients Tab */}
         <TabsContent value="clients" className="space-y-4">
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                <Building className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Clients</p>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Client Revenue Report</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Revenue breakdown by client</p>
-              </div>
-            </div>
             <div className="p-5">
               {clientSummaries.length > 0 ? (
                 <div className="space-y-6">
@@ -1997,16 +1957,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
         {/* Routes Tab */}
         <TabsContent value="routes" className="space-y-4">
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                <MapPin className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Routes</p>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Route Profitability Report</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Performance analysis by route</p>
-              </div>
-            </div>
             <div className="p-4">
               {routeSummaries.length > 0 ? (
                 <div className="space-y-3">
@@ -2123,16 +2073,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
           {/* By Category */}
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                <Receipt className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Categories</p>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Expenses by Category</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Cost breakdown across expense categories</p>
-              </div>
-            </div>
             <div className="p-4">
               {expenseSummaries.byCategory.length > 0 ? (
                 <div className="space-y-3">
@@ -2172,16 +2112,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
           {/* By Vehicle */}
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                <Truck className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Vehicles</p>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Expenses by Vehicle</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Cost allocation per fleet vehicle</p>
-              </div>
-            </div>
             <div className="p-4">
               {expenseSummaries.byVehicle.length > 0 ? (
                 <div className="space-y-3">
@@ -2221,16 +2151,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
           {/* Detailed Sub-Category Breakdown */}
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex items-start gap-3 border-b border-slate-200/70 bg-slate-50/60 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/30">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                <DollarSign className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Detailed</p>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Detailed Sub-Category Breakdown</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Granular expense breakdown by category and sub-category</p>
-              </div>
-            </div>
             <div className="p-4">
               {expenseSummaries.bySubCategory.length > 0 ? (
                 <div className="overflow-x-auto rounded-lg border border-slate-200/70 dark:border-slate-800">
