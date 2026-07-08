@@ -371,7 +371,10 @@ const ActiveTrips = ({
     const fleets = [...new Set(trips.map(t => t.fleet_number).filter(Boolean))] as string[];
     const drivers = [...new Set(trips.map(t => t.driver_name).filter(Boolean))] as string[];
     const clients = [...new Set(trips.map(t => t.client_name).filter(Boolean))] as string[];
-    const weeks = [...new Set(trips.map(t => t.departure_date ? getWeekKey(t.departure_date) : null).filter(Boolean))] as string[];
+    const weeks = [...new Set(trips.map(t => {
+      const dateToUse = t.arrival_date || t.departure_date;
+      return dateToUse ? getWeekKey(dateToUse) : null;
+    }).filter(Boolean))] as string[];
     return {
       fleets: fleets.sort(),
       drivers: drivers.sort(),
@@ -387,7 +390,8 @@ const ActiveTrips = ({
       if (driverFilter !== 'all' && trip.driver_name !== driverFilter) return false;
       if (clientFilter !== 'all' && trip.client_name !== clientFilter) return false;
       if (weekFilter.length > 0) {
-        const tripWeek = trip.departure_date ? getWeekKey(trip.departure_date) : null;
+        const dateToUse = trip.arrival_date || trip.departure_date;
+        const tripWeek = dateToUse ? getWeekKey(dateToUse) : null;
         if (!tripWeek || !weekFilter.includes(tripWeek)) return false;
       }
       if (showMissingRevenueOnly && trip.base_revenue && trip.base_revenue > 0) return false;
@@ -410,7 +414,10 @@ const ActiveTrips = ({
     const grouped: Record<string, Trip[]> = {};
 
     filteredTrips.forEach(trip => {
-      const weekKey = trip.departure_date ? getWeekKey(trip.departure_date) : 'No Date';
+      // Week allocation is based on the offloading (arrival) date, falling back
+      // to departure date — matching CompletedTrips behaviour.
+      const dateToUse = trip.arrival_date || trip.departure_date;
+      const weekKey = dateToUse ? getWeekKey(dateToUse) : 'No Date';
       if (!grouped[weekKey]) {
         grouped[weekKey] = [];
       }

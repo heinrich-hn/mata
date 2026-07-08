@@ -37,8 +37,6 @@ import {
   Download,
   MapPin,
   Receipt,
-  TrendingDown,
-  TrendingUp,
   Truck,
   User
 } from 'lucide-react';
@@ -1555,89 +1553,6 @@ const TripReportsSection = ({ trips, costEntries }: TripReportsSectionProps) => 
 
   return (
     <div className="space-y-5">
-      {/* Overall Summary Cards */}
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-blue-500/70" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
-              <Truck className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Total Trips</p>
-              <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{overallStats.totalTrips.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-emerald-500/70" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
-              <DollarSign className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Revenue</p>
-              <p className="mt-0.5 text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{formatCurrency(overallStats.revenue.USD)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-rose-500/70" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400">
-              <TrendingDown className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Expenses</p>
-              <p className="mt-0.5 text-base font-semibold tabular-nums text-rose-700 dark:text-rose-400">{formatCurrency(overallStats.expenses.USD)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className={cn(
-            "absolute inset-x-0 top-0 h-[2px]",
-            overallStats.profit.USD >= 0 ? "bg-emerald-500/70" : "bg-orange-500/70"
-          )} />
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-md",
-              overallStats.profit.USD >= 0
-                ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
-                : "bg-orange-50 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400"
-            )}>
-              {overallStats.profit.USD >= 0 ? (
-                <TrendingUp className="h-4 w-4" />
-              ) : (
-                <TrendingDown className="h-4 w-4" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Net Profit (USD)</p>
-              <p className={cn(
-                "mt-0.5 text-base font-semibold tabular-nums",
-                overallStats.profit.USD >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-orange-700 dark:text-orange-400"
-              )}>{formatCurrency(overallStats.profit.USD)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-violet-500/70" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-violet-50 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400">
-              <MapPin className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Total KM</p>
-              <p className="mt-0.5 text-base font-semibold tabular-nums text-slate-900 dark:text-slate-100">{overallStats.totalKm.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Detailed Reports Tabs */}
       <Tabs
         value={activeReportTab}
