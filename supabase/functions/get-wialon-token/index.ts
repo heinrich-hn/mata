@@ -1,7 +1,9 @@
 // supabase/functions/get-wialon-token/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const WIALON_HOST = Deno.env.get("WIALON_HOST") || "https://hst-api.wialon.com";
+// Default must match wialon-proxy's default — a token minted on one Wialon host
+// is rejected (error 8: INVALID_AUTH_TOKEN) when logging in on another.
+const WIALON_HOST = Deno.env.get("WIALON_HOST") || "https://hst-api.wialon.eu";
 const WIALON_USER = Deno.env.get("WIALON_USER") || "";
 const WIALON_PASS = Deno.env.get("WIALON_PASS") || "";
 const WIALON_APP_NAME = Deno.env.get("WIALON_APP_NAME") || "";

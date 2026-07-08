@@ -183,23 +183,40 @@ export class WialonService {
       console.log('🔄 Authenticating with Wialon via Supabase proxy...');
       console.log('🔍 Token length:', this.config.token.length);
 
-      // Step 1: Authenticate via Supabase Edge Function (bypasses CORS)
-      const response = await supabase.functions.invoke('wialon-proxy', {
-        body: {
-          service: 'token/login',
-          params: {
-            token: this.config.token,
+      const loginWithToken = async (token: string) => {
+        // Authenticate via Supabase Edge Function (bypasses CORS)
+        const response = await supabase.functions.invoke('wialon-proxy', {
+          body: {
+            service: 'token/login',
+            params: { token },
           },
-        },
-      });
+        });
 
-      if (response.error) {
-        throw new Error(`Proxy authentication failed: ${response.error.message}`);
+        if (response.error) {
+          throw new Error(`Proxy authentication failed: ${response.error.message}`);
+        }
+
+        return response.data;
+      };
+
+      let authResult = await loginWithToken(this.config.token);
+
+      // Error 8 = INVALID_AUTH_TOKEN: token expired, revoked, or issued for a
+      // different Wialon host. Mint a fresh token via the edge function and retry once.
+      if (authResult.error === 8) {
+        console.warn('⚠️ Wialon token rejected (error 8: INVALID_AUTH_TOKEN). Fetching a fresh token...');
+        this.config.token = '';
+        this.config.token = await this.fetchToken();
+        authResult = await loginWithToken(this.config.token);
       }
 
-      const authResult = response.data;
-
       if (authResult.error) {
+        if (authResult.error === 8) {
+          throw new Error(
+            'Wialon authentication error 8: INVALID_AUTH_TOKEN — token rejected even after refresh. ' +
+            'Regenerate the token in Wialon CMS and verify the WIALON_HOST used by the edge functions matches the token host.'
+          );
+        }
         throw new Error(`Wialon authentication error: ${authResult.error}`);
       }
 

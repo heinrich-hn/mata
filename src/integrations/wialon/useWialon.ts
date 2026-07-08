@@ -1,5 +1,5 @@
 // src/integrations/wialon/useWialon.ts
- 
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabase/client';
 import { getWialonAdvancedService } from './wialonAdvanced';
@@ -61,7 +61,7 @@ export interface UseWialonResult {
   getUnitById: (unitId: number) => WialonUnit | undefined;
   searchUnits: (query: string) => WialonUnit[];
   filterUnits: (filters: UnitFilters) => WialonUnit[];
-  callAPI: (service: string, params?: Record<string, unknown>) => Promise<{ error?: number; error_description?: string; [key: string]: unknown }>;
+  callAPI: (service: string, params?: Record<string, unknown>) => Promise<{ error?: number; error_description?: string;[key: string]: unknown }>;
   // Enhanced methods
   getUnitHistory: (unitId: number, from: Date, to: Date) => Promise<WialonRawMessage[]>;
   sendCommand: (unitId: number, command: string, params?: Record<string, unknown>) => Promise<boolean>;
@@ -502,22 +502,54 @@ export function useWialon(): UseWialonResult {
 
       console.log('Authenticating via Supabase proxy...');
 
-      const response = await supabase.functions.invoke('wialon-proxy', {
-        body: {
-          service: 'token/login',
-          params: {
-            token: token,
+      const loginWithToken = async (loginToken: string) => {
+        const response = await supabase.functions.invoke('wialon-proxy', {
+          body: {
+            service: 'token/login',
+            params: {
+              token: loginToken,
+            },
           },
-        },
-      });
+        });
 
-      if (response.error) {
-        throw new Error(`Proxy authentication failed: ${response.error.message}`);
+        if (response.error) {
+          throw new Error(`Proxy authentication failed: ${response.error.message}`);
+        }
+
+        return response.data;
+      };
+
+      let authResult = await loginWithToken(token);
+
+      // Error 8 = INVALID_AUTH_TOKEN: the token is expired, revoked, or was
+      // issued for a different Wialon host. Try to mint a fresh token via the
+      // get-wialon-token edge function and retry once.
+      if (authResult.error === 8) {
+        console.warn('⚠️ Wialon token rejected (error 8: INVALID_AUTH_TOKEN). Requesting a fresh token...');
+        const { data: tokenData, error: tokenError } = await supabase.functions.invoke('get-wialon-token');
+
+        if (tokenError || !tokenData?.token) {
+          throw new Error(
+            'Wialon error 8: INVALID_AUTH_TOKEN — the configured VITE_WIALON_TOKEN is expired, revoked, ' +
+            'or was generated for a different Wialon host. Automatic re-authentication via the ' +
+            'get-wialon-token edge function also failed' +
+            (tokenError ? ` (${tokenError.message})` : '') +
+            '. Generate a new token in Wialon CMS and update VITE_WIALON_TOKEN.'
+          );
+        }
+
+        console.log('🔄 Retrying Wialon login with freshly minted token...');
+        authResult = await loginWithToken(tokenData.token);
       }
 
-      const authResult = response.data;
-
       if (authResult.error) {
+        if (authResult.error === 8) {
+          throw new Error(
+            'Wialon error 8: INVALID_AUTH_TOKEN — the freshly minted token was also rejected. ' +
+            'Verify that WIALON_HOST matches between the wialon-proxy and get-wialon-token edge functions ' +
+            '(hst-api.wialon.eu vs hst-api.wialon.com), and that the Wialon account credentials are valid.'
+          );
+        }
         throw new Error(`Wialon error ${authResult.error}: ${authResult.reason || 'Unknown error'}`);
       }
 
