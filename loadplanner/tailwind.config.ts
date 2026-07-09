@@ -144,8 +144,23 @@ export default {
         "pulse-soft": "pulse-soft 2s ease-in-out infinite",
       },
       boxShadow: {
-        "soft": "0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)",
-        "card": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+        /* Token-driven soft shadow scale (adapts to dark mode via index.css) */
+        "soft-xs": "var(--shadow-soft-xs)",
+        "soft-sm": "var(--shadow-soft-sm)",
+        soft: "var(--shadow-soft-md)",
+        "soft-md": "var(--shadow-soft-md)",
+        "soft-lg": "var(--shadow-soft-lg)",
+        "soft-xl": "var(--shadow-soft-xl)",
+        "soft-2xl": "var(--shadow-soft-2xl)",
+        card: "var(--shadow-soft-xs)",
+      },
+      transitionDuration: {
+        fast: "var(--motion-fast)",
+        base: "var(--motion-base)",
+        slow: "var(--motion-slow)",
+      },
+      transitionTimingFunction: {
+        standard: "var(--ease-standard)",
       },
     },
   },

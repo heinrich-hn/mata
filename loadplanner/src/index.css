@@ -958,7 +958,7 @@
   .kpi-card,
   .load-card {
     box-shadow: none !important;
-    border: 1px solid #e5e7eb !important;
+    border: 1px solid hsl(220 13% 91%) !important;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -1058,9 +1058,9 @@
   height: 46px;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
-  border: 2px solid rgba(79, 70, 229, 0.65);
-  background: rgba(79, 70, 229, 0.12);
-  box-shadow: 0 0 12px rgba(79, 70, 229, 0.35);
+  border: 2px solid hsl(var(--accent) / 0.65);
+  background: hsl(var(--accent) / 0.12);
+  box-shadow: 0 0 12px hsl(var(--accent) / 0.35);
   pointer-events: none;
 }
 

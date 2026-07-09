@@ -9,15 +9,18 @@
 
 .card {
   padding: 2rem;
-  border-radius: var(--radius, 0.75rem);
+  border-radius: var(--radius, 0.375rem);
   background-color: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  box-shadow: none;
-  transition: border-color 0.2s ease;
+  box-shadow: var(--shadow-soft-xs);
+  transition:
+    border-color var(--motion-base, 250ms) var(--ease-standard, ease),
+    box-shadow var(--motion-base, 250ms) var(--ease-standard, ease);
 }
 
 .card:hover {
   border-color: hsl(var(--accent) / 0.4);
+  box-shadow: var(--shadow-soft-sm);
 }
 
 .read-the-docs {
