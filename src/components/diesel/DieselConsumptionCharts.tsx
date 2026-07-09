@@ -70,11 +70,12 @@ const _wkStart = (date: Date): Date => {
     return d;
 };
 
-const _wkLabel = (start: Date): string => {
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6);
-    const o: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-    return `${start.toLocaleDateString('en-ZA', o)} – ${end.toLocaleDateString('en-ZA', o)}`;
+const _wkNumber = (date: Date): number => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 };
 
 // ── Tooltip ──
@@ -157,6 +158,34 @@ function buildMonthlySummary(records: DieselConsumptionRecord[], isReefer: boole
         }));
 }
 
+function buildWeeklySummary(records: DieselConsumptionRecord[], isReefer: boolean): MonthlyFleetData[] {
+    const wm = new Map<string, { ws: Date; litres: number; km: number; hours: number; cost: number; fills: number }>();
+    records.forEach(r => {
+        const ws = _wkStart(new Date(r.date));
+        const wk = ws.toISOString().split('T')[0];
+        const e = wm.get(wk) ?? { ws, litres: 0, km: 0, hours: 0, cost: 0, fills: 0 };
+        e.litres += r.litres_filled || 0;
+        e.km += r.distance_travelled || 0;
+        e.hours += r.hours_operated || 0;
+        e.cost += r.total_cost || 0;
+        e.fills += 1;
+        wm.set(wk, e);
+    });
+    return Array.from(wm.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([wk, d]) => ({
+            month: wk,
+            monthLabel: `Week ${_wkNumber(d.ws)}`,
+            totalLitres: d.litres,
+            totalKm: d.km,
+            totalHours: d.hours,
+            kmPerLitre: !isReefer && d.litres > 0 ? d.km / d.litres : null,
+            litresPerHour: isReefer && d.hours > 0 ? d.litres / d.hours : null,
+            totalCost: d.cost,
+            fillCount: d.fills,
+        }));
+}
+
 function buildUnitMonthly(records: DieselConsumptionRecord[], isReefer: boolean): Map<string, UnitMonthlyPoint[]> {
     const tm = new Map<string, Map<string, { litres: number; km: number; hours: number; cost: number; fills: number }>>();
     records.forEach(r => {
@@ -213,7 +242,7 @@ function buildUnitWeekly(records: DieselConsumptionRecord[], isReefer: boolean):
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([, d]) => ({
                 weekKey: d.ws.toISOString().split('T')[0],
-                weekLabel: _wkLabel(d.ws),
+                weekLabel: `Week ${_wkNumber(d.ws)}`,
                 totalLitres: d.litres,
                 totalKm: d.km,
                 totalHours: d.hours,
@@ -237,6 +266,7 @@ const DieselConsumptionCharts = ({
     const [mode, setMode] = useState<DataMode>('truck');
     const [selectedUnit, setSelectedUnit] = useState<string>('');
     const [isExporting, setIsExporting] = useState(false);
+    const [overviewPeriod, setOverviewPeriod] = useState<'monthly' | 'weekly'>('monthly');
 
     const isReefer = mode === 'reefer';
     const records = isReefer ? filteredReeferRecords : filteredTruckRecords;
@@ -256,6 +286,13 @@ const DieselConsumptionCharts = ({
 
     // ── Monthly summary ──
     const monthlySummary = useMemo(() => buildMonthlySummary(records, isReefer), [records, isReefer]);
+
+    // ── Weekly summary ──
+    const weeklySummary = useMemo(() => buildWeeklySummary(records, isReefer), [records, isReefer]);
+
+    const isWeeklyOverview = overviewPeriod === 'weekly';
+    const overviewSummary = isWeeklyOverview ? weeklySummary : monthlySummary;
+    const periodWord = isWeeklyOverview ? 'Week' : 'Month';
 
     // ── Per-unit monthly data ──
     const unitMonthlyData = useMemo(() => buildUnitMonthly(records, isReefer), [records, isReefer]);
@@ -469,39 +506,47 @@ const DieselConsumptionCharts = ({
          ═══════════════════════════════════════════════════ */}
             <Card>
                 <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
                             <CardTitle className="flex items-center gap-2 text-lg">
                                 <TrendingUp className="h-5 w-5" />
-                                Monthly {isReefer ? 'Reefer' : 'Consumption'} Overview
+                                {isWeeklyOverview ? 'Weekly' : 'Monthly'} {isReefer ? 'Reefer' : 'Consumption'} Overview
                             </CardTitle>
                             <CardDescription>
                                 {isReefer
-                                    ? 'Fleet-wide reefer diesel usage and L/hr trends, month on month'
-                                    : 'Fleet-wide diesel usage and efficiency trends, month on month'}
+                                    ? `Fleet-wide reefer diesel usage and L/hr trends, ${isWeeklyOverview ? 'week on week' : 'month on month'}`
+                                    : `Fleet-wide diesel usage and efficiency trends, ${isWeeklyOverview ? 'week on week' : 'month on month'}`}
                             </CardDescription>
                         </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                            onClick={handleExportMonthly}
-                            disabled={isExporting || monthlySummary.length === 0}
-                        >
-                            <Download className="h-4 w-4" />
-                            {isExporting ? 'Exporting…' : 'Export to Excel'}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Tabs value={overviewPeriod} onValueChange={(v) => setOverviewPeriod(v as 'monthly' | 'weekly')}>
+                                <TabsList className="h-9">
+                                    <TabsTrigger value="monthly" className="px-4 text-xs">Monthly</TabsTrigger>
+                                    <TabsTrigger value="weekly" className="px-4 text-xs">Weekly</TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={handleExportMonthly}
+                                disabled={isExporting || monthlySummary.length === 0}
+                            >
+                                <Download className="h-4 w-4" />
+                                {isExporting ? 'Exporting…' : 'Export to Excel'}
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {monthlySummary.length > 0 ? (
+                    {overviewSummary.length > 0 ? (
                         <div className="space-y-10">
 
-                            {/* Chart: Litres per month */}
+                            {/* Chart: Litres per period */}
                             <div>
-                                <h4 className="text-sm font-medium mb-3">Litres Consumed per Month</h4>
+                                <h4 className="text-sm font-medium mb-3">Litres Consumed per {periodWord}</h4>
                                 <ResponsiveContainer width="100%" height={280}>
-                                    <BarChart data={monthlySummary} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                                    <BarChart data={overviewSummary} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                                         <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
                                         <YAxis tick={{ fontSize: 12 }} />
@@ -517,7 +562,7 @@ const DieselConsumptionCharts = ({
                                     {isReefer ? 'Average Litres per Hour (L/hr)' : 'Average Fuel Efficiency (km/L)'}
                                 </h4>
                                 <ResponsiveContainer width="100%" height={260}>
-                                    <LineChart data={monthlySummary} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                                    <LineChart data={overviewSummary} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                                         <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
                                         <YAxis tick={{ fontSize: 12 }} domain={['auto', 'auto']} />
@@ -538,9 +583,9 @@ const DieselConsumptionCharts = ({
 
                             {/* Chart: Cost trend */}
                             <div>
-                                <h4 className="text-sm font-medium mb-3">Total Cost per Month</h4>
+                                <h4 className="text-sm font-medium mb-3">Total Cost per {periodWord}</h4>
                                 <ResponsiveContainer width="100%" height={260}>
-                                    <BarChart data={monthlySummary} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                                    <BarChart data={overviewSummary} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                                         <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
                                         <YAxis tick={{ fontSize: 12 }} />
@@ -750,9 +795,9 @@ const DieselConsumptionCharts = ({
                                 <div>
                                     <h4 className="text-sm font-medium mb-3">{selectedUnit} — Week by Week</h4>
                                     <ResponsiveContainer width="100%" height={300}>
-                                        <LineChart data={unitWeekly} margin={{ top: 5, right: 20, left: 10, bottom: 50 }}>
+                                        <LineChart data={unitWeekly} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                                             <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                                            <XAxis dataKey="weekLabel" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={60} />
+                                            <XAxis dataKey="weekLabel" tick={{ fontSize: 12 }} />
                                             <YAxis tick={{ fontSize: 12 }} domain={['auto', 'auto']} />
                                             <Tooltip content={<ChartTooltip />} />
                                             <Legend />
