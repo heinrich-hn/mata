@@ -130,6 +130,49 @@ const dateToIsoWeekInput = (iso: string): string => {
 
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 
+// Local (timezone-safe) yyyy-mm-dd for a Date.
+const localISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+// One-click reporting periods.
+const QUICK_RANGES: { label: string; range: () => { from: string; to: string } }[] = [
+    { label: "This Week", range: () => isoWeekToDateRange(isoWeekKey(new Date()))! },
+    {
+        label: "Last Week",
+        range: () => {
+            const d = new Date();
+            d.setDate(d.getDate() - 7);
+            return isoWeekToDateRange(isoWeekKey(d))!;
+        },
+    },
+    {
+        label: "This Month",
+        range: () => {
+            const n = new Date();
+            return { from: localISO(new Date(n.getFullYear(), n.getMonth(), 1)), to: localISO(n) };
+        },
+    },
+    {
+        label: "Last Month",
+        range: () => {
+            const n = new Date();
+            return {
+                from: localISO(new Date(n.getFullYear(), n.getMonth() - 1, 1)),
+                to: localISO(new Date(n.getFullYear(), n.getMonth(), 0)),
+            };
+        },
+    },
+    { label: "Last 3 Months", range: () => ({ from: monthsAgoISO(3), to: todayISO() }) },
+    { label: "Last 6 Months", range: () => ({ from: monthsAgoISO(6), to: todayISO() }) },
+    {
+        label: "This Year",
+        range: () => {
+            const n = new Date();
+            return { from: localISO(new Date(n.getFullYear(), 0, 1)), to: localISO(n) };
+        },
+    },
+];
+
 const fmtDateLong = (d: Date) =>
     d.toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
 
@@ -165,6 +208,7 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         { fleet_number: string; vehicle_type: string | null }[]
     >([]);
     const [periodMode, setPeriodMode] = useState<"date" | "week">("date");
+    const [includeWeekly, setIncludeWeekly] = useState(true);
     const [filters, setFilters] = useState<FilterState>({
         from: monthsAgoISO(3),
         to: todayISO(),
@@ -473,6 +517,41 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
         };
     }, [weekBlocks, totalFleetsInScope]);
 
+    // ── Period grand total: all weeks in the range combined, per fleet ──────
+    const periodTotal = useMemo(() => {
+        const byFleet = new Map<string, { gaps: number; total: number }>();
+        for (const b of weekBlocks) {
+            for (const r of b.rows) {
+                const e = byFleet.get(r.fleet) || { gaps: 0, total: 0 };
+                e.gaps += r.gaps;
+                e.total += r.totalGapDays;
+                byFleet.set(r.fleet, e);
+            }
+        }
+        const rows: FleetWeekRow[] = [...byFleet.entries()]
+            .map(([fleet, v]) => ({
+                fleet,
+                week: "",
+                gaps: v.gaps,
+                totalGapDays: v.total,
+                avgGapDays: v.gaps > 0 ? v.total / v.gaps : 0,
+            }))
+            .sort((a, b) => a.fleet.localeCompare(b.fleet, undefined, { numeric: true }));
+        const totalDaysStanding = rows.reduce((s, r) => s + r.totalGapDays, 0);
+        const totalWorkingDays = weekBlocks.reduce((s, b) => s + b.totalWorkingDays, 0);
+        const pctStanding =
+            totalWorkingDays > 0
+                ? Math.round((totalDaysStanding / totalWorkingDays) * 100)
+                : 0;
+        return {
+            rows,
+            totalDaysStanding,
+            totalWorkingDays,
+            pctStanding,
+            pctMinus5: Math.max(0, pctStanding - 5),
+        };
+    }, [weekBlocks]);
+
     const toggleSet = (key: keyof FilterState, value: string) => {
         setFilters((prev) => {
             const next = new Set(prev[key] as Set<string>);
@@ -526,10 +605,10 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 },
             });
 
-            // Column widths (5 columns: Fleet | Week | Gaps | Total Gap Days | Avg Gap Days)
+            // Column widths (5 columns: Fleet | Week/Period | Gaps | Total Gap Days | Avg Gap Days)
             ws.columns = [
                 { width: 14 },
-                { width: 14 },
+                { width: 26 },
                 { width: 12 },
                 { width: 18 },
                 { width: 16 },
@@ -554,13 +633,35 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
 
             let cursor = 1;
 
-            for (let bIdx = 0; bIdx < weekBlocks.length; bIdx++) {
-                const block = weekBlocks[bIdx];
+            // Period grand total always leads; weekly blocks follow when enabled.
+            const periodLabel = `${filters.from} → ${filters.to}`;
+            const renderBlocks = [
+                {
+                    title: "FLEET GAP DAYS — PERIOD TOTAL",
+                    col2: "Period",
+                    week: periodLabel,
+                    rows: periodTotal.rows.map((r) => ({ ...r, week: periodLabel })),
+                    totalDaysStanding: periodTotal.totalDaysStanding,
+                    totalWorkingDays: periodTotal.totalWorkingDays,
+                    pctStanding: periodTotal.pctStanding,
+                    pctMinus5: periodTotal.pctMinus5,
+                },
+                ...(includeWeekly
+                    ? weekBlocks.map((b) => ({
+                        title: "FLEET GAP DAYS — WEEKLY",
+                        col2: "Week",
+                        ...b,
+                    }))
+                    : []),
+            ];
+
+            for (let bIdx = 0; bIdx < renderBlocks.length; bIdx++) {
+                const block = renderBlocks[bIdx];
 
                 // Title row
                 ws.mergeCells(cursor, 1, cursor, 5);
                 const titleCell = ws.getCell(cursor, 1);
-                titleCell.value = "FLEET GAP DAYS — WEEKLY";
+                titleCell.value = block.title;
                 titleCell.font = {
                     name: "Calibri",
                     bold: true,
@@ -587,7 +688,7 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
 
                 // Header row
                 const headerRow = ws.getRow(cursor);
-                headerRow.values = ["Fleet", "Week", "Gaps", "Total Gap Days", "Avg Gap Days"];
+                headerRow.values = ["Fleet", block.col2, "Gaps", "Total Gap Days", "Avg Gap Days"];
                 headerRow.height = 22;
                 headerRow.eachCell((cell) => {
                     cell.fill = {
@@ -750,11 +851,11 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                     cursor += 1;
                 }
 
-                // Spacer between weekly blocks
-                if (bIdx < weekBlocks.length - 1) cursor += 3;
+                // Spacer between blocks
+                if (bIdx < renderBlocks.length - 1) cursor += 3;
             }
 
-            const fname = `Fleet_Gap_Days_Weekly_${filters.from}_to_${filters.to}.xlsx`;
+            const fname = `Fleet_Gap_Days_${includeWeekly ? "Weekly_" : "Total_"}${filters.from}_to_${filters.to}.xlsx`;
             const buffer = await wb.xlsx.writeBuffer();
             saveAs(
                 new Blob([buffer], {
@@ -803,13 +904,13 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
             const TOTAL_TXT: [number, number, number] = [6, 95, 70];
             const generatedAt = fmtDateLong(new Date());
 
-            const drawHeaderBand = () => {
+            const drawHeaderBand = (title: string) => {
                 doc.setFillColor(NAVY[0], NAVY[1], NAVY[2]);
                 doc.rect(0, 0, pageWidth, 20, "F");
                 doc.setTextColor(255, 255, 255);
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(13);
-                doc.text("FLEET GAP DAYS — WEEKLY", 14, 13);
+                doc.text(title, 14, 13);
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(8);
                 doc.text("Car Craft Co Fleet Management", pageWidth - 14, 13, {
@@ -817,7 +918,7 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 });
             };
 
-            const drawSubLine = (week: string, y: number) => {
+            const drawSubLine = (label: string, y: number) => {
                 doc.setTextColor(102, 102, 102);
                 doc.setFont("helvetica", "italic");
                 doc.setFontSize(9);
@@ -828,20 +929,44 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 );
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-                doc.text(`Week ${week}`, pageWidth - 14, y, { align: "right" });
+                doc.text(label, pageWidth - 14, y, { align: "right" });
             };
 
-            for (let bIdx = 0; bIdx < weekBlocks.length; bIdx++) {
-                const block = weekBlocks[bIdx];
+            // Period grand total always leads; weekly pages follow when enabled.
+            const periodLabel = `${filters.from} → ${filters.to}`;
+            const renderBlocks = [
+                {
+                    title: "FLEET GAP DAYS — PERIOD TOTAL",
+                    col2: "Period",
+                    subLabel: periodLabel,
+                    week: periodLabel,
+                    rows: periodTotal.rows.map((r) => ({ ...r, week: periodLabel })),
+                    totalDaysStanding: periodTotal.totalDaysStanding,
+                    totalWorkingDays: periodTotal.totalWorkingDays,
+                    pctStanding: periodTotal.pctStanding,
+                    pctMinus5: periodTotal.pctMinus5,
+                },
+                ...(includeWeekly
+                    ? weekBlocks.map((b) => ({
+                        title: "FLEET GAP DAYS — WEEKLY",
+                        col2: "Week",
+                        subLabel: `Week ${b.week}`,
+                        ...b,
+                    }))
+                    : []),
+            ];
+
+            for (let bIdx = 0; bIdx < renderBlocks.length; bIdx++) {
+                const block = renderBlocks[bIdx];
                 if (bIdx > 0) doc.addPage();
 
-                drawHeaderBand();
-                drawSubLine(block.week, 28);
+                drawHeaderBand(block.title);
+                drawSubLine(block.subLabel, 28);
 
                 const tableStartY = 34;
                 autoTable(doc, {
                     startY: tableStartY,
-                    head: [["Fleet", "Week", "Gaps", "Total Gap Days", "Avg Gap Days"]],
+                    head: [["Fleet", block.col2, "Gaps", "Total Gap Days", "Avg Gap Days"]],
                     body: block.rows.map((r) => [
                         r.fleet,
                         r.week,
@@ -869,7 +994,7 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                     alternateRowStyles: { fillColor: ALT },
                     columnStyles: {
                         0: { halign: "left", cellWidth: 28 },
-                        1: { halign: "left", cellWidth: 28 },
+                        1: { halign: "left", cellWidth: 44 },
                         2: { halign: "right", cellWidth: 26 },
                         3: { halign: "right", cellWidth: 36 },
                         4: { halign: "right", cellWidth: 32 },
@@ -941,7 +1066,7 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 });
             }
 
-            doc.save(`Fleet_Gap_Days_Weekly_${filters.from}_to_${filters.to}.pdf`);
+            doc.save(`Fleet_Gap_Days_${includeWeekly ? "Weekly_" : "Total_"}${filters.from}_to_${filters.to}.pdf`);
             toast({
                 title: "PDF report generated",
                 description: `${weekBlocks.length} week${weekBlocks.length === 1 ? "" : "s"} • ${kpi.fleets} fleet${kpi.fleets === 1 ? "" : "s"}`,
@@ -1101,6 +1226,47 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                                         </div>
                                     )}
                                 </div>
+                                {/* One-click quick ranges */}
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                    {QUICK_RANGES.map((q) => {
+                                        const r = q.range();
+                                        const active =
+                                            filters.from === r.from && filters.to === r.to;
+                                        return (
+                                            <button
+                                                key={q.label}
+                                                type="button"
+                                                onClick={() => {
+                                                    setPeriodMode("date");
+                                                    setFilters((p) => ({
+                                                        ...p,
+                                                        from: r.from,
+                                                        to: r.to,
+                                                    }));
+                                                }}
+                                                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${active
+                                                        ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                                                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                                                    }`}
+                                            >
+                                                {q.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {/* Report contents */}
+                                <label
+                                    htmlFor="gapdays-include-weekly"
+                                    className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-300"
+                                >
+                                    <Checkbox
+                                        id="gapdays-include-weekly"
+                                        checked={includeWeekly}
+                                        onCheckedChange={(c) => setIncludeWeekly(c === true)}
+                                    />
+                                    Include week-by-week breakdown (the period total is always
+                                    included)
+                                </label>
                             </section>
 
                             <Separator />
@@ -1178,7 +1344,7 @@ export const FleetGapDaysReportDialog = ({ open, onOpenChange }: Props) => {
                 <DialogFooter className="px-6 py-4 border-t border-slate-200/70 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/30">
                     <div className="flex w-full flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Per-week blocks: Fleet · Week · Gaps · Total Gap Days · Avg Gap Days, with utilisation totals.
+                            Period total first{includeWeekly ? ", then per-week blocks" : " (weekly breakdown off)"}: Fleet · Gaps · Total Gap Days · Avg Gap Days.
                         </p>
                         <div className="flex items-center gap-2">
                             <Button variant="outline" onClick={() => onOpenChange(false)}>
