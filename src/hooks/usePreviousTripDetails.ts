@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { compareTripNumbers } from '@/hooks/useTripKmValidation';
+import { compareTripSequence } from '@/hooks/useTripKmValidation';
 
 export interface PreviousTripHighlights {
     id: string;
@@ -38,12 +38,12 @@ export function usePreviousTripDetails(
 
             const currentTripNumber = tripNumber || '';
 
-            // Sort ascending by POD sequence, departure_date as tiebreaker
-            const sorted = [...allTrips].sort((a, b) => {
-                const cmp = compareTripNumbers(a.trip_number || '', b.trip_number || '');
-                if (cmp !== 0) return cmp;
-                return (a.departure_date || '').localeCompare(b.departure_date || '');
-            });
+            // Sort ascending by real-world sequence (dates first, POD tiebreaker)
+            const sorted = [...allTrips].sort((a, b) =>
+                compareTripSequence(
+                    { trip_number: a.trip_number || '', departure_date: a.departure_date, arrival_date: a.arrival_date },
+                    { trip_number: b.trip_number || '', departure_date: b.departure_date, arrival_date: b.arrival_date },
+                ));
 
             // Find the current trip index
             let currentIdx = -1;
@@ -104,14 +104,14 @@ export function useLatestVehicleTrip(
 
             if (error || !allTrips || allTrips.length === 0) return null;
 
-            // Sort ascending by POD sequence, departure_date as tiebreaker
-            const sorted = [...allTrips].sort((a, b) => {
-                const cmp = compareTripNumbers(a.trip_number || '', b.trip_number || '');
-                if (cmp !== 0) return cmp;
-                return (a.departure_date || '').localeCompare(b.departure_date || '');
-            });
+            // Sort ascending by real-world sequence (dates first, POD tiebreaker)
+            const sorted = [...allTrips].sort((a, b) =>
+                compareTripSequence(
+                    { trip_number: a.trip_number || '', departure_date: a.departure_date, arrival_date: a.arrival_date },
+                    { trip_number: b.trip_number || '', departure_date: b.departure_date, arrival_date: b.arrival_date },
+                ));
 
-            // Return the last one (most recent by POD sequence)
+            // Return the last one (most recent by real-world sequence)
             const last = sorted[sorted.length - 1];
             return {
                 id: last.id,

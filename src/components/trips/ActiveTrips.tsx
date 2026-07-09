@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/hooks/use-toast';
 import { ensureAlert } from '@/lib/alertUtils';
 import { resolveMissingRevenueAlert } from '@/lib/alertResolution';
-import { compareTripNumbers } from '@/hooks/useTripKmValidation';
+import { compareTripSequence } from '@/hooks/useTripKmValidation';
 import { useAuth } from '@/contexts/AuthContext';
 import { addDays, format, getISOWeek, parseISO, startOfWeek } from 'date-fns';
 import {
@@ -228,17 +228,17 @@ const ActiveTrips = ({
   const { data: previousEndingKmMap } = useQuery({
     queryKey: ['previous-ending-km', vehicleIds.join(',')],
     queryFn: async () => {
-      if (vehicleIds.length === 0) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
+      if (vehicleIds.length === 0) return new Map<string, { id: string; ending_km: number; trip_number: string; departure_date: string | null; arrival_date: string | null }[]>();
       const { data, error } = await supabase
         .from('trips')
-        .select('id, fleet_vehicle_id, trip_number, ending_km')
+        .select('id, fleet_vehicle_id, trip_number, ending_km, departure_date, arrival_date')
         .in('fleet_vehicle_id', vehicleIds)
         .not('ending_km', 'is', null)
         .not('trip_number', 'is', null);
 
-      if (error) return new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
+      if (error) return new Map<string, { id: string; ending_km: number; trip_number: string; departure_date: string | null; arrival_date: string | null }[]>();
 
-      const map = new Map<string, { id: string; ending_km: number; trip_number: string }[]>();
+      const map = new Map<string, { id: string; ending_km: number; trip_number: string; departure_date: string | null; arrival_date: string | null }[]>();
       for (const row of data || []) {
         const vid = row.fleet_vehicle_id as string | null;
         if (!vid) continue; // strict: must have fleet_vehicle_id
@@ -247,12 +247,14 @@ const ActiveTrips = ({
           id: row.id as string,
           ending_km: row.ending_km as number,
           trip_number: row.trip_number as string,
+          departure_date: row.departure_date as string | null,
+          arrival_date: row.arrival_date as string | null,
         });
       }
 
-      // Sort each vehicle's trips ascending by trip_number (POD sequence).
+      // Sort each vehicle's trips ascending by real-world sequence (dates first, POD tiebreaker).
       for (const [, vehicleTrips] of map) {
-        vehicleTrips.sort((a, b) => compareTripNumbers(a.trip_number, b.trip_number));
+        vehicleTrips.sort(compareTripSequence);
       }
 
       return map;
@@ -271,12 +273,19 @@ const ActiveTrips = ({
       const vehicleTrips = previousEndingKmMap.get(trip.fleet_vehicle_id);
       if (!vehicleTrips) continue;
 
-      // Find the prev trip on the SAME vehicle with the largest trip_number STRICTLY less than current's.
+      const current = {
+        trip_number: trip.trip_number,
+        departure_date: trip.departure_date ?? null,
+        arrival_date: trip.arrival_date ?? null,
+      };
+
+      // Find the prev trip on the SAME vehicle: the latest trip in real-world
+      // sequence (dates first, POD tiebreaker) that comes STRICTLY before current.
       let prev: typeof vehicleTrips[number] | null = null;
       for (const vt of vehicleTrips) {
         if (vt.id === trip.id) continue;
-        if (compareTripNumbers(vt.trip_number, trip.trip_number) < 0) {
-          if (!prev || compareTripNumbers(vt.trip_number, prev.trip_number) > 0) prev = vt;
+        if (compareTripSequence(vt, current) < 0) {
+          if (!prev || compareTripSequence(vt, prev) > 0) prev = vt;
         }
       }
       if (!prev) continue;
@@ -981,13 +990,14 @@ const ActiveTrips = ({
                           return acc;
                         }, {});
 
-                        // Sort trips within each fleet by download date (created_at) desc,
-                        // falling back to departure_date when created_at is missing.
+                        // Sort trips within each fleet by POD number (trip_number) descending
+                        // so the sequence reads newest POD → oldest POD.
                         Object.values(fleetGroups).forEach((group) => {
                           group.sort((a, b) => {
-                            const aTime = new Date(a.created_at || a.departure_date || 0).getTime();
-                            const bTime = new Date(b.created_at || b.departure_date || 0).getTime();
-                            return bTime - aTime;
+                            const numA = Number(a.trip_number);
+                            const numB = Number(b.trip_number);
+                            if (!isNaN(numA) && !isNaN(numB)) return numB - numA;
+                            return (b.trip_number || '').localeCompare(a.trip_number || '', undefined, { numeric: true });
                           });
                         });
 

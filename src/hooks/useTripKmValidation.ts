@@ -45,25 +45,53 @@ export function compareTripNumbers(a: string, b: string): number {
 }
 
 /**
- * Given a list of vehicle trips (with trip_number, ending_km, departure_date),
- * find the trip immediately preceding the given tripNumber in POD sequence.
- * Uses trip_number (POD) as primary sort, departure_date as tiebreaker.
+ * Compare two trips for their real-world sequence on a vehicle.
+ * POD (trip_number) order is the primary ranking. Dates are only used to
+ * order trips *within* the same POD group (same integer part, e.g. "12834"
+ * vs "12834.1"), where the sub-POD may have been driven before the main POD.
+ * Across different POD numbers (e.g. 12088 vs 12089), POD order always wins
+ * so imprecise stored dates cannot reorder the chain.
  */
-function findPreviousTrip<T extends { trip_number: string; departure_date?: string | null }>(
+export function compareTripSequence(
+    a: { trip_number: string; departure_date?: string | null; arrival_date?: string | null },
+    b: { trip_number: string; departure_date?: string | null; arrival_date?: string | null },
+): number {
+    const numA = parseFloat(a.trip_number);
+    const numB = parseFloat(b.trip_number);
+    const sameGroup = !isNaN(numA) && !isNaN(numB) && Math.floor(numA) === Math.floor(numB);
+
+    if (!sameGroup) {
+        const cmp = compareTripNumbers(a.trip_number, b.trip_number);
+        if (cmp !== 0) return cmp;
+    }
+
+    // Same POD group (e.g. "12834" and "12834.1") or identical POD —
+    // order by actual run dates. Normalize to date-only strings so
+    // timestamps don't cause spurious ordering.
+    const depA = (a.departure_date || a.arrival_date || '').slice(0, 10);
+    const depB = (b.departure_date || b.arrival_date || '').slice(0, 10);
+    if (depA && depB && depA !== depB) return depA.localeCompare(depB);
+
+    const arrA = (a.arrival_date || a.departure_date || '').slice(0, 10);
+    const arrB = (b.arrival_date || b.departure_date || '').slice(0, 10);
+    if (arrA && arrB && arrA !== arrB) return arrA.localeCompare(arrB);
+
+    return compareTripNumbers(a.trip_number, b.trip_number);
+}
+
+/**
+ * Given a list of vehicle trips (with trip_number, dates),
+ * find the trip immediately preceding the given trip in real-world sequence.
+ * Ranked by POD order, with dates ordering sub-PODs within the same POD group.
+ */
+function findPreviousTrip<T extends { trip_number: string; departure_date?: string | null; arrival_date?: string | null }>(
     vehicleTrips: T[],
     currentTripNumber: string,
     currentTripId?: string,
     tripIdAccessor?: (t: T) => string,
 ): T | null {
-    // Sort ascending by trip_number (POD sequence), then by departure_date as tiebreaker
-    const sorted = [...vehicleTrips].sort((a, b) => {
-        const cmp = compareTripNumbers(a.trip_number, b.trip_number);
-        if (cmp !== 0) return cmp;
-        // Same trip number — sort by departure_date ascending
-        const dateA = a.departure_date || '';
-        const dateB = b.departure_date || '';
-        return dateA.localeCompare(dateB);
-    });
+    // Sort ascending by real-world trip sequence (dates first, POD tiebreaker)
+    const sorted = [...vehicleTrips].sort(compareTripSequence);
 
     // Find the index of the current trip in the sorted list
     let currentIdx = -1;
@@ -210,8 +238,9 @@ export async function checkTripKmMismatch(
             trip_number: (t.trip_number as string) || '',
             ending_km: t.ending_km as number,
             departure_date: t.departure_date as string | null,
+            arrival_date: t.arrival_date as string | null,
         })),
-        { id: tripId, trip_number: currentTripNumber, ending_km: 0, departure_date: departureDate },
+        { id: tripId, trip_number: currentTripNumber, ending_km: 0, departure_date: departureDate, arrival_date: null as string | null },
     ];
 
     const prev = findPreviousTrip(
