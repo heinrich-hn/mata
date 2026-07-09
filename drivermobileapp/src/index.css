@@ -29,7 +29,15 @@
     --success: 160 70% 42%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
+    --warning-foreground: 26 83% 14%;
     --info: 176 49% 49%;
+    --info-foreground: 0 0% 100%;
+
+    /* Soft elevation scale */
+    --shadow-soft-xs: 0 1px 2px 0 hsl(200 25% 18% / 0.05);
+    --shadow-soft-sm: 0 1px 3px 0 hsl(200 25% 18% / 0.07), 0 1px 2px -1px hsl(200 25% 18% / 0.05);
+    --shadow-soft-md: 0 4px 6px -1px hsl(200 25% 18% / 0.07), 0 2px 4px -2px hsl(200 25% 18% / 0.05);
+    --shadow-soft-lg: 0 10px 15px -3px hsl(200 25% 18% / 0.08), 0 4px 6px -4px hsl(200 25% 18% / 0.05);
   }
 
   .dark {
@@ -50,6 +58,18 @@
     --border: 200 20% 24%;
     --input: 200 25% 18%;
     --ring: 176 49% 52%;
+    --success: 160 60% 45%;
+    --success-foreground: 200 30% 10%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 200 30% 10%;
+    --info: 176 49% 52%;
+    --info-foreground: 200 30% 10%;
+
+    /* Soft elevation scale (deeper in dark mode) */
+    --shadow-soft-xs: 0 1px 2px 0 hsl(200 40% 4% / 0.3);
+    --shadow-soft-sm: 0 1px 3px 0 hsl(200 40% 4% / 0.35), 0 1px 2px -1px hsl(200 40% 4% / 0.3);
+    --shadow-soft-md: 0 4px 6px -1px hsl(200 40% 4% / 0.35), 0 2px 4px -2px hsl(200 40% 4% / 0.3);
+    --shadow-soft-lg: 0 10px 15px -3px hsl(200 40% 4% / 0.4), 0 4px 6px -4px hsl(200 40% 4% / 0.3);
   }
 }
 

@@ -60,6 +60,12 @@ const config: Config = {
         xl: "calc(var(--radius) + 4px)",
         "2xl": "calc(var(--radius) + 8px)",
       },
+      boxShadow: {
+        "soft-xs": "var(--shadow-soft-xs)",
+        "soft-sm": "var(--shadow-soft-sm)",
+        "soft-md": "var(--shadow-soft-md)",
+        "soft-lg": "var(--shadow-soft-lg)",
+      },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
       },
@@ -141,7 +147,7 @@ const config: Config = {
   plugins: [
     tailwindcssAnimate,
     // Add custom plugin for safe area utilities with proper typing
-    function({ addUtilities }: PluginAPI) {
+    function ({ addUtilities }: PluginAPI) {
       const newUtilities = {
         '.safe-area-top': {
           paddingTop: 'env(safe-area-inset-top)',
