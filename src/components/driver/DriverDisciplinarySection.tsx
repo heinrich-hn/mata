@@ -113,11 +113,10 @@ interface OutcomeForm {
     category: string;
     status: string;
     outcome_date: Date | undefined;
-    follow_up_date: Date | undefined;
 }
 const INITIAL_OUTCOME: OutcomeForm = {
-    outcome: "", sanction: "", category: "", status: "outcome_recorded",
-    outcome_date: new Date(), follow_up_date: undefined,
+    outcome: "", sanction: "", category: "", status: "resolved",
+    outcome_date: new Date(),
 };
 
 /* ─── Component ─── */
@@ -226,7 +225,7 @@ export default function DriverDisciplinarySection() {
                 category: f.category,
                 status: f.status,
                 outcome_date: formatLocalDate(f.outcome_date),
-                follow_up_date: formatLocalDate(f.follow_up_date),
+                follow_up_date: null,
             }).eq("id", id);
             if (error) throw error;
         },
@@ -282,9 +281,8 @@ export default function DriverDisciplinarySection() {
         setOutcomeForm({
             outcome: rec.outcome || "", sanction: rec.sanction || "",
             category: rec.category,
-            status: "outcome_recorded",
+            status: rec.status === "appeal" || rec.status === "dismissed" ? rec.status : "resolved",
             outcome_date: rec.outcome_date ? new Date(rec.outcome_date) : new Date(),
-            follow_up_date: rec.follow_up_date ? new Date(rec.follow_up_date) : undefined,
         });
         setOutcomeOpen(true);
     };
@@ -338,7 +336,8 @@ export default function DriverDisciplinarySection() {
     // Which actions are available per stage
     const canScheduleHearing = (s: string) => s === "inquiry_logged";
     const canEditHearing = (s: string) => s === "hearing_scheduled";
-    const canRecordOutcome = (s: string) => s === "hearing_scheduled";
+    const canRecordOutcome = (s: string) =>
+        ["hearing_scheduled", "outcome_recorded", "resolved", "appeal", "dismissed"].includes(s);
 
     // Stats
     const inquiryCount = records.filter((r) => r.status === "inquiry_logged").length;
@@ -471,7 +470,7 @@ export default function DriverDisciplinarySection() {
                                                 <Button variant="ghost" size="icon" onClick={() => openScheduleHearing(rec)} title="Edit hearing details"><Calendar className="h-4 w-4 text-blue-600" /></Button>
                                             )}
                                             {canRecordOutcome(rec.status) && (
-                                                <Button variant="ghost" size="icon" onClick={() => openRecordOutcome(rec)} title="Record outcome"><Gavel className="h-4 w-4 text-amber-600" /></Button>
+                                                <Button variant="ghost" size="icon" onClick={() => openRecordOutcome(rec)} title={rec.outcome ? "Edit outcome" : "Record outcome"}><Gavel className="h-4 w-4 text-amber-600" /></Button>
                                             )}
                                             <Button variant="ghost" size="icon" onClick={() => openEditInquiry(rec)} title="Edit"><Edit className="h-4 w-4" /></Button>
                                             <DropdownMenu>
@@ -619,7 +618,7 @@ export default function DriverDisciplinarySection() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Gavel className="h-5 w-5 text-amber-600" />
-                            Record Outcome
+                            {activeRecord?.outcome ? "Edit Outcome" : "Record Outcome"}
                         </DialogTitle>
                     </DialogHeader>
                     {activeRecord && (
@@ -655,7 +654,6 @@ export default function DriverDisciplinarySection() {
                                 <Select value={outcomeForm.status} onValueChange={(v) => setOutcomeForm((s) => ({ ...s, status: v }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="outcome_recorded">Outcome Recorded</SelectItem>
                                         <SelectItem value="resolved">Resolved</SelectItem>
                                         <SelectItem value="appeal">Appeal</SelectItem>
                                         <SelectItem value="dismissed">Dismissed</SelectItem>
@@ -666,10 +664,6 @@ export default function DriverDisciplinarySection() {
                                 <Label>Outcome Date</Label>
                                 <DatePicker value={outcomeForm.outcome_date} onChange={(d) => setOutcomeForm((s) => ({ ...s, outcome_date: d }))} />
                             </div>
-                        </div>
-                        <div className="space-y-1">
-                            <Label>Follow-up Date</Label>
-                            <DatePicker value={outcomeForm.follow_up_date} onChange={(d) => setOutcomeForm((s) => ({ ...s, follow_up_date: d }))} />
                         </div>
                     </div>
                     <DialogFooter>

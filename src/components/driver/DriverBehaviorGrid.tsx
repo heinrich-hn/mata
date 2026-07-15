@@ -11,6 +11,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,9 +21,10 @@ import { useBulkDeleteDriverBehaviorEvents, useDeleteDriverBehaviorEvent, useDri
 import { useDriverCoaching } from "@/hooks/useDriverCoaching";
 import { useRealtimeDriverBehaviorEvents } from "@/hooks/useRealtimeDriverBehaviorEvents";
 import type { Database } from "@/integrations/supabase/types";
-import { generateDriverCoachingPDF, generateDriverBehaviorExcel, generateDriverBehaviorPDF, generateWeeklyDriverDebriefsPDF, fetchAllSnapshotsBase64, fetchSnapshotBlobs } from "@/lib/driverBehaviorExport";
+import { generateDriverCoachingPDF, generateDriverBehaviorExcel, generateDriverBehaviorPDF, generateWeeklyDriverDebriefsPDF, generateDriverWeeklyBreakdownPDF, fetchAllSnapshotsBase64, fetchSnapshotBlobs } from "@/lib/driverBehaviorExport";
 import type { SnapshotMedia } from "@/lib/driverBehaviorExport";
 import { format } from "date-fns";
+import { endOfWeek, startOfWeek, subWeeks } from "date-fns";
 import { AlertTriangle, ArrowUpDown, BarChart3, Calendar, Camera, Car, CheckCircle, ChevronDown, Clock, Download, Edit2, Eye, FileSpreadsheet, FileText, List, Loader2, MessageSquare, Search, Share2, Trash2, User, Video } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -92,6 +95,11 @@ export default function DriverBehaviorGrid() {
   const [sharingEventId, setSharingEventId] = useState<string | null>(null);
   const [exportingEventId, setExportingEventId] = useState<string | null>(null);
 
+  // Weekly debrief PDF export — week + driver selection
+  const [weeklyExportOpen, setWeeklyExportOpen] = useState(false);
+  const [weeklyExportDriver, setWeeklyExportDriver] = useState<string | null>(null);
+  const [weekAnchor, setWeekAnchor] = useState<Date>(() => new Date());
+
   // Bulk selection handlers
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => {
@@ -159,6 +167,38 @@ export default function DriverBehaviorGrid() {
 
   const exportPDF = () => { if (selected) exportEventPDFWithMedia(selected); };
   const exportEventPDF = (e: Event) => exportEventPDFWithMedia(e);
+
+  // Weekly debrief export: computed week range (Mon–Sun) from the anchor date
+  const weekRange = useMemo(() => ({
+    from: startOfWeek(weekAnchor, { weekStartsOn: 1 }),
+    to: endOfWeek(weekAnchor, { weekStartsOn: 1 }),
+  }), [weekAnchor]);
+
+  const weeklyExportCount = useMemo(() => {
+    const start = format(weekRange.from, "yyyy-MM-dd");
+    const end = format(weekRange.to, "yyyy-MM-dd");
+    return debriefedEvents.filter((e) =>
+      e.debriefed_at &&
+      e.event_date >= start &&
+      e.event_date <= end &&
+      (!weeklyExportDriver || e.driver_name === weeklyExportDriver),
+    ).length;
+  }, [weekRange, debriefedEvents, weeklyExportDriver]);
+
+  const openWeeklyExport = (driverName?: string) => {
+    setWeeklyExportDriver(driverName ?? null);
+    setWeekAnchor(new Date());
+    setWeeklyExportOpen(true);
+  };
+
+  const handleWeeklyExport = () => {
+    generateWeeklyDriverDebriefsPDF(debriefedEvents, {
+      weekStart: weekRange.from,
+      weekEnd: weekRange.to,
+      driverName: weeklyExportDriver ?? undefined,
+    });
+    setWeeklyExportOpen(false);
+  };
 
   const openMediaViewer = (event: Event) => {
     const resolved = resolveEventMedia(event.location || "", event.fleet_number, surfsightDevices);
@@ -702,9 +742,9 @@ export default function DriverBehaviorGrid() {
                     <FileText className="w-4 h-4 mr-2" />
                     PDF
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => generateWeeklyDriverDebriefsPDF(debriefedEvents)}>
+                  <DropdownMenuItem onClick={() => openWeeklyExport()}>
                     <Calendar className="w-4 h-4 mr-2" />
-                    Weekly Debriefs PDF
+                    Weekly Debriefs PDF…
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -740,19 +780,45 @@ export default function DriverBehaviorGrid() {
               groupedDebriefed.map(([driverName, driverEvents]) => (
                 <Collapsible key={driverName}>
                   <div className="border border-green-200 rounded-lg overflow-hidden">
-                    <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 bg-green-50 hover:bg-green-100 transition-colors group">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-green-200 rounded-full p-2">
-                          <User className="w-4 h-4 text-green-700" />
+                    <div className="flex items-center bg-green-50 hover:bg-green-100 transition-colors">
+                      <CollapsibleTrigger className="flex items-center justify-between flex-1 px-4 py-3 group">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-green-200 rounded-full p-2">
+                            <User className="w-4 h-4 text-green-700" />
+                          </div>
+                          <span className="font-semibold text-foreground">{driverName}</span>
+                          <Badge variant="outline" className="text-green-600 border-green-600">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            {driverEvents.length} debriefed
+                          </Badge>
                         </div>
-                        <span className="font-semibold text-foreground">{driverName}</span>
-                        <Badge variant="outline" className="text-green-600 border-green-600">
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          {driverEvents.length} debriefed
-                        </Badge>
-                      </div>
-                      <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-                    </CollapsibleTrigger>
+                        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mr-4 whitespace-nowrap border-green-300 text-green-700 hover:bg-green-100 hover:text-green-800"
+                            title={`Export weekly debrief PDF for ${driverName}`}
+                          >
+                            <Calendar className="w-4 h-4 mr-1" />
+                            Weekly PDF
+                            <ChevronDown className="w-3 h-3 ml-1" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openWeeklyExport(driverName)}>
+                            <Calendar className="w-4 h-4 mr-2" />
+                            Selected week…
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => generateDriverWeeklyBreakdownPDF(debriefedEvents, driverName)}>
+                            <FileText className="w-4 h-4 mr-2" />
+                            All weeks (weekly breakdown)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                     <CollapsibleContent>
                       <div className="divide-y divide-green-100">
                         {driverEvents.map((event) => (
@@ -985,6 +1051,73 @@ export default function DriverBehaviorGrid() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Weekly Debrief PDF — week & driver selection */}
+      <Dialog open={weeklyExportOpen} onOpenChange={setWeeklyExportOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Weekly Debrief PDF</DialogTitle>
+            <DialogDescription>
+              {weeklyExportDriver
+                ? `Choose the week to export debriefed events for ${weeklyExportDriver}.`
+                : "Choose the week to export debriefed events for all drivers."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setWeekAnchor(new Date())}
+              >
+                This week
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setWeekAnchor(subWeeks(new Date(), 1))}
+              >
+                Last week
+              </Button>
+            </div>
+
+            <div className="flex justify-center rounded-md border">
+              <CalendarPicker
+                mode="single"
+                weekStartsOn={1}
+                selected={weekAnchor}
+                onSelect={(d) => d && setWeekAnchor(d)}
+                disabled={{ after: new Date() }}
+                modifiers={{ inWeek: weekRange }}
+                modifiersClassNames={{ inWeek: "bg-primary/15 rounded-none" }}
+              />
+            </div>
+
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-center text-sm">
+              <div className="font-medium text-foreground">
+                {format(weekRange.from, "dd MMM yyyy")} – {format(weekRange.to, "dd MMM yyyy")}
+              </div>
+              <div className="text-muted-foreground text-xs mt-0.5">
+                {weeklyExportCount} debriefed event{weeklyExportCount !== 1 ? "s" : ""} in this week
+                {weeklyExportDriver ? ` for ${weeklyExportDriver}` : ""}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWeeklyExportOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleWeeklyExport} disabled={weeklyExportCount === 0}>
+              <Download className="w-4 h-4 mr-2" />
+              Export PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Surfsight Media Viewer */}
       {mediaViewerData && (

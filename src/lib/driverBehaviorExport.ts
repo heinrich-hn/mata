@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { endOfWeek, format, startOfWeek } from "date-fns";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
@@ -143,6 +143,168 @@ export interface SnapshotMedia {
   cabin: string | null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared PDF theme — brand palette, typography & reusable layout helpers
+// Gives every exported PDF a consistent, professional look.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type RGB = [number, number, number];
+
+const PDF = {
+  brand: [30, 58, 95] as RGB,        // deep navy — primary brand
+  brandDark: [17, 34, 58] as RGB,    // darker navy
+  accent: [37, 99, 235] as RGB,      // blue accent
+  slate: [30, 41, 59] as RGB,        // slate-800 (table/section bars)
+  slateSoft: [51, 65, 85] as RGB,    // slate-700
+  slateLight: [226, 232, 240] as RGB,// slate-200
+  ink: [17, 24, 39] as RGB,          // near-black body text
+  muted: [107, 114, 128] as RGB,     // secondary text
+  faint: [148, 163, 184] as RGB,     // captions / footer
+  line: [209, 213, 219] as RGB,      // hairline borders
+  zebra: [247, 249, 251] as RGB,     // alternating row fill
+  panel: [241, 245, 251] as RGB,     // soft panel background
+  panelBorder: [214, 224, 238] as RGB,
+  headerSub: [200, 214, 235] as RGB, // header band subtitle text
+  critical: [220, 38, 38] as RGB,
+  high: [234, 88, 12] as RGB,
+  medium: [202, 138, 4] as RGB,
+  low: [37, 99, 235] as RGB,
+  white: [255, 255, 255] as RGB,
+};
+
+const PDF_BRAND_NAME = 'Matanuska Fleet';
+const PDF_BRAND_TAGLINE = 'Fleet Safety & Driver Behaviour';
+
+const pdfSeverityColor = (s: string | null | undefined): RGB => {
+  switch (s) {
+    case 'critical': return PDF.critical;
+    case 'high': return PDF.high;
+    case 'medium': return PDF.medium;
+    case 'low': return PDF.low;
+    default: return PDF.muted;
+  }
+};
+
+/**
+ * Draw a branded header band at the top of the current page and return the
+ * y-position just below it. Works for both portrait and landscape.
+ */
+const drawPdfHeader = (
+  doc: jsPDF,
+  opts: { title: string; subtitle?: string; meta?: string; margin?: number },
+): number => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = opts.margin ?? 15;
+  const bandH = 24;
+
+  doc.setFillColor(PDF.brand[0], PDF.brand[1], PDF.brand[2]);
+  doc.rect(0, 0, pageWidth, bandH, 'F');
+  doc.setFillColor(PDF.accent[0], PDF.accent[1], PDF.accent[2]);
+  doc.rect(0, bandH, pageWidth, 1.1, 'F');
+
+  // Brand mark block (left)
+  doc.setTextColor(PDF.white[0], PDF.white[1], PDF.white[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text(PDF_BRAND_NAME.toUpperCase(), margin, 11);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(PDF.headerSub[0], PDF.headerSub[1], PDF.headerSub[2]);
+  doc.text(PDF_BRAND_TAGLINE, margin, 16.5);
+
+  // Report title block (right)
+  doc.setTextColor(PDF.white[0], PDF.white[1], PDF.white[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12.5);
+  doc.text(opts.title, pageWidth - margin, 11, { align: 'right' });
+  if (opts.subtitle) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(PDF.headerSub[0], PDF.headerSub[1], PDF.headerSub[2]);
+    doc.text(opts.subtitle, pageWidth - margin, 16.5, { align: 'right' });
+  }
+  if (opts.meta) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(PDF.headerSub[0], PDF.headerSub[1], PDF.headerSub[2]);
+    doc.text(opts.meta, pageWidth - margin, 21, { align: 'right' });
+  }
+
+  doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+  return bandH + 9;
+};
+
+/** Draw a consistent footer with divider + page numbers on every page. */
+const drawPdfFooters = (doc: jsPDF, note: string, margin = 15) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(PDF.line[0], PDF.line[1], PDF.line[2]);
+    doc.setLineWidth(0.2);
+    doc.line(margin, pageHeight - 11, pageWidth - margin, pageHeight - 11);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(PDF.faint[0], PDF.faint[1], PDF.faint[2]);
+    doc.text(note, margin, pageHeight - 6.5);
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 6.5, { align: 'right' });
+    doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+  }
+};
+
+/** Draw a section heading with an accent tick. Returns the y below the heading. */
+const drawSectionHeading = (doc: jsPDF, text: string, x: number, y: number): number => {
+  doc.setFillColor(PDF.accent[0], PDF.accent[1], PDF.accent[2]);
+  doc.rect(x, y - 3.6, 1.5, 5, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(PDF.brand[0], PDF.brand[1], PDF.brand[2]);
+  doc.text(text, x + 4.5, y);
+  doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+  doc.setFont('helvetica', 'normal');
+  return y + 6.5;
+};
+
+/**
+ * Draw a row of KPI stat cards. Returns the y-position below the row.
+ */
+const drawPdfStatCards = (
+  doc: jsPDF,
+  x: number,
+  y: number,
+  totalWidth: number,
+  cards: { label: string; value: string; color?: RGB }[],
+  height = 16,
+): number => {
+  const gap = 4;
+  const cardW = (totalWidth - gap * (cards.length - 1)) / cards.length;
+  cards.forEach((card, i) => {
+    const cx = x + i * (cardW + gap);
+    doc.setFillColor(PDF.panel[0], PDF.panel[1], PDF.panel[2]);
+    doc.setDrawColor(PDF.panelBorder[0], PDF.panelBorder[1], PDF.panelBorder[2]);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(cx, y, cardW, height, 1.6, 1.6, 'FD');
+    // Accent tick
+    const col = card.color ?? PDF.accent;
+    doc.setFillColor(col[0], col[1], col[2]);
+    doc.rect(cx, y + 2, 1.3, height - 4, 'F');
+    // Label
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8);
+    doc.setTextColor(PDF.muted[0], PDF.muted[1], PDF.muted[2]);
+    doc.text(card.label.toUpperCase(), cx + 4, y + 6);
+    // Value
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(col[0], col[1], col[2]);
+    doc.text(card.value, cx + 4, y + height - 4);
+  });
+  doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+  doc.setLineWidth(0.2);
+  return y + height + 6;
+};
+
 export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, snapshots?: SnapshotMedia | null) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -157,27 +319,26 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, sn
     return y + lines.length * lineHeight;
   };
 
-  // Header
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text("DRIVER COACHING ACKNOWLEDGMENT FORM", pageWidth / 2, yPos, { align: "center" });
-  yPos += 10;
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Form #: DBE-${event.id.split("-")[0].toUpperCase()}`, pageWidth / 2, yPos, { align: "center" });
-  yPos += 15;
+  // Branded header band
+  yPos = drawPdfHeader(doc, {
+    title: "DRIVER COACHING FORM",
+    subtitle: event.driver_name,
+    meta: `Form #: DBE-${event.id.split("-")[0].toUpperCase()}`,
+    margin,
+  });
+  yPos += 2;
 
   // Event Details Section
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text("EVENT DETAILS", margin, yPos);
-  yPos += 8;
+  yPos = drawSectionHeading(doc, "EVENT DETAILS", margin, yPos);
+  yPos += 2;
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.setDrawColor(200, 200, 200);
-  doc.rect(margin, yPos - 2, contentWidth, 35);
+  doc.setFillColor(PDF.panel[0], PDF.panel[1], PDF.panel[2]);
+  doc.setDrawColor(PDF.panelBorder[0], PDF.panelBorder[1], PDF.panelBorder[2]);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, yPos - 2, contentWidth, 35, 2, 2, "FD");
+  doc.setLineWidth(0.2);
 
   const detailsY = yPos + 3;
   doc.text(`Driver Name: ${event.driver_name}`, margin + 5, detailsY);
@@ -201,10 +362,8 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, sn
   yPos += 40;
 
   // Incident Description
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text("INCIDENT DESCRIPTION", margin, yPos);
-  yPos += 8;
+  yPos = drawSectionHeading(doc, "INCIDENT DESCRIPTION", margin, yPos);
+  yPos += 2;
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
@@ -248,13 +407,11 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, sn
       }
     };
 
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("EVENT SNAPSHOTS", margin, yPos);
-    yPos += 8;
+    yPos = drawSectionHeading(doc, "EVENT SNAPSHOTS", margin, yPos);
+    yPos += 2;
 
-    if (hasFront) addSnapshot("📷 Front Camera (Road View)", hasFront);
-    if (hasCabin) addSnapshot("📷 Cabin Camera (In-Cab View)", hasCabin);
+    if (hasFront) addSnapshot("Front Camera (Road View)", hasFront);
+    if (hasCabin) addSnapshot("Cabin Camera (In-Cab View)", hasCabin);
   }
 
   // Video/Media Link (if present)
@@ -281,10 +438,8 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, sn
 
   // Coaching Discussion (if debriefed)
   if (event.debriefed_at) {
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("COACHING DISCUSSION", margin, yPos);
-    yPos += 8;
+    yPos = drawSectionHeading(doc, "COACHING DISCUSSION", margin, yPos);
+    yPos += 2;
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -310,10 +465,8 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, sn
 
     // Corrective Action Plan
     if (event.coaching_action_plan) {
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text("CORRECTIVE ACTION PLAN", margin, yPos);
-      yPos += 8;
+      yPos = drawSectionHeading(doc, "CORRECTIVE ACTION PLAN", margin, yPos);
+      yPos += 2;
 
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
@@ -329,13 +482,14 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, sn
   }
 
   // Signatures Section
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text("ACKNOWLEDGMENT & SIGNATURES", margin, yPos);
-  yPos += 10;
+  yPos = drawSectionHeading(doc, "ACKNOWLEDGMENT & SIGNATURES", margin, yPos);
+  yPos += 3;
 
-  doc.setDrawColor(200, 200, 200);
-  doc.rect(margin, yPos, contentWidth, 70);
+  doc.setFillColor(PDF.panel[0], PDF.panel[1], PDF.panel[2]);
+  doc.setDrawColor(PDF.panelBorder[0], PDF.panelBorder[1], PDF.panelBorder[2]);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, yPos, contentWidth, 70, 2, 2, "FD");
+  doc.setLineWidth(0.2);
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
@@ -389,15 +543,7 @@ export const generateDriverCoachingPDF = (event: DriverBehaviorEventExtended, sn
   doc.text(`Date: ${format(new Date(), "MMM dd, yyyy")}`, pageWidth - margin - 35, yPos + 48);
 
   // Footer
-  yPos = doc.internal.pageSize.getHeight() - 15;
-  doc.setFontSize(8);
-  doc.setTextColor(128, 128, 128);
-  doc.text(
-    `Generated: ${format(new Date(), "MMM dd, yyyy HH:mm")} | Form Reference: DBE-${event.id.split("-")[0]}`,
-    pageWidth / 2,
-    yPos,
-    { align: "center" }
-  );
+  drawPdfFooters(doc, `${PDF_BRAND_NAME} • Driver Coaching Form • Ref: DBE-${event.id.split("-")[0].toUpperCase()}`, margin);
 
   // Save the PDF
   const fileName = `driver-coaching-${event.driver_name.replace(/\s+/g, "-")}-${format(new Date(), "yyyy-MM-dd")}.pdf`;
@@ -692,77 +838,39 @@ export const generateDriverBehaviorPDF = (
 ): void => {
   const doc = new jsPDF({ orientation: 'landscape' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 12;
+  const contentWidth = pageWidth - 2 * margin;
 
   const pending = events.filter(e => !e.debriefed_at);
   const debriefed = events.filter(e => !!e.debriefed_at);
   const totalPoints = events.reduce((s, e) => s + (e.points || 0), 0);
 
-  const typeLabel = type === 'pending' ? 'PENDING DRIVER BEHAVIOR EVENTS'
-    : type === 'debriefed' ? 'DEBRIEFED DRIVER BEHAVIOR EVENTS'
-      : 'DRIVER BEHAVIOR REPORT';
+  const typeLabel = type === 'pending' ? 'Pending Events'
+    : type === 'debriefed' ? 'Debriefed Events'
+      : 'All Events';
 
   const generatedOn = format(new Date(), 'MMM dd, yyyy HH:mm');
 
-  const addFooter = () => {
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      `Car Craft Co • Driver Behavior Report • Generated: ${generatedOn}`,
-      pageWidth / 2, pageHeight - 8, { align: 'center' }
-    );
-    doc.setTextColor(0, 0, 0);
-  };
-
-  // Title
-  doc.setFillColor(30, 58, 95);
-  doc.rect(margin, 12, pageWidth - 2 * margin, 14, 'F');
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text(typeLabel, pageWidth / 2, 22, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Generated: ${generatedOn}  •  ${events.length} events  •  ${totalPoints} total points`, pageWidth / 2, 32, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-
-  // Summary box
-  doc.setFillColor(245, 245, 245);
-  doc.roundedRect(margin, 36, pageWidth - 2 * margin, 14, 2, 2, 'F');
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  const bw = (pageWidth - 2 * margin) / 5;
-  const by = 43;
+  // Branded header band
+  let yPos = drawPdfHeader(doc, {
+    title: 'DRIVER BEHAVIOUR REPORT',
+    subtitle: typeLabel,
+    meta: `Generated: ${generatedOn}`,
+    margin,
+  });
 
   const critical = events.filter(e => e.severity === 'critical').length;
   const high = events.filter(e => e.severity === 'high').length;
 
-  doc.text('Pending:', margin + 10, by);
-  doc.setTextColor(220, 38, 38);
-  doc.text(String(pending.length), margin + 35, by);
-  doc.setTextColor(0, 0, 0);
-
-  doc.text('Debriefed:', margin + bw + 10, by);
-  doc.setTextColor(22, 163, 74);
-  doc.text(String(debriefed.length), margin + bw + 42, by);
-  doc.setTextColor(0, 0, 0);
-
-  doc.text('Critical:', margin + 2 * bw + 10, by);
-  doc.setTextColor(220, 38, 38);
-  doc.text(String(critical), margin + 2 * bw + 35, by);
-  doc.setTextColor(0, 0, 0);
-
-  doc.text('High:', margin + 3 * bw + 10, by);
-  doc.setTextColor(249, 115, 22);
-  doc.text(String(high), margin + 3 * bw + 28, by);
-  doc.setTextColor(0, 0, 0);
-
-  doc.text('Total Points:', margin + 4 * bw + 10, by);
-  doc.text(String(totalPoints), margin + 4 * bw + 48, by);
+  // Summary stat cards
+  yPos = drawPdfStatCards(doc, margin, yPos, contentWidth, [
+    { label: 'Total Events', value: String(events.length), color: PDF.brand },
+    { label: 'Pending', value: String(pending.length), color: PDF.high },
+    { label: 'Debriefed', value: String(debriefed.length), color: [22, 163, 74] },
+    { label: 'Critical', value: String(critical), color: PDF.critical },
+    { label: 'High', value: String(high), color: PDF.high },
+    { label: 'Total Points', value: String(totalPoints), color: PDF.accent },
+  ]);
 
   // Auto table for events
   const tableHeaders = type === 'debriefed'
@@ -779,7 +887,7 @@ export const generateDriverBehaviorPDF = (
   const tableData = sorted.map(ev => {
     const sev = (ev.severity || 'medium').charAt(0).toUpperCase() + (ev.severity || 'medium').slice(1);
     const dateStr = format(new Date(ev.event_date), 'MMM dd');
-    const hasMedia = ev.location && /^https?:\/\//i.test(ev.location) ? '📹 Yes' : '';
+    const hasMedia = ev.location && /^https?:\/\//i.test(ev.location) ? 'Yes' : '';
     const risk = ev.risk_score != null ? `${ev.risk_score}/5` : '';
 
     if (type === 'debriefed') {
@@ -809,38 +917,39 @@ export const generateDriverBehaviorPDF = (
   autoTable(doc, {
     head: [tableHeaders],
     body: tableData,
-    startY: 55,
-    styles: { fontSize: 7, cellPadding: 2 },
+    startY: yPos,
+    margin: { left: margin, right: margin },
+    styles: {
+      fontSize: 7,
+      cellPadding: 2.2,
+      textColor: PDF.ink,
+      lineColor: PDF.line,
+      lineWidth: 0.1,
+      valign: 'middle',
+    },
     headStyles: {
-      fillColor: [30, 58, 95],
+      fillColor: PDF.brand,
       textColor: 255,
       fontStyle: 'bold',
-      fontSize: 8,
+      fontSize: 7.5,
+      halign: 'left',
     },
-    alternateRowStyles: { fillColor: [243, 244, 246] },
+    alternateRowStyles: { fillColor: PDF.zebra },
     didParseCell: (data) => {
       if (data.section !== 'body') return;
       // Severity column colour
       const sevColIdx = type === 'pending' ? 5 : 4;
       if (data.column.index === sevColIdx) {
         const val = (data.cell.raw as string || '').toLowerCase();
-        if (val === 'critical') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; }
-        else if (val === 'high') { data.cell.styles.textColor = [249, 115, 22]; data.cell.styles.fontStyle = 'bold'; }
-        else if (val === 'medium') { data.cell.styles.textColor = [217, 119, 6]; }
+        const col = pdfSeverityColor(val);
+        data.cell.styles.textColor = col;
+        if (val === 'critical' || val === 'high') data.cell.styles.fontStyle = 'bold';
       }
     },
   });
 
-  // Footer
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    addFooter();
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
-    doc.setTextColor(0, 0, 0);
-  }
+  // Footer with page numbers
+  drawPdfFooters(doc, `${PDF_BRAND_NAME} • Driver Behaviour Report • Generated: ${generatedOn}`, margin);
 
   const label = type === 'pending' ? 'pending' : type === 'debriefed' ? 'debriefed' : 'all';
   doc.save(`driver_behavior_${label}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
@@ -855,7 +964,19 @@ export const generateDriverBehaviorPDF = (
  * grouped by driver, with an acknowledgment & signature section per driver.
  * Only includes events that have been debriefed (debriefed_at is non-null).
  */
-export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExtended[]) => {
+export interface WeeklyDebriefExportOptions {
+  /** Start of the week to export (inclusive). Defaults to 7 days ago. */
+  weekStart?: Date;
+  /** End of the week to export (inclusive). Defaults to today. */
+  weekEnd?: Date;
+  /** When provided, only export events for this driver. */
+  driverName?: string;
+}
+
+export const generateWeeklyDriverDebriefsPDF = (
+  events: DriverBehaviorEventExtended[],
+  options: WeeklyDebriefExportOptions = {},
+) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -863,17 +984,25 @@ export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExten
   const contentWidth = pageWidth - 2 * margin;
 
   const now = new Date();
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const rangeStart = format(sevenDaysAgo, 'yyyy-MM-dd');
-  const rangeEnd = format(now, 'yyyy-MM-dd');
+  const defaultStart = new Date(now);
+  defaultStart.setDate(defaultStart.getDate() - 7);
+  const rangeStartDate = options.weekStart ?? defaultStart;
+  const rangeEndDate = options.weekEnd ?? now;
+  const rangeStart = format(rangeStartDate, 'yyyy-MM-dd');
+  const rangeEnd = format(rangeEndDate, 'yyyy-MM-dd');
 
-  // Filter: debriefed events within the last 7 days
+  // Filter: debriefed events within the selected week (and optional driver)
   const filtered = events.filter(e =>
     e.debriefed_at &&
     e.event_date >= rangeStart &&
-    e.event_date <= rangeEnd,
+    e.event_date <= rangeEnd &&
+    (!options.driverName || e.driver_name === options.driverName),
   );
+
+  const safeDriver = options.driverName
+    ? `-${options.driverName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
+    : '';
+  const fileName = `weekly-driver-debriefs${safeDriver}-${format(rangeStartDate, 'yyyy-MM-dd')}.pdf`;
 
   // Group by driver
   const byDriver: Record<string, DriverBehaviorEventExtended[]> = {};
@@ -891,8 +1020,13 @@ export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExten
   if (driverNames.length === 0) {
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('No debriefed behavior events found for the last 7 days.', pageWidth / 2, 40, { align: 'center' });
-    doc.save(`weekly-driver-debriefs-${format(now, 'yyyy-MM-dd')}.pdf`);
+    doc.text(
+      `No debriefed behavior events found for ${format(rangeStartDate, 'dd MMM yyyy')} – ${format(rangeEndDate, 'dd MMM yyyy')}.`,
+      pageWidth / 2,
+      40,
+      { align: 'center' },
+    );
+    doc.save(fileName);
     return;
   }
 
@@ -907,96 +1041,56 @@ export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExten
     return false;
   };
 
-  const addFooter = () => {
-    doc.setFontSize(7);
-    doc.setTextColor(140, 140, 140);
-    doc.text(
-      `Generated: ${format(now, 'MMM dd, yyyy HH:mm')} | Weekly Driver Behavior Debrief Report`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: 'center' },
-    );
-    doc.setTextColor(0, 0, 0);
-  };
-
-  const severityColor = (s: string | null): [number, number, number] => {
-    switch (s) {
-      case 'critical': return [220, 38, 38];
-      case 'high': return [234, 88, 12];
-      case 'medium': return [202, 138, 4];
-      case 'low': return [37, 99, 235];
-      default: return [100, 100, 100];
-    }
-  };
-
   // ── One page (or more) per driver ──
   driverNames.forEach((driver, driverIdx) => {
     if (driverIdx > 0) doc.addPage();
-    yPos = 20;
 
     const driverEvents = byDriver[driver];
     const totalPoints = driverEvents.reduce((s, e) => s + (e.points || 0), 0);
-
-    // ── Title ──
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('WEEKLY DRIVER BEHAVIOR DEBRIEF', pageWidth / 2, yPos, { align: 'center' });
-    yPos += 9;
-
-    doc.setFontSize(11);
-    doc.text(`Driver: ${driver}`, pageWidth / 2, yPos, { align: 'center' });
-    yPos += 7;
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(
-      `Period: ${format(sevenDaysAgo, 'dd MMM yyyy')} – ${format(now, 'dd MMM yyyy')}`,
-      pageWidth / 2,
-      yPos,
-      { align: 'center' },
-    );
-    yPos += 5;
-    doc.setFontSize(8);
-    doc.setTextColor(120, 120, 120);
-    doc.text(`Generated: ${format(now, 'dd MMM yyyy HH:mm')}`, pageWidth / 2, yPos, { align: 'center' });
-    doc.setTextColor(0, 0, 0);
-    yPos += 10;
-
-    // ── Summary box ──
-    doc.setFillColor(240, 245, 255);
-    doc.roundedRect(margin, yPos, contentWidth, 14, 2, 2, 'F');
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Summary:', margin + 4, yPos + 5);
-    doc.setFont('helvetica', 'normal');
     const fleetNums = [...new Set(driverEvents.map(e => e.fleet_number).filter(Boolean))].join(', ') || 'N/A';
-    doc.text(
-      `Events: ${driverEvents.length}  |  Total Points: ${totalPoints}  |  Fleet: ${fleetNums}`,
-      margin + 28,
-      yPos + 5,
-    );
+    const criticalCount = driverEvents.filter(e => e.severity === 'critical' || e.severity === 'high').length;
+
+    // ── Branded header ──
+    yPos = drawPdfHeader(doc, {
+      title: 'WEEKLY DRIVER DEBRIEF',
+      subtitle: `Driver: ${driver}`,
+      meta: `${format(rangeStartDate, 'dd MMM yyyy')} – ${format(rangeEndDate, 'dd MMM yyyy')}`,
+      margin,
+    });
+
+    // ── Summary stat cards ──
+    yPos = drawPdfStatCards(doc, margin, yPos, contentWidth, [
+      { label: 'Events', value: String(driverEvents.length), color: PDF.brand },
+      { label: 'Total Points', value: String(totalPoints), color: PDF.accent },
+      { label: 'Critical / High', value: String(criticalCount), color: PDF.critical },
+      { label: 'Fleet', value: fleetNums.length > 10 ? `${fleetNums.slice(0, 10)}…` : fleetNums, color: PDF.slate },
+    ]);
+
     const conductors = [...new Set(driverEvents.map(e => e.debrief_conducted_by).filter(Boolean))].join(', ');
     if (conductors) {
       doc.setFontSize(8);
-      doc.text(`Debriefed by: ${conductors}`, margin + 4, yPos + 11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(PDF.muted[0], PDF.muted[1], PDF.muted[2]);
+      doc.text(`Debriefed by: ${conductors}`, margin, yPos);
+      doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+      yPos += 6;
     }
-    yPos += 18;
 
     // ── Table header ──
     const colWidths = [20, 32, 18, 18, 14, 35, 33];
     const headers = ['Date', 'Event Type', 'Severity', 'Points', 'Ack.', 'Conducted By', 'Action Plan'];
 
-    doc.setFillColor(30, 41, 59); // slate-800
+    doc.setFillColor(PDF.slate[0], PDF.slate[1], PDF.slate[2]);
     doc.rect(margin, yPos, contentWidth, 8, 'F');
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
+    doc.setTextColor(PDF.white[0], PDF.white[1], PDF.white[2]);
     let xPos = margin + 2;
     headers.forEach((h, i) => {
       doc.text(h, xPos, yPos + 5.5);
       xPos += colWidths[i];
     });
-    doc.setTextColor(0, 0, 0);
+    doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
     yPos += 10;
 
     // ── Table rows ──
@@ -1007,7 +1101,7 @@ export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExten
       checkPageBreak(16);
 
       if (rowIdx % 2 === 0) {
-        doc.setFillColor(249, 250, 251);
+        doc.setFillColor(PDF.zebra[0], PDF.zebra[1], PDF.zebra[2]);
         doc.rect(margin, yPos - 3, contentWidth, 8, 'F');
       }
 
@@ -1022,7 +1116,7 @@ export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExten
       xPos += colWidths[1];
 
       // Severity (colour-coded)
-      const sevCol = severityColor(event.severity);
+      const sevCol = pdfSeverityColor(event.severity);
       doc.setTextColor(sevCol[0], sevCol[1], sevCol[2]);
       doc.text((event.severity || 'N/A').toUpperCase(), xPos, yPos);
       doc.setTextColor(0, 0, 0);
@@ -1067,10 +1161,8 @@ export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExten
 
     // ── Event details section (descriptions + corrective actions) ──
     checkPageBreak(16 + driverEvents.length * 12);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('EVENT DETAILS & CORRECTIVE ACTIONS', margin, yPos);
-    yPos += 7;
+    yPos = drawSectionHeading(doc, 'EVENT DETAILS & CORRECTIVE ACTIONS', margin, yPos);
+    yPos += 1;
 
     driverEvents.forEach((event, idx) => {
       checkPageBreak(22);
@@ -1105,13 +1197,14 @@ export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExten
     checkPageBreak(85);
 
     yPos += 4;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ACKNOWLEDGMENT & SIGNATURES', margin, yPos + 2);
-    yPos += 8;
+    yPos = drawSectionHeading(doc, 'ACKNOWLEDGMENT & SIGNATURES', margin, yPos);
+    yPos += 2;
 
-    doc.setDrawColor(180, 180, 180);
-    doc.rect(margin, yPos, contentWidth, 74);
+    doc.setFillColor(PDF.panel[0], PDF.panel[1], PDF.panel[2]);
+    doc.setDrawColor(PDF.panelBorder[0], PDF.panelBorder[1], PDF.panelBorder[2]);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, yPos, contentWidth, 74, 2, 2, 'FD');
+    doc.setLineWidth(0.2);
 
     const sigStartY = yPos + 6;
 
@@ -1157,10 +1250,201 @@ export const generateWeeklyDriverDebriefsPDF = (events: DriverBehaviorEventExten
     doc.line(margin + 103, sig2Y + 8, margin + contentWidth - 4, sig2Y + 8);
     doc.text('Date:', margin + 4, sig2Y + 14);
     doc.line(margin + 16, sig2Y + 15, margin + 55, sig2Y + 15);
-
-    addFooter();
   });
 
-  const fileName = `weekly-driver-debriefs-${format(now, 'yyyy-MM-dd')}.pdf`;
+  // Footer with page numbers across all pages
+  drawPdfFooters(doc, `${PDF_BRAND_NAME} • Weekly Driver Debrief Report`, margin);
+
+  doc.save(fileName);
+};
+
+/**
+ * Per-driver weekly breakdown PDF: every debriefed event for a single driver,
+ * grouped into week sections (Mon–Sun) with per-week totals (events + points).
+ */
+export const generateDriverWeeklyBreakdownPDF = (
+  events: DriverBehaviorEventExtended[],
+  driverName: string,
+) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - 2 * margin;
+  const now = new Date();
+
+  const driverEvents = events.filter(e => e.debriefed_at && e.driver_name === driverName);
+
+  const slug = driverName.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  const fileName = `driver-weekly-breakdown-${slug}-${format(now, 'yyyy-MM-dd')}.pdf`;
+
+  if (driverEvents.length === 0) {
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`No debriefed behavior events found for ${driverName}.`, pageWidth / 2, 40, { align: 'center' });
+    doc.save(fileName);
+    return;
+  }
+
+  // Group by week (Mon–Sun)
+  const byWeek: Record<string, DriverBehaviorEventExtended[]> = {};
+  for (const e of driverEvents) {
+    const weekStart = startOfWeek(new Date(e.event_date), { weekStartsOn: 1 });
+    const key = format(weekStart, 'yyyy-MM-dd');
+    if (!byWeek[key]) byWeek[key] = [];
+    byWeek[key].push(e);
+  }
+  const weekKeys = Object.keys(byWeek).sort((a, b) => b.localeCompare(a)); // newest week first
+  for (const k of weekKeys) {
+    byWeek[k].sort((a, b) => a.event_date.localeCompare(b.event_date));
+  }
+
+  const totalEvents = driverEvents.length;
+  const totalPoints = driverEvents.reduce((s, e) => s + (e.points || 0), 0);
+  const allFleets = [...new Set(driverEvents.map(e => e.fleet_number).filter(Boolean))].join(', ') || 'N/A';
+
+  let yPos = 20;
+
+  const checkPageBreak = (space: number) => {
+    if (yPos + space > pageHeight - 18) {
+      doc.addPage();
+      yPos = 20;
+      return true;
+    }
+    return false;
+  };
+
+  // ── Branded header ──
+  yPos = drawPdfHeader(doc, {
+    title: 'WEEKLY DEBRIEF BREAKDOWN',
+    subtitle: `Driver: ${driverName}`,
+    meta: `Generated: ${format(now, 'dd MMM yyyy HH:mm')}`,
+    margin,
+  });
+
+  // ── Overall summary stat cards ──
+  yPos = drawPdfStatCards(doc, margin, yPos, contentWidth, [
+    { label: 'Weeks', value: String(weekKeys.length), color: PDF.brand },
+    { label: 'Total Events', value: String(totalEvents), color: PDF.accent },
+    { label: 'Total Points', value: String(totalPoints), color: PDF.critical },
+    { label: 'Fleet', value: allFleets.length > 10 ? `${allFleets.slice(0, 10)}…` : allFleets, color: PDF.slate },
+  ]);
+
+  // ── One section per week ──
+  const colWidths = [22, 42, 22, 16, 38, 40];
+  const headers = ['Date', 'Event Type', 'Severity', 'Points', 'Conducted By', 'Action Plan'];
+
+  weekKeys.forEach((key) => {
+    const weekEvents = byWeek[key];
+    const wkStart = startOfWeek(new Date(`${key}T00:00:00`), { weekStartsOn: 1 });
+    const wkEnd = endOfWeek(wkStart, { weekStartsOn: 1 });
+    const weekPoints = weekEvents.reduce((s, e) => s + (e.points || 0), 0);
+
+    checkPageBreak(30);
+
+    // Week header bar
+    doc.setFillColor(PDF.slate[0], PDF.slate[1], PDF.slate[2]);
+    doc.rect(margin, yPos, contentWidth, 8, 'F');
+    doc.setTextColor(PDF.white[0], PDF.white[1], PDF.white[2]);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(
+      `Week of ${format(wkStart, 'dd MMM yyyy')} – ${format(wkEnd, 'dd MMM yyyy')}`,
+      margin + 3,
+      yPos + 5.5,
+    );
+    doc.text(
+      `${weekEvents.length} event${weekEvents.length !== 1 ? 's' : ''}  |  ${weekPoints} pts`,
+      pageWidth - margin - 3,
+      yPos + 5.5,
+      { align: 'right' },
+    );
+    doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+    yPos += 10;
+
+    // Column headers
+    doc.setFillColor(PDF.slateLight[0], PDF.slateLight[1], PDF.slateLight[2]);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(PDF.slate[0], PDF.slate[1], PDF.slate[2]);
+    let xPos = margin + 2;
+    headers.forEach((h, i) => {
+      doc.text(h, xPos, yPos + 5);
+      xPos += colWidths[i];
+    });
+    doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+    yPos += 9;
+
+    // Rows
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    weekEvents.forEach((event, rowIdx) => {
+      checkPageBreak(8);
+
+      if (rowIdx % 2 === 0) {
+        doc.setFillColor(PDF.zebra[0], PDF.zebra[1], PDF.zebra[2]);
+        doc.rect(margin, yPos - 3, contentWidth, 7, 'F');
+      }
+
+      xPos = margin + 2;
+      doc.text(format(new Date(event.event_date), 'dd MMM'), xPos, yPos);
+      xPos += colWidths[0];
+
+      doc.text((event.event_type || '').substring(0, 24), xPos, yPos);
+      xPos += colWidths[1];
+
+      const sevCol = pdfSeverityColor(event.severity);
+      doc.setTextColor(sevCol[0], sevCol[1], sevCol[2]);
+      doc.text((event.severity || 'N/A').toUpperCase(), xPos, yPos);
+      doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+      xPos += colWidths[2];
+
+      doc.text(String(event.points ?? 0), xPos, yPos);
+      xPos += colWidths[3];
+
+      doc.text((event.debrief_conducted_by || 'N/A').substring(0, 20), xPos, yPos);
+      xPos += colWidths[4];
+
+      const plan = event.coaching_action_plan || '—';
+      doc.text(plan.substring(0, 22) + (plan.length > 22 ? '…' : ''), xPos, yPos);
+
+      yPos += 6;
+    });
+
+    // Week subtotal line
+    doc.setDrawColor(PDF.line[0], PDF.line[1], PDF.line[2]);
+    doc.line(margin, yPos - 1, margin + contentWidth, yPos - 1);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(PDF.slate[0], PDF.slate[1], PDF.slate[2]);
+    doc.text(
+      `Week total: ${weekEvents.length} event${weekEvents.length !== 1 ? 's' : ''}, ${weekPoints} points`,
+      pageWidth - margin - 3,
+      yPos + 4,
+      { align: 'right' },
+    );
+    doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+    doc.setFont('helvetica', 'normal');
+    yPos += 12;
+  });
+
+  // ── Grand total ──
+  checkPageBreak(14);
+  doc.setFillColor(PDF.brand[0], PDF.brand[1], PDF.brand[2]);
+  doc.rect(margin, yPos, contentWidth, 9, 'F');
+  doc.setTextColor(PDF.white[0], PDF.white[1], PDF.white[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(`GRAND TOTAL — ${driverName}`, margin + 3, yPos + 6);
+  doc.text(
+    `${weekKeys.length} week${weekKeys.length !== 1 ? 's' : ''}  |  ${totalEvents} events  |  ${totalPoints} points`,
+    pageWidth - margin - 3,
+    yPos + 6,
+    { align: 'right' },
+  );
+  doc.setTextColor(PDF.ink[0], PDF.ink[1], PDF.ink[2]);
+
+  drawPdfFooters(doc, `${PDF_BRAND_NAME} • Weekly Debrief Breakdown — ${driverName}`, margin);
   doc.save(fileName);
 };
