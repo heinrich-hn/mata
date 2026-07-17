@@ -1,5 +1,7 @@
 import type { Load } from "@/hooks/useTrips";
 import { parseTimeWindow } from "@/lib/timeWindow";
+import { getLocationDisplayName } from "@/lib/utils";
+import { findWaypointByName } from "@/lib/waypoints";
 import { addDays, format, isBefore, parseISO, startOfDay } from "date-fns";
 
 const cargoLabels: Record<string, string> = {
@@ -52,12 +54,38 @@ function formatShortDate(dateStr: string): string {
 }
 
 /**
+ * Build a Google Maps link for a loading/offloading point.
+ *
+ * Prefers a precise pin (`?q=lat,lng`) resolved from the known
+ * waypoints/geofences list (matched by name). Falls back to a Maps search
+ * query using the address or place name when no coordinate match is found,
+ * so a usable link is produced even for locations outside that list.
+ */
+function buildLocationMapsLink(
+    location: string | { placeName?: string; address?: string } | null | undefined,
+    address?: string,
+): string | null {
+    const name = getLocationDisplayName(location);
+    if (!name) return null;
+
+    const waypoint = findWaypointByName(name);
+    if (waypoint) {
+        return `https://www.google.com/maps?q=${waypoint.latitude},${waypoint.longitude}`;
+    }
+
+    const query = address || name;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+/**
  * Generate a professional WhatsApp-formatted message for a single load/trip.
  */
 export function generateTripWhatsAppMessage(load: Load): string {
     const tw = parseTimeWindow(load.time_window);
     const cargo = cargoLabels[load.cargo_type] || load.cargo_type;
     const statusBadge = getStatusBadge(load.status);
+    const originMapsLink = buildLocationMapsLink(load.origin, tw.origin.address);
+    const destinationMapsLink = buildLocationMapsLink(load.destination, tw.destination.address);
 
     const lines = [
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -78,6 +106,12 @@ export function generateTripWhatsAppMessage(load: Load): string {
         `Offload:     ${formatDate(load.offloading_date)}`,
         `Arrival:     ${formatTime(tw.destination.plannedArrival)}`,
         `Departure:   ${formatTime(tw.destination.plannedDeparture)}`,
+        "",
+        "─  LOCATIONS  ────────────────────",
+        `Loading:     ${getLocationDisplayName(load.origin)}`,
+        `Map:         ${originMapsLink ?? "—"}`,
+        `Offloading:  ${getLocationDisplayName(load.destination)}`,
+        `Map:         ${destinationMapsLink ?? "—"}`,
         "",
     ];
 
@@ -171,6 +205,8 @@ export function generateWeeklyScheduleWhatsAppMessage(
             const tw = parseTimeWindow(load.time_window);
             const cargo = cargoLabels[load.cargo_type] || load.cargo_type;
             const num = (index + 1).toString().padStart(2, "0");
+            const originMapsLink = buildLocationMapsLink(load.origin, tw.origin.address);
+            const destinationMapsLink = buildLocationMapsLink(load.destination, tw.destination.address);
 
             lines.push(`${num}. ${load.load_id}`);
             lines.push(`   Date:   ${formatShortDate(load.loading_date)}`);
@@ -178,6 +214,12 @@ export function generateWeeklyScheduleWhatsAppMessage(
             lines.push(`   Cargo:  ${cargo}`);
             lines.push(`   Depart: ${formatTime(tw.origin.plannedDeparture)}`);
             lines.push(`   Arrive: ${formatTime(tw.destination.plannedArrival)}`);
+            if (originMapsLink) {
+                lines.push(`   Load Map: ${originMapsLink}`);
+            }
+            if (destinationMapsLink) {
+                lines.push(`   Offload Map: ${destinationMapsLink}`);
+            }
             if (load.fleet_vehicle) {
                 lines.push(`   Vehicle: ${load.fleet_vehicle.vehicle_id}`);
             }
